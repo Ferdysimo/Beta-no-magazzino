@@ -95,7 +95,16 @@ const CassaPage = () => {
     setEditValue(order.description);
   };
 
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditValue('');
+  };
+
   const handleSaveEdit = async (orderId) => {
+    if (!editValue.trim()) {
+      handleCancelEdit();
+      return;
+    }
     try {
       await updateOrder(orderId, { description: editValue });
       setEditingId(null);
@@ -264,16 +273,34 @@ const CassaPage = () => {
               <span className="w-16 font-bold text-gray-800 text-lg">{order.order_number}</span>
               
               {editingId === order.id ? (
-                <input
-                  data-testid={`edit-input-${order.order_number}`}
-                  type="text"
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  onBlur={() => handleSaveEdit(order.id)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(order.id)}
-                  className="flex-1 h-10 px-3 border border-gray-300 rounded focus:border-blue-500 focus:outline-none"
-                  autoFocus
-                />
+                <div className="flex-1 flex items-center gap-2">
+                  <input
+                    data-testid={`edit-input-${order.order_number}`}
+                    type="text"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveEdit(order.id);
+                      if (e.key === 'Escape') handleCancelEdit();
+                    }}
+                    className="flex-1 h-10 px-3 border border-gray-300 rounded focus:border-blue-500 focus:outline-none"
+                    autoFocus
+                  />
+                  <button
+                    data-testid={`save-edit-${order.order_number}`}
+                    onClick={() => handleSaveEdit(order.id)}
+                    className="w-10 h-10 flex items-center justify-center bg-green-500 hover:bg-green-600 text-white rounded transition-colors"
+                  >
+                    <Check size={18} />
+                  </button>
+                  <button
+                    data-testid={`cancel-edit-${order.order_number}`}
+                    onClick={handleCancelEdit}
+                    className="w-10 h-10 flex items-center justify-center bg-gray-400 hover:bg-gray-500 text-white rounded transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
               ) : (
                 <span className="flex-1 font-medium text-gray-800">{order.description}</span>
               )}

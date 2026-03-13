@@ -35,10 +35,10 @@ export const OrderProvider = ({ children }) => {
     // Initial fetch
     fetchOrders();
 
-    // Poll every 2 seconds for updates
+    // Poll every 5 seconds for updates (less aggressive to avoid UI interruptions)
     pollingRef.current = setInterval(() => {
       fetchOrders();
-    }, 2000);
+    }, 5000);
 
     return () => {
       if (pollingRef.current) {
