@@ -265,7 +265,7 @@ const CassaPage = () => {
         </form>
 
         {/* Orders List */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden select-none">
           {/* Pending Orders */}
           {pendingOrders.map((order) => (
             <div
