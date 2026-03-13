@@ -27,11 +27,6 @@ const GeneralePage = () => {
     }
   };
 
-  const formatTime = (isoString) => {
-    const date = new Date(isoString);
-    return date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  };
-
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
       <Header />
@@ -39,55 +34,62 @@ const GeneralePage = () => {
       <main className="max-w-6xl mx-auto p-6">
         {/* Page Header */}
         <div className="flex justify-between items-center mb-6">
-          <h1 className="font-heading text-4xl font-bold text-gray-900 uppercase">Tablet generale</h1>
+          <h1 className="font-heading text-4xl font-bold text-gray-900">Tablet generale</h1>
           <p className="font-heading text-xl text-gray-600" data-testid="generale-location">
             {restaurant?.location}
           </p>
         </div>
 
-        {/* Orders Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {/* Orders List - Row format */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           {pendingOrders.map((order) => (
             <div
               key={order.id}
-              data-testid={`generale-card-${order.order_number}`}
-              className="bg-white rounded-lg shadow-sm border-2 border-gray-200 p-4 hover:border-[#F5C518] transition-colors"
+              data-testid={`generale-row-${order.order_number}`}
+              className="flex items-center px-4 py-4 border-b border-gray-100 hover:bg-gray-50 transition-colors"
             >
-              <div className="flex justify-between items-start mb-3">
-                <span className="text-3xl font-bold text-gray-800">{order.order_number}</span>
-                <span className="text-sm text-gray-500">{formatTime(order.created_at)}</span>
-              </div>
+              {/* Order Number */}
+              <span className="w-20 font-bold text-xl text-gray-800">
+                {order.order_number}
+              </span>
               
-              <p className="text-xl font-semibold text-gray-800 mb-4">
+              {/* Order Description */}
+              <span className="flex-1 font-medium text-lg text-gray-800">
                 {order.description}
-              </p>
+              </span>
               
-              <div className="flex gap-2">
+              {/* Action Buttons */}
+              <div className="flex items-center gap-4">
+                {/* Complete Button */}
                 <button
                   data-testid={`generale-complete-${order.order_number}`}
                   onClick={() => handleComplete(order.id)}
-                  className="flex-1 h-12 flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white rounded-md font-bold uppercase transition-colors"
+                  className="w-10 h-10 flex items-center justify-center bg-white hover:bg-gray-100 text-gray-700 rounded border border-gray-300 transition-colors"
                 >
                   <Check size={20} />
-                  Fatto
                 </button>
+                
+                {/* Spacer */}
+                <div className="w-8" />
+                
+                {/* Delete Button */}
                 <button
                   data-testid={`generale-delete-${order.order_number}`}
                   onClick={() => handleDelete(order.id)}
-                  className="w-12 h-12 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors"
+                  className="w-10 h-10 flex items-center justify-center bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
                 >
                   <Trash2 size={20} />
                 </button>
               </div>
             </div>
           ))}
-        </div>
 
-        {pendingOrders.length === 0 && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center text-gray-500">
-            Nessun ordine in attesa. Gli ordini appariranno qui automaticamente.
-          </div>
-        )}
+          {pendingOrders.length === 0 && (
+            <div className="p-8 text-center text-gray-500">
+              Nessun ordine in attesa. Gli ordini appariranno qui automaticamente.
+            </div>
+          )}
+        </div>
       </main>
     </div>
   );
