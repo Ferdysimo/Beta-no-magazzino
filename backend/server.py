@@ -676,17 +676,20 @@ async def get_daily_report(date: str = None, token_data: dict = Depends(verify_t
 # Seed data endpoint for initial setup
 @api_router.post("/seed")
 async def seed_data():
-    # Delete existing restaurants and create new ones
-    await db.restaurants.delete_many({})
-    await db.orders.delete_many({})
-    await db.deletion_logs.delete_many({})
-    await db.modification_logs.delete_many({})
+    # Only create restaurants if they don't exist
+    existing = await db.restaurants.count_documents({})
+    if existing > 0:
+        return {"message": "Database già configurato", "accounts": [
+            {"username": "Flaminio", "location": "Flaminio"},
+            {"username": "Grazie", "location": "Grazie"},
+            {"username": "Brazza", "location": "Largo di Brazzà"},
+        ]}
     
     # Create the 3 restaurants with new credentials
     restaurants = [
         {"name": "Pastasciutta Roma", "username": "Flaminio", "password": "Pastasciutt4!", "location": "Flaminio"},
         {"name": "Pastasciutta Roma", "username": "Grazie", "password": "Pastasciutt4!", "location": "Grazie"},
-        {"name": "Pastasciutta Roma", "username": "Brazzà", "password": "Pastasciutt4!", "location": "Largo di Brazzà"},
+        {"name": "Pastasciutta Roma", "username": "Brazza", "password": "Pastasciutt4!", "location": "Largo di Brazzà"},
     ]
     
     for r in restaurants:
@@ -701,10 +704,10 @@ async def seed_data():
             "order_counter": 0
         })
     
-    return {"message": "Credenziali aggiornate", "accounts": [
+    return {"message": "Credenziali create", "accounts": [
         {"username": "Flaminio", "password": "Pastasciutt4!", "location": "Flaminio"},
         {"username": "Grazie", "password": "Pastasciutt4!", "location": "Grazie"},
-        {"username": "Brazzà", "password": "Pastasciutt4!", "location": "Largo di Brazzà"},
+        {"username": "Brazza", "password": "Pastasciutt4!", "location": "Largo di Brazzà"},
     ]}
 
 # WebSocket endpoint
