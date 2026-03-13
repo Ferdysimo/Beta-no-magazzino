@@ -94,15 +94,13 @@ const HomePage = () => {
                 >
                   Report di cassa
                 </button>
-                {secondaryButtons.slice(1, 2).map((btn) => (
-                  <button
-                    key={btn.id}
-                    data-testid={`btn-${btn.id}`}
-                    className="bg-[#3B82F6] hover:bg-[#2563EB] text-white px-4 py-2 rounded-md font-medium text-sm transition-colors"
-                  >
-                    {btn.label}
-                  </button>
-                ))}
+                <button
+                  data-testid="btn-report-excel"
+                  onClick={() => navigate('/report-excel')}
+                  className="bg-[#3B82F6] hover:bg-[#2563EB] text-white px-4 py-2 rounded-md font-medium text-sm transition-colors"
+                >
+                  Report per Excel
+                </button>
               </div>
               
               <div className="flex flex-wrap gap-2">

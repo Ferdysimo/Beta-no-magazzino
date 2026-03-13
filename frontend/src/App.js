@@ -9,6 +9,7 @@ import CassaPage from './pages/CassaPage';
 import BollitorePage from './pages/BollitorePage';
 import GeneralePage from './pages/GeneralePage';
 import ReportPage from './pages/ReportPage';
+import ReportExcelPage from './pages/ReportExcelPage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -79,6 +80,11 @@ function AppRoutes() {
       <Route path="/report" element={
         <ProtectedRoute>
           <ReportPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/report-excel" element={
+        <ProtectedRoute>
+          <ReportExcelPage />
         </ProtectedRoute>
       } />
     </Routes>
