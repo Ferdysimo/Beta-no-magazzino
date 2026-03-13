@@ -2,17 +2,41 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrders } from '../contexts/OrderContext';
 import Header from '../components/Header';
-import { Edit2, Trash2, Check, Loader2 } from 'lucide-react';
+import { Edit2, Trash2, Check, Loader2, AlertCircle } from 'lucide-react';
+import axios from 'axios';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
 
 const CassaPage = () => {
-  const { restaurant } = useAuth();
+  const { restaurant, token } = useAuth();
   const { orders, createOrder, deleteOrder, completeOrder, updateOrder } = useOrders();
   const [orderNumber, setOrderNumber] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
+  const [logs, setLogs] = useState({ deletions: { count: 0, logs: [] }, modifications: { count: 0, logs: [] } });
+  const [showLogs, setShowLogs] = useState(false);
   const inputRef = useRef(null);
+
+  // Fetch today's logs
+  const fetchLogs = async () => {
+    if (!token) return;
+    try {
+      const response = await axios.get(`${API}/logs/today`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setLogs(response.data);
+    } catch (error) {
+      console.error('Error fetching logs:', error);
+    }
+  };
+
+  // Fetch logs on mount and after operations
+  useEffect(() => {
+    fetchLogs();
+  }, [token]);
 
   // Calculate next order number based on existing orders
   const getNextOrderNumber = () => {
@@ -51,7 +75,8 @@ const CassaPage = () => {
   const handleDelete = async (orderId) => {
     try {
       await deleteOrder(orderId);
-      // Order number will auto-update via useEffect when orders change
+      // Refresh logs after deletion
+      setTimeout(fetchLogs, 500);
     } catch (error) {
       console.error('Error deleting order:', error);
     }
@@ -75,6 +100,8 @@ const CassaPage = () => {
       await updateOrder(orderId, { description: editValue });
       setEditingId(null);
       setEditValue('');
+      // Refresh logs after modification
+      setTimeout(fetchLogs, 500);
     } catch (error) {
       console.error('Error updating order:', error);
     }
@@ -119,6 +146,76 @@ const CassaPage = () => {
             {restaurant?.location}
           </p>
         </div>
+
+        {/* Logs Counter Bar */}
+        <div 
+          className="mb-4 bg-white rounded-lg shadow-sm border border-gray-200 p-3 flex items-center justify-between cursor-pointer hover:bg-gray-50"
+          onClick={() => setShowLogs(!showLogs)}
+          data-testid="logs-counter-bar"
+        >
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <Trash2 size={18} className="text-red-500" />
+              <span className="font-medium">
+                Cancellate oggi: <strong className="text-red-600">{logs.deletions.count}</strong>
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Edit2 size={18} className="text-amber-500" />
+              <span className="font-medium">
+                Modificate oggi: <strong className="text-amber-600">{logs.modifications.count}</strong>
+              </span>
+            </div>
+          </div>
+          <span className="text-gray-500 text-sm">{showLogs ? '▲ Chiudi' : '▼ Dettagli'}</span>
+        </div>
+
+        {/* Logs Detail Panel */}
+        {showLogs && (
+          <div className="mb-4 bg-white rounded-lg shadow-sm border border-gray-200 p-4 max-h-64 overflow-y-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Deletions */}
+              <div>
+                <h3 className="font-bold text-red-600 mb-2 flex items-center gap-2">
+                  <Trash2 size={16} /> Cancellazioni
+                </h3>
+                {logs.deletions.logs.length === 0 ? (
+                  <p className="text-gray-500 text-sm">Nessuna cancellazione oggi</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {logs.deletions.logs.map((log) => (
+                      <li key={log.id} className="text-sm bg-red-50 p-2 rounded">
+                        <span className="font-bold">#{log.order_number}</span> - {log.description}
+                        <br />
+                        <span className="text-gray-500">Cancellato: {formatTime(log.deleted_at)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              
+              {/* Modifications */}
+              <div>
+                <h3 className="font-bold text-amber-600 mb-2 flex items-center gap-2">
+                  <Edit2 size={16} /> Modifiche
+                </h3>
+                {logs.modifications.logs.length === 0 ? (
+                  <p className="text-gray-500 text-sm">Nessuna modifica oggi</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {logs.modifications.logs.map((log) => (
+                      <li key={log.id} className="text-sm bg-amber-50 p-2 rounded">
+                        <span className="font-bold">#{log.order_number}</span>: {log.old_description} → {log.new_description}
+                        <br />
+                        <span className="text-gray-500">Modificato: {formatTime(log.modified_at)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Input Section */}
         <form onSubmit={handleSubmit} className="mb-6">

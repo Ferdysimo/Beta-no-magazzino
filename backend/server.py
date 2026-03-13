@@ -107,6 +107,23 @@ class OrderUpdate(BaseModel):
     timer_paused: Optional[bool] = None
     timer_elapsed: Optional[int] = None
 
+class DeletionLog(BaseModel):
+    id: str
+    order_number: int
+    description: str
+    restaurant_id: str
+    deleted_at: str
+    original_created_at: str
+
+class ModificationLog(BaseModel):
+    id: str
+    order_id: str
+    order_number: int
+    old_description: str
+    new_description: str
+    restaurant_id: str
+    modified_at: str
+
 class OrderResponse(BaseModel):
     id: str
     order_number: int
@@ -291,7 +308,25 @@ async def update_order(
 ):
     restaurant_id = token_data["restaurant_id"]
     
+    # Get original order for logging
+    original_order = await db.orders.find_one({"id": order_id, "restaurant_id": restaurant_id})
+    if not original_order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    
+    # Log modification if description changed
+    if "description" in update_data and update_data["description"] != original_order["description"]:
+        modification_log = {
+            "id": str(uuid.uuid4()),
+            "order_id": order_id,
+            "order_number": original_order["order_number"],
+            "old_description": original_order["description"],
+            "new_description": update_data["description"],
+            "restaurant_id": restaurant_id,
+            "modified_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.modification_logs.insert_one(modification_log)
     
     result = await db.orders.find_one_and_update(
         {"id": order_id, "restaurant_id": restaurant_id},
@@ -316,10 +351,21 @@ async def update_order(
 async def delete_order(order_id: str, token_data: dict = Depends(verify_token)):
     restaurant_id = token_data["restaurant_id"]
     
-    # Get the order first to know its number
+    # Get the order first to log it
     order = await db.orders.find_one({"id": order_id, "restaurant_id": restaurant_id})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Log the deletion
+    deletion_log = {
+        "id": str(uuid.uuid4()),
+        "order_number": order["order_number"],
+        "description": order["description"],
+        "restaurant_id": restaurant_id,
+        "deleted_at": datetime.now(timezone.utc).isoformat(),
+        "original_created_at": order["created_at"]
+    }
+    await db.deletion_logs.insert_one(deletion_log)
     
     # Delete the order
     result = await db.orders.delete_one(
@@ -336,13 +382,11 @@ async def delete_order(order_id: str, token_data: dict = Depends(verify_token)):
     )
     
     if highest_order:
-        # Set counter to highest remaining order number
         await db.restaurants.update_one(
             {"id": restaurant_id},
             {"$set": {"order_counter": highest_order["order_number"]}}
         )
     else:
-        # No orders left, reset counter to 0
         await db.restaurants.update_one(
             {"id": restaurant_id},
             {"$set": {"order_counter": 0}}
@@ -455,6 +499,68 @@ async def reset_timer(order_id: str, token_data: dict = Depends(verify_token)):
     })
     
     return {"message": "Timer reset"}
+
+# Logs endpoints
+@api_router.get("/logs/deletions")
+async def get_deletion_logs(token_data: dict = Depends(verify_token)):
+    restaurant_id = token_data["restaurant_id"]
+    
+    # Get today's deletions
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    logs = await db.deletion_logs.find(
+        {
+            "restaurant_id": restaurant_id,
+            "deleted_at": {"$gte": today_start.isoformat()}
+        },
+        {"_id": 0}
+    ).sort("deleted_at", -1).to_list(500)
+    
+    return {"count": len(logs), "logs": logs}
+
+@api_router.get("/logs/modifications")
+async def get_modification_logs(token_data: dict = Depends(verify_token)):
+    restaurant_id = token_data["restaurant_id"]
+    
+    # Get today's modifications
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    logs = await db.modification_logs.find(
+        {
+            "restaurant_id": restaurant_id,
+            "modified_at": {"$gte": today_start.isoformat()}
+        },
+        {"_id": 0}
+    ).sort("modified_at", -1).to_list(500)
+    
+    return {"count": len(logs), "logs": logs}
+
+@api_router.get("/logs/today")
+async def get_today_logs(token_data: dict = Depends(verify_token)):
+    restaurant_id = token_data["restaurant_id"]
+    
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    deletions = await db.deletion_logs.find(
+        {
+            "restaurant_id": restaurant_id,
+            "deleted_at": {"$gte": today_start.isoformat()}
+        },
+        {"_id": 0}
+    ).sort("deleted_at", -1).to_list(500)
+    
+    modifications = await db.modification_logs.find(
+        {
+            "restaurant_id": restaurant_id,
+            "modified_at": {"$gte": today_start.isoformat()}
+        },
+        {"_id": 0}
+    ).sort("modified_at", -1).to_list(500)
+    
+    return {
+        "deletions": {"count": len(deletions), "logs": deletions},
+        "modifications": {"count": len(modifications), "logs": modifications}
+    }
 
 # Seed data endpoint for initial setup
 @api_router.post("/seed")
