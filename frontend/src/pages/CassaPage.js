@@ -7,11 +7,24 @@ import { Edit2, Trash2, Check, Loader2 } from 'lucide-react';
 const CassaPage = () => {
   const { restaurant } = useAuth();
   const { orders, createOrder, deleteOrder, completeOrder, updateOrder } = useOrders();
-  const [input, setInput] = useState('');
+  const [orderNumber, setOrderNumber] = useState('');
+  const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
   const inputRef = useRef(null);
+
+  // Calculate next order number based on existing orders
+  const getNextOrderNumber = () => {
+    if (orders.length === 0) return 1;
+    const maxNumber = Math.max(...orders.map(o => o.order_number));
+    return maxNumber + 1;
+  };
+
+  // Update order number when orders change
+  useEffect(() => {
+    setOrderNumber(String(getNextOrderNumber()));
+  }, [orders]);
 
   // Auto-focus input
   useEffect(() => {
@@ -20,12 +33,13 @@ const CassaPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!description.trim()) return;
     
     setLoading(true);
     try {
-      await createOrder(input.trim());
-      setInput('');
+      await createOrder(description.trim(), parseInt(orderNumber) || getNextOrderNumber());
+      setDescription('');
+      setOrderNumber(String(getNextOrderNumber() + 1));
       inputRef.current?.focus();
     } catch (error) {
       console.error('Error creating order:', error);
@@ -37,6 +51,7 @@ const CassaPage = () => {
   const handleDelete = async (orderId) => {
     try {
       await deleteOrder(orderId);
+      // Order number will auto-update via useEffect when orders change
     } catch (error) {
       console.error('Error deleting order:', error);
     }
@@ -88,9 +103,6 @@ const CassaPage = () => {
     return `00:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // Get next order number
-  const nextOrderNumber = orders.length > 0 ? orders[0].order_number + 1 : 1;
-
   // Filter pending orders
   const pendingOrders = orders.filter(o => o.status === 'pending');
   const completedOrders = orders.filter(o => o.status === 'completed');
@@ -111,23 +123,31 @@ const CassaPage = () => {
         {/* Input Section */}
         <form onSubmit={handleSubmit} className="mb-6">
           <div className="flex items-center gap-2 bg-white p-2 rounded-lg shadow-sm border border-gray-200">
-            <span className="text-lg font-bold text-gray-700 px-3" data-testid="next-order-number">
-              {nextOrderNumber}
-            </span>
+            {/* Editable Order Number */}
+            <input
+              data-testid="order-number-input"
+              type="text"
+              value={orderNumber}
+              onChange={(e) => setOrderNumber(e.target.value.replace(/\D/g, ''))}
+              className="w-20 h-12 text-lg font-bold text-center px-2 border border-gray-300 rounded focus:border-blue-500 focus:outline-none"
+              placeholder="N°"
+            />
+            
+            {/* Description Input */}
             <input
               ref={inputRef}
               data-testid="order-input"
               type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
               className="flex-1 h-12 text-lg px-4 border-0 focus:ring-0 focus:outline-none"
-              placeholder="es. CARB TA 20"
+              placeholder="es. carb ta 20 oppure CARB TA 20"
               disabled={loading}
             />
             <button
               data-testid="order-submit"
               type="submit"
-              disabled={loading || !input.trim()}
+              disabled={loading || !description.trim()}
               className="action-button h-12 px-6 disabled:opacity-50"
             >
               {loading ? <Loader2 className="animate-spin" size={20} /> : 'Invia'}

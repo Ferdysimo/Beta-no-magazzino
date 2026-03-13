@@ -47,10 +47,14 @@ export const OrderProvider = ({ children }) => {
     };
   }, [restaurant?.id, token, fetchOrders]);
 
-  const createOrder = async (description) => {
+  const createOrder = async (description, orderNumber = null) => {
+    const payload = { description };
+    if (orderNumber) {
+      payload.order_number = orderNumber;
+    }
     const response = await axios.post(
       `${API}/orders`,
-      { description },
+      payload,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     // Optimistic update - add to front of list
