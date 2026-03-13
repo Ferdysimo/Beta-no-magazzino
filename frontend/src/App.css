@@ -1,34 +1,46 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* App-specific styles */
+.header-bar {
+  background-color: var(--brand-yellow);
+  height: 64px;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+.nav-button {
+  @apply bg-neutral-900 hover:bg-neutral-800 text-white px-4 py-2 rounded-md font-bold uppercase tracking-wide transition-all;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+.action-button {
+  @apply bg-[#2563EB] hover:bg-[#1D4ED8] text-white h-12 px-6 rounded-md font-bold uppercase tracking-wide transition-transform active:scale-95;
 }
 
-.App-link {
-    color: #61dafb;
+.destructive-button {
+  @apply bg-[#DC2626] hover:bg-[#B91C1C] text-white h-12 px-4 rounded-md font-bold transition-transform active:scale-95;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+.order-card {
+  @apply bg-white border-2 border-gray-200 rounded-lg p-4 shadow-sm;
+}
+
+.kitchen-button {
+  @apply h-16 text-xl w-full flex items-center justify-center rounded-lg shadow-sm border-2 border-transparent active:border-black/10 font-bold uppercase;
+}
+
+.input-touch {
+  @apply h-14 text-lg px-4 rounded-md border-2 border-gray-300 focus:border-[#2563EB] focus:ring-0 focus:outline-none;
+}
+
+/* Order row colors based on timer */
+.order-row-green {
+  background-color: #22C55E;
+}
+
+.order-row-red {
+  background-color: #EF4444;
+}
+
+.order-row-pink {
+  background-color: #FDA4AF;
+}
+
+.order-row-white {
+  background-color: #FFFFFF;
 }
