@@ -265,7 +265,7 @@ const CassaPage = () => {
         </form>
 
         {/* Orders List */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden select-none">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           {/* Pending Orders */}
           {pendingOrders.map((order) => (
             <div
@@ -319,13 +319,6 @@ const CassaPage = () => {
               </span>
               
               <div className="flex gap-2 ml-4">
-                <button
-                  data-testid={`complete-btn-${order.order_number}`}
-                  onClick={() => handleComplete(order.id)}
-                  className="w-10 h-10 flex items-center justify-center bg-green-500 hover:bg-green-600 text-white rounded transition-colors"
-                >
-                  <Check size={18} />
-                </button>
                 <button
                   data-testid={`edit-btn-${order.order_number}`}
                   onClick={() => handleEdit(order)}
