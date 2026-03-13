@@ -64,7 +64,10 @@ const CassaPage = () => {
       await createOrder(description.trim(), parseInt(orderNumber) || getNextOrderNumber());
       setDescription('');
       setOrderNumber(String(getNextOrderNumber() + 1));
-      inputRef.current?.focus();
+      // Focus input after a short delay to ensure DOM is updated
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
     } catch (error) {
       console.error('Error creating order:', error);
     } finally {
