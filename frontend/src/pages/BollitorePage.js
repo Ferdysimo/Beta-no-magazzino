@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrders } from '../contexts/OrderContext';
 import Header from '../components/Header';
@@ -7,32 +7,38 @@ import { Play, Pause, RotateCcw, Check } from 'lucide-react';
 const BollitorePage = () => {
   const { restaurant } = useAuth();
   const { orders, startTimer, pauseTimer, resetTimer, completeOrder } = useOrders();
-  const [timers, setTimers] = useState({});
+  const [tick, setTick] = useState(0);
+  const intervalRef = useRef(null);
 
   // Filter only pending orders
   const pendingOrders = orders.filter(o => o.status === 'pending');
 
-  // Update timers every second
+  // Tick every second to force re-render for timer updates
   useEffect(() => {
-    const interval = setInterval(() => {
-      const newTimers = {};
-      pendingOrders.forEach(order => {
-        if (order.timer_started && !order.timer_paused) {
-          const start = new Date(order.timer_start_time);
-          const now = new Date();
-          const elapsed = Math.floor((now - start) / 1000) + (order.timer_elapsed || 0);
-          newTimers[order.id] = elapsed;
-        } else if (order.timer_started && order.timer_paused) {
-          newTimers[order.id] = order.timer_elapsed || 0;
-        } else {
-          newTimers[order.id] = 0;
-        }
-      });
-      setTimers(newTimers);
+    intervalRef.current = setInterval(() => {
+      setTick(t => t + 1);
     }, 1000);
 
-    return () => clearInterval(interval);
-  }, [pendingOrders]);
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, []);
+
+  // Calculate elapsed time for an order
+  const getElapsedSeconds = useCallback((order) => {
+    if (!order.timer_started) return 0;
+    
+    if (order.timer_paused) {
+      return order.timer_elapsed || 0;
+    }
+    
+    const start = new Date(order.timer_start_time);
+    const now = new Date();
+    const elapsed = Math.floor((now - start) / 1000) + (order.timer_elapsed || 0);
+    return elapsed;
+  }, [tick]); // tick dependency forces recalculation
 
   const formatTimer = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -43,7 +49,7 @@ const BollitorePage = () => {
   const getRowColor = (order) => {
     if (!order.timer_started) return 'bg-white';
     
-    const elapsed = timers[order.id] || 0;
+    const elapsed = getElapsedSeconds(order);
     
     if (elapsed > 180) return 'bg-[#FDA4AF]'; // Pink for > 3 mins
     if (elapsed > 120) return 'bg-[#EF4444] text-white'; // Red for > 2 mins
@@ -58,8 +64,7 @@ const BollitorePage = () => {
     }
   };
 
-  const handlePauseTimer = async (orderId) => {
-    const elapsed = timers[orderId] || 0;
+  const handlePauseTimer = async (orderId, elapsed) => {
     try {
       await pauseTimer(orderId, elapsed);
     } catch (error) {
@@ -99,8 +104,8 @@ const BollitorePage = () => {
         {/* Orders List */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           {pendingOrders.map((order) => {
+            const elapsed = getElapsedSeconds(order);
             const rowColor = getRowColor(order);
-            const elapsed = timers[order.id] || 0;
             const isRunning = order.timer_started && !order.timer_paused;
             
             return (
@@ -112,13 +117,13 @@ const BollitorePage = () => {
                 <span className="w-16 font-bold text-lg">{order.order_number}</span>
                 <span className="flex-1 font-medium text-lg">{order.description}</span>
                 
-                <span className="w-28 font-mono text-lg font-bold">
+                <span className="w-28 font-mono text-lg font-bold tabular-nums">
                   {order.timer_started ? formatTimer(elapsed) : ''}
                 </span>
                 
                 <div className="flex gap-2 ml-4">
                   {/* Play/Pause Button */}
-                  {!order.timer_started || order.timer_paused ? (
+                  {!isRunning ? (
                     <button
                       data-testid={`play-btn-${order.order_number}`}
                       onClick={() => handleStartTimer(order.id)}
@@ -129,7 +134,7 @@ const BollitorePage = () => {
                   ) : (
                     <button
                       data-testid={`pause-btn-${order.order_number}`}
-                      onClick={() => handlePauseTimer(order.id)}
+                      onClick={() => handlePauseTimer(order.id, elapsed)}
                       className="w-10 h-10 flex items-center justify-center bg-white hover:bg-gray-100 text-gray-800 rounded border border-gray-300 transition-colors"
                     >
                       <Pause size={18} />
