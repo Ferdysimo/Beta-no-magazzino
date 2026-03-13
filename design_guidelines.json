@@ -1,0 +1,142 @@
+{
+  "identity": {
+    "name": "Pastasciutta Roma",
+    "tone": "Utilitarian, Authentic, Fast-Paced, Kitchen-First",
+    "aesthetic": "Italian Street Food x Digital Efficiency",
+    "mission": "Streamline the chaos of a Roman pasta kitchen with high-visibility, touch-first design."
+  },
+  "typography": {
+    "font_family": {
+      "headings": "Barlow Condensed, sans-serif",
+      "body": "DM Sans, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "scale": {
+      "h1": "text-4xl md:text-5xl font-bold tracking-tight uppercase",
+      "h2": "text-3xl font-semibold tracking-tight uppercase",
+      "h3": "text-2xl font-semibold tracking-normal",
+      "body-lg": "text-lg font-medium leading-relaxed",
+      "body-base": "text-base font-normal leading-relaxed",
+      "caption": "text-sm font-medium uppercase tracking-wider text-muted-foreground"
+    },
+    "imports": [
+      "@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,400;500;700&display=swap');"
+    ]
+  },
+  "colors": {
+    "palette": {
+      "brand": {
+        "yellow": "#F5C518",
+        "blue": "#2563EB",
+        "red": "#DC2626",
+        "green": "#16A34A"
+      },
+      "neutral": {
+        "background": "#F5F5F5",
+        "surface": "#FFFFFF",
+        "text-primary": "#1A1A1A",
+        "text-secondary": "#64748B",
+        "border": "#E2E8F0"
+      },
+      "status": {
+        "timer-green": "#22C55E",
+        "timer-red": "#EF4444",
+        "timer-pink": "#F472B6",
+        "timer-white": "#FFFFFF"
+      }
+    },
+    "usage": {
+      "header_bg": "bg-[#F5C518]",
+      "header_text": "text-black",
+      "page_bg": "bg-[#F5F5F5]",
+      "card_bg": "bg-white",
+      "primary_action": "bg-[#2563EB] hover:bg-[#1D4ED8] text-white",
+      "destructive_action": "bg-[#DC2626] hover:bg-[#B91C1C] text-white",
+      "nav_button": "bg-neutral-900 hover:bg-neutral-800 text-white"
+    }
+  },
+  "components": {
+    "buttons": {
+      "default": "h-12 px-6 rounded-md font-bold uppercase tracking-wide transition-transform active:scale-95",
+      "kitchen_touch": "h-16 text-xl w-full flex items-center justify-center rounded-lg shadow-sm border-2 border-transparent active:border-black/10"
+    },
+    "cards": {
+      "order_ticket": "bg-white border-2 border-gray-200 rounded-lg p-4 shadow-sm flex flex-col gap-2 relative overflow-hidden",
+      "dashboard_nav": "aspect-square flex flex-col items-center justify-center gap-4 text-2xl font-bold uppercase bg-white border-2 border-transparent hover:border-[#F5C518] shadow-md hover:shadow-lg transition-all"
+    },
+    "inputs": {
+      "touch_friendly": "h-14 text-lg px-4 rounded-md border-2 border-gray-300 focus:border-[#2563EB] focus:ring-0"
+    }
+  },
+  "layout_strategies": {
+    "dashboard": {
+      "type": "bento",
+      "grid_cols": "grid-cols-1 md:grid-cols-3 gap-6 p-6",
+      "container_width": "max-w-7xl mx-auto"
+    },
+    "kitchen_display": {
+      "type": "masonry",
+      "grid_cols": "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-4",
+      "notes": "Dense packing for maximum visibility of orders."
+    },
+    "cashier": {
+      "type": "split_view",
+      "structure": "grid grid-cols-12 gap-6 h-[calc(100vh-80px)] p-6",
+      "left_panel": "col-span-12 md:col-span-4 bg-white p-6 rounded-xl shadow-sm border",
+      "right_panel": "col-span-12 md:col-span-8 bg-white p-6 rounded-xl shadow-sm border overflow-y-auto"
+    }
+  },
+  "motion": {
+    "duration": {
+      "fast": "150ms",
+      "normal": "250ms"
+    },
+    "ease": "ease-out",
+    "page_transition": "initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}"
+  },
+  "visual_enhancers": {
+    "shadows": {
+      "lifted": "shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)]",
+      "sharp": "shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+    },
+    "borders": {
+      "thick": "border-2 border-gray-900"
+    }
+  },
+  "media": {
+    "images": {
+      "login_bg": {
+        "url": "https://images.unsplash.com/photo-1612966874574-e0a92ad2bc43?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzl8MHwxfHNlYXJjaHwxfHxhdXRoZW50aWMlMjBpdGFsaWFuJTIwcGFzdGElMjBwbGF0ZSUyMGZyZXNofGVufDB8fHx8MTc3MzQwMTgyNXww&ixlib=rb-4.1.0&q=85",
+        "alt": "Fresh pasta background"
+      },
+      "logo_fallback": {
+        "url": "https://images.unsplash.com/photo-1613634326309-7fe54ed25ffa?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzl8MHwxfHNlYXJjaHw0fHxhdXRoZW50aWMlMjBpdGFsaWFuJTIwcGFzdGElMjBwbGF0ZSUyMGZyZXNofGVufDB8fHx8MTc3MzQwMTgyNXww&ixlib=rb-4.1.0&q=85",
+        "alt": "Pasta plate"
+      }
+    }
+  },
+  "instructions_to_main_agent": [
+    "1. HEADER: Must be fixed height (h-16 or h-20), Background #F5C518. Logo/Text left, 'Esci' button right (black).",
+    "2. LOGIN: Full screen. Use the 'login_bg' image with an overlay. Centered white card for inputs.",
+    "3. CASSA (Cashier): Priority is speed. Input field should be auto-focused. List should show latest orders at top.",
+    "4. BOLLITORE (Kitchen): Orders are cards. Background color of the card header changes based on timer status (Green -> Red).",
+    "5. TIMERS: Use specific colors requested. Green (<2m), Pink/Red (>2m), White (Not started).",
+    "6. LANGUAGE: UI must be in Italian (e.g., 'Utente', 'Password', 'Accedi', 'Invia', 'Annulla').",
+    "7. FONTS: Import Barlow Condensed for all headings. It gives the 'Receipt/Ticket' look.",
+    "8. TESTIDS: Add data-testid to every button and input for testing."
+  ],
+  "UNIVERSAL_GUIDELINES": {
+    "do_not_use": [
+      "Gradients on buttons (use flat bold colors)",
+      "Rounded-full buttons (use rounded-md for utility)",
+      "Slow animations",
+      "English text for UI labels"
+    ],
+    "must_use": [
+      "High contrast text",
+      "Large touch targets (min 44px)",
+      "Clear visual hierarchy",
+      "shadcn/ui components customized to match the theme"
+    ]
+  }
+}
