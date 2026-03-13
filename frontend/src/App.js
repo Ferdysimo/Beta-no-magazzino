@@ -8,6 +8,7 @@ import HomePage from './pages/HomePage';
 import CassaPage from './pages/CassaPage';
 import BollitorePage from './pages/BollitorePage';
 import GeneralePage from './pages/GeneralePage';
+import ReportPage from './pages/ReportPage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -73,6 +74,11 @@ function AppRoutes() {
       <Route path="/generale" element={
         <ProtectedRoute>
           <GeneralePage />
+        </ProtectedRoute>
+      } />
+      <Route path="/report" element={
+        <ProtectedRoute>
+          <ReportPage />
         </ProtectedRoute>
       } />
     </Routes>

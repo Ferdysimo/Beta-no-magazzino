@@ -406,7 +406,10 @@ async def complete_order(order_id: str, token_data: dict = Depends(verify_token)
     
     result = await db.orders.find_one_and_update(
         {"id": order_id, "restaurant_id": restaurant_id},
-        {"$set": {"status": "completed"}},
+        {"$set": {
+            "status": "completed",
+            "completed_at": datetime.now(timezone.utc).isoformat()
+        }},
         return_document=True
     )
     
@@ -560,6 +563,114 @@ async def get_today_logs(token_data: dict = Depends(verify_token)):
     return {
         "deletions": {"count": len(deletions), "logs": deletions},
         "modifications": {"count": len(modifications), "logs": modifications}
+    }
+
+@api_router.get("/report/daily")
+async def get_daily_report(date: str = None, token_data: dict = Depends(verify_token)):
+    """Get daily report with all orders and their status changes"""
+    restaurant_id = token_data["restaurant_id"]
+    
+    # Parse date or use today
+    if date:
+        try:
+            report_date = datetime.fromisoformat(date.replace('Z', '+00:00'))
+        except:
+            report_date = datetime.now(timezone.utc)
+    else:
+        report_date = datetime.now(timezone.utc)
+    
+    day_start = report_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start.replace(hour=23, minute=59, second=59, microsecond=999999)
+    
+    # Get all orders created on this day (including completed ones)
+    orders = await db.orders.find(
+        {
+            "restaurant_id": restaurant_id,
+            "created_at": {"$gte": day_start.isoformat(), "$lte": day_end.isoformat()}
+        },
+        {"_id": 0}
+    ).sort("order_number", 1).to_list(1000)
+    
+    # Get deletions for this day
+    deletions = await db.deletion_logs.find(
+        {
+            "restaurant_id": restaurant_id,
+            "deleted_at": {"$gte": day_start.isoformat(), "$lte": day_end.isoformat()}
+        },
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Get modifications for this day
+    modifications = await db.modification_logs.find(
+        {
+            "restaurant_id": restaurant_id,
+            "modified_at": {"$gte": day_start.isoformat(), "$lte": day_end.isoformat()}
+        },
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Build report items - combine orders and deleted orders
+    report_items = []
+    
+    # Add existing orders
+    for order in orders:
+        item = {
+            "order_number": order["order_number"],
+            "description": order["description"],
+            "created_at": order["created_at"],
+            "completed_at": None,
+            "deleted_at": None,
+            "modified_at": None,
+            "status": order["status"]
+        }
+        
+        # Check if order was completed (status changed)
+        if order["status"] == "completed":
+            # We don't have exact completion time stored, so we'll use status
+            item["completed_at"] = order.get("completed_at")
+        
+        # Check for modifications
+        order_mods = [m for m in modifications if m.get("order_id") == order["id"]]
+        if order_mods:
+            # Get the latest modification
+            latest_mod = max(order_mods, key=lambda x: x["modified_at"])
+            item["modified_at"] = latest_mod["modified_at"]
+        
+        report_items.append(item)
+    
+    # Add deleted orders (they won't be in orders collection anymore)
+    for deletion in deletions:
+        # Check if this order number is already in report (shouldn't be, but just in case)
+        existing = next((r for r in report_items if r["order_number"] == deletion["order_number"]), None)
+        if not existing:
+            item = {
+                "order_number": deletion["order_number"],
+                "description": deletion["description"],
+                "created_at": deletion["original_created_at"],
+                "completed_at": None,
+                "deleted_at": deletion["deleted_at"],
+                "modified_at": None,
+                "status": "deleted"
+            }
+            
+            # Check for modifications before deletion
+            order_mods = [m for m in modifications if m.get("order_number") == deletion["order_number"]]
+            if order_mods:
+                latest_mod = max(order_mods, key=lambda x: x["modified_at"])
+                item["modified_at"] = latest_mod["modified_at"]
+            
+            report_items.append(item)
+    
+    # Sort by order number
+    report_items.sort(key=lambda x: x["order_number"])
+    
+    return {
+        "date": day_start.isoformat(),
+        "total_orders": len(report_items),
+        "completed": len([r for r in report_items if r["status"] == "completed"]),
+        "deleted": len([r for r in report_items if r["status"] == "deleted"]),
+        "pending": len([r for r in report_items if r["status"] == "pending"]),
+        "items": report_items
     }
 
 # Seed data endpoint for initial setup

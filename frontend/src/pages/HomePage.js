@@ -87,7 +87,14 @@ const HomePage = () => {
               </button>
               
               <div className="flex flex-wrap gap-2">
-                {secondaryButtons.slice(0, 2).map((btn) => (
+                <button
+                  data-testid="btn-report-cassa"
+                  onClick={() => navigate('/report')}
+                  className="bg-[#3B82F6] hover:bg-[#2563EB] text-white px-4 py-2 rounded-md font-medium text-sm transition-colors"
+                >
+                  Report di cassa
+                </button>
+                {secondaryButtons.slice(1, 2).map((btn) => (
                   <button
                     key={btn.id}
                     data-testid={`btn-${btn.id}`}
