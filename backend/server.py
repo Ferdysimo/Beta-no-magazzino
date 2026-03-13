@@ -676,16 +676,17 @@ async def get_daily_report(date: str = None, token_data: dict = Depends(verify_t
 # Seed data endpoint for initial setup
 @api_router.post("/seed")
 async def seed_data():
-    # Check if already seeded
-    existing = await db.restaurants.find_one({"username": "brazza"})
-    if existing:
-        return {"message": "Data already seeded"}
+    # Delete existing restaurants and create new ones
+    await db.restaurants.delete_many({})
+    await db.orders.delete_many({})
+    await db.deletion_logs.delete_many({})
+    await db.modification_logs.delete_many({})
     
-    # Create sample restaurants
+    # Create the 3 restaurants with new credentials
     restaurants = [
-        {"name": "Pastasciutta Roma", "username": "brazza", "password": "brazza123", "location": "Largo di Brazzà"},
-        {"name": "Pastasciutta Roma", "username": "trastevere", "password": "trastevere123", "location": "Trastevere"},
-        {"name": "Pastasciutta Roma", "username": "termini", "password": "termini123", "location": "Termini"},
+        {"name": "Pastasciutta Roma", "username": "Flaminio", "password": "Pastasciutt4!", "location": "Flaminio"},
+        {"name": "Pastasciutta Roma", "username": "Grazie", "password": "Pastasciutt4!", "location": "Grazie"},
+        {"name": "Pastasciutta Roma", "username": "Brazzà", "password": "Pastasciutt4!", "location": "Largo di Brazzà"},
     ]
     
     for r in restaurants:
@@ -700,10 +701,10 @@ async def seed_data():
             "order_counter": 0
         })
     
-    return {"message": "Seeded 3 restaurants", "credentials": [
-        {"username": "brazza", "password": "brazza123", "location": "Largo di Brazzà"},
-        {"username": "trastevere", "password": "trastevere123", "location": "Trastevere"},
-        {"username": "termini", "password": "termini123", "location": "Termini"},
+    return {"message": "Credenziali aggiornate", "accounts": [
+        {"username": "Flaminio", "password": "Pastasciutt4!", "location": "Flaminio"},
+        {"username": "Grazie", "password": "Pastasciutt4!", "location": "Grazie"},
+        {"username": "Brazzà", "password": "Pastasciutt4!", "location": "Largo di Brazzà"},
     ]}
 
 # WebSocket endpoint
