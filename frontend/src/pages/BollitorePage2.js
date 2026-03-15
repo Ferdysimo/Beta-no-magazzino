@@ -30,8 +30,8 @@ const OrderRow2 = memo(({ order, tick, onStart, onPause, onReset, onComplete }) 
 
   let rowColor = 'bg-white';
   if (order.timer_started) {
-    if (elapsed > 180) rowColor = 'bg-[#FDA4AF]';
-    else if (elapsed > 120) rowColor = 'bg-[#EF4444] text-white';
+    if (elapsed >= 240) rowColor = 'bg-gray-400 text-white';
+    else if (elapsed >= 180) rowColor = 'bg-[#EF4444] text-white';
     else rowColor = 'bg-[#22C55E] text-white';
   }
 
