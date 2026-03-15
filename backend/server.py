@@ -888,6 +888,79 @@ async def delete_supplier(supplier_id: str, token_data: dict = Depends(verify_to
     
     return {"message": "Fornitore eliminato"}
 
+# ==================== VERSAMENTI (DEPOSITS) ====================
+
+@api_router.post("/versamenti")
+async def create_versamento(
+    description: str = "",
+    control_code: str = "",
+    image_data: str = "",
+    versamento_date: str = None,
+    token_data: dict = Depends(verify_token)
+):
+    restaurant_id = token_data["restaurant_id"]
+    restaurant_name = token_data["restaurant_name"]
+    
+    # Check for duplicate control code if provided
+    if control_code:
+        existing = await db.versamenti.find_one({
+            "restaurant_id": restaurant_id,
+            "control_code": control_code
+        })
+        if existing:
+            raise HTTPException(status_code=400, detail="Codice di controllo già esistente")
+    
+    versamento_id = str(uuid.uuid4())
+    
+    versamento = {
+        "id": versamento_id,
+        "restaurant_id": restaurant_id,
+        "description": description,
+        "control_code": control_code,
+        "image_data": image_data,
+        "versamento_date": versamento_date or datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "uploaded_by": restaurant_name
+    }
+    
+    await db.versamenti.insert_one(versamento)
+    
+    return {
+        "id": versamento_id,
+        "message": "Versamento caricato con successo"
+    }
+
+@api_router.get("/versamenti")
+async def get_versamenti(
+    search: str = None,
+    token_data: dict = Depends(verify_token)
+):
+    restaurant_id = token_data["restaurant_id"]
+    
+    query = {"restaurant_id": restaurant_id}
+    
+    # Search in description
+    if search:
+        query["description"] = {"$regex": search, "$options": "i"}
+    
+    versamenti = await db.versamenti.find(query, {"_id": 0}).sort("versamento_date", -1).to_list(500)
+    
+    return versamenti
+
+@api_router.delete("/versamenti/{versamento_id}")
+async def delete_versamento(versamento_id: str, token_data: dict = Depends(verify_token)):
+    restaurant_id = token_data["restaurant_id"]
+    
+    result = await db.versamenti.delete_one({
+        "id": versamento_id,
+        "restaurant_id": restaurant_id
+    })
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Versamento non trovato")
+    
+    return {"message": "Versamento eliminato"}
+
 # Include the router in the main app
 app.include_router(api_router)
 

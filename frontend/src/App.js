@@ -11,6 +11,7 @@ import GeneralePage from './pages/GeneralePage';
 import ReportPage from './pages/ReportPage';
 import ReportExcelPage from './pages/ReportExcelPage';
 import FatturePage from './pages/FatturePage';
+import VersamentiPage from './pages/VersamentiPage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -91,6 +92,11 @@ function AppRoutes() {
       <Route path="/fatture" element={
         <ProtectedRoute>
           <FatturePage />
+        </ProtectedRoute>
+      } />
+      <Route path="/versamenti" element={
+        <ProtectedRoute>
+          <VersamentiPage />
         </ProtectedRoute>
       } />
     </Routes>
