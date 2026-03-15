@@ -11,7 +11,7 @@ const WS_URL = BACKEND_URL.replace(/^http/, 'ws');
 const OPTIMISTIC_GUARD_MS = 3000;
 const WS_BUFFER_FLUSH_MS = 300;
 const WS_PING_INTERVAL_MS = 25000;     // keepalive ping every 25s
-const POLLING_FALLBACK_MS = 15000;     // safety-net poll every 15s
+const POLLING_FALLBACK_MS = 5000;      // safety-net poll every 5s
 
 export const OrderProvider = ({ children }) => {
   const { token, restaurant } = useAuth();
@@ -197,8 +197,8 @@ export const OrderProvider = ({ children }) => {
     // Initial HTTP fetch
     fetchOrdersImpl(true);
 
-    // Connect WebSocket
-    connectWebSocket();
+    // Connect WebSocket with slight delay to avoid race with React mount/unmount
+    const wsDelay = setTimeout(() => connectWebSocket(), 500);
 
     // Safety-net polling fallback
     pollingIntervalRef.current = setInterval(() => {
@@ -213,6 +213,7 @@ export const OrderProvider = ({ children }) => {
       if (flushTimerRef.current) { clearTimeout(flushTimerRef.current); flushTimerRef.current = null; }
       if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
       if (pollingIntervalRef.current) { clearInterval(pollingIntervalRef.current); pollingIntervalRef.current = null; }
+      clearTimeout(wsDelay);
     };
   }, [restaurant?.id, token]); // eslint-disable-line react-hooks/exhaustive-deps
 
