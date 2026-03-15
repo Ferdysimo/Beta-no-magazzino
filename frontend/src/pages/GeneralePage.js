@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrders } from '../contexts/OrderContext';
 import Header from '../components/Header';
@@ -6,7 +6,10 @@ import { Check, Trash2, RefreshCw, Lock, Unlock } from 'lucide-react';
 
 const GeneralePage = () => {
   const { restaurant } = useAuth();
-  const { orders, deleteOrder, completeOrder, newOrdersAvailable, pauseUpdates, setPauseUpdates, refreshOrders } = useOrders();
+  const { orders, deleteOrder, newOrdersAvailable, pauseUpdates, setPauseUpdates, refreshOrders } = useOrders();
+  
+  // Track highlighted orders (local state, not saved to DB)
+  const [highlightedOrders, setHighlightedOrders] = useState(new Set());
 
   // Filter only pending orders, sorted by order_number ascending
   const pendingOrders = orders
@@ -20,25 +23,31 @@ const GeneralePage = () => {
     return letters === letters.toUpperCase();
   };
 
+  // Toggle highlight for an order
+  const toggleHighlight = (orderId) => {
+    setHighlightedOrders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(orderId)) {
+        newSet.delete(orderId);
+      } else {
+        newSet.add(orderId);
+      }
+      return newSet;
+    });
+  };
+
   const handleDelete = async (orderId) => {
     try {
       await deleteOrder(orderId);
+      // Remove from highlighted if it was highlighted
+      setHighlightedOrders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
     } catch (error) {
       console.error('Error deleting order:', error);
     }
-  };
-
-  const handleComplete = async (orderId) => {
-    try {
-      await completeOrder(orderId);
-    } catch (error) {
-      console.error('Error completing order:', error);
-    }
-  };
-
-  const formatTime = (isoString) => {
-    const date = new Date(isoString);
-    return date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
 
   return (
@@ -92,47 +101,57 @@ const GeneralePage = () => {
 
         {/* Orders List - Row format */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          {pendingOrders.map((order) => (
-            <div
-              key={order.id}
-              data-testid={`generale-row-${order.order_number}`}
-              className="flex items-center px-4 py-4 border-b border-gray-100 hover:bg-gray-50 transition-colors"
-            >
-              {/* Order Number */}
-              <span className="w-20 font-bold text-xl text-gray-800">
-                {order.order_number}
-              </span>
-              
-              {/* Order Description */}
-              <span className={`flex-1 text-lg text-gray-800 ${isUppercase(order.description) ? 'font-bold' : 'font-medium'}`}>
-                {order.description}
-              </span>
-              
-              {/* Action Buttons */}
-              <div className="flex items-center gap-4">
-                {/* Complete Button */}
-                <button
-                  data-testid={`generale-complete-${order.order_number}`}
-                  onClick={() => handleComplete(order.id)}
-                  className="w-10 h-10 flex items-center justify-center bg-white hover:bg-gray-100 text-gray-700 rounded border border-gray-300 transition-colors"
-                >
-                  <Check size={20} />
-                </button>
+          {pendingOrders.map((order) => {
+            const isHighlighted = highlightedOrders.has(order.id);
+            
+            return (
+              <div
+                key={order.id}
+                data-testid={`generale-row-${order.order_number}`}
+                className={`flex items-center px-4 py-4 border-b border-gray-100 transition-colors ${
+                  isHighlighted ? 'bg-blue-100' : 'hover:bg-gray-50'
+                }`}
+              >
+                {/* Order Number */}
+                <span className={`w-20 font-bold text-xl ${isHighlighted ? 'text-blue-800' : 'text-gray-800'}`}>
+                  {order.order_number}
+                </span>
                 
-                {/* Spacer */}
-                <div className="w-8" />
+                {/* Order Description */}
+                <span className={`flex-1 text-lg ${isHighlighted ? 'text-blue-800' : 'text-gray-800'} ${isUppercase(order.description) ? 'font-bold' : 'font-medium'}`}>
+                  {order.description}
+                </span>
                 
-                {/* Delete Button */}
-                <button
-                  data-testid={`generale-delete-${order.order_number}`}
-                  onClick={() => handleDelete(order.id)}
-                  className="w-10 h-10 flex items-center justify-center bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
-                >
-                  <Trash2 size={20} />
-                </button>
+                {/* Action Buttons */}
+                <div className="flex items-center gap-4">
+                  {/* Highlight Button (Check) */}
+                  <button
+                    data-testid={`generale-highlight-${order.order_number}`}
+                    onClick={() => toggleHighlight(order.id)}
+                    className={`w-10 h-10 flex items-center justify-center rounded border transition-colors ${
+                      isHighlighted
+                        ? 'bg-blue-500 text-white border-blue-500'
+                        : 'bg-white hover:bg-gray-100 text-gray-700 border-gray-300'
+                    }`}
+                  >
+                    <Check size={20} />
+                  </button>
+                  
+                  {/* Spacer */}
+                  <div className="w-8" />
+                  
+                  {/* Delete Button */}
+                  <button
+                    data-testid={`generale-delete-${order.order_number}`}
+                    onClick={() => handleDelete(order.id)}
+                    className="w-10 h-10 flex items-center justify-center bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                  >
+                    <Trash2 size={20} />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {pendingOrders.length === 0 && (
             <div className="p-8 text-center text-gray-500">

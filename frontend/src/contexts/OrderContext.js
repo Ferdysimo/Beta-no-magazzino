@@ -7,14 +7,30 @@ const OrderContext = createContext(null);
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+// Convert http(s) to ws(s)
+const WS_URL = BACKEND_URL.replace(/^http/, 'ws');
+
 export const OrderProvider = ({ children }) => {
   const { token, restaurant } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [newOrdersAvailable, setNewOrdersAvailable] = useState(false);
   const [pauseUpdates, setPauseUpdates] = useState(false);
-  const pollingRef = useRef(null);
-  const latestOrdersRef = useRef([]);
+  const wsRef = useRef(null);
+  const reconnectTimeoutRef = useRef(null);
+  const reconnectAttemptsRef = useRef(0);
+  const pauseUpdatesRef = useRef(pauseUpdates);
+  const ordersRef = useRef(orders);
+  const pendingEventsRef = useRef([]);
+
+  // Keep refs in sync
+  useEffect(() => {
+    pauseUpdatesRef.current = pauseUpdates;
+  }, [pauseUpdates]);
+
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
 
   const fetchOrders = useCallback(async (forceUpdate = false) => {
     if (!token) return;
@@ -22,58 +38,126 @@ export const OrderProvider = ({ children }) => {
       const response = await axios.get(`${API}/orders`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
-      latestOrdersRef.current = response.data;
-      
-      // If updates are paused, just notify that new orders are available
-      if (pauseUpdates && !forceUpdate) {
-        const currentIds = orders.map(o => o.id).sort().join(',');
+
+      if (pauseUpdatesRef.current && !forceUpdate) {
+        const currentIds = ordersRef.current.map(o => o.id).sort().join(',');
         const newIds = response.data.map(o => o.id).sort().join(',');
         if (currentIds !== newIds) {
           setNewOrdersAvailable(true);
+          pendingEventsRef.current = [];
         }
       } else {
         setOrders(response.data);
         setNewOrdersAvailable(false);
+        pendingEventsRef.current = [];
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
     } finally {
       setLoading(false);
     }
-  }, [token, pauseUpdates, orders]);
+  }, [token]);
+
+  // Apply a WebSocket event to orders state
+  const applyWsEvent = useCallback((event) => {
+    if (pauseUpdatesRef.current) {
+      setNewOrdersAvailable(true);
+      pendingEventsRef.current.push(event);
+      return;
+    }
+
+    const { type, order, order_id } = event;
+
+    if (type === 'order_created') {
+      setOrders(prev => {
+        // Avoid duplicates (optimistic update may have already added it)
+        if (prev.some(o => o.id === order.id)) return prev;
+        return [order, ...prev];
+      });
+    } else if (type === 'order_updated') {
+      setOrders(prev => prev.map(o => o.id === order.id ? order : o));
+    } else if (type === 'order_deleted') {
+      setOrders(prev => prev.filter(o => o.id !== order_id));
+    }
+  }, []);
+
+  // WebSocket connection
+  const connectWebSocket = useCallback(() => {
+    if (!restaurant?.id) return;
+
+    // Close existing connection
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
+    const wsUrl = `${WS_URL}/api/ws/${restaurant.id}`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+      reconnectAttemptsRef.current = 0;
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        applyWsEvent(data);
+      } catch (err) {
+        console.error('WS message parse error:', err);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket disconnected, reconnecting...');
+      wsRef.current = null;
+      // Exponential backoff reconnect: 1s, 2s, 4s, 8s, max 15s
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 15000);
+      reconnectAttemptsRef.current++;
+      reconnectTimeoutRef.current = setTimeout(connectWebSocket, delay);
+    };
+
+    ws.onerror = (err) => {
+      console.error('WebSocket error:', err);
+      ws.close();
+    };
+
+    wsRef.current = ws;
+  }, [restaurant?.id, applyWsEvent]);
 
   // Manual refresh function
   const refreshOrders = useCallback(() => {
-    setOrders(latestOrdersRef.current);
-    setNewOrdersAvailable(false);
-  }, []);
+    fetchOrders(true);
+  }, [fetchOrders]);
 
-  // Polling for real-time updates
+  // Setup: initial fetch + WebSocket connection
   useEffect(() => {
     if (!restaurant?.id || !token) return;
 
-    // Initial fetch
+    // Initial HTTP fetch for full state
     fetchOrders(true);
 
-    // Poll every 5 seconds
-    pollingRef.current = setInterval(() => {
-      fetchOrders();
-    }, 5000);
+    // Connect WebSocket for real-time updates
+    connectWebSocket();
 
     return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [restaurant?.id, token]);
+  }, [restaurant?.id, token, connectWebSocket, fetchOrders]);
 
-  // Re-fetch when pauseUpdates changes to false
+  // When pause is lifted, apply pending events
   useEffect(() => {
     if (!pauseUpdates && newOrdersAvailable) {
-      refreshOrders();
+      // Do a full re-fetch to get consistent state
+      fetchOrders(true);
     }
-  }, [pauseUpdates, newOrdersAvailable, refreshOrders]);
+  }, [pauseUpdates, newOrdersAvailable, fetchOrders]);
 
   const createOrder = async (description, orderNumber = null) => {
     const payload = { description };
@@ -85,7 +169,7 @@ export const OrderProvider = ({ children }) => {
       payload,
       { headers: { Authorization: `Bearer ${token}` } }
     );
-    // Optimistic update - add to front of list
+    // Optimistic update
     setOrders(prev => [response.data, ...prev]);
     return response.data;
   };
@@ -96,28 +180,24 @@ export const OrderProvider = ({ children }) => {
       data,
       { headers: { Authorization: `Bearer ${token}` } }
     );
-    // Optimistic update
     setOrders(prev => prev.map(o => o.id === orderId ? response.data : o));
     return response.data;
   };
 
   const deleteOrder = async (orderId) => {
-    // Optimistic update - remove immediately from UI
     setOrders(prev => prev.filter(o => o.id !== orderId));
     try {
       await axios.delete(`${API}/orders/${orderId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
     } catch (error) {
-      // Revert on error - refetch orders
-      fetchOrders();
+      fetchOrders(true);
       throw error;
     }
   };
 
   const completeOrder = async (orderId) => {
-    // Optimistic update
-    setOrders(prev => prev.map(o => 
+    setOrders(prev => prev.map(o =>
       o.id === orderId ? { ...o, status: 'completed' } : o
     ));
     try {
@@ -125,15 +205,14 @@ export const OrderProvider = ({ children }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
     } catch (error) {
-      fetchOrders();
+      fetchOrders(true);
       throw error;
     }
   };
 
   const startTimer = async (orderId) => {
     const now = new Date().toISOString();
-    // Optimistic update
-    setOrders(prev => prev.map(o => 
+    setOrders(prev => prev.map(o =>
       o.id === orderId ? { ...o, timer_started: true, timer_start_time: now, timer_paused: false } : o
     ));
     try {
@@ -141,14 +220,13 @@ export const OrderProvider = ({ children }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
     } catch (error) {
-      fetchOrders();
+      fetchOrders(true);
       throw error;
     }
   };
 
   const pauseTimer = async (orderId, elapsed) => {
-    // Optimistic update
-    setOrders(prev => prev.map(o => 
+    setOrders(prev => prev.map(o =>
       o.id === orderId ? { ...o, timer_paused: true, timer_elapsed: elapsed } : o
     ));
     try {
@@ -156,14 +234,13 @@ export const OrderProvider = ({ children }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
     } catch (error) {
-      fetchOrders();
+      fetchOrders(true);
       throw error;
     }
   };
 
   const resetTimer = async (orderId) => {
-    // Optimistic update
-    setOrders(prev => prev.map(o => 
+    setOrders(prev => prev.map(o =>
       o.id === orderId ? { ...o, timer_started: false, timer_start_time: null, timer_paused: false, timer_elapsed: 0 } : o
     ));
     try {
@@ -171,7 +248,7 @@ export const OrderProvider = ({ children }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
     } catch (error) {
-      fetchOrders();
+      fetchOrders(true);
       throw error;
     }
   };

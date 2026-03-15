@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 
 class PastasciuttaAPITester:
-    def __init__(self, base_url="https://a8f51bd2-5107-42d3-aca0-6778f0891a1a.preview.emergentagent.com"):
+    def __init__(self, base_url="https://cassa-real-time.preview.emergentagent.com"):
         self.base_url = base_url
         self.token = None
         self.restaurant_id = None

@@ -728,7 +728,7 @@ async def seed_data():
     ]}
 
 # WebSocket endpoint
-@app.websocket("/ws/{restaurant_id}")
+@app.websocket("/api/ws/{restaurant_id}")
 async def websocket_endpoint(websocket: WebSocket, restaurant_id: str):
     await manager.connect(websocket, restaurant_id)
     try:
