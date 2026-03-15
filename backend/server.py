@@ -835,12 +835,9 @@ async def delete_invoice(invoice_id: str, token_data: dict = Depends(verify_toke
 
 @api_router.get("/suppliers")
 async def get_suppliers(token_data: dict = Depends(verify_token)):
-    """Get unique suppliers for this restaurant"""
-    restaurant_id = token_data["restaurant_id"]
-    
-    # Get suppliers from dedicated collection
+    """Get all suppliers (shared across all restaurants)"""
     suppliers = await db.suppliers.find(
-        {"restaurant_id": restaurant_id},
+        {},
         {"_id": 0}
     ).sort("name", 1).to_list(100)
     
@@ -848,12 +845,9 @@ async def get_suppliers(token_data: dict = Depends(verify_token)):
 
 @api_router.post("/suppliers")
 async def create_supplier(name: str, token_data: dict = Depends(verify_token)):
-    """Add a new supplier"""
-    restaurant_id = token_data["restaurant_id"]
-    
+    """Add a new supplier (shared across all restaurants)"""
     # Check if exists
     existing = await db.suppliers.find_one({
-        "restaurant_id": restaurant_id,
         "name": {"$regex": f"^{name}$", "$options": "i"}
     })
     if existing:
@@ -863,7 +857,6 @@ async def create_supplier(name: str, token_data: dict = Depends(verify_token)):
     await db.suppliers.insert_one({
         "id": supplier_id,
         "name": name,
-        "restaurant_id": restaurant_id,
         "created_at": datetime.now(timezone.utc).isoformat()
     })
     
@@ -871,11 +864,9 @@ async def create_supplier(name: str, token_data: dict = Depends(verify_token)):
 
 @api_router.patch("/suppliers/{supplier_id}")
 async def update_supplier(supplier_id: str, name: str, token_data: dict = Depends(verify_token)):
-    """Update supplier name"""
-    restaurant_id = token_data["restaurant_id"]
-    
+    """Update supplier name (affects all restaurants)"""
     result = await db.suppliers.find_one_and_update(
-        {"id": supplier_id, "restaurant_id": restaurant_id},
+        {"id": supplier_id},
         {"$set": {"name": name}},
         return_document=True
     )
@@ -887,12 +878,9 @@ async def update_supplier(supplier_id: str, name: str, token_data: dict = Depend
 
 @api_router.delete("/suppliers/{supplier_id}")
 async def delete_supplier(supplier_id: str, token_data: dict = Depends(verify_token)):
-    """Delete a supplier"""
-    restaurant_id = token_data["restaurant_id"]
-    
+    """Delete a supplier (affects all restaurants)"""
     result = await db.suppliers.delete_one({
-        "id": supplier_id,
-        "restaurant_id": restaurant_id
+        "id": supplier_id
     })
     
     if result.deleted_count == 0:
