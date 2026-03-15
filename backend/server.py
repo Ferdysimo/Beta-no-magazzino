@@ -174,7 +174,11 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) 
 # Routes
 @api_router.get("/")
 async def root():
-    return {"message": "Pastasciutta Roma API"}
+    return {"message": "Pastasciutta Roma API", "version": "2026031501"}
+
+@api_router.get("/version")
+async def version_check():
+    return {"version": "2026031501", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 # Restaurant Routes
 @api_router.post("/restaurants", response_model=RestaurantResponse)
