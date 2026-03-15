@@ -53,9 +53,7 @@ const GeneralePage = () => {
             <div
               key={order.id}
               data-testid={`generale-row-${order.order_number}`}
-              className={`flex items-center px-4 py-4 border-b border-gray-100 transition-colors ${
-                isUppercase(order.description) ? 'bg-gray-200 hover:bg-gray-300' : 'hover:bg-gray-50'
-              }`}
+              className="flex items-center px-4 py-4 border-b border-gray-100 hover:bg-gray-50 transition-colors"
             >
               {/* Order Number */}
               <span className="w-20 font-bold text-xl text-gray-800">
@@ -63,7 +61,7 @@ const GeneralePage = () => {
               </span>
               
               {/* Order Description */}
-              <span className="flex-1 font-medium text-lg text-gray-800">
+              <span className={`flex-1 text-lg text-gray-800 ${isUppercase(order.description) ? 'font-bold' : 'font-medium'}`}>
                 {order.description}
               </span>
               

@@ -278,9 +278,7 @@ const CassaPage = () => {
             <div
               key={order.id}
               data-testid={`order-row-${order.order_number}`}
-              className={`flex items-center px-4 py-3 border-b border-gray-100 transition-colors ${
-                isUppercase(order.description) ? 'bg-gray-200 hover:bg-gray-300' : 'hover:bg-gray-50'
-              }`}
+              className="flex items-center px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors"
             >
               <span className="w-16 font-bold text-gray-800 text-lg">{order.order_number}</span>
               
@@ -314,7 +312,9 @@ const CassaPage = () => {
                   </button>
                 </div>
               ) : (
-                <span className="flex-1 font-medium text-gray-800">{order.description}</span>
+                <span className={`flex-1 text-gray-800 ${isUppercase(order.description) ? 'font-bold' : 'font-medium'}`}>
+                  {order.description}
+                </span>
               )}
               
               <span className="w-24 text-gray-600 text-sm">{formatTime(order.created_at)}</span>

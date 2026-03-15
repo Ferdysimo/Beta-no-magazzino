@@ -54,10 +54,7 @@ const BollitorePage = () => {
   };
 
   const getRowColor = (order) => {
-    if (!order.timer_started) {
-      // No timer - check uppercase for darker background
-      return isUppercase(order.description) ? 'bg-gray-200' : 'bg-white';
-    }
+    if (!order.timer_started) return 'bg-white';
     
     const elapsed = getElapsedSeconds(order);
     
@@ -125,7 +122,9 @@ const BollitorePage = () => {
                 className={`flex items-center px-4 py-4 border-b border-gray-100 transition-colors ${rowColor}`}
               >
                 <span className="w-16 font-bold text-lg">{order.order_number}</span>
-                <span className="flex-1 font-medium text-lg">{order.description}</span>
+                <span className={`flex-1 text-lg ${isUppercase(order.description) ? 'font-bold' : 'font-medium'}`}>
+                  {order.description}
+                </span>
                 
                 <span className="w-28 font-mono text-lg font-bold tabular-nums">
                   {order.timer_started ? formatTimer(elapsed) : ''}
