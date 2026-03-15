@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
+import { APP_VERSION } from '../components/Header';
+
 const LoginPage = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -129,7 +131,7 @@ const LoginPage = () => {
 
         {/* Footer */}
         <p className="text-center text-white/60 text-sm mt-6">
-          © 2026 Pastasciutta Srl
+          © 2026 Pastasciutta Srl — v{APP_VERSION}
         </p>
       </div>
     </div>

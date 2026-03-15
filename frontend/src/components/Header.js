@@ -2,6 +2,9 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
+// Build version - changes force CDN cache invalidation
+export const APP_VERSION = '2026031501';
+
 const Header = () => {
   const { logout } = useAuth();
   const navigate = useNavigate();
