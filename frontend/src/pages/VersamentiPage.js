@@ -91,13 +91,12 @@ const VersamentiPage = () => {
       const reader = new FileReader();
       reader.onloadend = async () => {
         try {
-          const params = new URLSearchParams();
-          params.append('description', description);
-          params.append('control_code', controlCode);
-          params.append('image_data', reader.result);
-          params.append('versamento_date', new Date(versamentoDate).toISOString());
-          
-          await axios.post(`${API}/versamenti?${params.toString()}`, {}, {
+          await axios.post(`${API}/versamenti`, {
+            description,
+            control_code: controlCode,
+            image_data: reader.result,
+            versamento_date: new Date(versamentoDate).toISOString()
+          }, {
             headers: { Authorization: `Bearer ${token}` }
           });
           

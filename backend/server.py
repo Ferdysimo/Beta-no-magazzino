@@ -890,22 +890,22 @@ async def delete_supplier(supplier_id: str, token_data: dict = Depends(verify_to
 
 # ==================== VERSAMENTI (DEPOSITS) ====================
 
+class VersamentoCreate(BaseModel):
+    description: str = ""
+    control_code: str = ""
+    image_data: str = ""
+    versamento_date: str = None
+
 @api_router.post("/versamenti")
-async def create_versamento(
-    description: str = "",
-    control_code: str = "",
-    image_data: str = "",
-    versamento_date: str = None,
-    token_data: dict = Depends(verify_token)
-):
+async def create_versamento(data: VersamentoCreate, token_data: dict = Depends(verify_token)):
     restaurant_id = token_data["restaurant_id"]
     restaurant_name = token_data["restaurant_name"]
     
     # Check for duplicate control code if provided
-    if control_code:
+    if data.control_code:
         existing = await db.versamenti.find_one({
             "restaurant_id": restaurant_id,
-            "control_code": control_code
+            "control_code": data.control_code
         })
         if existing:
             raise HTTPException(status_code=400, detail="Codice di controllo già esistente")
@@ -915,10 +915,10 @@ async def create_versamento(
     versamento = {
         "id": versamento_id,
         "restaurant_id": restaurant_id,
-        "description": description,
-        "control_code": control_code,
-        "image_data": image_data,
-        "versamento_date": versamento_date or datetime.now(timezone.utc).isoformat(),
+        "description": data.description,
+        "control_code": data.control_code,
+        "image_data": data.image_data,
+        "versamento_date": data.versamento_date or datetime.now(timezone.utc).isoformat(),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "uploaded_by": restaurant_name
     }
