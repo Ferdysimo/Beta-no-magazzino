@@ -734,8 +734,14 @@ async def websocket_endpoint(websocket: WebSocket, restaurant_id: str):
     try:
         while True:
             data = await websocket.receive_text()
-            message = json.loads(data)
-            logger.info(f"Received WS message: {message}")
+            try:
+                message = json.loads(data)
+                if message.get("type") == "ping":
+                    await websocket.send_json({"type": "pong"})
+                else:
+                    logger.info(f"Received WS message: {message}")
+            except json.JSONDecodeError:
+                pass
     except WebSocketDisconnect:
         manager.disconnect(websocket, restaurant_id)
     except Exception as e:
