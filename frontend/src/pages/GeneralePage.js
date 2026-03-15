@@ -109,7 +109,7 @@ const GeneralePage = () => {
                 key={order.id}
                 data-testid={`generale-row-${order.order_number}`}
                 className={`flex items-center px-4 py-4 border-b border-gray-100 transition-colors ${
-                  isHighlighted ? 'bg-blue-400' : 'hover:bg-gray-50'
+                  isHighlighted ? 'bg-blue-700' : 'hover:bg-gray-50'
                 }`}
               >
                 {/* Order Number */}
@@ -130,7 +130,7 @@ const GeneralePage = () => {
                     onClick={() => toggleHighlight(order.id)}
                     className={`w-10 h-10 flex items-center justify-center rounded border transition-colors ${
                       isHighlighted
-                        ? 'bg-blue-500 text-white border-blue-500'
+                        ? 'bg-blue-700 text-white border-blue-700'
                         : 'bg-white hover:bg-gray-100 text-gray-700 border-gray-300'
                     }`}
                   >
