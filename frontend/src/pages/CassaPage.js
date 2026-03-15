@@ -142,6 +142,13 @@ const CassaPage = () => {
     return `00:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
+  // Check if description is uppercase (for table grouping)
+  const isUppercase = (text) => {
+    const letters = text.replace(/[^a-zA-Z]/g, '');
+    if (letters.length === 0) return false;
+    return letters === letters.toUpperCase();
+  };
+
   // Filter pending orders
   const pendingOrders = orders.filter(o => o.status === 'pending');
   const completedOrders = orders.filter(o => o.status === 'completed');
@@ -271,7 +278,9 @@ const CassaPage = () => {
             <div
               key={order.id}
               data-testid={`order-row-${order.order_number}`}
-              className="flex items-center px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors"
+              className={`flex items-center px-4 py-3 border-b border-gray-100 transition-colors ${
+                isUppercase(order.description) ? 'bg-gray-100 hover:bg-gray-200' : 'hover:bg-gray-50'
+              }`}
             >
               <span className="w-16 font-bold text-gray-800 text-lg">{order.order_number}</span>
               
