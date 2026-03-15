@@ -124,6 +124,22 @@ class ModificationLog(BaseModel):
     restaurant_id: str
     modified_at: str
 
+class InvoiceCreate(BaseModel):
+    supplier: str
+    paid: bool = False
+    control_code: str
+    image_data: str  # Base64 encoded image
+
+class InvoiceResponse(BaseModel):
+    id: str
+    restaurant_id: str
+    supplier: str
+    paid: bool
+    control_code: str
+    image_url: str
+    created_at: str
+    uploaded_by: str
+
 class OrderResponse(BaseModel):
     id: str
     order_number: int
@@ -717,7 +733,6 @@ async def websocket_endpoint(websocket: WebSocket, restaurant_id: str):
     try:
         while True:
             data = await websocket.receive_text()
-            # Handle any incoming messages if needed
             message = json.loads(data)
             logger.info(f"Received WS message: {message}")
     except WebSocketDisconnect:
@@ -725,6 +740,104 @@ async def websocket_endpoint(websocket: WebSocket, restaurant_id: str):
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
         manager.disconnect(websocket, restaurant_id)
+
+# ==================== INVOICES (FATTURE) ====================
+
+@api_router.post("/invoices")
+async def create_invoice(data: InvoiceCreate, token_data: dict = Depends(verify_token)):
+    restaurant_id = token_data["restaurant_id"]
+    restaurant_name = token_data["restaurant_name"]
+    
+    # Check for duplicate control code
+    existing = await db.invoices.find_one({
+        "restaurant_id": restaurant_id,
+        "control_code": data.control_code
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail="Codice di controllo già esistente")
+    
+    invoice_id = str(uuid.uuid4())
+    
+    invoice = {
+        "id": invoice_id,
+        "restaurant_id": restaurant_id,
+        "supplier": data.supplier,
+        "paid": data.paid,
+        "control_code": data.control_code,
+        "image_data": data.image_data,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "uploaded_by": restaurant_name
+    }
+    
+    await db.invoices.insert_one(invoice)
+    
+    return {
+        "id": invoice_id,
+        "message": "Fattura caricata con successo"
+    }
+
+@api_router.get("/invoices")
+async def get_invoices(
+    date: str = None,
+    supplier: str = None,
+    token_data: dict = Depends(verify_token)
+):
+    restaurant_id = token_data["restaurant_id"]
+    
+    query = {"restaurant_id": restaurant_id}
+    
+    # Filter by date
+    if date:
+        day_start = datetime.fromisoformat(date.replace('Z', '+00:00')).replace(hour=0, minute=0, second=0)
+        day_end = day_start.replace(hour=23, minute=59, second=59)
+        query["created_at"] = {"$gte": day_start.isoformat(), "$lte": day_end.isoformat()}
+    
+    # Filter by supplier
+    if supplier and supplier != "all":
+        query["supplier"] = supplier
+    
+    invoices = await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    
+    return invoices
+
+@api_router.get("/invoices/{invoice_id}")
+async def get_invoice(invoice_id: str, token_data: dict = Depends(verify_token)):
+    invoice = await db.invoices.find_one(
+        {"id": invoice_id, "restaurant_id": token_data["restaurant_id"]},
+        {"_id": 0}
+    )
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Fattura non trovata")
+    return invoice
+
+@api_router.patch("/invoices/{invoice_id}")
+async def update_invoice(invoice_id: str, paid: bool, token_data: dict = Depends(verify_token)):
+    result = await db.invoices.find_one_and_update(
+        {"id": invoice_id, "restaurant_id": token_data["restaurant_id"]},
+        {"$set": {"paid": paid}},
+        return_document=True
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Fattura non trovata")
+    return {"message": "Fattura aggiornata"}
+
+@api_router.delete("/invoices/{invoice_id}")
+async def delete_invoice(invoice_id: str, token_data: dict = Depends(verify_token)):
+    result = await db.invoices.delete_one({
+        "id": invoice_id,
+        "restaurant_id": token_data["restaurant_id"]
+    })
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Fattura non trovata")
+    return {"message": "Fattura eliminata"}
+
+@api_router.get("/suppliers")
+async def get_suppliers(token_data: dict = Depends(verify_token)):
+    """Get unique suppliers for this restaurant"""
+    restaurant_id = token_data["restaurant_id"]
+    
+    suppliers = await db.invoices.distinct("supplier", {"restaurant_id": restaurant_id})
+    return suppliers
 
 # Include the router in the main app
 app.include_router(api_router)

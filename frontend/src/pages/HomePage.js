@@ -104,15 +104,25 @@ const HomePage = () => {
               </div>
               
               <div className="flex flex-wrap gap-2">
-                {secondaryButtons.slice(2).map((btn) => (
-                  <button
-                    key={btn.id}
-                    data-testid={`btn-${btn.id}`}
-                    className="bg-[#60A5FA] hover:bg-[#3B82F6] text-white px-4 py-2 rounded-md font-medium text-sm transition-colors"
-                  >
-                    {btn.label}
-                  </button>
-                ))}
+                <button
+                  data-testid="btn-versamenti"
+                  className="bg-[#60A5FA] hover:bg-[#3B82F6] text-white px-4 py-2 rounded-md font-medium text-sm transition-colors"
+                >
+                  Versamenti
+                </button>
+                <button
+                  data-testid="btn-chiusure"
+                  className="bg-[#60A5FA] hover:bg-[#3B82F6] text-white px-4 py-2 rounded-md font-medium text-sm transition-colors"
+                >
+                  Chiusure
+                </button>
+                <button
+                  data-testid="btn-fatture"
+                  onClick={() => navigate('/fatture')}
+                  className="bg-[#60A5FA] hover:bg-[#3B82F6] text-white px-4 py-2 rounded-md font-medium text-sm transition-colors"
+                >
+                  Fatture
+                </button>
               </div>
             </div>
 

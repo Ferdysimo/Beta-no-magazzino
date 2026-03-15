@@ -10,6 +10,7 @@ import BollitorePage from './pages/BollitorePage';
 import GeneralePage from './pages/GeneralePage';
 import ReportPage from './pages/ReportPage';
 import ReportExcelPage from './pages/ReportExcelPage';
+import FatturePage from './pages/FatturePage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -85,6 +86,11 @@ function AppRoutes() {
       <Route path="/report-excel" element={
         <ProtectedRoute>
           <ReportExcelPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/fatture" element={
+        <ProtectedRoute>
+          <FatturePage />
         </ProtectedRoute>
       } />
     </Routes>
