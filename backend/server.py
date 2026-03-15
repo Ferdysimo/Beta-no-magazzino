@@ -961,6 +961,86 @@ async def delete_versamento(versamento_id: str, token_data: dict = Depends(verif
     
     return {"message": "Versamento eliminato"}
 
+# ==================== CHIUSURE (CLOSURES) ====================
+
+class ChiusuraCreate(BaseModel):
+    description: str = ""
+    tipologia: str = "Piatti"
+    control_code: str = ""
+    image_data: str = ""
+    chiusura_date: str = None
+
+@api_router.post("/chiusure")
+async def create_chiusura(data: ChiusuraCreate, token_data: dict = Depends(verify_token)):
+    restaurant_id = token_data["restaurant_id"]
+    restaurant_name = token_data["restaurant_name"]
+    
+    # Check for duplicate control code if provided
+    if data.control_code:
+        existing = await db.chiusure.find_one({
+            "restaurant_id": restaurant_id,
+            "control_code": data.control_code
+        })
+        if existing:
+            raise HTTPException(status_code=400, detail="Codice di controllo già esistente")
+    
+    chiusura_id = str(uuid.uuid4())
+    
+    chiusura = {
+        "id": chiusura_id,
+        "restaurant_id": restaurant_id,
+        "description": data.description,
+        "tipologia": data.tipologia,
+        "control_code": data.control_code,
+        "image_data": data.image_data,
+        "chiusura_date": data.chiusura_date or datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "uploaded_by": restaurant_name
+    }
+    
+    await db.chiusure.insert_one(chiusura)
+    
+    return {
+        "id": chiusura_id,
+        "message": "Chiusura caricata con successo"
+    }
+
+@api_router.get("/chiusure")
+async def get_chiusure(
+    search: str = None,
+    tipologia: str = None,
+    token_data: dict = Depends(verify_token)
+):
+    restaurant_id = token_data["restaurant_id"]
+    
+    query = {"restaurant_id": restaurant_id}
+    
+    # Filter by tipologia
+    if tipologia and tipologia != "all":
+        query["tipologia"] = tipologia
+    
+    # Search in description
+    if search:
+        query["description"] = {"$regex": search, "$options": "i"}
+    
+    chiusure = await db.chiusure.find(query, {"_id": 0}).sort("chiusura_date", -1).to_list(500)
+    
+    return chiusure
+
+@api_router.delete("/chiusure/{chiusura_id}")
+async def delete_chiusura(chiusura_id: str, token_data: dict = Depends(verify_token)):
+    restaurant_id = token_data["restaurant_id"]
+    
+    result = await db.chiusure.delete_one({
+        "id": chiusura_id,
+        "restaurant_id": restaurant_id
+    })
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Chiusura non trovata")
+    
+    return {"message": "Chiusura eliminata"}
+
 # Include the router in the main app
 app.include_router(api_router)
 
