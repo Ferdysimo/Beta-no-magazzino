@@ -109,16 +109,16 @@ const GeneralePage = () => {
                 key={order.id}
                 data-testid={`generale-row-${order.order_number}`}
                 className={`flex items-center px-4 py-4 border-b border-gray-100 transition-colors ${
-                  isHighlighted ? 'bg-blue-100' : 'hover:bg-gray-50'
+                  isHighlighted ? 'bg-blue-400' : 'hover:bg-gray-50'
                 }`}
               >
                 {/* Order Number */}
-                <span className={`w-20 font-bold text-xl ${isHighlighted ? 'text-blue-800' : 'text-gray-800'}`}>
+                <span className={`w-20 font-bold text-xl ${isHighlighted ? 'text-white' : 'text-gray-800'}`}>
                   {order.order_number}
                 </span>
                 
                 {/* Order Description */}
-                <span className={`flex-1 text-lg ${isHighlighted ? 'text-blue-800' : 'text-gray-800'} ${isUppercase(order.description) ? 'font-bold' : 'font-medium'}`}>
+                <span className={`flex-1 text-lg ${isHighlighted ? 'text-white' : 'text-gray-800'} ${isUppercase(order.description) ? 'font-bold' : 'font-medium'}`}>
                   {order.description}
                 </span>
                 
