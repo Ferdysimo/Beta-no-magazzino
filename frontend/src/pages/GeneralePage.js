@@ -11,6 +11,13 @@ const GeneralePage = () => {
   // Filter only pending orders
   const pendingOrders = orders.filter(o => o.status === 'pending');
 
+  // Check if description is uppercase (for table grouping)
+  const isUppercase = (text) => {
+    const letters = text.replace(/[^a-zA-Z]/g, '');
+    if (letters.length === 0) return false;
+    return letters === letters.toUpperCase();
+  };
+
   const handleDelete = async (orderId) => {
     try {
       await deleteOrder(orderId);
@@ -46,7 +53,9 @@ const GeneralePage = () => {
             <div
               key={order.id}
               data-testid={`generale-row-${order.order_number}`}
-              className="flex items-center px-4 py-4 border-b border-gray-100 hover:bg-gray-50 transition-colors"
+              className={`flex items-center px-4 py-4 border-b border-gray-100 transition-colors ${
+                isUppercase(order.description) ? 'bg-gray-200 hover:bg-gray-300' : 'hover:bg-gray-50'
+              }`}
             >
               {/* Order Number */}
               <span className="w-20 font-bold text-xl text-gray-800">

@@ -13,6 +13,13 @@ const BollitorePage = () => {
   // Filter only pending orders
   const pendingOrders = orders.filter(o => o.status === 'pending');
 
+  // Check if description is uppercase (for table grouping)
+  const isUppercase = (text) => {
+    const letters = text.replace(/[^a-zA-Z]/g, '');
+    if (letters.length === 0) return false;
+    return letters === letters.toUpperCase();
+  };
+
   // Tick every second to force re-render for timer updates
   useEffect(() => {
     intervalRef.current = setInterval(() => {
@@ -47,7 +54,10 @@ const BollitorePage = () => {
   };
 
   const getRowColor = (order) => {
-    if (!order.timer_started) return 'bg-white';
+    if (!order.timer_started) {
+      // No timer - check uppercase for darker background
+      return isUppercase(order.description) ? 'bg-gray-200' : 'bg-white';
+    }
     
     const elapsed = getElapsedSeconds(order);
     

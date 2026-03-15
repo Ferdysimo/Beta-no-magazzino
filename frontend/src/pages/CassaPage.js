@@ -279,7 +279,7 @@ const CassaPage = () => {
               key={order.id}
               data-testid={`order-row-${order.order_number}`}
               className={`flex items-center px-4 py-3 border-b border-gray-100 transition-colors ${
-                isUppercase(order.description) ? 'bg-gray-100 hover:bg-gray-200' : 'hover:bg-gray-50'
+                isUppercase(order.description) ? 'bg-gray-200 hover:bg-gray-300' : 'hover:bg-gray-50'
               }`}
             >
               <span className="w-16 font-bold text-gray-800 text-lg">{order.order_number}</span>
