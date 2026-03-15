@@ -152,6 +152,7 @@ class OrderResponse(BaseModel):
     timer_start_time: Optional[str]
     timer_paused: bool
     timer_elapsed: int
+    kitchen_completed: bool = False
 
 # Auth helpers
 def create_token(restaurant_id: str, restaurant_name: str) -> str:
@@ -284,7 +285,8 @@ async def create_order(data: OrderCreate, token_data: dict = Depends(verify_toke
         "timer_started": False,
         "timer_start_time": None,
         "timer_paused": False,
-        "timer_elapsed": 0
+        "timer_elapsed": 0,
+        "kitchen_completed": False
     }
     
     await db.orders.insert_one(order)
@@ -445,6 +447,28 @@ async def complete_order(order_id: str, token_data: dict = Depends(verify_token)
     })
     
     return {"message": "Order completed"}
+
+@api_router.post("/orders/{order_id}/kitchen-complete")
+async def kitchen_complete_order(order_id: str, token_data: dict = Depends(verify_token)):
+    restaurant_id = token_data["restaurant_id"]
+    
+    result = await db.orders.find_one_and_update(
+        {"id": order_id, "restaurant_id": restaurant_id},
+        {"$set": {"kitchen_completed": True}},
+        return_document=True
+    )
+    
+    if not result:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    order_response = {k: v for k, v in result.items() if k != "_id"}
+    
+    await manager.broadcast_to_restaurant(restaurant_id, {
+        "type": "order_updated",
+        "order": order_response
+    })
+    
+    return {"message": "Order kitchen completed"}
 
 @api_router.post("/orders/{order_id}/timer/start")
 async def start_timer(order_id: str, token_data: dict = Depends(verify_token)):

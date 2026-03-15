@@ -87,12 +87,12 @@ const OrderRow = memo(({ order, tick, onStart, onPause, onReset, onComplete }) =
 
 const BollitorePage = () => {
   const { restaurant } = useAuth();
-  const { orders, startTimer, pauseTimer, resetTimer, completeOrder, newOrdersAvailable, pauseUpdates, setPauseUpdates, refreshOrders } = useOrders();
+  const { orders, startTimer, pauseTimer, resetTimer, kitchenComplete, newOrdersAvailable, pauseUpdates, setPauseUpdates, refreshOrders } = useOrders();
   const [tick, setTick] = useState(0);
   const intervalRef = useRef(null);
 
   const pendingOrders = orders
-    .filter(o => o.status === 'pending' && !o.description.trim().endsWith('-'))
+    .filter(o => o.status === 'pending' && !o.kitchen_completed && !o.description.trim().endsWith('-'))
     .sort((a, b) => a.order_number - b.order_number);
 
   useEffect(() => {
@@ -113,8 +113,8 @@ const BollitorePage = () => {
   }, [resetTimer]);
 
   const handleComplete = useCallback(async (id) => {
-    try { await completeOrder(id); } catch (e) { console.error('Error completing order:', e); }
-  }, [completeOrder]);
+    try { await kitchenComplete(id); } catch (e) { console.error('Error completing order:', e); }
+  }, [kitchenComplete]);
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">

@@ -40,6 +40,7 @@ Clone and enhance the website `https://webapp.pastasciuttaroma.com/` - a multi-r
 - [x] Lock updates feature on tablet pages
 - [x] Darker blue highlight on Tablet Generale (bg-blue-700 + white text)
 - [x] Timer Play button race condition fix (single DOM node + WS buffering + optimistic guard)
+- [x] Separation Bollitore/Cassa: kitchen_completed field + endpoint (orders stay in Cassa after kitchen completion)
 
 ## Prioritized Backlog
 - **P1**: Populate supplier list (user will provide data)

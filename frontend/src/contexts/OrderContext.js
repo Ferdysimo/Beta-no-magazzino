@@ -274,6 +274,22 @@ export const OrderProvider = ({ children }) => {
     }
   };
 
+  const kitchenComplete = async (orderId) => {
+    guardOrder(orderId);
+    setOrders(prev => prev.map(o =>
+      o.id === orderId ? { ...o, kitchen_completed: true } : o
+    ));
+    try {
+      await axios.post(`${API}/orders/${orderId}/kitchen-complete`, {}, {
+        headers: { Authorization: `Bearer ${tokenRef.current}` }
+      });
+    } catch (error) {
+      optimisticGuardRef.current.delete(orderId);
+      fetchOrdersImpl(true);
+      throw error;
+    }
+  };
+
   const startTimer = async (orderId) => {
     guardOrder(orderId);
     const now = new Date().toISOString();
@@ -327,7 +343,7 @@ export const OrderProvider = ({ children }) => {
     <OrderContext.Provider value={{
       orders, loading, newOrdersAvailable, pauseUpdates, setPauseUpdates,
       refreshOrders, fetchOrders, createOrder, updateOrder, deleteOrder,
-      completeOrder, startTimer, pauseTimer, resetTimer
+      completeOrder, kitchenComplete, startTimer, pauseTimer, resetTimer
     }}>
       {children}
     </OrderContext.Provider>
