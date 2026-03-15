@@ -140,6 +140,20 @@ const HomePage = () => {
                 </button>
                 <span className="text-gray-600 text-sm">ordini scritti normalmente</span>
               </div>
+
+              {/* Tablet Bollitore 2 - SOLO PER FLAMINIO */}
+              {restaurant?.location === 'Flaminio' && (
+                <div className="flex items-center gap-4">
+                  <button
+                    data-testid="btn-tablet-bollitore-2"
+                    onClick={() => navigate('/bollitore2')}
+                    className="action-button"
+                  >
+                    Tablet bollitore 2
+                  </button>
+                  <span className="text-gray-600 text-sm">simbolo: -</span>
+                </div>
+              )}
               
               <div className="flex items-center gap-4">
                 <button

@@ -13,6 +13,7 @@ import ReportExcelPage from './pages/ReportExcelPage';
 import FatturePage from './pages/FatturePage';
 import VersamentiPage from './pages/VersamentiPage';
 import ChiusurePage from './pages/ChiusurePage';
+import BollitorePage2 from './pages/BollitorePage2';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -103,6 +104,11 @@ function AppRoutes() {
       <Route path="/chiusure" element={
         <ProtectedRoute>
           <ChiusurePage />
+        </ProtectedRoute>
+      } />
+      <Route path="/bollitore2" element={
+        <ProtectedRoute>
+          <BollitorePage2 />
         </ProtectedRoute>
       } />
     </Routes>
