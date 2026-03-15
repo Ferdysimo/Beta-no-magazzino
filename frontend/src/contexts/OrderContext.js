@@ -6,9 +6,12 @@ const OrderContext = createContext(null);
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
-
-// Convert http(s) to ws(s)
 const WS_URL = BACKEND_URL.replace(/^http/, 'ws');
+
+// How long to ignore WebSocket echoes for optimistically updated orders (ms)
+const OPTIMISTIC_GUARD_MS = 3000;
+// How often to flush buffered WebSocket events (ms)
+const WS_BUFFER_FLUSH_MS = 300;
 
 export const OrderProvider = ({ children }) => {
   const { token, restaurant } = useAuth();
@@ -21,16 +24,33 @@ export const OrderProvider = ({ children }) => {
   const reconnectAttemptsRef = useRef(0);
   const pauseUpdatesRef = useRef(pauseUpdates);
   const ordersRef = useRef(orders);
-  const pendingEventsRef = useRef([]);
 
-  // Keep refs in sync
-  useEffect(() => {
-    pauseUpdatesRef.current = pauseUpdates;
-  }, [pauseUpdates]);
+  // Track order IDs that were recently optimistically updated
+  // so we can ignore the WebSocket echo for them
+  const optimisticGuardRef = useRef(new Map()); // orderId -> expiry timestamp
 
-  useEffect(() => {
-    ordersRef.current = orders;
-  }, [orders]);
+  // Buffer for incoming WebSocket events
+  const wsBufferRef = useRef([]);
+  const flushTimerRef = useRef(null);
+
+  useEffect(() => { pauseUpdatesRef.current = pauseUpdates; }, [pauseUpdates]);
+  useEffect(() => { ordersRef.current = orders; }, [orders]);
+
+  // Mark an order as "just optimistically updated" — ignore WS echoes for it
+  const guardOrder = useCallback((orderId) => {
+    optimisticGuardRef.current.set(orderId, Date.now() + OPTIMISTIC_GUARD_MS);
+  }, []);
+
+  // Check if an order is currently guarded
+  const isGuarded = useCallback((orderId) => {
+    const expiry = optimisticGuardRef.current.get(orderId);
+    if (!expiry) return false;
+    if (Date.now() > expiry) {
+      optimisticGuardRef.current.delete(orderId);
+      return false;
+    }
+    return true;
+  }, []);
 
   const fetchOrders = useCallback(async (forceUpdate = false) => {
     if (!token) return;
@@ -44,12 +64,12 @@ export const OrderProvider = ({ children }) => {
         const newIds = response.data.map(o => o.id).sort().join(',');
         if (currentIds !== newIds) {
           setNewOrdersAvailable(true);
-          pendingEventsRef.current = [];
         }
       } else {
         setOrders(response.data);
         setNewOrdersAvailable(false);
-        pendingEventsRef.current = [];
+        // Clear all guards on full refresh
+        optimisticGuardRef.current.clear();
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
@@ -58,34 +78,56 @@ export const OrderProvider = ({ children }) => {
     }
   }, [token]);
 
-  // Apply a WebSocket event to orders state
-  const applyWsEvent = useCallback((event) => {
+  // Flush buffered WebSocket events in one batch
+  const flushWsBuffer = useCallback(() => {
+    const events = wsBufferRef.current;
+    if (events.length === 0) return;
+    wsBufferRef.current = [];
+
     if (pauseUpdatesRef.current) {
       setNewOrdersAvailable(true);
-      pendingEventsRef.current.push(event);
       return;
     }
 
-    const { type, order, order_id } = event;
+    setOrders(prev => {
+      let next = [...prev];
+      for (const event of events) {
+        const { type, order, order_id } = event;
 
-    if (type === 'order_created') {
-      setOrders(prev => {
-        // Avoid duplicates (optimistic update may have already added it)
-        if (prev.some(o => o.id === order.id)) return prev;
-        return [order, ...prev];
-      });
-    } else if (type === 'order_updated') {
-      setOrders(prev => prev.map(o => o.id === order.id ? order : o));
-    } else if (type === 'order_deleted') {
-      setOrders(prev => prev.filter(o => o.id !== order_id));
+        if (type === 'order_created') {
+          if (!next.some(o => o.id === order.id)) {
+            next = [order, ...next];
+          }
+        } else if (type === 'order_updated') {
+          // Skip echo for guarded orders
+          if (isGuarded(order.id)) continue;
+          next = next.map(o => o.id === order.id ? order : o);
+        } else if (type === 'order_deleted') {
+          if (isGuarded(order_id)) continue;
+          next = next.filter(o => o.id !== order_id);
+        }
+      }
+      return next;
+    });
+  }, [isGuarded]);
+
+  // Queue a WebSocket event into the buffer
+  const enqueueWsEvent = useCallback((event) => {
+    wsBufferRef.current.push(event);
+
+    // Schedule a flush if one isn't already pending
+    if (!flushTimerRef.current) {
+      flushTimerRef.current = setTimeout(() => {
+        flushTimerRef.current = null;
+        flushWsBuffer();
+      }, WS_BUFFER_FLUSH_MS);
     }
-  }, []);
+  }, [flushWsBuffer]);
 
   // WebSocket connection
   const connectWebSocket = useCallback(() => {
     if (!restaurant?.id) return;
 
-    // Close existing connection
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
@@ -102,7 +144,7 @@ export const OrderProvider = ({ children }) => {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        applyWsEvent(data);
+        enqueueWsEvent(data);
       } catch (err) {
         console.error('WS message parse error:', err);
       }
@@ -111,7 +153,6 @@ export const OrderProvider = ({ children }) => {
     ws.onclose = () => {
       console.log('WebSocket disconnected, reconnecting...');
       wsRef.current = null;
-      // Exponential backoff reconnect: 1s, 2s, 4s, 8s, max 15s
       const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 15000);
       reconnectAttemptsRef.current++;
       reconnectTimeoutRef.current = setTimeout(connectWebSocket, delay);
@@ -123,80 +164,69 @@ export const OrderProvider = ({ children }) => {
     };
 
     wsRef.current = ws;
-  }, [restaurant?.id, applyWsEvent]);
+  }, [restaurant?.id, enqueueWsEvent]);
 
-  // Manual refresh function
   const refreshOrders = useCallback(() => {
     fetchOrders(true);
   }, [fetchOrders]);
 
-  // Setup: initial fetch + WebSocket connection
+  // Setup: initial fetch + WebSocket
   useEffect(() => {
     if (!restaurant?.id || !token) return;
 
-    // Initial HTTP fetch for full state
     fetchOrders(true);
-
-    // Connect WebSocket for real-time updates
     connectWebSocket();
 
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
+      if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+      if (reconnectTimeoutRef.current) { clearTimeout(reconnectTimeoutRef.current); }
+      if (flushTimerRef.current) { clearTimeout(flushTimerRef.current); }
     };
   }, [restaurant?.id, token, connectWebSocket, fetchOrders]);
 
-  // When pause is lifted, apply pending events
+  // When pause is lifted, re-fetch
   useEffect(() => {
     if (!pauseUpdates && newOrdersAvailable) {
-      // Do a full re-fetch to get consistent state
       fetchOrders(true);
     }
   }, [pauseUpdates, newOrdersAvailable, fetchOrders]);
 
   const createOrder = async (description, orderNumber = null) => {
     const payload = { description };
-    if (orderNumber) {
-      payload.order_number = orderNumber;
-    }
-    const response = await axios.post(
-      `${API}/orders`,
-      payload,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    // Optimistic update
+    if (orderNumber) payload.order_number = orderNumber;
+    const response = await axios.post(`${API}/orders`, payload, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    guardOrder(response.data.id);
     setOrders(prev => [response.data, ...prev]);
     return response.data;
   };
 
   const updateOrder = async (orderId, data) => {
-    const response = await axios.patch(
-      `${API}/orders/${orderId}`,
-      data,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    guardOrder(orderId);
+    const response = await axios.patch(`${API}/orders/${orderId}`, data, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
     setOrders(prev => prev.map(o => o.id === orderId ? response.data : o));
     return response.data;
   };
 
   const deleteOrder = async (orderId) => {
+    guardOrder(orderId);
     setOrders(prev => prev.filter(o => o.id !== orderId));
     try {
       await axios.delete(`${API}/orders/${orderId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
     } catch (error) {
+      optimisticGuardRef.current.delete(orderId);
       fetchOrders(true);
       throw error;
     }
   };
 
   const completeOrder = async (orderId) => {
+    guardOrder(orderId);
     setOrders(prev => prev.map(o =>
       o.id === orderId ? { ...o, status: 'completed' } : o
     ));
@@ -205,12 +235,14 @@ export const OrderProvider = ({ children }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
     } catch (error) {
+      optimisticGuardRef.current.delete(orderId);
       fetchOrders(true);
       throw error;
     }
   };
 
   const startTimer = async (orderId) => {
+    guardOrder(orderId);
     const now = new Date().toISOString();
     setOrders(prev => prev.map(o =>
       o.id === orderId ? { ...o, timer_started: true, timer_start_time: now, timer_paused: false } : o
@@ -220,12 +252,14 @@ export const OrderProvider = ({ children }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
     } catch (error) {
+      optimisticGuardRef.current.delete(orderId);
       fetchOrders(true);
       throw error;
     }
   };
 
   const pauseTimer = async (orderId, elapsed) => {
+    guardOrder(orderId);
     setOrders(prev => prev.map(o =>
       o.id === orderId ? { ...o, timer_paused: true, timer_elapsed: elapsed } : o
     ));
@@ -234,12 +268,14 @@ export const OrderProvider = ({ children }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
     } catch (error) {
+      optimisticGuardRef.current.delete(orderId);
       fetchOrders(true);
       throw error;
     }
   };
 
   const resetTimer = async (orderId) => {
+    guardOrder(orderId);
     setOrders(prev => prev.map(o =>
       o.id === orderId ? { ...o, timer_started: false, timer_start_time: null, timer_paused: false, timer_elapsed: 0 } : o
     ));
@@ -248,6 +284,7 @@ export const OrderProvider = ({ children }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
     } catch (error) {
+      optimisticGuardRef.current.delete(orderId);
       fetchOrders(true);
       throw error;
     }
@@ -255,20 +292,9 @@ export const OrderProvider = ({ children }) => {
 
   return (
     <OrderContext.Provider value={{
-      orders,
-      loading,
-      newOrdersAvailable,
-      pauseUpdates,
-      setPauseUpdates,
-      refreshOrders,
-      fetchOrders,
-      createOrder,
-      updateOrder,
-      deleteOrder,
-      completeOrder,
-      startTimer,
-      pauseTimer,
-      resetTimer
+      orders, loading, newOrdersAvailable, pauseUpdates, setPauseUpdates,
+      refreshOrders, fetchOrders, createOrder, updateOrder, deleteOrder,
+      completeOrder, startTimer, pauseTimer, resetTimer
     }}>
       {children}
     </OrderContext.Provider>
@@ -277,8 +303,6 @@ export const OrderProvider = ({ children }) => {
 
 export const useOrders = () => {
   const context = useContext(OrderContext);
-  if (!context) {
-    throw new Error('useOrders must be used within OrderProvider');
-  }
+  if (!context) throw new Error('useOrders must be used within OrderProvider');
   return context;
 };

@@ -172,24 +172,17 @@ const BollitorePage2 = () => {
                 </span>
                 
                 <div className="flex gap-2 ml-4">
-                  {/* Play/Pause Button */}
-                  {!isRunning ? (
-                    <button
-                      data-testid={`play-btn-2-${order.order_number}`}
-                      onClick={() => handleStartTimer(order.id)}
-                      className="w-10 h-10 flex items-center justify-center bg-white hover:bg-gray-100 text-gray-800 rounded border border-gray-300 transition-colors"
-                    >
-                      <Play size={18} fill="currentColor" />
-                    </button>
-                  ) : (
-                    <button
-                      data-testid={`pause-btn-2-${order.order_number}`}
-                      onClick={() => handlePauseTimer(order.id, elapsed)}
-                      className="w-10 h-10 flex items-center justify-center bg-white hover:bg-gray-100 text-gray-800 rounded border border-gray-300 transition-colors"
-                    >
-                      <Pause size={18} />
-                    </button>
-                  )}
+                  {/* Single Play/Pause Button — same DOM node, avoids missed clicks */}
+                  <button
+                    data-testid={isRunning ? `pause-btn-2-${order.order_number}` : `play-btn-2-${order.order_number}`}
+                    onClick={isRunning
+                      ? () => handlePauseTimer(order.id, elapsed)
+                      : () => handleStartTimer(order.id)
+                    }
+                    className="w-10 h-10 flex items-center justify-center bg-white hover:bg-gray-100 text-gray-800 rounded border border-gray-300 transition-colors"
+                  >
+                    {isRunning ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
+                  </button>
                   
                   {/* Reset Button */}
                   <button

@@ -38,7 +38,8 @@ Clone and enhance the website `https://webapp.pastasciuttaroma.com/` - a multi-r
 - [x] Chiusure with categorization
 - [x] WebSocket real-time updates (replaced polling)
 - [x] Lock updates feature on tablet pages
-- [x] Darker blue highlight on Tablet Generale (bg-blue-400 + white text)
+- [x] Darker blue highlight on Tablet Generale (bg-blue-700 + white text)
+- [x] Timer Play button race condition fix (single DOM node + WS buffering + optimistic guard)
 
 ## Prioritized Backlog
 - **P1**: Populate supplier list (user will provide data)
