@@ -11,31 +11,52 @@ export const OrderProvider = ({ children }) => {
   const { token, restaurant } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [newOrdersAvailable, setNewOrdersAvailable] = useState(false);
+  const [pauseUpdates, setPauseUpdates] = useState(false);
   const pollingRef = useRef(null);
+  const latestOrdersRef = useRef([]);
 
-  const fetchOrders = useCallback(async () => {
+  const fetchOrders = useCallback(async (forceUpdate = false) => {
     if (!token) return;
-    setLoading(true);
     try {
       const response = await axios.get(`${API}/orders`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setOrders(response.data);
+      
+      latestOrdersRef.current = response.data;
+      
+      // If updates are paused, just notify that new orders are available
+      if (pauseUpdates && !forceUpdate) {
+        const currentIds = orders.map(o => o.id).sort().join(',');
+        const newIds = response.data.map(o => o.id).sort().join(',');
+        if (currentIds !== newIds) {
+          setNewOrdersAvailable(true);
+        }
+      } else {
+        setOrders(response.data);
+        setNewOrdersAvailable(false);
+      }
     } catch (error) {
       console.error('Error fetching orders:', error);
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, pauseUpdates, orders]);
 
-  // Polling for real-time updates (more reliable than WebSocket in some environments)
+  // Manual refresh function
+  const refreshOrders = useCallback(() => {
+    setOrders(latestOrdersRef.current);
+    setNewOrdersAvailable(false);
+  }, []);
+
+  // Polling for real-time updates
   useEffect(() => {
     if (!restaurant?.id || !token) return;
 
     // Initial fetch
-    fetchOrders();
+    fetchOrders(true);
 
-    // Poll every 5 seconds for updates (less aggressive to avoid UI interruptions)
+    // Poll every 5 seconds
     pollingRef.current = setInterval(() => {
       fetchOrders();
     }, 5000);
@@ -45,7 +66,14 @@ export const OrderProvider = ({ children }) => {
         clearInterval(pollingRef.current);
       }
     };
-  }, [restaurant?.id, token, fetchOrders]);
+  }, [restaurant?.id, token]);
+
+  // Re-fetch when pauseUpdates changes to false
+  useEffect(() => {
+    if (!pauseUpdates && newOrdersAvailable) {
+      refreshOrders();
+    }
+  }, [pauseUpdates, newOrdersAvailable, refreshOrders]);
 
   const createOrder = async (description, orderNumber = null) => {
     const payload = { description };
@@ -152,6 +180,10 @@ export const OrderProvider = ({ children }) => {
     <OrderContext.Provider value={{
       orders,
       loading,
+      newOrdersAvailable,
+      pauseUpdates,
+      setPauseUpdates,
+      refreshOrders,
       fetchOrders,
       createOrder,
       updateOrder,

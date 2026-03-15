@@ -2,11 +2,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrders } from '../contexts/OrderContext';
 import Header from '../components/Header';
-import { Play, Pause, RotateCcw, Check } from 'lucide-react';
+import { Play, Pause, RotateCcw, Check, RefreshCw, Lock, Unlock } from 'lucide-react';
 
 const BollitorePage2 = () => {
   const { restaurant } = useAuth();
-  const { orders, startTimer, pauseTimer, resetTimer, completeOrder } = useOrders();
+  const { orders, startTimer, pauseTimer, resetTimer, completeOrder, newOrdersAvailable, pauseUpdates, setPauseUpdates, refreshOrders } = useOrders();
   const [tick, setTick] = useState(0);
   const intervalRef = useRef(null);
 
@@ -108,10 +108,46 @@ const BollitorePage2 = () => {
             <h1 className="font-heading text-4xl font-bold text-gray-900 uppercase">Tablet bollitore 2</h1>
             <p className="text-gray-500">Solo ordini con simbolo: -</p>
           </div>
-          <p className="font-heading text-xl text-gray-600" data-testid="bollitore2-location">
-            {restaurant?.location}
-          </p>
+          <div className="flex items-center gap-4">
+            {/* Lock/Unlock Updates Button */}
+            <button
+              onClick={() => setPauseUpdates(!pauseUpdates)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium transition-colors ${
+                pauseUpdates 
+                  ? 'bg-amber-500 text-white' 
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+              data-testid="toggle-updates-btn-2"
+            >
+              {pauseUpdates ? <Lock size={18} /> : <Unlock size={18} />}
+              {pauseUpdates ? 'Aggiornamenti bloccati' : 'Blocca aggiornamenti'}
+            </button>
+            
+            {/* Refresh Button - shows when new orders available */}
+            {newOrdersAvailable && (
+              <button
+                onClick={refreshOrders}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-md font-medium animate-pulse"
+                data-testid="refresh-orders-btn-2"
+              >
+                <RefreshCw size={18} />
+                Nuovi ordini!
+              </button>
+            )}
+            
+            <p className="font-heading text-xl text-gray-600" data-testid="bollitore2-location">
+              {restaurant?.location}
+            </p>
+          </div>
         </div>
+
+        {/* Info Banner when paused */}
+        {pauseUpdates && (
+          <div className="bg-amber-100 border border-amber-300 text-amber-800 px-4 py-2 rounded-md mb-4 flex items-center gap-2">
+            <Lock size={16} />
+            <span>Aggiornamenti bloccati. Puoi cancellare tranquillamente. Clicca "Sblocca" quando hai finito.</span>
+          </div>
+        )}
 
         {/* Orders List */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
