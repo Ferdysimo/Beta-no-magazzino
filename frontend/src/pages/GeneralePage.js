@@ -8,8 +8,10 @@ const GeneralePage = () => {
   const { restaurant } = useAuth();
   const { orders, deleteOrder, completeOrder } = useOrders();
 
-  // Filter only pending orders
-  const pendingOrders = orders.filter(o => o.status === 'pending');
+  // Filter only pending orders, sorted by order_number ascending
+  const pendingOrders = orders
+    .filter(o => o.status === 'pending')
+    .sort((a, b) => a.order_number - b.order_number);
 
   // Check if description is uppercase (for table grouping)
   const isUppercase = (text) => {
