@@ -10,8 +10,10 @@ const BollitorePage = () => {
   const [tick, setTick] = useState(0);
   const intervalRef = useRef(null);
 
-  // Filter only pending orders
-  const pendingOrders = orders.filter(o => o.status === 'pending');
+  // Filter only pending orders that DO NOT end with "-"
+  const pendingOrders = orders.filter(o => 
+    o.status === 'pending' && !o.description.trim().endsWith('-')
+  );
 
   // Check if description is uppercase (for table grouping)
   const isUppercase = (text) => {
