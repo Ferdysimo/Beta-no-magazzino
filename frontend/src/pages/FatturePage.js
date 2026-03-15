@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import axios from 'axios';
-import { Upload, Check, Trash2, Eye, X, FileText } from 'lucide-react';
+import { Upload, Check, Trash2, Eye, X, FileText, Edit2, Plus, Settings } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -14,6 +14,7 @@ const FatturePage = () => {
   // Form state
   const [selectedFile, setSelectedFile] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [invoiceDate, setInvoiceDate] = useState('');
   const [supplier, setSupplier] = useState('');
   const [paid, setPaid] = useState(false);
   const [controlCode, setControlCode] = useState('');
@@ -27,6 +28,21 @@ const FatturePage = () => {
   const [filterDate, setFilterDate] = useState('');
   const [filterSupplier, setFilterSupplier] = useState('all');
   const [viewingInvoice, setViewingInvoice] = useState(null);
+  
+  // Supplier management modal
+  const [showSupplierModal, setShowSupplierModal] = useState(false);
+  const [newSupplierName, setNewSupplierName] = useState('');
+  const [editingSupplier, setEditingSupplier] = useState(null);
+  const [supplierError, setSupplierError] = useState('');
+
+  // Set current date/time on load
+  useEffect(() => {
+    const now = new Date();
+    const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 16);
+    setInvoiceDate(localDateTime);
+  }, []);
 
   // Fetch invoices and suppliers
   const fetchInvoices = async () => {
@@ -67,7 +83,6 @@ const FatturePage = () => {
     const file = e.target.files[0];
     if (!file) return;
     
-    // Check file size (16 MB max)
     if (file.size > 16 * 1024 * 1024) {
       setError('File troppo grande. Massimo 16 MB.');
       return;
@@ -76,7 +91,6 @@ const FatturePage = () => {
     setSelectedFile(file);
     setError('');
     
-    // Create preview
     const reader = new FileReader();
     reader.onloadend = () => {
       setPreview(reader.result);
@@ -92,8 +106,8 @@ const FatturePage = () => {
       setError('Seleziona una foto della fattura');
       return;
     }
-    if (!supplier.trim()) {
-      setError('Inserisci il fornitore');
+    if (!supplier) {
+      setError('Seleziona un fornitore');
       return;
     }
     if (!controlCode.trim()) {
@@ -105,15 +119,15 @@ const FatturePage = () => {
     setError('');
     
     try {
-      // Convert file to base64
       const reader = new FileReader();
       reader.onloadend = async () => {
         try {
           await axios.post(`${API}/invoices`, {
-            supplier: supplier.trim(),
+            supplier,
             paid,
             control_code: controlCode.trim(),
-            image_data: reader.result
+            image_data: reader.result,
+            invoice_date: new Date(invoiceDate).toISOString()
           }, {
             headers: { Authorization: `Bearer ${token}` }
           });
@@ -124,12 +138,12 @@ const FatturePage = () => {
           setSupplier('');
           setPaid(false);
           setControlCode('');
+          const now = new Date();
+          setInvoiceDate(new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
           setSuccess('Fattura caricata con successo!');
           setTimeout(() => setSuccess(''), 3000);
           
-          // Refresh lists
           fetchInvoices();
-          fetchSuppliers();
         } catch (err) {
           setError(err.response?.data?.detail || 'Errore nel caricamento');
         } finally {
@@ -140,6 +154,50 @@ const FatturePage = () => {
     } catch (err) {
       setError('Errore nella lettura del file');
       setLoading(false);
+    }
+  };
+
+  // Supplier management
+  const addSupplier = async () => {
+    if (!newSupplierName.trim()) {
+      setSupplierError('Inserisci un nome');
+      return;
+    }
+    
+    try {
+      await axios.post(`${API}/suppliers?name=${encodeURIComponent(newSupplierName.trim())}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setNewSupplierName('');
+      setSupplierError('');
+      fetchSuppliers();
+    } catch (err) {
+      setSupplierError(err.response?.data?.detail || 'Errore');
+    }
+  };
+
+  const updateSupplier = async (supplierId, newName) => {
+    try {
+      await axios.patch(`${API}/suppliers/${supplierId}?name=${encodeURIComponent(newName)}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setEditingSupplier(null);
+      fetchSuppliers();
+    } catch (err) {
+      setSupplierError(err.response?.data?.detail || 'Errore');
+    }
+  };
+
+  const deleteSupplier = async (supplierId) => {
+    if (!window.confirm('Eliminare questo fornitore?')) return;
+    
+    try {
+      await axios.delete(`${API}/suppliers/${supplierId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchSuppliers();
+    } catch (err) {
+      setSupplierError(err.response?.data?.detail || 'Errore');
     }
   };
 
@@ -171,6 +229,7 @@ const FatturePage = () => {
 
   // Format date
   const formatDate = (isoString) => {
+    if (!isoString) return '';
     const date = new Date(isoString);
     return date.toLocaleDateString('it-IT', {
       day: '2-digit',
@@ -252,23 +311,41 @@ const FatturePage = () => {
               </div>
             )}
 
-            {/* Supplier */}
+            {/* Date */}
+            <div className="flex items-center gap-4">
+              <label className="w-32 text-gray-700 font-medium">Data</label>
+              <input
+                type="datetime-local"
+                value={invoiceDate}
+                onChange={(e) => setInvoiceDate(e.target.value)}
+                className="h-10 px-3 border border-gray-300 rounded-md focus:border-blue-500 focus:outline-none"
+                data-testid="date-input"
+              />
+            </div>
+
+            {/* Supplier with management button */}
             <div className="flex items-center gap-4">
               <label className="w-32 text-gray-700 font-medium">Fornitore</label>
-              <input
-                type="text"
+              <select
                 value={supplier}
                 onChange={(e) => setSupplier(e.target.value)}
-                className="flex-1 max-w-xs h-10 px-3 border border-gray-300 rounded-md focus:border-blue-500 focus:outline-none"
-                placeholder="Nome fornitore"
-                list="suppliers-list"
-                data-testid="supplier-input"
-              />
-              <datalist id="suppliers-list">
-                {suppliers.map((s, i) => (
-                  <option key={i} value={s} />
+                className="flex-1 max-w-xs h-10 px-3 border border-gray-300 rounded-md focus:border-blue-500 focus:outline-none bg-white"
+                data-testid="supplier-select"
+              >
+                <option value="">-- Seleziona fornitore --</option>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.name}>{s.name}</option>
                 ))}
-              </datalist>
+              </select>
+              <button
+                type="button"
+                onClick={() => setShowSupplierModal(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md transition-colors"
+                data-testid="manage-suppliers-btn"
+              >
+                <Settings size={16} />
+                Gestisci fornitori
+              </button>
             </div>
 
             {/* Paid Checkbox */}
@@ -355,8 +432,8 @@ const FatturePage = () => {
               data-testid="filter-supplier"
             >
               <option value="all">Tutti i fornitori</option>
-              {suppliers.map((s, i) => (
-                <option key={i} value={s}>{s}</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.name}>{s.name}</option>
               ))}
             </select>
             <select
@@ -407,7 +484,10 @@ const FatturePage = () => {
                     Codice: <strong>{invoice.control_code}</strong>
                   </div>
                   <div className="text-sm text-gray-500">
-                    {formatDate(invoice.created_at)}
+                    Data fattura: {formatDate(invoice.invoice_date)}
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    Caricata: {formatDate(invoice.created_at)}
                   </div>
                 </div>
 
@@ -451,6 +531,101 @@ const FatturePage = () => {
         </div>
       </main>
 
+      {/* Supplier Management Modal */}
+      {showSupplierModal && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowSupplierModal(false)}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="font-bold text-lg">Gestisci Fornitori</h3>
+              <button
+                onClick={() => setShowSupplierModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="p-4">
+              {/* Add new supplier */}
+              <div className="flex gap-2 mb-4">
+                <input
+                  type="text"
+                  value={newSupplierName}
+                  onChange={(e) => setNewSupplierName(e.target.value)}
+                  placeholder="Nuovo fornitore..."
+                  className="flex-1 h-10 px-3 border border-gray-300 rounded-md focus:border-blue-500 focus:outline-none"
+                  onKeyDown={(e) => e.key === 'Enter' && addSupplier()}
+                />
+                <button
+                  onClick={addSupplier}
+                  className="px-4 h-10 bg-green-500 hover:bg-green-600 text-white rounded-md flex items-center gap-1"
+                >
+                  <Plus size={18} />
+                  Aggiungi
+                </button>
+              </div>
+
+              {supplierError && (
+                <div className="text-red-600 text-sm mb-3">{supplierError}</div>
+              )}
+
+              {/* Supplier list */}
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {suppliers.map((s) => (
+                  <div key={s.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md">
+                    {editingSupplier === s.id ? (
+                      <input
+                        type="text"
+                        defaultValue={s.name}
+                        className="flex-1 h-8 px-2 border border-gray-300 rounded focus:border-blue-500 focus:outline-none"
+                        onBlur={(e) => updateSupplier(s.id, e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && updateSupplier(s.id, e.target.value)}
+                        autoFocus
+                      />
+                    ) : (
+                      <span className="flex-1 font-medium">{s.name}</span>
+                    )}
+                    <button
+                      onClick={() => setEditingSupplier(s.id)}
+                      className="w-8 h-8 flex items-center justify-center text-amber-600 hover:bg-amber-100 rounded"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                    <button
+                      onClick={() => deleteSupplier(s.id)}
+                      className="w-8 h-8 flex items-center justify-center text-red-600 hover:bg-red-100 rounded"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+                
+                {suppliers.length === 0 && (
+                  <div className="text-center text-gray-500 py-4">
+                    Nessun fornitore. Aggiungine uno!
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 border-t bg-gray-50 rounded-b-lg">
+              <button
+                onClick={() => setShowSupplierModal(false)}
+                className="w-full py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-md font-medium"
+              >
+                Chiudi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Image Viewer Modal */}
       {viewingInvoice && (
         <div 
@@ -472,6 +647,7 @@ const FatturePage = () => {
             <div className="bg-white p-3 rounded-b-lg mt-1">
               <p><strong>Fornitore:</strong> {viewingInvoice.supplier}</p>
               <p><strong>Codice:</strong> {viewingInvoice.control_code}</p>
+              <p><strong>Data fattura:</strong> {formatDate(viewingInvoice.invoice_date)}</p>
               <p><strong>Stato:</strong> {viewingInvoice.paid ? '✅ Pagato' : '⏳ Non pagato'}</p>
             </div>
           </div>

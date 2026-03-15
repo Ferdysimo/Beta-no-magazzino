@@ -129,6 +129,7 @@ class InvoiceCreate(BaseModel):
     paid: bool = False
     control_code: str
     image_data: str  # Base64 encoded image
+    invoice_date: str = None  # Date selected by user
 
 class InvoiceResponse(BaseModel):
     id: str
@@ -765,6 +766,7 @@ async def create_invoice(data: InvoiceCreate, token_data: dict = Depends(verify_
         "paid": data.paid,
         "control_code": data.control_code,
         "image_data": data.image_data,
+        "invoice_date": data.invoice_date or datetime.now(timezone.utc).isoformat(),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "uploaded_by": restaurant_name
     }
@@ -836,8 +838,67 @@ async def get_suppliers(token_data: dict = Depends(verify_token)):
     """Get unique suppliers for this restaurant"""
     restaurant_id = token_data["restaurant_id"]
     
-    suppliers = await db.invoices.distinct("supplier", {"restaurant_id": restaurant_id})
+    # Get suppliers from dedicated collection
+    suppliers = await db.suppliers.find(
+        {"restaurant_id": restaurant_id},
+        {"_id": 0}
+    ).sort("name", 1).to_list(100)
+    
     return suppliers
+
+@api_router.post("/suppliers")
+async def create_supplier(name: str, token_data: dict = Depends(verify_token)):
+    """Add a new supplier"""
+    restaurant_id = token_data["restaurant_id"]
+    
+    # Check if exists
+    existing = await db.suppliers.find_one({
+        "restaurant_id": restaurant_id,
+        "name": {"$regex": f"^{name}$", "$options": "i"}
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail="Fornitore già esistente")
+    
+    supplier_id = str(uuid.uuid4())
+    await db.suppliers.insert_one({
+        "id": supplier_id,
+        "name": name,
+        "restaurant_id": restaurant_id,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {"id": supplier_id, "name": name}
+
+@api_router.patch("/suppliers/{supplier_id}")
+async def update_supplier(supplier_id: str, name: str, token_data: dict = Depends(verify_token)):
+    """Update supplier name"""
+    restaurant_id = token_data["restaurant_id"]
+    
+    result = await db.suppliers.find_one_and_update(
+        {"id": supplier_id, "restaurant_id": restaurant_id},
+        {"$set": {"name": name}},
+        return_document=True
+    )
+    
+    if not result:
+        raise HTTPException(status_code=404, detail="Fornitore non trovato")
+    
+    return {"id": supplier_id, "name": name}
+
+@api_router.delete("/suppliers/{supplier_id}")
+async def delete_supplier(supplier_id: str, token_data: dict = Depends(verify_token)):
+    """Delete a supplier"""
+    restaurant_id = token_data["restaurant_id"]
+    
+    result = await db.suppliers.delete_one({
+        "id": supplier_id,
+        "restaurant_id": restaurant_id
+    })
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Fornitore non trovato")
+    
+    return {"message": "Fornitore eliminato"}
 
 # Include the router in the main app
 app.include_router(api_router)
