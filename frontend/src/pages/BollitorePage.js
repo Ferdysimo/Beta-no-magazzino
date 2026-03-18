@@ -116,6 +116,21 @@ const BollitorePage = () => {
     try { await kitchenComplete(id); } catch (e) { console.error('Error completing order:', e); }
   }, [kitchenComplete]);
 
+  const handleClearOver5Min = useCallback(async () => {
+    const now = new Date();
+    const toRemove = pendingOrders.filter(o => {
+      if (!o.timer_started) return false;
+      let elapsed = o.timer_elapsed || 0;
+      if (!o.timer_paused && o.timer_start_time) {
+        elapsed += Math.floor((now - new Date(o.timer_start_time)) / 1000);
+      }
+      return elapsed >= 300;
+    });
+    for (const o of toRemove) {
+      try { await kitchenComplete(o.id); } catch (e) { console.error(e); }
+    }
+  }, [pendingOrders, kitchenComplete]);
+
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
       <Header />
@@ -164,6 +179,16 @@ const BollitorePage = () => {
           {pendingOrders.length === 0 && (
             <div className="p-8 text-center text-gray-500">Nessun ordine in attesa.</div>
           )}
+        </div>
+
+        <div className="mt-4">
+          <button
+            data-testid="clear-over-5min"
+            onClick={handleClearOver5Min}
+            className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-medium rounded transition-colors"
+          >
+            Cancella &gt; 5 minuti
+          </button>
         </div>
       </main>
     </div>
