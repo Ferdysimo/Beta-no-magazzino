@@ -8,6 +8,22 @@ import axios from 'axios';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+const getTimerSeconds = (order) => {
+  if (!order.timer_started) return -1;
+  if (order.timer_paused) return order.timer_elapsed || 0;
+  const start = new Date(order.timer_start_time);
+  const now = new Date();
+  return Math.floor((now - start) / 1000) + (order.timer_elapsed || 0);
+};
+
+const getTimerColor = (order) => {
+  const secs = getTimerSeconds(order);
+  if (secs < 0) return 'text-gray-400';
+  if (secs >= 240) return 'text-gray-400';
+  if (secs >= 180) return 'text-red-600';
+  return 'text-green-600';
+};
+
 const CassaPage = () => {
   const { restaurant, token } = useAuth();
   const { orders, createOrder, deleteOrder, completeOrder, updateOrder } = useOrders();
@@ -19,6 +35,13 @@ const CassaPage = () => {
   const [logs, setLogs] = useState({ deletions: { count: 0, logs: [] }, modifications: { count: 0, logs: [] } });
   const [showLogs, setShowLogs] = useState(false);
   const inputRef = useRef(null);
+  const [tick, setTick] = useState(0);
+
+  // Tick every second for live timer colors
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Fetch today's logs
   const fetchLogs = async () => {
@@ -320,9 +343,7 @@ const CassaPage = () => {
               <span className="w-24 text-gray-600 text-sm">{formatTime(order.created_at)}</span>
               
               <span 
-                className={`w-24 text-sm font-mono ${
-                  order.timer_started ? 'text-blue-600' : 'text-gray-400'
-                }`}
+                className={`w-24 text-sm font-mono font-bold ${getTimerColor(order)}`}
               >
                 {getTimerDisplay(order)}
               </span>
