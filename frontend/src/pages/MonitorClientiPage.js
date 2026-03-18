@@ -39,7 +39,7 @@ const MonitorClientiPage = () => {
             className="bg-[#F5C518] rounded-2xl w-40 h-40 flex items-center justify-center shadow-2xl animate-pulse-slow"
           >
             <span className="text-gray-900 text-7xl font-black">
-              {order.order_number}
+              {order.order_number > 99 ? String(order.order_number).slice(1) : order.order_number}
             </span>
           </div>
         ))}
