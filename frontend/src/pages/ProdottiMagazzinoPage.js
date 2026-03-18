@@ -357,9 +357,11 @@ const ProdottiMagazzinoPage = () => {
                       <span className="text-gray-500 font-normal ml-1">({product.unit})</span>
                     )}
                   </p>
-                  {product.supplier && (
-                    <p className="text-sm text-gray-500">{product.supplier}</p>
-                  )}
+                </div>
+
+                {/* Supplier column */}
+                <div className="w-48 text-sm text-gray-600 truncate px-4">
+                  {product.supplier || '—'}
                 </div>
 
                 {/* Actions */}
