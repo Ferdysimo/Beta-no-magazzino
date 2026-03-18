@@ -91,6 +91,7 @@ class RestaurantResponse(BaseModel):
     username: str
     location: str
     created_at: str
+    role: str = "restaurant"
 
 class LoginRequest(BaseModel):
     username: str
@@ -281,7 +282,8 @@ async def login(data: LoginRequest):
             name=restaurant["name"],
             username=restaurant["username"],
             location=restaurant["location"],
-            created_at=restaurant["created_at"]
+            created_at=restaurant["created_at"],
+            role=restaurant.get("role", "restaurant")
         )
     )
 
@@ -797,17 +799,32 @@ async def seed_data():
     # Only create restaurants if they don't exist
     existing = await db.restaurants.count_documents({})
     if existing > 0:
+        # Check if Magazziniere exists, add if not
+        mag = await db.restaurants.find_one({"username": "Magazziniere"})
+        if not mag:
+            await db.restaurants.insert_one({
+                "id": str(uuid.uuid4()),
+                "name": "Pastasciutta Roma",
+                "username": "Magazziniere",
+                "password": pwd_context.hash("Pastasciutt4!"),
+                "location": "Magazzino",
+                "role": "magazzino",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "order_counter": 0
+            })
         return {"message": "Database già configurato", "accounts": [
             {"username": "Flaminio", "location": "Flaminio"},
             {"username": "Grazie", "location": "Grazie"},
             {"username": "Brazza", "location": "Largo di Brazzà"},
+            {"username": "Magazziniere", "location": "Magazzino"},
         ]}
     
-    # Create the 3 restaurants with new credentials
+    # Create the 3 restaurants + magazziniere
     restaurants = [
-        {"name": "Pastasciutta Roma", "username": "Flaminio", "password": "Pastasciutt4!", "location": "Flaminio"},
-        {"name": "Pastasciutta Roma", "username": "Grazie", "password": "Pastasciutt4!", "location": "Grazie"},
-        {"name": "Pastasciutta Roma", "username": "Brazza", "password": "Pastasciutt4!", "location": "Largo di Brazzà"},
+        {"name": "Pastasciutta Roma", "username": "Flaminio", "password": "Pastasciutt4!", "location": "Flaminio", "role": "restaurant"},
+        {"name": "Pastasciutta Roma", "username": "Grazie", "password": "Pastasciutt4!", "location": "Grazie", "role": "restaurant"},
+        {"name": "Pastasciutta Roma", "username": "Brazza", "password": "Pastasciutt4!", "location": "Largo di Brazzà", "role": "restaurant"},
+        {"name": "Pastasciutta Roma", "username": "Magazziniere", "password": "Pastasciutt4!", "location": "Magazzino", "role": "magazzino"},
     ]
     
     for r in restaurants:
@@ -818,6 +835,7 @@ async def seed_data():
             "username": r["username"],
             "password": pwd_context.hash(r["password"]),
             "location": r["location"],
+            "role": r.get("role", "restaurant"),
             "created_at": datetime.now(timezone.utc).isoformat(),
             "order_counter": 0
         })
@@ -826,6 +844,7 @@ async def seed_data():
         {"username": "Flaminio", "password": "Pastasciutt4!", "location": "Flaminio"},
         {"username": "Grazie", "password": "Pastasciutt4!", "location": "Grazie"},
         {"username": "Brazza", "password": "Pastasciutt4!", "location": "Largo di Brazzà"},
+        {"username": "Magazziniere", "password": "Pastasciutt4!", "location": "Magazzino"},
     ]}
 
 # WebSocket endpoint

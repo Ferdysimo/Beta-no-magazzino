@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
@@ -7,6 +7,13 @@ import { Receipt, Timer, List, FileText, FileSpreadsheet, Banknote, X, FileCheck
 const HomePage = () => {
   const { restaurant } = useAuth();
   const navigate = useNavigate();
+
+  // Magazziniere goes straight to magazzino
+  useEffect(() => {
+    if (restaurant?.role === 'magazzino') {
+      navigate('/magazzino', { replace: true });
+    }
+  }, [restaurant, navigate]);
 
   const mainButtons = [
     {
