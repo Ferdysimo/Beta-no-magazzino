@@ -7,6 +7,12 @@ import { X, FileText, Trash2, Eye, Search } from 'lucide-react';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+const resolveImageSrc = (imageData) => {
+  if (!imageData) return '';
+  if (imageData.startsWith('data:')) return imageData;
+  return `${BACKEND_URL}${imageData}`;
+};
+
 const VersamentiPage = () => {
   const { restaurant, token } = useAuth();
   const fileInputRef = useRef(null);
@@ -311,7 +317,7 @@ const VersamentiPage = () => {
                   onClick={() => setViewingVersamento(versamento)}
                 >
                   {versamento.image_data ? (
-                    <img src={versamento.image_data} alt="Versamento" className="w-full h-full object-cover" />
+                    <img src={resolveImageSrc(versamento.image_data)} alt="Versamento" className="w-full h-full object-cover" />
                   ) : (
                     <FileText className="text-gray-400" size={24} />
                   )}
@@ -377,7 +383,7 @@ const VersamentiPage = () => {
               <X size={24} />
             </button>
             <img 
-              src={viewingVersamento.image_data} 
+              src={resolveImageSrc(viewingVersamento.image_data)} 
               alt="Versamento" 
               className="max-w-full max-h-[85vh] object-contain rounded-lg"
             />

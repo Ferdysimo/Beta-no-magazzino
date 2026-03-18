@@ -1,10 +1,12 @@
 from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import base64
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
@@ -15,6 +17,8 @@ import jwt
 from passlib.context import CryptContext
 
 ROOT_DIR = Path(__file__).parent
+UPLOADS_DIR = ROOT_DIR.parent / "uploads"
+UPLOADS_DIR.mkdir(exist_ok=True)
 load_dotenv(ROOT_DIR / '.env')
 
 # MongoDB connection
@@ -156,6 +160,30 @@ class OrderResponse(BaseModel):
     monitor_visible: bool = False
 
 # Auth helpers
+def save_image_to_disk(base64_data: str, prefix: str) -> str:
+    """Save base64 image to disk, return filename."""
+    if not base64_data:
+        return ""
+    # Strip data URI prefix if present (e.g. data:image/jpeg;base64,)
+    if "," in base64_data:
+        header, data = base64_data.split(",", 1)
+        # Detect extension from header
+        ext = "jpg"
+        if "png" in header:
+            ext = "png"
+        elif "webp" in header:
+            ext = "webp"
+        elif "gif" in header:
+            ext = "gif"
+    else:
+        data = base64_data
+        ext = "jpg"
+    
+    filename = f"{prefix}_{uuid.uuid4().hex[:12]}.{ext}"
+    filepath = UPLOADS_DIR / filename
+    filepath.write_bytes(base64.b64decode(data))
+    return filename
+
 def create_token(restaurant_id: str, restaurant_name: str) -> str:
     payload = {
         "restaurant_id": restaurant_id,
@@ -181,6 +209,13 @@ async def root():
 @api_router.get("/version")
 async def version_check():
     return {"version": "2026031501", "timestamp": datetime.now(timezone.utc).isoformat()}
+
+@api_router.get("/uploads/{filename}")
+async def serve_upload(filename: str):
+    filepath = UPLOADS_DIR / filename
+    if not filepath.exists() or not filepath.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(filepath)
 
 # Restaurant Routes
 @api_router.post("/restaurants", response_model=RestaurantResponse)
@@ -819,13 +854,16 @@ async def create_invoice(data: InvoiceCreate, token_data: dict = Depends(verify_
     
     invoice_id = str(uuid.uuid4())
     
+    # Save image to disk instead of DB
+    image_filename = save_image_to_disk(data.image_data, "fattura")
+    
     invoice = {
         "id": invoice_id,
         "restaurant_id": restaurant_id,
         "supplier": data.supplier,
         "paid": data.paid,
         "control_code": data.control_code,
-        "image_data": data.image_data,
+        "image_file": image_filename,
         "invoice_date": data.invoice_date or datetime.now(timezone.utc).isoformat(),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "uploaded_by": restaurant_name
@@ -860,6 +898,12 @@ async def get_invoices(
     
     invoices = await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
     
+    # Build image_url from file or keep legacy base64
+    for inv in invoices:
+        if inv.get("image_file"):
+            inv["image_data"] = f"/api/uploads/{inv['image_file']}"
+        inv.pop("image_file", None)
+    
     return invoices
 
 @api_router.get("/invoices/{invoice_id}")
@@ -870,6 +914,9 @@ async def get_invoice(invoice_id: str, token_data: dict = Depends(verify_token))
     )
     if not invoice:
         raise HTTPException(status_code=404, detail="Fattura non trovata")
+    if invoice.get("image_file"):
+        invoice["image_data"] = f"/api/uploads/{invoice['image_file']}"
+    invoice.pop("image_file", None)
     return invoice
 
 @api_router.patch("/invoices/{invoice_id}")
@@ -972,12 +1019,15 @@ async def create_versamento(data: VersamentoCreate, token_data: dict = Depends(v
     
     versamento_id = str(uuid.uuid4())
     
+    # Save image to disk instead of DB
+    image_filename = save_image_to_disk(data.image_data, "versamento")
+    
     versamento = {
         "id": versamento_id,
         "restaurant_id": restaurant_id,
         "description": data.description,
         "control_code": data.control_code,
-        "image_data": data.image_data,
+        "image_file": image_filename,
         "versamento_date": data.versamento_date or datetime.now(timezone.utc).isoformat(),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "uploaded_by": restaurant_name
@@ -1004,6 +1054,11 @@ async def get_versamenti(
         query["description"] = {"$regex": search, "$options": "i"}
     
     versamenti = await db.versamenti.find(query, {"_id": 0}).sort("versamento_date", -1).to_list(500)
+    
+    for v in versamenti:
+        if v.get("image_file"):
+            v["image_data"] = f"/api/uploads/{v['image_file']}"
+        v.pop("image_file", None)
     
     return versamenti
 
@@ -1046,13 +1101,16 @@ async def create_chiusura(data: ChiusuraCreate, token_data: dict = Depends(verif
     
     chiusura_id = str(uuid.uuid4())
     
+    # Save image to disk instead of DB
+    image_filename = save_image_to_disk(data.image_data, "chiusura")
+    
     chiusura = {
         "id": chiusura_id,
         "restaurant_id": restaurant_id,
         "description": data.description,
         "tipologia": data.tipologia,
         "control_code": data.control_code,
-        "image_data": data.image_data,
+        "image_file": image_filename,
         "chiusura_date": data.chiusura_date or datetime.now(timezone.utc).isoformat(),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "uploaded_by": restaurant_name
@@ -1084,6 +1142,11 @@ async def get_chiusure(
         query["description"] = {"$regex": search, "$options": "i"}
     
     chiusure = await db.chiusure.find(query, {"_id": 0}).sort("chiusura_date", -1).to_list(500)
+    
+    for c in chiusure:
+        if c.get("image_file"):
+            c["image_data"] = f"/api/uploads/{c['image_file']}"
+        c.pop("image_file", None)
     
     return chiusure
 

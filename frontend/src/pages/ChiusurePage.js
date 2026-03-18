@@ -7,6 +7,12 @@ import { X, FileText, Trash2, Eye, Search } from 'lucide-react';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+const resolveImageSrc = (imageData) => {
+  if (!imageData) return '';
+  if (imageData.startsWith('data:')) return imageData;
+  return `${BACKEND_URL}${imageData}`;
+};
+
 const ChiusurePage = () => {
   const { restaurant, token } = useAuth();
   const fileInputRef = useRef(null);
@@ -366,7 +372,7 @@ const ChiusurePage = () => {
                   onClick={() => setViewingChiusura(chiusura)}
                 >
                   {chiusura.image_data ? (
-                    <img src={chiusura.image_data} alt="Chiusura" className="w-full h-full object-cover" />
+                    <img src={resolveImageSrc(chiusura.image_data)} alt="Chiusura" className="w-full h-full object-cover" />
                   ) : (
                     <FileText className="text-gray-400" size={24} />
                   )}
@@ -437,7 +443,7 @@ const ChiusurePage = () => {
               <X size={24} />
             </button>
             <img 
-              src={viewingChiusura.image_data} 
+              src={resolveImageSrc(viewingChiusura.image_data)} 
               alt="Chiusura" 
               className="max-w-full max-h-[85vh] object-contain rounded-lg"
             />

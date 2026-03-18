@@ -7,6 +7,13 @@ import { Upload, Check, Trash2, Eye, X, FileText, Edit2, Plus, Settings } from '
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+// Resolve image source: old base64 or new file URL
+const resolveImageSrc = (imageData) => {
+  if (!imageData) return '';
+  if (imageData.startsWith('data:')) return imageData; // legacy base64
+  return `${BACKEND_URL}${imageData}`; // new file path: /api/uploads/filename.jpg
+};
+
 const FatturePage = () => {
   const { restaurant, token } = useAuth();
   const fileInputRef = useRef(null);
@@ -464,7 +471,7 @@ const FatturePage = () => {
                   onClick={() => setViewingInvoice(invoice)}
                 >
                   {invoice.image_data ? (
-                    <img src={invoice.image_data} alt="Fattura" className="w-full h-full object-cover" />
+                    <img src={resolveImageSrc(invoice.image_data)} alt="Fattura" className="w-full h-full object-cover" />
                   ) : (
                     <FileText className="text-gray-400" size={24} />
                   )}
@@ -640,7 +647,7 @@ const FatturePage = () => {
               <X size={24} />
             </button>
             <img 
-              src={viewingInvoice.image_data} 
+              src={resolveImageSrc(viewingInvoice.image_data)} 
               alt="Fattura" 
               className="max-w-full max-h-[85vh] object-contain rounded-lg"
             />
