@@ -290,6 +290,22 @@ export const OrderProvider = ({ children }) => {
     }
   };
 
+  const toggleMonitor = async (orderId) => {
+    guardOrder(orderId);
+    setOrders(prev => prev.map(o =>
+      o.id === orderId ? { ...o, monitor_visible: !o.monitor_visible } : o
+    ));
+    try {
+      await axios.post(`${API}/orders/${orderId}/monitor-toggle`, {}, {
+        headers: { Authorization: `Bearer ${tokenRef.current}` }
+      });
+    } catch (error) {
+      optimisticGuardRef.current.delete(orderId);
+      fetchOrdersImpl(true);
+      throw error;
+    }
+  };
+
   const startTimer = async (orderId) => {
     guardOrder(orderId);
     const now = new Date().toISOString();
@@ -343,7 +359,7 @@ export const OrderProvider = ({ children }) => {
     <OrderContext.Provider value={{
       orders, loading, newOrdersAvailable, pauseUpdates, setPauseUpdates,
       refreshOrders, fetchOrders, createOrder, updateOrder, deleteOrder,
-      completeOrder, kitchenComplete, startTimer, pauseTimer, resetTimer
+      completeOrder, kitchenComplete, toggleMonitor, startTimer, pauseTimer, resetTimer
     }}>
       {children}
     </OrderContext.Provider>

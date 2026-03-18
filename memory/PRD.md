@@ -41,6 +41,8 @@ Clone and enhance the website `https://webapp.pastasciuttaroma.com/` - a multi-r
 - [x] Darker blue highlight on Tablet Generale (bg-blue-700 + white text)
 - [x] Timer Play button race condition fix (single DOM node + WS buffering + optimistic guard)
 - [x] Separation Bollitore/Cassa: kitchen_completed field + endpoint (orders stay in Cassa after kitchen completion)
+- [x] Monitor Clienti page (Flaminio only): shows order numbers on dark display, camera toggle on Tablet Generale
+- [x] Timer colors updated: <3min green, 3-4min red, >4min gray (Bollitore + Cassa synced)
 
 ## Prioritized Backlog
 - **P1**: Populate supplier list (user will provide data)

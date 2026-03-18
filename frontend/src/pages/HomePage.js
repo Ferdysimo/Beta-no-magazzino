@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
-import { Receipt, Timer, List, FileText, FileSpreadsheet, Banknote, X, FileCheck } from 'lucide-react';
+import { Receipt, Timer, List, FileText, FileSpreadsheet, Banknote, X, FileCheck, Monitor } from 'lucide-react';
 
 const HomePage = () => {
   const { restaurant } = useAuth();
@@ -165,6 +165,20 @@ const HomePage = () => {
                 </button>
                 <span className="text-gray-600 text-sm">tutti gli ordini</span>
               </div>
+
+              {/* Monitor Clienti - SOLO PER FLAMINIO */}
+              {restaurant?.location === 'Flaminio' && (
+                <div className="flex items-center gap-4">
+                  <button
+                    data-testid="btn-monitor-clienti"
+                    onClick={() => navigate('/monitor-clienti')}
+                    className="action-button"
+                  >
+                    Monitor clienti
+                  </button>
+                  <span className="text-gray-600 text-sm">monitor sala</span>
+                </div>
+              )}
             </div>
           </div>
 

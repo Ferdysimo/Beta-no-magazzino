@@ -153,6 +153,7 @@ class OrderResponse(BaseModel):
     timer_paused: bool
     timer_elapsed: int
     kitchen_completed: bool = False
+    monitor_visible: bool = False
 
 # Auth helpers
 def create_token(restaurant_id: str, restaurant_name: str) -> str:
@@ -286,7 +287,8 @@ async def create_order(data: OrderCreate, token_data: dict = Depends(verify_toke
         "timer_start_time": None,
         "timer_paused": False,
         "timer_elapsed": 0,
-        "kitchen_completed": False
+        "kitchen_completed": False,
+        "monitor_visible": False
     }
     
     await db.orders.insert_one(order)
@@ -469,6 +471,30 @@ async def kitchen_complete_order(order_id: str, token_data: dict = Depends(verif
     })
     
     return {"message": "Order kitchen completed"}
+
+@api_router.post("/orders/{order_id}/monitor-toggle")
+async def toggle_monitor_visibility(order_id: str, token_data: dict = Depends(verify_token)):
+    restaurant_id = token_data["restaurant_id"]
+    
+    order = await db.orders.find_one({"id": order_id, "restaurant_id": restaurant_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    new_val = not order.get("monitor_visible", False)
+    result = await db.orders.find_one_and_update(
+        {"id": order_id, "restaurant_id": restaurant_id},
+        {"$set": {"monitor_visible": new_val}},
+        return_document=True
+    )
+    
+    order_response = {k: v for k, v in result.items() if k != "_id"}
+    
+    await manager.broadcast_to_restaurant(restaurant_id, {
+        "type": "order_updated",
+        "order": order_response
+    })
+    
+    return {"message": f"Monitor visibility: {new_val}", "monitor_visible": new_val}
 
 @api_router.post("/orders/{order_id}/timer/start")
 async def start_timer(order_id: str, token_data: dict = Depends(verify_token)):

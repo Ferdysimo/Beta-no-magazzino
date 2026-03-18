@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrders } from '../contexts/OrderContext';
 import Header from '../components/Header';
-import { Check, Trash2, RefreshCw, Lock, Unlock } from 'lucide-react';
+import { Check, Trash2, Camera, RefreshCw, Lock, Unlock } from 'lucide-react';
 
 const GeneralePage = () => {
   const { restaurant } = useAuth();
-  const { orders, deleteOrder, newOrdersAvailable, pauseUpdates, setPauseUpdates, refreshOrders } = useOrders();
+  const { orders, deleteOrder, toggleMonitor, newOrdersAvailable, pauseUpdates, setPauseUpdates, refreshOrders } = useOrders();
   
   // Track highlighted orders (local state, not saved to DB)
   const [highlightedOrders, setHighlightedOrders] = useState(new Set());
@@ -139,6 +139,19 @@ const GeneralePage = () => {
                   
                   {/* Spacer */}
                   <div className="w-8" />
+
+                  {/* Monitor Button (Camera) */}
+                  <button
+                    data-testid={`generale-monitor-${order.order_number}`}
+                    onClick={() => toggleMonitor(order.id)}
+                    className={`w-10 h-10 flex items-center justify-center rounded border transition-colors ${
+                      order.monitor_visible
+                        ? 'bg-[#F5C518] text-gray-900 border-[#F5C518]'
+                        : 'bg-white hover:bg-gray-100 text-gray-700 border-gray-300'
+                    }`}
+                  >
+                    <Camera size={20} />
+                  </button>
                   
                   {/* Delete Button */}
                   <button

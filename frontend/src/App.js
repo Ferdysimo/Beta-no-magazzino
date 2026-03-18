@@ -14,6 +14,7 @@ import FatturePage from './pages/FatturePage';
 import VersamentiPage from './pages/VersamentiPage';
 import ChiusurePage from './pages/ChiusurePage';
 import BollitorePage2 from './pages/BollitorePage2';
+import MonitorClientiPage from './pages/MonitorClientiPage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -109,6 +110,11 @@ function AppRoutes() {
       <Route path="/bollitore2" element={
         <ProtectedRoute>
           <BollitorePage2 />
+        </ProtectedRoute>
+      } />
+      <Route path="/monitor-clienti" element={
+        <ProtectedRoute>
+          <MonitorClientiPage />
         </ProtectedRoute>
       } />
     </Routes>
