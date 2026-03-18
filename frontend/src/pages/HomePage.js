@@ -186,6 +186,7 @@ const HomePage = () => {
           <div className="border-t border-gray-300 pt-6">
             <button
               data-testid="btn-magazzino"
+              onClick={() => navigate('/magazzino')}
               className="border border-gray-400 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-md font-medium text-sm transition-colors"
             >
               Richiesta / Check merce dal magazzino

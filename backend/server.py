@@ -159,6 +159,18 @@ class OrderResponse(BaseModel):
     kitchen_completed: bool = False
     monitor_visible: bool = False
 
+class ProductCreate(BaseModel):
+    name: str
+    unit: str = ""
+    supplier: str = ""
+    image_data: str = ""  # Base64 on create, saved to disk
+
+class ProductUpdate(BaseModel):
+    name: Optional[str] = None
+    unit: Optional[str] = None
+    supplier: Optional[str] = None
+    image_data: Optional[str] = None  # New image if provided
+
 # Auth helpers
 def save_image_to_disk(base64_data: str, prefix: str) -> str:
     """Save base64 image to disk, return filename."""
@@ -994,6 +1006,110 @@ async def delete_supplier(supplier_id: str, token_data: dict = Depends(verify_to
         raise HTTPException(status_code=404, detail="Fornitore non trovato")
     
     return {"message": "Fornitore eliminato"}
+
+
+# ==================== PRODUCTS (WAREHOUSE) ====================
+
+@api_router.get("/products")
+async def get_products(supplier: str = None, token_data: dict = Depends(verify_token)):
+    """Get all warehouse products (shared across restaurants)"""
+    query = {}
+    if supplier:
+        query["supplier"] = supplier
+    products = await db.products.find(query, {"_id": 0}).sort("name", 1).to_list(1000)
+    for p in products:
+        if p.get("image_file"):
+            p["image_url"] = f"/api/uploads/{p['image_file']}"
+        elif p.get("image_data") and p["image_data"].startswith("data:"):
+            p["image_url"] = p["image_data"]
+        else:
+            p["image_url"] = ""
+        p.pop("image_file", None)
+        p.pop("image_data", None)
+    return products
+
+@api_router.post("/products")
+async def create_product(data: ProductCreate, token_data: dict = Depends(verify_token)):
+    """Create a warehouse product (shared)"""
+    product_id = str(uuid.uuid4())
+    
+    image_filename = ""
+    if data.image_data:
+        image_filename = save_image_to_disk(data.image_data, "product")
+    
+    product = {
+        "id": product_id,
+        "name": data.name,
+        "unit": data.unit,
+        "supplier": data.supplier,
+        "image_file": image_filename,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.products.insert_one(product)
+    
+    response = {k: v for k, v in product.items() if k != "_id"}
+    if response.get("image_file"):
+        response["image_url"] = f"/api/uploads/{response['image_file']}"
+    else:
+        response["image_url"] = ""
+    response.pop("image_file", None)
+    
+    return response
+
+@api_router.put("/products/{product_id}")
+async def update_product(product_id: str, data: ProductUpdate, token_data: dict = Depends(verify_token)):
+    """Update a warehouse product"""
+    update_fields = {}
+    if data.name is not None:
+        update_fields["name"] = data.name
+    if data.unit is not None:
+        update_fields["unit"] = data.unit
+    if data.supplier is not None:
+        update_fields["supplier"] = data.supplier
+    if data.image_data:
+        old_product = await db.products.find_one({"id": product_id})
+        if old_product and old_product.get("image_file"):
+            old_path = UPLOADS_DIR / old_product["image_file"]
+            if old_path.exists():
+                old_path.unlink()
+        update_fields["image_file"] = save_image_to_disk(data.image_data, "product")
+    
+    if not update_fields:
+        raise HTTPException(status_code=400, detail="Nessun campo da aggiornare")
+    
+    result = await db.products.find_one_and_update(
+        {"id": product_id},
+        {"$set": update_fields},
+        return_document=True
+    )
+    
+    if not result:
+        raise HTTPException(status_code=404, detail="Prodotto non trovato")
+    
+    response = {k: v for k, v in result.items() if k != "_id"}
+    if response.get("image_file"):
+        response["image_url"] = f"/api/uploads/{response['image_file']}"
+    else:
+        response["image_url"] = ""
+    response.pop("image_file", None)
+    
+    return response
+
+@api_router.delete("/products/{product_id}")
+async def delete_product(product_id: str, token_data: dict = Depends(verify_token)):
+    """Delete a warehouse product"""
+    product = await db.products.find_one({"id": product_id})
+    if not product:
+        raise HTTPException(status_code=404, detail="Prodotto non trovato")
+    
+    if product.get("image_file"):
+        old_path = UPLOADS_DIR / product["image_file"]
+        if old_path.exists():
+            old_path.unlink()
+    
+    await db.products.delete_one({"id": product_id})
+    return {"message": "Prodotto eliminato"}
 
 # ==================== VERSAMENTI (DEPOSITS) ====================
 

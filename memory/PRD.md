@@ -48,7 +48,10 @@ Clone and enhance the website `https://webapp.pastasciuttaroma.com/` - a multi-r
 - [x] Monitor Clienti: order numbers >99 show only last 2 digits
 
 ## Prioritized Backlog
+- **P0**: Warehouse management - remaining pages (Carico, Scarico, Inventario, Analisi)
+- **P1**: 10 performance optimizations (indexed, pooling, rate limiting, gzip, pagination, WS heartbeat, auth uploads, archival, DB timeouts, log rotation)
 - **P1**: Populate supplier list (user will provide data)
+- **P2**: Automatic backup system
 - **P2**: Further WebSocket optimizations if needed
 
 ## Credentials

@@ -15,6 +15,8 @@ import VersamentiPage from './pages/VersamentiPage';
 import ChiusurePage from './pages/ChiusurePage';
 import BollitorePage2 from './pages/BollitorePage2';
 import MonitorClientiPage from './pages/MonitorClientiPage';
+import MagazzinierePage from './pages/MagazzinierePage';
+import ProdottiMagazzinoPage from './pages/ProdottiMagazzinoPage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -115,6 +117,16 @@ function AppRoutes() {
       <Route path="/monitor-clienti" element={
         <ProtectedRoute>
           <MonitorClientiPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/magazzino" element={
+        <ProtectedRoute>
+          <MagazzinierePage />
+        </ProtectedRoute>
+      } />
+      <Route path="/magazzino/prodotti" element={
+        <ProtectedRoute>
+          <ProdottiMagazzinoPage />
         </ProtectedRoute>
       } />
     </Routes>
