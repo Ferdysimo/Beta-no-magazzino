@@ -26,10 +26,10 @@ apt update && apt upgrade -y
 echo "[2/8] Installazione dipendenze..."
 apt install -y curl git build-essential python3 python3-pip python3-venv nginx certbot
 
-# 3. Installa Node.js 18
-echo "[3/8] Installazione Node.js 18..."
-if ! command -v node &> /dev/null; then
-    curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+# 3. Installa Node.js 20
+echo "[3/8] Installazione Node.js 20..."
+if ! command -v node &> /dev/null || [ "$(node -v | cut -d. -f1 | tr -d v)" -lt 20 ]; then
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
     apt install -y nodejs
 fi
 npm install -g yarn
