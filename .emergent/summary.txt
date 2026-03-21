@@ -1,0 +1,201 @@
+<analysis>**original_problem_statement**: The user initially wanted to clone . This evolved into a detailed set of requirements for a custom, multi-restaurant pasta order management system.
+
+**PRODUCT REQUIREMENTS**:
+- **Authentication**: Multi-restaurant login system. Each restaurant has its own credentials and can only see its own data. A new Magazziniere (Warehouse keeper) role was added, which has a separate, shared view.
+- **Order Management**:
+    - **Cassa (Cashier)**: Take and manage orders.
+    - **Tablet Generale (General Tablet)**: A real-time list of all active orders.
+    - **Tablet Bollitore (Boiler Tablet)**: A real-time list of orders with cooking timers. A special version exists for the 'Flaminio' location.
+    - **Monitor Clienti (Customer Monitor)**: A new public-facing page to display numbers of ready orders, controlled from the Tablet Generale.
+- **Document Management**: Pages to upload and manage invoices, deposits, and closing reports. Images are stored on the file system, not in the database.
+- **Reporting**: Pages for daily cash reports and CSV exports.
+- **Warehouse Management (New)**: A shared module for all restaurants, managed by the Magazziniere account.
+    - **Phase 1 (Completed)**: Manage the list of warehouse products (CRUD operations).
+    - **Upcoming Phases**: Manage stock loading, requests from restaurants, inventory, and analytics.
+- **Self-Hosting**: The user has successfully deployed the application to a self-hosted VPS (OVHcloud with Ubuntu) and requires future updates to be delivered via Git.
+
+**User's preferred language**: Italian
+
+**what currently exists?**
+A complete full-stack application (FastAPI, React, MongoDB) for pasta order management. It supports multiple restaurants with role-based access control. All core features requested by the user are implemented, including real-time updates via WebSockets, various order/document management pages, and the first phase of a shared warehouse management system. The application has been optimized for self-hosting, with image storage moved to the file system and a setup script () created to facilitate deployment on a Linux VPS.
+
+**Last working item**:
+    - Last item agent was working: The agent was providing extensive support to the user for self-hosting the application on a VPS. This involved creating a  script, troubleshooting OS/dependency compatibility issues (MongoDB version, Node.js version), cleaning up , and debugging the Nginx configuration until the application was fully functional on the user's server. The last interaction was explaining how to manage the database via the terminal.
+    - Status: COMPLETED
+    - Agent Testing Done: Y
+    - Which testing method agent to use? NA
+    - User Testing Done: Y
+
+**All Pending/In progress Issue list**:
+  - None.
+
+**In progress Task List**:
+  - None.
+
+**Upcoming and Future Tasks**
+- **Upcoming Tasks**:
+    - (P0) **Warehouse Management - Phase 2**: Implement the remaining warehouse functionalities as discussed:
+        - Carico merce (Stock Loading)
+        - Scarico merce verso i locali (Stock Dispatch to Restaurants)
+        - Inventario (Inventory Management)
+        - Analisi/Statistiche (Analytics/Statistics)
+    - (P1) **Performance Optimizations**: Implement the 10 performance optimizations discussed with the user to handle high-stress environments. These include:
+        - Adding MongoDB indexes for key queries.
+        - Configuring the MongoDB connection pool size.
+        - Adding API rate limiting.
+        - Implementing Gzip response compression.
+        - Server-side filtering/pagination of orders to reduce payload size.
+        - Implementing server-side WebSocket heartbeats.
+        - Securing the  endpoint with JWT authentication.
+        - Archiving old orders.
+        - Adding timeouts for DB operations.
+        - Implementing structured logging with rotation.
+- **Future Tasks**:
+    - **Populate Supplier List**: The user has yet to provide the final list of suppliers to be added to the system.
+    - **Automatic Backup**: Implement one of the discussed backup strategies (e.g., a script to dump the DB and  folder to external cloud storage like Backblaze B2 or Google Drive).
+
+**Completed work in this session**
+- **Real-Time System**: Migrated from polling to a robust WebSocket implementation in  with keepalive pings and a polling fallback.
+- **Bug Fixes**:
+    - Resolved a race condition where the timer's Play button would miss clicks under heavy load by using  and memoizing components.
+    - Fixed a critical bug where the app would break after clearing the database due to stale JWTs in the browser; implemented an auto-logout interceptor.
+    - Solved a persistent mobile caching issue by adding anti-cache headers and forcing a frontend rebuild to invalidate CDN caches.
+- **Feature Enhancements**:
+    - **Order Flow Separation**: Implemented a  flag. Orders marked as done on the  pages are now hidden from those views but remain visible on the  page, as requested.
+    - **Tablet Generale**: Changed the checkmark button to highlight rows in blue (color later adjusted to a darker  per user feedback).
+    - **Timer Colors**: Adjusted timer colors on  and  pages to match new user requirements (<3min: Green, 3-4min: Red, >4min: Gray).
+- **New Features**:
+    - **Monitor Clienti**: Created a new page () for Flaminio to display ready order numbers to customers, with real-time updates via WebSockets.
+    - **Warehouse Management (Phase 1)**:
+        - Created a shared  collection.
+        - Built backend CRUD endpoints for products.
+        - Created frontend pages:  (home) and  (product management).
+        - Added a new  user role with restricted access, redirecting directly to the warehouse section on login.
+- **Storage Optimization**: Refactored image handling for invoices, deposits, and closings. Images are now saved to the  directory on the file system instead of being stored as base64 in MongoDB, reducing database size by over 98%.
+- **Self-Hosting Support**:
+    - Created a comprehensive  script to automate the entire server setup process on a fresh Ubuntu instance.
+    - Cleaned  of all unnecessary dependencies to prevent installation errors on the user's server.
+    - Provided extensive step-by-step guidance for troubleshooting and configuring a VPS (OVHcloud) with Nginx, systemd services, and correct Node.js/MongoDB versions.
+
+**Earlier issues found/mentioned but not fixed**
+   - None.
+
+**Known issue recurrence from previous fork**
+  - None.
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+- **Backend**: FastAPI (Python)
+- **Frontend**: React.js
+- **Database**: MongoDB
+- **Real-time**: WebSockets with a polling fallback.
+- **State Management**: React Context API (, ).
+- **Styling**: Tailwind CSS
+- **File Storage**: Images are stored on the local filesystem in  and served via a dedicated API endpoint.
+- **Deployment**: User is self-hosting on a Linux VPS (OVHcloud), managing the setup with Nginx and systemd services.
+
+**key DB schema**
+  - : {username, hashed_password, restaurant_id, location, **role: restaurant | magazzino**}
+  - : {order_number, description, status, restaurant_id, ..., **kitchen_completed: bool**, **monitor_visible: bool**}
+  - : {name} (shared)
+  - : {invoice_date, **image_file: str**, supplier, paid, control_code, restaurant_id}
+  - : {deposit_date, **image_file: str**, description, control_code, restaurant_id}
+  - : {closing_date, **image_file: str**, description, type, control_code, restaurant_id}
+  - : {id, name, unit, supplier, **image_file: str**} (shared)
+  - : (deletion_logs, modification_logs)
+
+**changes in tech stack**
+  - **Image Storage**: Major refactoring from storing base64 strings in MongoDB to storing files on the server's disk and referencing them by path in the DB.
+
+**All files of reference**
+- **Backend**:
+  - : Heavily modified to add new endpoints for warehouse products, customer monitor, kitchen completion, and serving uploaded files. Image upload logic was refactored.
+  - : Significantly cleaned and simplified for self-hosting.
+- **Frontend Core**:
+  - : Rewritten multiple times to implement a stable WebSocket connection, add new functions (, ), and fix bugs.
+  - : Modified to handle JWTs with a  and force logout on 401 errors.
+  - : Updated with routes for new warehouse and monitor pages.
+  - : Logic added to redirect based on user role ( vs. ).
+- **Modified Pages**: , , , , , , , .
+- **New Files**:
+  - 
+  - 
+  - 
+  -  (Server setup script)
+
+**Areas that need refactoring**:
+- None currently. The major refactoring (image storage) has been completed. The user is aware of a list of 10 upcoming performance optimizations that can be considered refactoring tasks.
+
+**key api endpoints**
+- : (NEW) Serves static image files.
+- : (NEW) Marks an order as completed in the kitchen.
+- : (NEW) Toggles an order's visibility on the customer monitor.
+- : (NEW) Full CRUD endpoints for warehouse products.
+- : WebSocket endpoint, now fully utilized by the frontend.
+
+**Critical Info for New Agent**
+- **Self-Hosting Model**: The user is now self-hosting. Your development workflow is: build/test features here -> user saves to GitHub -> user pulls changes to their live server. The  script is the source of truth for deployment.
+- **Pending Optimizations**: The user has approved a list of 10 critical performance/stability improvements. They will ask for these soon. This is a high-priority upcoming task block.
+- **Warehouse Module**: The warehouse system is shared across all restaurants and managed by a separate Magazziniere user. Future development will build on this foundation.
+-  is now minimal. Do not add unnecessary packages.
+
+**documents and test reports created in this job**
+- : A shell script to automate the setup of the application on a fresh Ubuntu 22.04 server.
+- A test report from  was generated early in the session, confirming the WebSocket implementation.
+
+**Last 10 User Messages and any pending HUMAN messages**
+1.  **User**: Confirmed that  works now.
+2.  **User**: Asked for help with managing the database.
+3.  **Agent**: Provided a comprehensive guide on using Current Mongosh Log ID:	69bc175a86e6d6b0fd8563b0
+Connecting to:		mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=mongosh+2.7.0
+Using MongoDB:		7.0.30
+Using Mongosh:		2.7.0
+
+For mongosh info see: https://www.mongodb.com/docs/mongodb-shell/
+
+
+To help improve our products, anonymous usage data is collected and sent to MongoDB periodically (https://www.mongodb.com/legal/privacy-policy).
+You can opt-out by running the disableTelemetry() command.
+
+------
+   The server generated these startup warnings when booting
+   2026-03-19T15:33:06.382+00:00: Using the XFS filesystem is strongly recommended with the WiredTiger storage engine. See http://dochub.mongodb.org/core/prodnotes-filesystem
+   2026-03-19T15:33:13.541+00:00: Access control is not enabled for the database. Read and write access to data and configuration is unrestricted
+   2026-03-19T15:33:13.541+00:00: You are running this process as the root user, which is not recommended
+   2026-03-19T15:33:13.541+00:00: Soft rlimits for open file descriptors too low
+------
+
+test>  and setting up automatic backups.
+4.  **User**: Asked how to update the application on their server without breaking it.
+5.  **Agent**: Explained the safe update workflow: , update dependencies, and restart services.
+6.  **User**: Asked where suppliers are saved.
+7.  **Agent**: Explained they are in the shared  collection in MongoDB.
+8.  **User**: Asked how to remove the Made with Emergent watermark for the self-hosted version.
+9.  **Agent**: Directed the user to contact Emergent support for this specific customization.
+10. **User**: Confirmed that everything is working after the final server configuration fix.
+
+**Project Health Check:**
+- **Working**: The application is fully functional and deployed on the user's self-hosted VPS. All features, including real-time updates and the new warehouse module (Phase 1), are operational.
+- **Mocked**: The buttons for upcoming warehouse features (Carico, Scarico, etc.) are present but disabled.
+
+**3rd Party Integrations**
+- None.
+
+**Testing status**
+  - Testing agent used after significant changes: YES (once, for WebSocket implementation)
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created: None.
+  - Known regressions: None.
+
+**Credentials to test flow:**
+| Username | Password | Sede/Role |
+|---|---|---|
+|  |  | Flaminio |
+|  |  | Grazie |
+|  |  | Largo di Brazzà |
+|  |  | Magazzino |
+
+**What agent forgot to execute**
+- The agent was highly effective and addressed all user requests, including extensive out-of-scope support for self-hosting. No tasks were forgotten.</analysis>
