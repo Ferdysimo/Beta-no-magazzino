@@ -6,14 +6,14 @@ import { Check, Trash2, Camera, RefreshCw, Lock, Unlock } from 'lucide-react';
 
 const GeneralePage = () => {
   const { restaurant } = useAuth();
-  const { orders, deleteOrder, toggleMonitor, newOrdersAvailable, pauseUpdates, setPauseUpdates, refreshOrders } = useOrders();
+  const { orders, hideFromGenerale, toggleMonitor, newOrdersAvailable, pauseUpdates, setPauseUpdates, refreshOrders } = useOrders();
   
   // Track highlighted orders (local state, not saved to DB)
   const [highlightedOrders, setHighlightedOrders] = useState(new Set());
 
-  // Filter only pending orders, sorted by order_number ascending
+  // Filter only pending orders that are NOT hidden from generale, sorted by order_number ascending
   const pendingOrders = orders
-    .filter(o => o.status === 'pending')
+    .filter(o => o.status === 'pending' && !o.hidden_generale)
     .sort((a, b) => a.order_number - b.order_number);
 
   // Check if description is uppercase (for table grouping)
@@ -38,7 +38,7 @@ const GeneralePage = () => {
 
   const handleDelete = async (orderId) => {
     try {
-      await deleteOrder(orderId);
+      await hideFromGenerale(orderId);
       // Remove from highlighted if it was highlighted
       setHighlightedOrders(prev => {
         const newSet = new Set(prev);
@@ -46,7 +46,7 @@ const GeneralePage = () => {
         return newSet;
       });
     } catch (error) {
-      console.error('Error deleting order:', error);
+      console.error('Error hiding order from generale:', error);
     }
   };
 

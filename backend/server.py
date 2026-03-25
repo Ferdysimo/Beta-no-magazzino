@@ -159,6 +159,7 @@ class OrderResponse(BaseModel):
     timer_elapsed: int
     kitchen_completed: bool = False
     monitor_visible: bool = False
+    hidden_generale: bool = False
 
 class ProductCreate(BaseModel):
     name: str
@@ -337,7 +338,8 @@ async def create_order(data: OrderCreate, token_data: dict = Depends(verify_toke
         "timer_paused": False,
         "timer_elapsed": 0,
         "kitchen_completed": False,
-        "monitor_visible": False
+        "monitor_visible": False,
+        "hidden_generale": False
     }
     
     await db.orders.insert_one(order)
@@ -520,6 +522,28 @@ async def kitchen_complete_order(order_id: str, token_data: dict = Depends(verif
     })
     
     return {"message": "Order kitchen completed"}
+
+@api_router.post("/orders/{order_id}/hide-generale")
+async def hide_from_generale(order_id: str, token_data: dict = Depends(verify_token)):
+    restaurant_id = token_data["restaurant_id"]
+    
+    result = await db.orders.find_one_and_update(
+        {"id": order_id, "restaurant_id": restaurant_id},
+        {"$set": {"hidden_generale": True}},
+        return_document=True
+    )
+    
+    if not result:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    order_response = {k: v for k, v in result.items() if k != "_id"}
+    
+    await manager.broadcast_to_restaurant(restaurant_id, {
+        "type": "order_updated",
+        "order": order_response
+    })
+    
+    return {"message": "Order hidden from generale"}
 
 @api_router.post("/orders/{order_id}/monitor-toggle")
 async def toggle_monitor_visibility(order_id: str, token_data: dict = Depends(verify_token)):
