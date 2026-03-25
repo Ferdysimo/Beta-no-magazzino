@@ -17,6 +17,7 @@ const getTimerSeconds = (order) => {
 };
 
 const getTimerColor = (order) => {
+  if (order.hidden_generale) return 'text-blue-600';
   const secs = getTimerSeconds(order);
   if (secs < 0) return 'text-gray-400';
   if (secs >= 240) return 'text-gray-400';
@@ -149,6 +150,14 @@ const CassaPage = () => {
 
   const getTimerDisplay = (order) => {
     if (!order.timer_started) return '--:--:--';
+    
+    // Frozen timer when hidden from generale
+    if (order.hidden_generale) {
+      const seconds = order.hidden_generale_timer || 0;
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `00:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
     
     if (order.timer_paused) {
       const seconds = order.timer_elapsed || 0;
@@ -301,7 +310,9 @@ const CassaPage = () => {
             <div
               key={order.id}
               data-testid={`order-row-${order.order_number}`}
-              className="flex items-center px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors"
+              className={`flex items-center px-4 py-3 border-b border-gray-100 transition-colors ${
+                order.hidden_generale ? 'bg-blue-100' : 'hover:bg-gray-50'
+              }`}
             >
               <span className="w-16 font-bold text-gray-800 text-lg">{order.order_number}</span>
               

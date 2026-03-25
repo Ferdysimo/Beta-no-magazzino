@@ -309,7 +309,7 @@ export const OrderProvider = ({ children }) => {
   const hideFromGenerale = async (orderId) => {
     guardOrder(orderId);
     setOrders(prev => prev.map(o =>
-      o.id === orderId ? { ...o, hidden_generale: true } : o
+      o.id === orderId ? { ...o, hidden_generale: true, hidden_generale_timer: 0 } : o
     ));
     try {
       await axios.post(`${API}/orders/${orderId}/hide-generale`, {}, {

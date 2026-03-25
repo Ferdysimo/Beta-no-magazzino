@@ -160,6 +160,7 @@ class OrderResponse(BaseModel):
     kitchen_completed: bool = False
     monitor_visible: bool = False
     hidden_generale: bool = False
+    hidden_generale_timer: int = 0
 
 class ProductCreate(BaseModel):
     name: str
@@ -527,9 +528,23 @@ async def kitchen_complete_order(order_id: str, token_data: dict = Depends(verif
 async def hide_from_generale(order_id: str, token_data: dict = Depends(verify_token)):
     restaurant_id = token_data["restaurant_id"]
     
+    order = await db.orders.find_one({"id": order_id, "restaurant_id": restaurant_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Calculate frozen timer value at this moment
+    frozen_timer = 0
+    if order.get("timer_started"):
+        if order.get("timer_paused"):
+            frozen_timer = order.get("timer_elapsed", 0)
+        elif order.get("timer_start_time"):
+            start = datetime.fromisoformat(order["timer_start_time"])
+            now = datetime.now(timezone.utc)
+            frozen_timer = int((now - start).total_seconds()) + (order.get("timer_elapsed", 0))
+    
     result = await db.orders.find_one_and_update(
         {"id": order_id, "restaurant_id": restaurant_id},
-        {"$set": {"hidden_generale": True}},
+        {"$set": {"hidden_generale": True, "hidden_generale_timer": frozen_timer}},
         return_document=True
     )
     
