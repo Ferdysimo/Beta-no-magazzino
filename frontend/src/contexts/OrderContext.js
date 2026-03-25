@@ -110,6 +110,8 @@ export const OrderProvider = ({ children }) => {
         } else if (type === 'order_deleted') {
           if (isGuarded(order_id)) continue;
           next = next.filter(o => o.id !== order_id);
+        } else if (type === 'daily_reset') {
+          next = [];
         }
       }
       return next;

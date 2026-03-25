@@ -14,6 +14,8 @@ import uuid
 from datetime import datetime, timezone
 import json
 import jwt
+import asyncio
+from zoneinfo import ZoneInfo
 from passlib.context import CryptContext
 
 ROOT_DIR = Path(__file__).parent
@@ -45,6 +47,50 @@ security = HTTPBearer()
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+ROME_TZ = ZoneInfo("Europe/Rome")
+
+# Midnight reset: archive orders and reset counters
+async def midnight_reset():
+    logger.info("Running midnight reset - archiving orders and resetting counters")
+    try:
+        # Get all orders
+        all_orders = await db.orders.find({}, {"_id": 0}).to_list(10000)
+        
+        if all_orders:
+            # Insert into archived_orders
+            await db.archived_orders.insert_many([{**o} for o in all_orders])
+            # Delete all orders
+            await db.orders.delete_many({})
+            logger.info(f"Archived {len(all_orders)} orders")
+        
+        # Reset all restaurant counters to 0
+        await db.restaurants.update_many(
+            {"role": "restaurant"},
+            {"$set": {"order_counter": 0}}
+        )
+        logger.info("Order counters reset to 0")
+        
+        # Broadcast reset to all connected clients
+        for rid in list(manager.active_connections.keys()):
+            await manager.broadcast_to_restaurant(rid, {
+                "type": "daily_reset"
+            })
+    except Exception as e:
+        logger.error(f"Midnight reset error: {e}")
+
+async def midnight_scheduler():
+    while True:
+        now = datetime.now(ROME_TZ)
+        # Calculate seconds until next midnight Rome time
+        tomorrow = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        if now >= tomorrow:
+            from datetime import timedelta
+            tomorrow += timedelta(days=1)
+        wait_seconds = (tomorrow - now).total_seconds()
+        logger.info(f"Next midnight reset in {wait_seconds:.0f} seconds ({tomorrow.isoformat()})")
+        await asyncio.sleep(wait_seconds)
+        await midnight_reset()
 
 # WebSocket Connection Manager
 class ConnectionManager:
@@ -742,6 +788,7 @@ async def get_daily_report(date: str = None, token_data: dict = Depends(verify_t
     day_end = day_start.replace(hour=23, minute=59, second=59, microsecond=999999)
     
     # Get all orders created on this day (including completed ones)
+    # Check both active orders and archived orders
     orders = await db.orders.find(
         {
             "restaurant_id": restaurant_id,
@@ -749,6 +796,21 @@ async def get_daily_report(date: str = None, token_data: dict = Depends(verify_t
         },
         {"_id": 0}
     ).sort("order_number", 1).to_list(1000)
+    
+    archived = await db.archived_orders.find(
+        {
+            "restaurant_id": restaurant_id,
+            "created_at": {"$gte": day_start.isoformat(), "$lte": day_end.isoformat()}
+        },
+        {"_id": 0}
+    ).sort("order_number", 1).to_list(1000)
+    
+    # Merge, avoiding duplicates by order id
+    seen_ids = {o["id"] for o in orders}
+    for a in archived:
+        if a["id"] not in seen_ids:
+            orders.append(a)
+    orders.sort(key=lambda x: x["order_number"])
     
     # Get deletions for this day
     deletions = await db.deletion_logs.find(
@@ -1352,3 +1414,7 @@ app.add_middleware(
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
+@app.on_event("startup")
+async def startup_scheduler():
+    asyncio.create_task(midnight_scheduler())
