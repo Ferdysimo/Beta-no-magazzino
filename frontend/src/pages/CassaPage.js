@@ -310,9 +310,7 @@ const CassaPage = () => {
             <div
               key={order.id}
               data-testid={`order-row-${order.order_number}`}
-              className={`flex items-center px-4 py-3 border-b border-gray-100 transition-colors ${
-                order.hidden_generale ? 'bg-blue-100' : 'hover:bg-gray-50'
-              }`}
+              className={`flex items-center px-4 py-3 border-b border-gray-100 transition-colors hover:bg-gray-50`}
             >
               <span className="w-16 font-bold text-gray-800 text-lg">{order.order_number}</span>
               
