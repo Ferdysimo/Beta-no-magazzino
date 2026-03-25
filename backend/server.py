@@ -544,7 +544,7 @@ async def hide_from_generale(order_id: str, token_data: dict = Depends(verify_to
     
     result = await db.orders.find_one_and_update(
         {"id": order_id, "restaurant_id": restaurant_id},
-        {"$set": {"hidden_generale": True, "hidden_generale_timer": frozen_timer}},
+        {"$set": {"hidden_generale": True, "hidden_generale_timer": frozen_timer, "monitor_visible": False}},
         return_document=True
     )
     
