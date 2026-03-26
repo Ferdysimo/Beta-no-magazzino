@@ -40,12 +40,12 @@ const OrderRow2 = memo(({ order, tick, onStart, onPause, onReset, onComplete }) 
       data-testid={`bollitore2-row-${order.order_number}`}
       className={`flex items-center px-2 py-1 border-b border-gray-100 transition-colors ${rowColor}`}
     >
-      <span className="w-14 font-bold text-base text-gray-900">{order.order_number}</span>
-      <span className={`flex-1 text-base text-gray-900 ${isUppercase(order.description) ? 'font-bold' : 'font-medium'}`}>
+      <span className="w-14 font-bold text-base text-black">{order.order_number}</span>
+      <span className={`flex-1 text-base text-black ${isUppercase(order.description) ? 'font-bold' : 'font-medium'}`}>
         {order.description}
       </span>
 
-      <span className="w-24 font-mono text-base font-bold tabular-nums text-gray-900">
+      <span className="w-24 font-mono text-base font-bold tabular-nums text-black">
         {order.timer_started ? formatTimer(elapsed) : ''}
       </span>
 
@@ -137,7 +137,7 @@ const BollitorePage2 = () => {
       <main className="max-w-6xl mx-auto p-6">
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h1 className="font-heading text-4xl font-bold text-gray-900 uppercase">Tablet bollitore 2</h1>
+            <h1 className="font-heading text-4xl font-bold text-black uppercase">Tablet bollitore 2</h1>
             <p className="text-gray-500">Solo ordini con simbolo: -</p>
           </div>
           <div className="flex items-center gap-4">
