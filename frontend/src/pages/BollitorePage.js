@@ -38,7 +38,7 @@ const OrderRow = memo(({ order, tick, onStart, onPause, onReset, onComplete }) =
   return (
     <div
       data-testid={`bollitore-row-${order.order_number}`}
-      className={`flex items-center px-3 py-2 border-b border-gray-100 transition-colors ${rowColor}`}
+      className={`flex items-center px-2 py-1 border-b border-gray-100 transition-colors ${rowColor}`}
     >
       <span className="w-14 font-bold text-base text-gray-900">{order.order_number}</span>
       <span className={`flex-1 text-base text-gray-900 ${isUppercase(order.description) ? 'font-bold' : 'font-medium'}`}>
