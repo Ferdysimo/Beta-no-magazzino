@@ -108,7 +108,7 @@ const GeneralePage = () => {
               <div
                 key={order.id}
                 data-testid={`generale-row-${order.order_number}`}
-                className={`flex items-center px-4 py-4 border-b border-gray-100 transition-colors ${
+                className={`flex items-center px-2 py-1 border-b border-gray-100 transition-colors ${
                   isHighlighted ? 'bg-blue-700' : 'hover:bg-gray-50'
                 }`}
               >
