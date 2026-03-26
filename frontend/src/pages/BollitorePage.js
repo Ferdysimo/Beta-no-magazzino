@@ -30,22 +30,22 @@ const OrderRow = memo(({ order, tick, onStart, onPause, onReset, onComplete }) =
 
   let rowColor = 'bg-white';
   if (order.timer_started) {
-    if (elapsed >= 240) rowColor = 'bg-gray-400 text-white';
-    else if (elapsed >= 180) rowColor = 'bg-[#EF4444] text-white';
-    else rowColor = 'bg-[#22C55E] text-white';
+    if (elapsed >= 240) rowColor = 'bg-gray-300';
+    else if (elapsed >= 180) rowColor = 'bg-red-200';
+    else rowColor = 'bg-green-200';
   }
 
   return (
     <div
       data-testid={`bollitore-row-${order.order_number}`}
-      className={`flex items-center px-4 py-4 border-b border-gray-100 transition-colors ${rowColor}`}
+      className={`flex items-center px-3 py-2 border-b border-gray-100 transition-colors ${rowColor}`}
     >
-      <span className="w-16 font-bold text-lg">{order.order_number}</span>
-      <span className={`flex-1 text-lg ${isUppercase(order.description) ? 'font-bold' : 'font-medium'}`}>
+      <span className="w-14 font-bold text-base text-gray-900">{order.order_number}</span>
+      <span className={`flex-1 text-base text-gray-900 ${isUppercase(order.description) ? 'font-bold' : 'font-medium'}`}>
         {order.description}
       </span>
 
-      <span className="w-28 font-mono text-lg font-bold tabular-nums">
+      <span className="w-24 font-mono text-base font-bold tabular-nums text-gray-900">
         {order.timer_started ? formatTimer(elapsed) : ''}
       </span>
 
