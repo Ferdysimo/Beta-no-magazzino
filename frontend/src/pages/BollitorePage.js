@@ -45,7 +45,7 @@ const OrderRow = memo(({ order, tick, onStart, onPause, onReset, onComplete }) =
         {order.description}
       </span>
 
-      <span className="w-24 font-mono text-lg font-bold tabular-nums text-black">
+      <span className="w-24 text-lg font-bold tabular-nums text-black">
         {order.timer_started ? formatTimer(elapsed) : ''}
       </span>
 
