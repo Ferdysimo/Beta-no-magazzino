@@ -29,6 +29,7 @@ const CassaPage = () => {
   const { restaurant, token } = useAuth();
   const { orders, createOrder, deleteOrder, completeOrder, updateOrder } = useOrders();
   const [orderNumber, setOrderNumber] = useState('');
+  const [userEditedNumber, setUserEditedNumber] = useState(false);
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -69,9 +70,11 @@ const CassaPage = () => {
     return maxNumber + 1;
   };
 
-  // Update order number when orders change
+  // Update order number when orders change, only if user hasn't manually edited it
   useEffect(() => {
-    setOrderNumber(String(getNextOrderNumber()));
+    if (!userEditedNumber) {
+      setOrderNumber(String(getNextOrderNumber()));
+    }
   }, [orders]);
 
   // Auto-focus input
@@ -87,6 +90,7 @@ const CassaPage = () => {
     try {
       await createOrder(description.trim(), parseInt(orderNumber) || getNextOrderNumber());
       setDescription('');
+      setUserEditedNumber(false);
       setOrderNumber(String(getNextOrderNumber() + 1));
       // Focus input after a short delay to ensure DOM is updated
       setTimeout(() => {
@@ -276,7 +280,10 @@ const CassaPage = () => {
               data-testid="order-number-input"
               type="text"
               value={orderNumber}
-              onChange={(e) => setOrderNumber(e.target.value.replace(/\D/g, ''))}
+              onChange={(e) => {
+                setOrderNumber(e.target.value.replace(/\D/g, ''));
+                setUserEditedNumber(true);
+              }}
               className="w-20 h-12 text-lg font-bold text-center px-2 border border-gray-300 rounded focus:border-blue-500 focus:outline-none"
               placeholder="N°"
             />
