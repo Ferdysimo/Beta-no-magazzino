@@ -41,7 +41,7 @@ const OrderRow2 = memo(({ order, tick, onStart, onPause, onReset, onComplete }) 
       className={`flex items-center px-2 py-1 border-b border-gray-100 transition-colors ${rowColor}`}
     >
       <span className="w-14 font-bold text-lg text-black">{order.order_number}</span>
-      <span className={`flex-1 text-lg text-black ${isUppercase(order.description) ? 'font-bold' : 'font-medium'}`}>
+      <span className={`flex-1 text-lg text-black font-bold`}>
         {order.description}
       </span>
 
