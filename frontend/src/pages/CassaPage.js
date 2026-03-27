@@ -296,7 +296,7 @@ const CassaPage = () => {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="flex-1 h-12 text-lg px-4 border-0 focus:ring-0 focus:outline-none"
-              placeholder="es. carb ta 20 oppure CARB TA 20"
+              placeholder=""
               disabled={loading}
             />
             <button
