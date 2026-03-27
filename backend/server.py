@@ -391,6 +391,13 @@ async def create_order(data: OrderCreate, token_data: dict = Depends(verify_toke
     
     await db.orders.insert_one(order)
     
+    # Backup to file for Flaminio
+    restaurant = await db.restaurants.find_one({"id": restaurant_id})
+    if restaurant and restaurant.get("location") == "Flaminio":
+        backup_file = UPLOADS_DIR / "backup_flaminio.txt"
+        with open(backup_file, "a") as f:
+            f.write(f"{order_number} {data.description}\n")
+    
     # Broadcast to all connected clients
     await manager.broadcast_to_restaurant(restaurant_id, {
         "type": "order_created",
