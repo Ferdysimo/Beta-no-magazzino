@@ -124,7 +124,7 @@ const BollitorePage2 = () => {
       if (!o.timer_paused && o.timer_start_time) {
         elapsed += Math.floor((now - new Date(o.timer_start_time)) / 1000);
       }
-      return elapsed >= 300;
+      return elapsed >= 420;
     });
     for (const o of toRemove) {
       try { await kitchenComplete(o.id); } catch (e) { console.error(e); }
@@ -190,7 +190,7 @@ const BollitorePage2 = () => {
             onClick={handleClearOver5Min}
             className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-medium rounded transition-colors"
           >
-            Cancella &gt; 5 minuti
+            Cancella &gt; 7 minuti
           </button>
         </div>
       </main>
