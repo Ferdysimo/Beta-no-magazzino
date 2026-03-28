@@ -123,7 +123,7 @@ const CassaPage = () => {
 
   const handleEdit = (order) => {
     setEditingId(order.id);
-    setEditValue(order.description);
+    setEditValue(`${order.order_number} ${order.description}`);
   };
 
   const handleCancelEdit = () => {
@@ -137,7 +137,15 @@ const CassaPage = () => {
       return;
     }
     try {
-      await updateOrder(orderId, { description: editValue });
+      const trimmed = editValue.trim();
+      const match = trimmed.match(/^(\d+)\s+(.+)$/);
+      if (match) {
+        const newNumber = parseInt(match[1]);
+        const newDescription = match[2];
+        await updateOrder(orderId, { order_number: newNumber, description: newDescription });
+      } else {
+        await updateOrder(orderId, { description: trimmed });
+      }
       setEditingId(null);
       setEditValue('');
       // Refresh logs after modification

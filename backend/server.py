@@ -152,6 +152,7 @@ class OrderCreate(BaseModel):
 
 class OrderUpdate(BaseModel):
     description: Optional[str] = None
+    order_number: Optional[int] = None
     status: Optional[str] = None
     timer_started: Optional[bool] = None
     timer_start_time: Optional[str] = None
