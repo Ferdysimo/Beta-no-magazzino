@@ -1,0 +1,1000 @@
+1 carb-
+2 CARB TA
+3 tart ta-
+4 amat-
+5 amat
+6 tart ta
+7 amat
+8 carb ta
+10 CARB TA-
+12 CARB TA
+11 CACIO TA
+9 cacio ta
+13 carb ta
+14 carb ta
+16 cacio ta
+15 carb
+18 carb ta
+17 carb ta
+19 carb ta
+22 CARB TA
+21 carb ta
+20 carb
+23 amat ta
+24 cacio
+25 tart ta-
+26 amat ta
+27 amat-
+28 cacio ta-
+31 amat ta
+29 AMAT TA
+32 CARB TA
+30 amat ta-
+34 cacio
+33 tart ta
+38 amat-
+37 GRICIA TA
+35 carb
+40 tart ta
+39 AMAT TA
+36 cacio
+41 tart ta
+42 GRICIA TA
+45 CARB TA
+43 AMAT TA
+46 tart ta
+44 CARB TA
+47 GRICIA TA
+48 AMAT TA
+50 GRICIA TA
+49 carb ta
+51 CARB TA
+52 carb
+53 carb
+54 carb ta
+55 CARB TA-
+56 GRICIA TA
+57 CACIO TA
+59 gricia
+58 CARB TA
+60 tart ta
+61 cacio
+63 amat ta
+64 carb
+62 gricia
+65 carb ta
+67 tart ta-
+66 cacio
+68 carb-
+69 tart ta
+70 AMAT TA-
+71 carb-
+72 amat ta
+73 carb ta
+75 CACIO TA
+74 cacio
+76 AMAT TA-
+77 gricia
+78 amat
+79 CARB TA-
+80 tart ta-
+81 GRICIA TA
+82 cacio ta
+83 carb
+86 amat-
+87 tart ta
+84 cacio ta-
+85 cacio ta
+88 CARB TA
+89 amat ta-
+91 amat ta
+90 carb-
+92 cacio
+93 tart ta
+94 AMAT TA-
+95 gricia
+96 carb ta-
+97 gricia
+98 cacio ta
+99 amat-
+100 GRICIA TA
+102 carb-
+103 amat ta-
+101 CARB TA-
+106 carb ta
+104 cacio ta
+105 CACIO TA
+107 cacio ta
+108 carb
+109 tart ta
+110 CACIO TA
+111 carb ta-
+112 tart ta
+113 cacio ta
+114 amat ta-
+116 tart ta
+115 carb ta
+117 CARB TA-
+118 cacio ta
+119 CACIO TA
+120 cacio ta
+121 tart ta
+123 carb-
+125 amat ta-
+124 tart ta
+122 tart ta
+126 AMAT TA
+127 CACIO TA
+128 amat
+129 amat ta-
+130 gricia
+131 CACIO TA
+133 carb ta
+134 amat ta-
+135 amat-
+132 GRICIA TA
+136 GRICIA TA
+137 CARB TA-
+141 CARB TA
+139 cacio
+138 tart ta-
+143 cacio ta
+142 amat ta-
+140 carb ta
+144 carb ta
+145 cacio ta
+147 carb ta-
+146 carb
+148 cacio ta
+150 GRICIA TA
+151 carb
+152 tart ta-
+149 carb ta
+153 amat ta
+156 CACIO TA
+154 GRICIA TA
+155 amat ta
+158 cacio ta
+157 carb
+160 carb ta
+161 CARB TA
+159 carb ta-
+162 tart ta
+163 CACIO TA
+164 CARB TA
+166 CACIO TA
+167 CACIO TA
+165 AMAT TA
+168 carb ta
+169 AMAT TA
+171 amat ta
+170 carb
+172 AMAT TA-
+173 amat ta-
+174 tart ta-
+175 CACIO TA
+176 carb ta
+177 carb ta-
+178 CARB TA-
+180 AMAT TA
+179 cacio ta
+181 CACIO TA
+183 cacio ta-
+182 AMAT TA-
+186 carb ta
+184 CARB TA
+187 cacio ta
+185 GRICIA TA
+188 cacio ta
+189 CARB TA
+190 CARB TA
+191 CACIO TA
+192 cacio ta
+193 cacio ta-
+196 cacio ta
+194 amat ta-
+195 tart ta-
+197 cacio
+198 carb ta
+200 amat-
+201 CARB TA-
+199 carb
+202 tart ta
+203 carb ta
+204 CACIO TA
+205 cacio
+206 carb ta
+209 cacio ta
+208 gricia
+207 gricia
+210 cacio ta-
+212 GRICIA TA
+213 cacio
+211 GRICIA TA
+214 cacio
+215 carb ta-
+216 CARB TA
+217 carb ta
+218 carb-
+219 carb ta-
+222 cacio ta
+223 amat-
+220 gricia
+221 cacio ta
+224 tart ta
+225 amat-
+227 tart ta
+226 cacio ta-
+228 amat ta-
+229 gricia
+231 carb ta
+230 amat ta
+232 AMAT TA
+233 cacio ta-
+234 CARB TA
+237 CARB TA-
+235 GRICIA TA
+236 GRICIA TA
+238 tart ta
+239 CARB TA
+240 carb-
+241 AMAT TA-
+244 GRICIA TA
+243 CARB TA-
+242 cacio ta-
+246 GRICIA TA
+249 carb ta
+247 CACIO TA
+248 cacio ta
+250 amat ta-
+251 amat
+245 gricia
+252 tart ta-
+254 CARB TA
+262 amat ta
+253 gricia
+257 carb
+259 carb-
+256 carb ta
+255 carb ta-
+258 tart ta
+263 carb
+261 AMAT TA
+260 amat ta
+264 amat
+266 amat ta-
+265 carb
+267 CARB TA
+269 amat ta-
+272 amat ta
+274 amat ta-
+271 CARB TA-
+270 cacio ta-
+268 CACIO TA
+273 cacio ta
+277 cacio ta
+276 tart ta-
+275 carb-
+279 AMAT TA
+280 GRICIA TA
+282 amat-
+278 CARB TA-
+281 cacio ta-
+283 amat-
+284 CARB TA
+285 tart ta
+286 cacio
+287 AMAT TA
+288 CARB TA
+291 carb ta
+290 gricia
+292 cacio
+293 gricia
+289 amat
+294 cacio
+295 CARB TA-
+297 carb ta
+299 cacio ta
+298 carb ta-
+296 amat
+303 CARB TA
+300 cacio
+302 amat ta
+301 carb-
+304 amat ta-
+305 AMAT TA-
+306 tart ta
+307 AMAT TA
+308 carb ta
+309 GRICIA TA
+310 amat-
+311 tart ta-
+312 CARB TA
+313 amat-
+314 carb ta
+315 CARB TA-
+317 carb ta
+321 amat ta
+319 tart ta-
+316 AMAT TA
+320 AMAT TA
+322 CARB TA-
+318 amat
+324 amat-
+323 gricia
+325 cacio ta
+326 tart ta-
+328 amat ta
+327 CARB TA-
+329 CACIO TA
+333 tart ta-
+330 tart ta-
+331 GRICIA TA
+332 tart ta-
+334 CACIO TA
+335 carb-
+340 amat
+338 tart ta
+341 carb ta-
+337 AMAT TA
+336 gricia
+343 CARB TA
+342 carb ta
+344 cacio ta-
+339 CARB TA
+345 cacio ta-
+346 CACIO TA
+349 amat
+348 CACIO TA
+347 cacio ta
+352 cacio ta
+351 cacio ta-
+356 CACIO TA
+350 CACIO TA
+353 CACIO TA
+358 gricia
+359 cacio ta
+357 cacio ta
+361 CARB TA
+354 carb
+362 CARB TA
+363 gricia
+355 carb ta-
+364 tart ta
+365 cacio ta
+360 carb ta-
+366 CACIO TA
+368 amat
+369 cacio ta-
+370 CARB TA
+371 carb ta
+367 CARB TA-
+372 cacio ta
+373 amat ta-
+374 cacio ta
+375 amat-
+376 CARB TA
+378 GRICIA TA
+377 tart ta
+380 cacio ta-
+379 carb
+381 CARB TA
+383 cacio
+384 carb ta-
+382 carb ta
+385 tart ta-
+386 carb ta
+387 carb ta
+388 cacio
+389 cacio ta-
+391 AMAT TA-
+390 GRICIA TA
+393 AMAT TA-
+392 CACIO TA
+394 amat
+395 CACIO TA
+396 tart ta-
+397 carb-
+398 CARB TA
+399 amat ta-
+402 gricia
+401 CACIO TA
+404 amat
+403 amat-
+400 cacio ta
+405 carb
+406 carb
+407 cacio ta-
+408 AMAT TA
+409 tart ta
+410 amat ta
+411 GRICIA TA
+413 carb ta-
+414 tart ta-
+412 amat
+416 amat
+415 CACIO TA
+417 carb ta
+418 CARB TA-
+419 amat
+421 amat-
+420 cacio ta
+424 cacio
+422 cacio
+425 amat ta
+423 cacio ta
+428 cacio
+429 GRICIA TA
+427 cacio ta-
+426 AMAT TA
+430 gricia
+432 CARB TA
+431 AMAT TA
+433 carb ta
+434 tart ta
+435 CARB TA
+436 CARB TA-
+438 AMAT TA
+437 amat-
+440 carb
+439 gricia
+441 carb
+443 carb-
+444 tart ta
+442 CARB TA
+445 gricia
+446 amat ta
+449 amat-
+447 CARB TA-
+448 cacio ta-
+450 amat-
+452 carb-
+451 amat ta
+455 tart ta
+456 gricia
+454 GRICIA TA
+457 cacio ta
+453 CACIO TA
+458 amat-
+460 amat-
+459 cacio ta
+461 tart ta-
+462 carb ta
+466 AMAT TA-
+463 carb ta
+468 amat-
+469 amat ta-
+475 AMAT TA
+465 AMAT TA-
+464 amat ta-
+472 carb
+473 AMAT TA
+476 amat
+467 AMAT TA-
+470 carb-
+474 cacio
+471 tart ta
+478 carb-
+477 cacio ta
+479 AMAT TA-
+480 cacio ta-
+481 CARB TA-
+482 gricia
+483 carb ta-
+484 CARB TA
+485 AMAT TA-
+487 cacio
+486 cacio
+488 gricia
+489 amat
+491 carb ta-
+493 cacio ta
+492 CACIO TA
+494 gricia
+496 AMAT TA-
+495 amat ta-
+490 amat ta
+497 carb-
+498 CARB TA
+501 CARB TA-
+500 tart ta-
+499 amat
+502 carb-
+503 CARB TA
+504 carb-
+505 CARB TA-
+506 CARB TA-
+508 amat
+507 carb
+509 tart ta
+510 amat ta-
+511 AMAT TA
+513 carb
+512 carb ta-
+515 carb
+514 carb
+516 amat ta
+517 amat
+518 tart ta-
+520 carb ta
+519 GRICIA TA
+521 tart ta
+522 amat
+523 carb ta
+524 cacio ta
+525 cacio ta
+526 carb-
+527 carb ta
+532 tart ta-
+528 amat ta
+529 amat ta-
+530 GRICIA TA
+531 gricia
+534 carb
+533 tart ta-
+535 gricia
+536 carb
+539 cacio
+540 tart ta
+538 CARB TA-
+537 CACIO TA
+542 amat-
+541 CARB TA-
+544 tart ta
+545 carb
+543 cacio ta
+548 GRICIA TA
+552 amat ta
+546 amat
+551 carb ta-
+549 GRICIA TA
+547 tart ta-
+550 carb
+553 tart ta-
+556 cacio
+557 carb
+554 gricia
+558 gricia
+555 CACIO TA
+559 amat-
+560 carb ta
+561 carb ta
+562 carb ta-
+563 CARB TA
+564 tart ta
+565 gricia
+566 amat ta-
+568 amat ta
+569 cacio ta-
+567 carb-
+570 carb-
+571 amat ta
+572 cacio
+574 cacio ta
+575 tart ta-
+573 amat ta-
+576 tart ta
+577 CARB TA
+578 cacio ta-
+579 carb-
+580 CACIO TA
+582 amat
+583 AMAT TA
+581 tart ta
+584 gricia
+585 cacio
+587 GRICIA TA
+586 carb
+590 CACIO TA
+588 amat
+589 CARB TA-
+592 CARB TA
+591 GRICIA TA
+594 cacio
+593 carb-
+595 CACIO TA
+596 cacio ta
+597 cacio ta-
+598 GRICIA TA
+599 amat-
+600 amat ta
+602 amat-
+601 tart ta-
+604 carb
+603 carb
+605 cacio
+606 cacio
+607 CACIO TA
+609 carb
+608 carb ta
+610 GRICIA TA
+612 carb ta-
+613 amat-
+611 AMAT TA
+615 gricia
+614 gricia
+618 amat-
+617 CACIO TA
+616 CARB TA
+619 CARB TA
+620 carb ta-
+622 carb
+621 CARB TA
+624 GRICIA TA
+625 carb-
+626 carb ta
+623 carb ta
+627 cacio ta
+628 amat
+629 CARB TA
+630 amat-
+631 amat-
+634 CACIO TA
+633 carb-
+632 AMAT TA-
+635 carb
+639 cacio ta
+637 GRICIA TA
+636 carb ta-
+638 gricia
+640 cacio ta
+641 AMAT TA-
+642 AMAT TA-
+645 CACIO TA
+643 carb-
+647 GRICIA TA
+646 amat
+644 cacio ta
+648 amat ta
+649 tart ta-
+650 carb ta-
+651 carb ta
+652 gricia
+655 tart ta
+656 carb
+653 amat ta
+654 carb
+657 tart ta
+658 cacio
+660 amat
+659 tart ta
+661 cacio ta
+662 amat-
+664 cacio
+663 cacio ta-
+665 amat ta
+667 AMAT TA-
+670 carb ta
+668 tart ta-
+669 carb
+666 carb-
+671 amat-
+672 tart ta-
+673 cacio ta
+674 CARB TA-
+677 carb ta-
+679 cacio
+676 GRICIA TA
+678 AMAT TA
+675 amat ta
+680 amat
+681 AMAT TA
+682 amat
+683 amat-
+684 amat ta
+685 CARB TA-
+689 tart ta-
+687 tart ta
+691 tart ta-
+690 amat ta-
+686 amat-
+688 carb
+692 cacio ta
+693 cacio
+695 AMAT TA
+696 cacio
+694 carb
+699 tart ta-
+697 carb ta
+698 amat-
+700 carb ta
+701 amat
+702 gricia
+703 cacio ta
+704 AMAT TA-
+705 amat ta-
+706 CACIO TA
+707 carb
+708 amat-
+709 cacio ta
+710 carb ta
+711 CACIO TA
+716 amat ta-
+715 carb
+712 CARB TA
+714 amat-
+717 carb-
+718 AMAT TA
+713 amat ta-
+719 cacio
+720 cacio ta-
+721 cacio ta-
+722 CARB TA-
+723 cacio
+724 cacio
+727 carb-
+725 amat-
+726 amat ta
+728 carb ta
+729 cacio ta
+730 cacio
+731 amat ta-
+732 amat-
+736 carb ta-
+737 tart ta-
+739 amat
+733 CARB TA
+734 amat
+741 GRICIA TA
+738 tart ta-
+735 CARB TA-
+742 GRICIA TA
+740 cacio
+743 AMAT TA-
+744 CARB TA
+745 amat
+748 tart ta
+747 cacio ta
+746 cacio
+749 GRICIA TA
+751 CARB TA
+752 carb-
+754 CARB TA-
+750 GRICIA TA
+753 AMAT TA
+755 carb ta
+761 CACIO TA
+763 carb ta-
+758 amat ta
+757 cacio ta-
+756 CACIO TA
+760 amat
+759 cacio ta-
+762 AMAT TA
+764 cacio ta-
+765 carb ta
+766 CARB TA-
+768 carb ta
+767 amat ta
+769 tart ta-
+770 CACIO TA
+771 CARB TA-
+772 amat ta-
+773 carb ta
+774 amat
+775 cacio ta
+776 cacio
+777 cacio
+780 cacio ta
+779 carb ta-
+781 CACIO TA
+782 gricia
+778 AMAT TA-
+783 gricia
+785 tart ta-
+786 cacio
+784 GRICIA TA
+787 carb
+788 carb ta-
+789 amat ta
+790 amat ta
+791 carb
+792 amat ta
+793 GRICIA TA
+799 GRICIA TA
+795 tart ta
+794 AMAT TA-
+798 tart ta-
+797 GRICIA TA
+796 CACIO TA
+801 carb-
+800 amat
+802 gricia
+804 CACIO TA
+803 AMAT TA
+805 carb
+806 cacio ta-
+807 cacio ta-
+808 AMAT TA-
+809 carb ta
+810 cacio
+811 amat-
+812 AMAT TA-
+814 CARB TA
+813 carb-
+815 gricia
+817 gricia
+816 tart ta
+818 carb ta
+819 cacio ta-
+820 carb-
+821 CARB TA
+822 carb-
+823 amat-
+825 amat ta-
+824 amat
+826 carb-
+827 carb ta
+829 carb ta
+828 amat ta
+830 carb
+831 CARB TA
+832 AMAT TA-
+836 cacio
+834 CARB TA
+837 amat ta
+835 gricia
+833 amat ta
+838 CARB TA
+839 carb ta
+840 gricia
+841 carb
+842 cacio
+843 amat ta-
+845 amat-
+846 AMAT TA
+844 tart ta
+847 carb-
+850 cacio
+848 amat
+853 tart ta
+851 GRICIA TA
+854 gricia
+852 CARB TA
+849 amat-
+855 cacio ta
+856 CARB TA
+857 cacio ta-
+858 amat ta-
+859 amat-
+861 AMAT TA-
+862 carb
+860 cacio ta
+863 carb ta
+864 AMAT TA
+865 amat ta-
+866 GRICIA TA
+867 cacio ta
+868 tart ta-
+870 gricia
+871 CARB TA
+869 GRICIA TA
+872 tart ta
+873 CACIO TA
+878 cacio
+875 gricia
+877 carb ta-
+874 amat ta
+879 AMAT TA
+876 amat ta-
+880 AMAT TA
+881 carb
+885 carb
+882 AMAT TA-
+884 carb
+889 AMAT TA-
+883 carb
+887 GRICIA TA
+888 AMAT TA
+891 AMAT TA
+890 tart ta
+893 CARB TA-
+895 gricia
+892 tart ta
+886 gricia
+894 GRICIA TA
+896 cacio
+897 amat ta-
+899 carb ta-
+898 amat ta-
+900 GRICIA TA
+901 AMAT TA
+902 CARB TA-
+906 cacio
+904 carb ta
+907 amat-
+905 amat-
+903 amat ta
+914 cacio ta
+908 CACIO TA
+910 carb
+909 amat ta-
+912 CARB TA
+911 gricia
+917 amat-
+913 AMAT TA
+916 carb
+915 AMAT TA
+918 amat
+919 CARB TA
+920 GRICIA TA
+921 amat ta
+922 cacio ta-
+923 CACIO TA
+924 carb ta
+925 AMAT TA-
+926 carb
+930 CACIO TA
+927 cacio
+928 AMAT TA-
+929 CARB TA-
+932 amat ta
+933 tart ta-
+931 tart ta
+934 amat-
+938 CACIO TA
+936 cacio
+939 carb ta
+941 cacio
+940 amat
+937 GRICIA TA
+935 CARB TA
+943 CACIO TA
+944 carb ta-
+942 cacio ta-
+946 CACIO TA
+945 tart ta
+947 carb ta
+949 cacio
+952 CARB TA
+951 tart ta
+948 AMAT TA-
+950 carb ta
+955 AMAT TA-
+953 amat ta
+954 AMAT TA
+956 carb ta-
+957 CARB TA-
+960 CARB TA-
+959 tart ta
+958 GRICIA TA
+961 tart ta
+962 carb-
+963 AMAT TA-
+965 amat-
+964 CACIO TA
+966 CARB TA
+967 amat ta
+968 gricia
+970 tart ta
+969 CACIO TA
+971 AMAT TA
+972 AMAT TA
+973 gricia
+974 GRICIA TA
+976 cacio ta-
+977 amat-
+978 cacio ta-
+975 AMAT TA
+980 AMAT TA
+979 carb
+981 cacio ta
+982 amat ta
+983 carb
+985 cacio
+986 CARB TA-
+984 amat ta
+988 amat
+987 GRICIA TA
+990 CARB TA
+989 amat ta-
+991 tart ta-
+992 cacio ta
+993 gricia
+994 tart ta-
+995 carb
+996 cacio
+999 carb ta
+998 CARB TA
+1000 carb-
+997 carb-
