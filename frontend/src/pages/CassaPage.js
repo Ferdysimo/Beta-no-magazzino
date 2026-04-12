@@ -140,10 +140,22 @@ const CassaPage = () => {
     const now = new Date();
     const orario = now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
     
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
-      <html><head><title>Stampa</title>
-      <style>
+    // Use hidden iframe instead of window.open to avoid mini window
+    let iframe = document.getElementById('print-frame');
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'print-frame';
+      iframe.style.position = 'fixed';
+      iframe.style.left = '-9999px';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      document.body.appendChild(iframe);
+    }
+    
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open();
+    doc.write(`
+      <html><head><style>
         @page { margin: 5mm; }
         body { font-family: Arial, sans-serif; padding: 0; margin: 0; }
         table { border-collapse: collapse; }
@@ -151,10 +163,12 @@ const CassaPage = () => {
       </style></head><body>
         <div class="orario">${orario}</div>
         <table>${rows}</table>
-        <script>window.onload=function(){window.print();window.close();}</script>
       </body></html>
     `);
-    printWindow.document.close();
+    doc.close();
+    
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
     setSelectedForPrint(new Set());
   };
 
