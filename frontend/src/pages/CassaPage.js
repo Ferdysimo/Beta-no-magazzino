@@ -132,8 +132,8 @@ const CassaPage = () => {
     
     const rows = toPrint.map(o => `
       <tr>
-        <td style="font-size:36px;font-weight:bold;padding:8px 20px 8px 0;border-bottom:1px solid #ccc;">${o.order_number}</td>
-        <td style="font-size:36px;font-weight:bold;padding:8px 0;border-bottom:1px solid #ccc;">${o.description}</td>
+        <td style="font-size:18px;font-weight:bold;padding:2px 12px 2px 0;">${o.order_number}</td>
+        <td style="font-size:18px;font-weight:bold;padding:2px 0;">${o.description}</td>
       </tr>
     `).join('');
     
@@ -141,9 +141,9 @@ const CassaPage = () => {
     printWindow.document.write(`
       <html><head><title>Stampa</title>
       <style>
-        body { font-family: Arial, sans-serif; padding: 20px; margin: 0; }
-        table { border-collapse: collapse; width: 100%; }
-        @media print { body { padding: 10px; } }
+        @page { margin: 5mm; }
+        body { font-family: Arial, sans-serif; padding: 0; margin: 0; }
+        table { border-collapse: collapse; }
       </style></head><body>
         <table>${rows}</table>
         <script>window.onload=function(){window.print();window.close();}</script>
