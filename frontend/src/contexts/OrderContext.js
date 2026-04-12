@@ -11,7 +11,7 @@ const WS_URL = BACKEND_URL.replace(/^http/, 'ws');
 const OPTIMISTIC_GUARD_MS = 3000;
 const WS_BUFFER_FLUSH_MS = 300;
 const WS_PING_INTERVAL_MS = 25000;     // keepalive ping every 25s
-const POLLING_FALLBACK_MS = 5000;      // safety-net poll every 5s
+const POLLING_FALLBACK_MS = 15000;      // safety-net poll every 15s
 
 export const OrderProvider = ({ children }) => {
   const { token, restaurant } = useAuth();
@@ -71,9 +71,25 @@ export const OrderProvider = ({ children }) => {
         const newIds = response.data.map(o => o.id).sort().join(',');
         if (currentIds !== newIds) setNewOrdersAvailable(true);
       } else {
-        setOrders(response.data);
+        // Respect optimistic guards: merge server data without overwriting guarded orders
+        const hasGuards = optimisticGuardRef.current.size > 0;
+        if (hasGuards && !forceUpdate) {
+          setOrders(prev => {
+            const guardedIds = new Set();
+            optimisticGuardRef.current.forEach((expiry, id) => {
+              if (Date.now() <= expiry) guardedIds.add(id);
+            });
+            // Keep guarded orders from local state, take the rest from server
+            const serverMap = new Map(response.data.map(o => [o.id, o]));
+            const localGuarded = prev.filter(o => guardedIds.has(o.id) && !serverMap.has(o.id));
+            const merged = response.data.map(o => guardedIds.has(o.id) ? (prev.find(p => p.id === o.id) || o) : o);
+            return [...merged, ...localGuarded];
+          });
+        } else {
+          setOrders(response.data);
+          optimisticGuardRef.current.clear();
+        }
         setNewOrdersAvailable(false);
-        optimisticGuardRef.current.clear();
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
