@@ -81,7 +81,7 @@ def sync_append_to_sheets(order_number, description, restaurant_location):
         data_str = now.strftime("%d/%m/%Y")
         
         sheet = client.open_by_key(SPREADSHEET_ID).sheet1
-        sheet.append_row([data_str, orario, order_number, description, restaurant_location])
+        sheet.append_row([order_number, description])
         logger.info(f"Sheets: added order #{order_number} for {restaurant_location}")
     except Exception as e:
         logger.error(f"Sheets append error: {e}")
