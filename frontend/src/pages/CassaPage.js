@@ -377,20 +377,6 @@ const CassaPage = () => {
           </div>
         </form>
 
-        {/* Print selected button */}
-        {selectedForPrint.size > 0 && (
-          <div className="flex justify-end mb-2">
-            <button
-              data-testid="print-selected-btn"
-              onClick={handlePrintSelected}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors"
-            >
-              <Printer size={18} />
-              Stampa {selectedForPrint.size} selezionate
-            </button>
-          </div>
-        )}
-
         {/* Orders List */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           {/* Pending Orders */}
@@ -398,7 +384,14 @@ const CassaPage = () => {
             <div
               key={order.id}
               data-testid={`order-row-${order.order_number}`}
-              className={`flex items-center px-4 py-3 border-b border-gray-100 transition-colors hover:bg-gray-50`}
+              className={`flex items-center px-4 py-3 border-b border-gray-100 transition-colors cursor-pointer ${
+                selectedForPrint.has(order.id)
+                  ? 'bg-blue-50 border-l-4 border-l-blue-600'
+                  : 'hover:bg-gray-50'
+              }`}
+              onClick={() => {
+                if (editingId !== order.id) handlePrint(order);
+              }}
             >
               <span className="w-16 font-bold text-gray-800 text-lg">{order.order_number}</span>
               
@@ -447,24 +440,15 @@ const CassaPage = () => {
               
               <div className="flex gap-2 ml-4">
                 <button
-                  data-testid={`print-btn-${order.order_number}`}
-                  onClick={() => handlePrint(order)}
-                  className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
-                    selectedForPrint.has(order.id) ? 'bg-blue-700 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'
-                  }`}
-                >
-                  <Printer size={18} />
-                </button>
-                <button
                   data-testid={`edit-btn-${order.order_number}`}
-                  onClick={() => handleEdit(order)}
+                  onClick={(e) => { e.stopPropagation(); handleEdit(order); }}
                   className="w-10 h-10 flex items-center justify-center bg-amber-500 hover:bg-amber-600 text-white rounded transition-colors"
                 >
                   <Edit2 size={18} />
                 </button>
                 <button
                   data-testid={`delete-btn-${order.order_number}`}
-                  onClick={() => handleDelete(order.id)}
+                  onClick={(e) => { e.stopPropagation(); handleDelete(order.id); }}
                   className="w-10 h-10 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
                 >
                   <Trash2 size={18} />
@@ -513,6 +497,30 @@ const CassaPage = () => {
           )}
         </div>
       </main>
+
+      {/* Fixed bottom print bar */}
+      {selectedForPrint.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-blue-600 text-white px-6 py-3 flex items-center justify-between shadow-lg z-50">
+          <span className="font-medium">{selectedForPrint.size} pasta{selectedForPrint.size > 1 ? 'e' : ''} selezionat{selectedForPrint.size > 1 ? 'e' : 'a'}</span>
+          <div className="flex gap-3">
+            <button
+              data-testid="clear-selection-btn"
+              onClick={() => setSelectedForPrint(new Set())}
+              className="px-4 py-2 bg-blue-500 hover:bg-blue-400 rounded transition-colors"
+            >
+              Annulla
+            </button>
+            <button
+              data-testid="print-selected-btn"
+              onClick={handlePrintSelected}
+              className="flex items-center gap-2 px-4 py-2 bg-white text-blue-600 font-bold rounded hover:bg-blue-50 transition-colors"
+            >
+              <Printer size={18} />
+              Stampa
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
