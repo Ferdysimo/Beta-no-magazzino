@@ -137,6 +137,9 @@ const CassaPage = () => {
       </tr>
     `).join('');
     
+    const now = new Date();
+    const orario = now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    
     const printWindow = window.open('', '_blank');
     printWindow.document.write(`
       <html><head><title>Stampa</title>
@@ -144,7 +147,9 @@ const CassaPage = () => {
         @page { margin: 5mm; }
         body { font-family: Arial, sans-serif; padding: 0; margin: 0; }
         table { border-collapse: collapse; }
+        .orario { font-size: 14px; margin-bottom: 4px; }
       </style></head><body>
+        <div class="orario">${orario}</div>
         <table>${rows}</table>
         <script>window.onload=function(){window.print();window.close();}</script>
       </body></html>
