@@ -37,6 +37,7 @@ const CassaPage = () => {
   const [logs, setLogs] = useState({ deletions: { count: 0, logs: [] }, modifications: { count: 0, logs: [] } });
   const [showLogs, setShowLogs] = useState(false);
   const [selectedForPrint, setSelectedForPrint] = useState(new Set());
+  const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef(null);
   const [tick, setTick] = useState(0);
 
@@ -44,6 +45,13 @@ const CassaPage = () => {
   useEffect(() => {
     const interval = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Stop drag selection on pointer up
+  useEffect(() => {
+    const stopDrag = () => setIsDragging(false);
+    window.addEventListener('pointerup', stopDrag);
+    return () => window.removeEventListener('pointerup', stopDrag);
   }, []);
 
   // Fetch today's logs
@@ -384,13 +392,29 @@ const CassaPage = () => {
             <div
               key={order.id}
               data-testid={`order-row-${order.order_number}`}
-              className={`flex items-center px-4 py-3 border-b border-gray-100 transition-colors cursor-pointer ${
+              className={`flex items-center px-4 py-3 border-b border-gray-100 transition-colors cursor-pointer select-none ${
                 selectedForPrint.has(order.id)
                   ? 'bg-blue-50 border-l-4 border-l-blue-600'
                   : 'hover:bg-gray-50'
               }`}
-              onClick={() => {
-                if (editingId !== order.id) handlePrint(order);
+              onPointerDown={(e) => {
+                if (editingId === order.id || e.target.closest('button') || e.target.closest('input')) return;
+                setIsDragging(true);
+                setSelectedForPrint(prev => {
+                  const next = new Set(prev);
+                  if (next.has(order.id)) next.delete(order.id);
+                  else next.add(order.id);
+                  return next;
+                });
+              }}
+              onPointerEnter={() => {
+                if (isDragging && editingId !== order.id) {
+                  setSelectedForPrint(prev => {
+                    const next = new Set(prev);
+                    next.add(order.id);
+                    return next;
+                  });
+                }
               }}
             >
               <span className="w-16 font-bold text-gray-800 text-lg">{order.order_number}</span>
