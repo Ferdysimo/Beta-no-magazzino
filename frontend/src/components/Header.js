@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 export const APP_VERSION = '2026040401';
 
 const Header = () => {
-  const { logout } = useAuth();
+  const { logout, isAdmin, effectiveRestaurant, clearSelectedRestaurant } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -19,18 +19,34 @@ const Header = () => {
     navigate('/home');
   };
 
+  const handleSwitchLocation = () => {
+    clearSelectedRestaurant();
+    navigate('/home');
+  };
+
   const isHome = location.pathname === '/home';
 
   return (
     <header className="bg-[#F5C518] h-16 flex items-center justify-between px-6 shadow-md">
-      <button
-        data-testid="header-home-btn"
-        onClick={handleHome}
-        className={`nav-button ${isHome ? 'opacity-50 cursor-default' : ''}`}
-        disabled={isHome}
-      >
-        Home
-      </button>
+      <div className="flex items-center gap-3">
+        <button
+          data-testid="header-home-btn"
+          onClick={handleHome}
+          className={`nav-button ${isHome ? 'opacity-50 cursor-default' : ''}`}
+          disabled={isHome}
+        >
+          Home
+        </button>
+        {isAdmin && effectiveRestaurant && (
+          <button
+            data-testid="header-switch-location"
+            onClick={handleSwitchLocation}
+            className="bg-white/80 hover:bg-white text-gray-800 px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
+          >
+            {effectiveRestaurant.location} ▼
+          </button>
+        )}
+      </div>
       
       <button
         data-testid="header-logout-btn"

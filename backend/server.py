@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends
+from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
@@ -246,17 +246,23 @@ def save_image_to_disk(base64_data: str, prefix: str) -> str:
     filepath.write_bytes(base64.b64decode(data))
     return filename
 
-def create_token(restaurant_id: str, restaurant_name: str) -> str:
+def create_token(restaurant_id: str, restaurant_name: str, role: str = "restaurant") -> str:
     payload = {
         "restaurant_id": restaurant_id,
         "restaurant_name": restaurant_name,
+        "role": role,
         "exp": datetime.now(timezone.utc).timestamp() + 86400 * 7
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
-def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security), request: Request = None) -> dict:
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        # Admin can act as any restaurant via header
+        if payload.get("role") == "admin" and request:
+            admin_restaurant_id = request.headers.get("X-Admin-Restaurant-Id")
+            if admin_restaurant_id:
+                payload["restaurant_id"] = admin_restaurant_id
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
@@ -322,7 +328,7 @@ async def login(data: LoginRequest):
     if not restaurant or not pwd_context.verify(data.password, restaurant["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    token = create_token(restaurant["id"], restaurant["name"])
+    token = create_token(restaurant["id"], restaurant["name"], restaurant.get("role", "restaurant"))
     
     return LoginResponse(
         token=token,
@@ -345,6 +351,16 @@ async def get_current_restaurant(token_data: dict = Depends(verify_token)):
     if not restaurant:
         raise HTTPException(status_code=404, detail="Restaurant not found")
     return RestaurantResponse(**restaurant)
+
+@api_router.get("/admin/restaurants")
+async def get_admin_restaurants(token_data: dict = Depends(verify_token)):
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    restaurants = await db.restaurants.find(
+        {"role": "restaurant"},
+        {"_id": 0, "password": 0}
+    ).to_list(100)
+    return restaurants
 
 # Order Routes
 class OrderCreate(BaseModel):
@@ -921,11 +937,25 @@ async def seed_data():
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "order_counter": 0
             })
+        # Check if Admin exists, add if not
+        admin = await db.restaurants.find_one({"username": "Admin"})
+        if not admin:
+            await db.restaurants.insert_one({
+                "id": str(uuid.uuid4()),
+                "name": "Amministratore",
+                "username": "Admin",
+                "password": pwd_context.hash("Pastasciutt4!"),
+                "location": "Amministrazione",
+                "role": "admin",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "order_counter": 0
+            })
         return {"message": "Database già configurato", "accounts": [
             {"username": "Flaminio", "location": "Flaminio"},
             {"username": "Grazie", "location": "Grazie"},
             {"username": "Brazza", "location": "Largo di Brazzà"},
             {"username": "Magazziniere", "location": "Magazzino"},
+            {"username": "Admin", "location": "Amministrazione"},
         ]}
     
     # Create the 3 restaurants + magazziniere
@@ -934,6 +964,7 @@ async def seed_data():
         {"name": "Pastasciutta Roma", "username": "Grazie", "password": "Pastasciutt4!", "location": "Grazie", "role": "restaurant"},
         {"name": "Pastasciutta Roma", "username": "Brazza", "password": "Pastasciutt4!", "location": "Largo di Brazzà", "role": "restaurant"},
         {"name": "Pastasciutta Roma", "username": "Magazziniere", "password": "Pastasciutt4!", "location": "Magazzino", "role": "magazzino"},
+        {"name": "Amministratore", "username": "Admin", "password": "Pastasciutt4!", "location": "Amministrazione", "role": "admin"},
     ]
     
     for r in restaurants:

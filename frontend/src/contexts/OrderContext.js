@@ -14,7 +14,8 @@ const WS_PING_INTERVAL_MS = 25000;     // keepalive ping every 25s
 const POLLING_FALLBACK_MS = 15000;      // safety-net poll every 15s
 
 export const OrderProvider = ({ children }) => {
-  const { token, restaurant } = useAuth();
+  const { token, restaurant, effectiveRestaurant, isAdmin } = useAuth();
+  const activeRestaurant = isAdmin ? effectiveRestaurant : restaurant;
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [newOrdersAvailable, setNewOrdersAvailable] = useState(false);
@@ -27,7 +28,7 @@ export const OrderProvider = ({ children }) => {
   const pauseUpdatesRef = useRef(pauseUpdates);
   const ordersRef = useRef(orders);
   const tokenRef = useRef(token);
-  const restaurantIdRef = useRef(restaurant?.id);
+  const restaurantIdRef = useRef(activeRestaurant?.id);
   const optimisticGuardRef = useRef(new Map());
   const wsBufferRef = useRef([]);
   const flushTimerRef = useRef(null);
@@ -40,7 +41,7 @@ export const OrderProvider = ({ children }) => {
   useEffect(() => { pauseUpdatesRef.current = pauseUpdates; }, [pauseUpdates]);
   useEffect(() => { ordersRef.current = orders; }, [orders]);
   useEffect(() => { tokenRef.current = token; }, [token]);
-  useEffect(() => { restaurantIdRef.current = restaurant?.id; }, [restaurant?.id]);
+  useEffect(() => { restaurantIdRef.current = activeRestaurant?.id; }, [activeRestaurant?.id]);
 
   const guardOrder = useCallback((orderId) => {
     optimisticGuardRef.current.set(orderId, Date.now() + OPTIMISTIC_GUARD_MS);
@@ -207,9 +208,9 @@ export const OrderProvider = ({ children }) => {
     fetchOrdersImpl(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // MAIN EFFECT — runs only when restaurant.id or token changes
+  // MAIN EFFECT — runs only when active restaurant or token changes
   useEffect(() => {
-    if (!restaurant?.id || !token) return;
+    if (!activeRestaurant?.id || !token) return;
     mountedRef.current = true;
 
     // Initial HTTP fetch
@@ -233,7 +234,7 @@ export const OrderProvider = ({ children }) => {
       if (pollingIntervalRef.current) { clearInterval(pollingIntervalRef.current); pollingIntervalRef.current = null; }
       clearTimeout(wsDelay);
     };
-  }, [restaurant?.id, token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeRestaurant?.id, token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When pause is lifted, re-fetch
   useEffect(() => {

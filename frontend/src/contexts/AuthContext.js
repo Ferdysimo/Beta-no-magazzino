@@ -10,16 +10,44 @@ export const AuthProvider = ({ children }) => {
   const [restaurant, setRestaurant] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
+  const [adminSelectedRestaurant, setAdminSelectedRestaurant] = useState(
+    JSON.parse(localStorage.getItem('admin_selected_restaurant') || 'null')
+  );
+
+  const isAdmin = restaurant?.role === 'admin';
+
+  // The effective restaurant: for admin it's the selected one, for others it's their own
+  const effectiveRestaurant = isAdmin ? adminSelectedRestaurant : restaurant;
+
+  const selectRestaurant = (rest) => {
+    setAdminSelectedRestaurant(rest);
+    localStorage.setItem('admin_selected_restaurant', JSON.stringify(rest));
+  };
+
+  const clearSelectedRestaurant = () => {
+    setAdminSelectedRestaurant(null);
+    localStorage.removeItem('admin_selected_restaurant');
+  };
 
   const logout = useCallback(() => {
     localStorage.removeItem('token');
+    localStorage.removeItem('admin_selected_restaurant');
     setToken(null);
     setRestaurant(null);
+    setAdminSelectedRestaurant(null);
   }, []);
 
-  // Global axios interceptor: auto-logout on 401
+  // Global axios interceptor: auto-logout on 401, add admin header
   useEffect(() => {
-    const interceptor = axios.interceptors.response.use(
+    const requestInterceptor = axios.interceptors.request.use((config) => {
+      const adminRest = JSON.parse(localStorage.getItem('admin_selected_restaurant') || 'null');
+      if (adminRest) {
+        config.headers['X-Admin-Restaurant-Id'] = adminRest.id;
+      }
+      return config;
+    });
+
+    const responseInterceptor = axios.interceptors.response.use(
       (response) => response,
       (error) => {
         if (error.response && error.response.status === 401) {
@@ -29,7 +57,10 @@ export const AuthProvider = ({ children }) => {
         return Promise.reject(error);
       }
     );
-    return () => axios.interceptors.response.eject(interceptor);
+    return () => {
+      axios.interceptors.request.eject(requestInterceptor);
+      axios.interceptors.response.eject(responseInterceptor);
+    };
   }, [logout]);
 
   useEffect(() => {
@@ -61,7 +92,11 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ restaurant, token, loading, login, logout }}>
+    <AuthContext.Provider value={{
+      restaurant, token, loading, login, logout,
+      isAdmin, effectiveRestaurant, adminSelectedRestaurant,
+      selectRestaurant, clearSelectedRestaurant
+    }}>
       {children}
     </AuthContext.Provider>
   );
