@@ -17,6 +17,8 @@ import jwt
 import asyncio
 from zoneinfo import ZoneInfo
 from passlib.context import CryptContext
+import gspread
+from google.oauth2.service_account import Credentials
 
 ROOT_DIR = Path(__file__).parent
 UPLOADS_DIR = ROOT_DIR.parent / "uploads"
@@ -49,6 +51,42 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 ROME_TZ = ZoneInfo("Europe/Rome")
+
+# Google Sheets integration
+SPREADSHEET_ID = "1stWnCov8ipM_KzkYJiW2Iq4HmobLBJ19jGXj3oVrdyQ"
+GOOGLE_CREDS_FILE = os.path.join(os.path.dirname(__file__), "google_credentials.json")
+gs_client = None
+
+def get_sheets_client():
+    global gs_client
+    if gs_client is None:
+        try:
+            creds = Credentials.from_service_account_file(GOOGLE_CREDS_FILE, scopes=[
+                "https://www.googleapis.com/auth/spreadsheets"
+            ])
+            gs_client = gspread.authorize(creds)
+            logger.info("Google Sheets client initialized")
+        except Exception as e:
+            logger.error(f"Google Sheets init error: {e}")
+            return None
+    return gs_client
+
+def sync_append_to_sheets(order_number, description, restaurant_location):
+    try:
+        client = get_sheets_client()
+        if not client:
+            return
+        now = datetime.now(ROME_TZ)
+        orario = now.strftime("%H:%M")
+        data_str = now.strftime("%d/%m/%Y")
+        
+        sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+        sheet.append_row([data_str, orario, order_number, description, restaurant_location])
+        logger.info(f"Sheets: added order #{order_number} for {restaurant_location}")
+    except Exception as e:
+        logger.error(f"Sheets append error: {e}")
+        global gs_client
+        gs_client = None
 
 # Midnight reset: archive orders and reset counters
 async def midnight_reset():
@@ -414,6 +452,10 @@ async def create_order(data: OrderCreate, token_data: dict = Depends(verify_toke
         backup_file = UPLOADS_DIR / "backup_flaminio.txt"
         with open(backup_file, "a") as f:
             f.write(f"{order_number} {data.description}\n")
+    
+    # Append to Google Sheets in background
+    location = restaurant["location"] if restaurant else restaurant_id
+    asyncio.get_event_loop().run_in_executor(None, sync_append_to_sheets, order_number, data.description, location)
     
     # Broadcast to all connected clients
     await manager.broadcast_to_restaurant(restaurant_id, {
