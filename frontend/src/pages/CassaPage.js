@@ -132,7 +132,7 @@ const CassaPage = () => {
     
     const rows = toPrint.map(o => `
       <tr>
-        <td style="font-size:18px;font-weight:bold;padding:2px 12px 2px 0;">${o.order_number}</td>
+        <td style="font-size:18px;font-weight:bold;padding:2px 12px 2px 0;">${String(o.order_number).slice(-2).padStart(2,'0')}</td>
         <td style="font-size:18px;font-weight:bold;padding:2px 0;">${o.description}</td>
       </tr>
     `).join('');
