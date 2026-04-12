@@ -394,7 +394,7 @@ const CassaPage = () => {
               data-testid={`order-row-${order.order_number}`}
               className={`flex items-center px-4 py-3 border-b border-gray-100 transition-colors cursor-pointer select-none ${
                 selectedForPrint.has(order.id)
-                  ? 'bg-blue-50 border-l-4 border-l-blue-600'
+                  ? 'bg-blue-100 border-l-4 border-l-blue-600'
                   : 'hover:bg-gray-50'
               }`}
               onPointerDown={(e) => {
