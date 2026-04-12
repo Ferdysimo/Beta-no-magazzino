@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrders } from '../contexts/OrderContext';
 import Header from '../components/Header';
-import { Edit2, Trash2, Check, Loader2, AlertCircle } from 'lucide-react';
+import { Edit2, Trash2, Check, Loader2, AlertCircle, Printer } from 'lucide-react';
 import axios from 'axios';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -111,6 +111,23 @@ const CassaPage = () => {
     } catch (error) {
       console.error('Error deleting order:', error);
     }
+  };
+
+  const handlePrint = (order) => {
+    const printWindow = window.open('', '_blank', 'width=300,height=200');
+    printWindow.document.write(`
+      <html><head><title>Stampa</title>
+      <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+        .number { font-size: 72px; font-weight: bold; }
+        .desc { font-size: 36px; font-weight: bold; margin-top: 10px; }
+      </style></head><body>
+        <div class="number">${order.order_number}</div>
+        <div class="desc">${order.description}</div>
+        <script>window.onload=function(){window.print();window.close();}</script>
+      </body></html>
+    `);
+    printWindow.document.close();
   };
 
   const handleComplete = async (orderId) => {
@@ -373,6 +390,13 @@ const CassaPage = () => {
               </span>
               
               <div className="flex gap-2 ml-4">
+                <button
+                  data-testid={`print-btn-${order.order_number}`}
+                  onClick={() => handlePrint(order)}
+                  className="w-10 h-10 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+                >
+                  <Printer size={18} />
+                </button>
                 <button
                   data-testid={`edit-btn-${order.order_number}`}
                   onClick={() => handleEdit(order)}
