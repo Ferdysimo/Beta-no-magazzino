@@ -17,6 +17,7 @@ import BollitorePage2 from './pages/BollitorePage2';
 import MonitorClientiPage from './pages/MonitorClientiPage';
 import MagazzinierePage from './pages/MagazzinierePage';
 import ProdottiMagazzinoPage from './pages/ProdottiMagazzinoPage';
+import MediaLocaliPage from './pages/MediaLocaliPage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -127,6 +128,11 @@ function AppRoutes() {
       <Route path="/magazzino/prodotti" element={
         <ProtectedRoute>
           <ProdottiMagazzinoPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/media-locali" element={
+        <ProtectedRoute>
+          <MediaLocaliPage />
         </ProtectedRoute>
       } />
     </Routes>

@@ -11,7 +11,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import json
 import jwt
 import asyncio
@@ -123,7 +123,6 @@ async def midnight_scheduler():
         # Calculate seconds until next midnight Rome time
         tomorrow = now.replace(hour=0, minute=0, second=0, microsecond=0)
         if now >= tomorrow:
-            from datetime import timedelta
             tomorrow += timedelta(days=1)
         wait_seconds = (tomorrow - now).total_seconds()
         logger.info(f"Next midnight reset in {wait_seconds:.0f} seconds ({tomorrow.isoformat()})")
@@ -399,6 +398,79 @@ async def get_admin_restaurants(token_data: dict = Depends(verify_token)):
         {"_id": 0, "password": 0}
     ).to_list(100)
     return restaurants
+
+@api_router.get("/admin/media-locali")
+async def get_media_locali(token_data: dict = Depends(verify_token)):
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    
+    # Get all restaurants
+    restaurants = await db.restaurants.find(
+        {"role": "restaurant"},
+        {"_id": 0, "password": 0}
+    ).to_list(100)
+    
+    # Date range: same day last month to today
+    today = datetime.now(ROME_TZ).replace(hour=23, minute=59, second=59)
+    from_date = today.replace(month=today.month - 1) if today.month > 1 else today.replace(year=today.year - 1, month=12)
+    
+    result = []
+    
+    # For each day in range
+    current = today.replace(hour=0, minute=0, second=0, microsecond=0)
+    from_start = from_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    while current >= from_start:
+        day_start = current.astimezone(timezone.utc).isoformat()
+        day_end = current.replace(hour=23, minute=59, second=59).astimezone(timezone.utc).isoformat()
+        
+        day_data = {"date": current.strftime("%d/%m/%Y"), "locations": {}}
+        
+        for rest in restaurants:
+            # Check both orders and archived_orders for the highest order number
+            max_order = 0
+            
+            # Active orders
+            active = await db.orders.find(
+                {"restaurant_id": rest["id"], "created_at": {"$gte": day_start, "$lte": day_end}},
+                {"_id": 0, "order_number": 1}
+            ).sort("order_number", -1).limit(1).to_list(1)
+            if active:
+                max_order = max(max_order, active[0]["order_number"])
+            
+            # Archived orders
+            archived = await db.archived_orders.find(
+                {"restaurant_id": rest["id"], "created_at": {"$gte": day_start, "$lte": day_end}},
+                {"_id": 0, "order_number": 1}
+            ).sort("order_number", -1).limit(1).to_list(1)
+            if archived:
+                max_order = max(max_order, archived[0]["order_number"])
+            
+            # Deletion logs (orders that were deleted)
+            deleted = await db.deletion_logs.find(
+                {"restaurant_id": rest["id"], "deleted_at": {"$gte": day_start, "$lte": day_end}},
+                {"_id": 0, "order_number": 1}
+            ).sort("order_number", -1).limit(1).to_list(1)
+            if deleted:
+                max_order = max(max_order, deleted[0].get("order_number", 0))
+            
+            day_data["locations"][rest["location"]] = max_order
+        
+        result.append(day_data)
+        current -= timedelta(days=1)
+    
+    # Calculate averages per location
+    averages = {}
+    for rest in restaurants:
+        loc = rest["location"]
+        values = [d["locations"].get(loc, 0) for d in result if d["locations"].get(loc, 0) > 0]
+        averages[loc] = round(sum(values) / len(values), 2) if values else 0
+    
+    return {
+        "locations": [r["location"] for r in restaurants],
+        "averages": averages,
+        "days": result
+    }
 
 # Order Routes
 class OrderCreate(BaseModel):

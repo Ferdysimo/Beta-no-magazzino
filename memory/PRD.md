@@ -1,62 +1,97 @@
 # Pastasciutta Roma - PRD
 
-## Original Problem Statement
-Clone and enhance the website `https://webapp.pastasciuttaroma.com/` - a multi-restaurant pasta order management system.
+## Problema Originale
+Sistema di gestione ordini pasta per multi-ristorante (Flaminio, Grazie, Largo di Brazzà) con ruoli diversi (Cassa, Bollitore, Generale, Magazziniere, Amministratore).
 
-## Architecture
-- **Frontend**: React.js + Tailwind CSS
-- **Backend**: FastAPI (Python)
+## Architettura
+- **Backend**: FastAPI (Python) su porta 8001
+- **Frontend**: React.js su porta 3000
 - **Database**: MongoDB
-- **Real-time**: WebSocket (upgraded from polling on 2026-03-15)
+- **Real-time**: WebSocket con fallback polling (15s)
+- **File Storage**: Immagini su filesystem `/app/uploads`
+- **Integrazione**: Google Sheets API per export automatico ordini
 
-## Core Requirements
-### Authentication
-- Multi-restaurant login (Flaminio, Grazie, Brazza)
-- JWT-based auth, restaurant-scoped data
+## Account
+| Username | Password | Ruolo |
+|---|---|---|
+| Flaminio | Pastasciutt4! | restaurant |
+| Grazie | Pastasciutt4! | restaurant |
+| Brazza | Pastasciutt4! | restaurant |
+| Magazziniere | Pastasciutt4! | magazzino |
+| Admin | Pastasciutt4! | admin |
 
-### Pages
-1. **Cassa** - Order creation, modification, deletion with logs
-2. **Tablet Generale** - All orders list view, blue highlight toggle, lock updates
-3. **Tablet Bollitore** - Orders with cooking timers, color-coded
-4. **Tablet Bollitore 2** (Flaminio only) - Orders ending with `-`
-5. **Report di Cassa** - Daily report with timestamps
-6. **Report per Excel** - CSV download
-7. **Fatture** - Invoice management with shared suppliers
-8. **Versamenti** - Deposit slips
-9. **Chiusure** - Closing reports (Piatti/Report)
+## Funzionalità Implementate
 
-## What's Been Implemented (as of 2026-03-15)
-- [x] Full authentication system with 3 restaurant accounts
-- [x] Cassa page with order CRUD, logs, auto-numbering
-- [x] Tablet Generale with highlight toggle (blue bg-blue-400), lock updates
-- [x] Tablet Bollitore with smooth timers, color-coding
-- [x] Tablet Bollitore 2 (Flaminio only, orders ending with `-`)
-- [x] Report di Cassa with date filtering
-- [x] Report per Excel with CSV export
-- [x] Fatture with shared supplier management
-- [x] Versamenti with image upload
-- [x] Chiusure with categorization
-- [x] WebSocket real-time updates (replaced polling)
-- [x] Lock updates feature on tablet pages
-- [x] Darker blue highlight on Tablet Generale (bg-blue-700 + white text)
-- [x] Timer Play button race condition fix (single DOM node + WS buffering + optimistic guard)
-- [x] Separation Bollitore/Cassa: kitchen_completed field + endpoint (orders stay in Cassa after kitchen completion)
-- [x] Monitor Clienti page (Flaminio only): shows order numbers on dark display, camera toggle on Tablet Generale
-- [x] Timer colors updated: <3min green, 3-4min red, >4min gray (Bollitore + Cassa synced)
-- [x] Image storage optimization: moved from base64-in-DB to file-on-disk, DB size reduced ~98.7%
-- [x] "Cancella > 5 minuti" button on both Bollitore pages
-- [x] Monitor Clienti: order numbers >99 show only last 2 digits
+### Core
+- Autenticazione multi-ristorante con JWT + ruoli
+- CRUD ordini con numerazione incrementale
+- Timer cottura con colori (verde/rosso/grigio/blu)
+- WebSocket real-time + polling fallback 15s
+- Reset automatico a mezzanotte (ora italiana) con archiviazione ordini
 
-## Prioritized Backlog
-- **P0**: Warehouse management - remaining pages (Carico, Scarico, Inventario, Analisi)
-- **P1**: 10 performance optimizations (indexed, pooling, rate limiting, gzip, pagination, WS heartbeat, auth uploads, archival, DB timeouts, log rotation)
-- **P1**: Populate supplier list (user will provide data)
-- **P2**: Automatic backup system
-- **P2**: Further WebSocket optimizations if needed
+### Pagine
+- **Cassa**: Creazione ordini, modifica numero+descrizione, stampa selezione multipla, timer, cancellazione reale
+- **Tablet Generale**: Lista ordini, soft-hide (non cancella dal DB), toggle monitor clienti, auto-off monitor
+- **Tablet Bollitore 1 & 2**: Timer cottura, kitchen complete, cancella >7min, testo nero grassetto compatto
+- **Monitor Clienti**: Display numeri pronti per clienti (Flaminio)
+- **Report Cassa**: Report giornaliero con ordini attivi + archiviati
+- **Report Excel**: Export dati
+- **Fatture/Versamenti/Chiusure**: Gestione documenti con immagini su filesystem
+- **Magazzino Fase 1**: CRUD prodotti con ruolo Magazziniere
+- **Media Locali** (Admin): Report medie giornaliere per locale (ultimo mese rolling)
 
-## Credentials
-| Username | Password | Location |
-|----------|----------|----------|
-| Flaminio | Pastasciutt4! | Flaminio |
-| Grazie | Pastasciutt4! | Grazie |
-| Brazza | Pastasciutt4! | Largo di Brazzà |
+### Account Amministratore
+- Selettore locale all'accesso
+- Accesso completo a tutte le pagine di ogni locale
+- Può fare operazioni (creare, cancellare, ecc.)
+- Cambio locale dall'header
+- Pagina "Media locali" esclusiva
+
+### Integrazioni
+- **Google Sheets**: Ogni ordine creato viene aggiunto automaticamente al foglio (colonna A: numero, colonna B: descrizione)
+- Credenziali: `/app/backend/google_credentials.json`
+- Spreadsheet ID: `1stWnCov8ipM_KzkYJiW2Iq4HmobLBJ19jGXj3oVrdyQ`
+
+### Bug Fix Critici
+- Cancellazione dal Tablet Generale non elimina più ordini dal DB (usa hidden_generale)
+- Timer si congela blu in Cassa quando ordine nascosto dal Generale
+- Monitor clienti auto-off quando ordine nascosto dal Generale
+- Fix flickering polling (guardie ottimistiche rispettate)
+- Fix numero ordine sovrascitto quando modificato manualmente
+- Fix timer perdeva secondi (allineamento con ora server)
+
+### Ottimizzazioni
+- Polling da 5s a 15s (WebSocket è primario)
+- Polling rispetta guardie ottimistiche (zero flickering)
+- Righe compatte nei tablet bollitore (px-2 py-1)
+- Testo nero grassetto nei bollitore per leggibilità
+
+## Self-Hosting
+- VPS OVHcloud con Ubuntu
+- Script `setup.sh` per installazione automatica
+- Aggiornamento: `git pull && cd frontend && npm run build && sudo systemctl restart pastasciutta-backend`
+
+## Backlog P0 - Magazzino Fase 2
+- Carico merce (Stock Loading)
+- Scarico merce verso i locali (Stock Dispatch)
+- Inventario (Inventory Management)
+- Analisi/Statistiche (Analytics)
+
+## Backlog P1 - Performance
+- Indici MongoDB
+- Pool connessioni MongoDB
+- Rate limiting API
+- Compressione Gzip
+- Filtraggio/paginazione server-side ordini
+- Heartbeat WebSocket server-side
+- Protezione JWT per `/api/uploads/`
+- Archiviazione ordini vecchi
+- Timeout operazioni DB
+- Logging strutturato con rotazione
+
+## Backlog P2 - Futuro
+- Popolare lista fornitori
+- Backup automatico (DB + uploads su cloud)
+- Stampante termica via LAN (Star TSP100)
+- Integrazione Google Sheets automatica a fine giornata (oltre che per singolo ordine)
+- Autocompletamento/validazione dizionario paste
