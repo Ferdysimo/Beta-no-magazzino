@@ -36,6 +36,7 @@ const CassaPage = () => {
   const [editValue, setEditValue] = useState('');
   const [logs, setLogs] = useState({ deletions: { count: 0, logs: [] }, modifications: { count: 0, logs: [] } });
   const [showLogs, setShowLogs] = useState(false);
+  const [selectedForPrint, setSelectedForPrint] = useState(new Set());
   const inputRef = useRef(null);
   const [tick, setTick] = useState(0);
 
@@ -114,20 +115,42 @@ const CassaPage = () => {
   };
 
   const handlePrint = (order) => {
-    const printWindow = window.open('', '_blank', 'width=300,height=200');
+    setSelectedForPrint(prev => {
+      const next = new Set(prev);
+      if (next.has(order.id)) {
+        next.delete(order.id);
+      } else {
+        next.add(order.id);
+      }
+      return next;
+    });
+  };
+
+  const handlePrintSelected = () => {
+    const toPrint = pendingOrders.filter(o => selectedForPrint.has(o.id));
+    if (toPrint.length === 0) return;
+    
+    const rows = toPrint.map(o => `
+      <tr>
+        <td style="font-size:36px;font-weight:bold;padding:8px 20px 8px 0;border-bottom:1px solid #ccc;">${o.order_number}</td>
+        <td style="font-size:36px;font-weight:bold;padding:8px 0;border-bottom:1px solid #ccc;">${o.description}</td>
+      </tr>
+    `).join('');
+    
+    const printWindow = window.open('', '_blank');
     printWindow.document.write(`
       <html><head><title>Stampa</title>
       <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
-        .number { font-size: 72px; font-weight: bold; }
-        .desc { font-size: 36px; font-weight: bold; margin-top: 10px; }
+        body { font-family: Arial, sans-serif; padding: 20px; margin: 0; }
+        table { border-collapse: collapse; width: 100%; }
+        @media print { body { padding: 10px; } }
       </style></head><body>
-        <div class="number">${order.order_number}</div>
-        <div class="desc">${order.description}</div>
+        <table>${rows}</table>
         <script>window.onload=function(){window.print();window.close();}</script>
       </body></html>
     `);
     printWindow.document.close();
+    setSelectedForPrint(new Set());
   };
 
   const handleComplete = async (orderId) => {
@@ -335,6 +358,20 @@ const CassaPage = () => {
           </div>
         </form>
 
+        {/* Print selected button */}
+        {selectedForPrint.size > 0 && (
+          <div className="flex justify-end mb-2">
+            <button
+              data-testid="print-selected-btn"
+              onClick={handlePrintSelected}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors"
+            >
+              <Printer size={18} />
+              Stampa {selectedForPrint.size} selezionate
+            </button>
+          </div>
+        )}
+
         {/* Orders List */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           {/* Pending Orders */}
@@ -393,7 +430,9 @@ const CassaPage = () => {
                 <button
                   data-testid={`print-btn-${order.order_number}`}
                   onClick={() => handlePrint(order)}
-                  className="w-10 h-10 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+                  className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
+                    selectedForPrint.has(order.id) ? 'bg-blue-700 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'
+                  }`}
                 >
                   <Printer size={18} />
                 </button>
