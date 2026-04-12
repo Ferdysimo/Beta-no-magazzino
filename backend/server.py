@@ -3,6 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
@@ -39,6 +40,9 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Create the main app
 app = FastAPI()
+
+# Gzip compression - responses > 500 bytes get compressed
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -539,13 +543,13 @@ async def create_order(data: OrderCreate, token_data: dict = Depends(verify_toke
 
 @api_router.get("/orders", response_model=List[OrderResponse])
 async def get_orders(
-    status: Optional[str] = None,
+    status: Optional[str] = "pending",
     token_data: dict = Depends(verify_token)
 ):
     restaurant_id = token_data["restaurant_id"]
     
     query = {"restaurant_id": restaurant_id}
-    if status:
+    if status and status != "all":
         query["status"] = status
     
     orders = await db.orders.find(query, {"_id": 0}).sort("order_number", -1).to_list(500)
@@ -1105,6 +1109,18 @@ async def seed_data():
 @app.websocket("/api/ws/{restaurant_id}")
 async def websocket_endpoint(websocket: WebSocket, restaurant_id: str):
     await manager.connect(websocket, restaurant_id)
+    
+    # Server-side heartbeat: detect dead connections
+    async def heartbeat():
+        try:
+            while True:
+                await asyncio.sleep(30)
+                await websocket.send_json({"type": "ping"})
+        except Exception:
+            pass
+    
+    heartbeat_task = asyncio.create_task(heartbeat())
+    
     try:
         while True:
             data = await websocket.receive_text()
@@ -1112,8 +1128,6 @@ async def websocket_endpoint(websocket: WebSocket, restaurant_id: str):
                 message = json.loads(data)
                 if message.get("type") == "ping":
                     await websocket.send_json({"type": "pong"})
-                else:
-                    logger.info(f"Received WS message: {message}")
             except json.JSONDecodeError:
                 pass
     except WebSocketDisconnect:
@@ -1121,6 +1135,8 @@ async def websocket_endpoint(websocket: WebSocket, restaurant_id: str):
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
         manager.disconnect(websocket, restaurant_id)
+    finally:
+        heartbeat_task.cancel()
 
 # ==================== INVOICES (FATTURE) ====================
 
@@ -1571,3 +1587,11 @@ async def shutdown_db_client():
 @app.on_event("startup")
 async def startup_scheduler():
     asyncio.create_task(midnight_scheduler())
+    
+    # Create MongoDB indexes for faster queries
+    await db.orders.create_index([("restaurant_id", 1), ("status", 1)])
+    await db.orders.create_index([("restaurant_id", 1), ("created_at", -1)])
+    await db.orders.create_index([("restaurant_id", 1), ("kitchen_completed", 1)])
+    await db.archived_orders.create_index([("restaurant_id", 1), ("created_at", -1)])
+    await db.deletion_logs.create_index([("restaurant_id", 1), ("deleted_at", -1)])
+    logger.info("MongoDB indexes created")
