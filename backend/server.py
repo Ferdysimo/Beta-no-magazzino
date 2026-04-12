@@ -662,7 +662,7 @@ async def start_timer(order_id: str, token_data: dict = Depends(verify_token)):
         "order": order_response
     })
     
-    return {"message": "Timer started"}
+    return {"message": "Timer started", "timer_start_time": result["timer_start_time"]}
 
 @api_router.post("/orders/{order_id}/timer/pause")
 async def pause_timer(order_id: str, elapsed: int = 0, token_data: dict = Depends(verify_token)):
