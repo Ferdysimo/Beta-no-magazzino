@@ -45,13 +45,7 @@ const LoginPage = () => {
           {/* Logo */}
           <div className="text-center mb-8">
             <div className="flex items-center justify-center mb-4">
-              <svg width="80" height="80" viewBox="0 0 100 100" className="text-[#F5C518]">
-                <circle cx="50" cy="30" r="8" fill="#F5C518" />
-                <path d="M42 35 Q50 70 58 35" stroke="#F5C518" strokeWidth="4" fill="none" />
-                <path d="M38 35 Q50 75 62 35" stroke="#F5C518" strokeWidth="3" fill="none" />
-                <path d="M35 35 Q50 80 65 35" stroke="#F5C518" strokeWidth="2" fill="none" />
-                <line x1="50" y1="25" x2="80" y2="15" stroke="#333" strokeWidth="4" strokeLinecap="round" />
-              </svg>
+              <img src="/logo-icon.png" alt="Pastasciutta Roma" className="h-20 object-contain" />
             </div>
             <h1 className="font-heading text-4xl font-bold tracking-tight text-gray-900 uppercase">
               — Pastasciutta —
