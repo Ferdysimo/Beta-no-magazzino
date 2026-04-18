@@ -72,22 +72,42 @@ export const OrderProvider = ({ children }) => {
         const newIds = response.data.map(o => o.id).sort().join(',');
         if (currentIds !== newIds) setNewOrdersAvailable(true);
       } else {
-        // Respect optimistic guards: merge server data without overwriting guarded orders
+        // Skip update if data hasn't changed (prevents unnecessary re-renders)
+        const prev = ordersRef.current;
+        const next = response.data;
         const hasGuards = optimisticGuardRef.current.size > 0;
-        if (hasGuards && !forceUpdate) {
-          setOrders(prev => {
+        
+        if (!hasGuards && !forceUpdate) {
+          // Quick comparison: same length, same ids, same key fields
+          if (prev.length === next.length) {
+            const changed = next.some((o, i) => 
+              o.id !== prev[i]?.id || 
+              o.order_number !== prev[i]?.order_number ||
+              o.description !== prev[i]?.description ||
+              o.status !== prev[i]?.status ||
+              o.hidden_generale !== prev[i]?.hidden_generale ||
+              o.kitchen_completed !== prev[i]?.kitchen_completed ||
+              o.monitor_visible !== prev[i]?.monitor_visible ||
+              o.timer_started !== prev[i]?.timer_started ||
+              o.timer_paused !== prev[i]?.timer_paused
+            );
+            if (!changed) return; // Nothing changed, skip re-render
+          }
+          setOrders(next);
+          optimisticGuardRef.current.clear();
+        } else if (hasGuards && !forceUpdate) {
+          setOrders(prevOrders => {
             const guardedIds = new Set();
             optimisticGuardRef.current.forEach((expiry, id) => {
               if (Date.now() <= expiry) guardedIds.add(id);
             });
-            // Keep guarded orders from local state, take the rest from server
-            const serverMap = new Map(response.data.map(o => [o.id, o]));
-            const localGuarded = prev.filter(o => guardedIds.has(o.id) && !serverMap.has(o.id));
-            const merged = response.data.map(o => guardedIds.has(o.id) ? (prev.find(p => p.id === o.id) || o) : o);
+            const serverMap = new Map(next.map(o => [o.id, o]));
+            const localGuarded = prevOrders.filter(o => guardedIds.has(o.id) && !serverMap.has(o.id));
+            const merged = next.map(o => guardedIds.has(o.id) ? (prevOrders.find(p => p.id === o.id) || o) : o);
             return [...merged, ...localGuarded];
           });
         } else {
-          setOrders(response.data);
+          setOrders(next);
           optimisticGuardRef.current.clear();
         }
         setNewOrdersAvailable(false);
