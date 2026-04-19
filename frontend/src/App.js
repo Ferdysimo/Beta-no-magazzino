@@ -24,6 +24,7 @@ import DDTViewPage from './pages/DDTViewPage';
 import MagazzinoRichiestePage from './pages/MagazzinoRichiestePage';
 import CarichiMagazzinoPage from './pages/CarichiMagazzinoPage';
 import NuovoCaricoPage from './pages/NuovoCaricoPage';
+import InventarioPage from './pages/InventarioPage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -154,6 +155,11 @@ function AppRoutes() {
       <Route path="/magazzino/carichi/:id/modifica" element={
         <ProtectedRoute>
           <NuovoCaricoPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/magazzino/inventario" element={
+        <ProtectedRoute>
+          <InventarioPage />
         </ProtectedRoute>
       } />
       <Route path="/richiesta-merce" element={

@@ -9,11 +9,10 @@ const MagazzinierePage = () => {
     { label: 'Richieste in arrivo', path: '/magazzino/richieste-in-arrivo' },
     { label: 'Modifica prodotti magazzino', path: '/magazzino/prodotti' },
     { label: 'Carico verso il magazzino', path: '/magazzino/carichi' },
-    { label: 'Scarico verso i locali', path: null },
   ];
 
   const secondaryButtons = [
-    { label: 'Inventario / Forza il sistema', path: null },
+    { label: 'Inventario / Forza il sistema', path: '/magazzino/inventario' },
     { label: 'Per analisi', path: null },
   ];
 
