@@ -36,6 +36,7 @@ export const OrderProvider = ({ children }) => {
   const pollingIntervalRef = useRef(null);
   const mountedRef = useRef(true);
   const wsClosedIntentionallyRef = useRef(false);
+  const wsConnectedRef = useRef(false);
 
   // Keep refs in sync
   useEffect(() => { pauseUpdatesRef.current = pauseUpdates; }, [pauseUpdates]);
@@ -184,6 +185,13 @@ export const OrderProvider = ({ children }) => {
     ws.onopen = () => {
       console.log('WebSocket connected');
       reconnectAttemptsRef.current = 0;
+      wsConnectedRef.current = true;
+
+      // Stop polling when WebSocket is connected
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
 
       // Start keepalive ping
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
@@ -207,6 +215,14 @@ export const OrderProvider = ({ children }) => {
     ws.onclose = () => {
       if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
       wsRef.current = null;
+      wsConnectedRef.current = false;
+
+      // Start polling as fallback when WebSocket disconnects
+      if (!pollingIntervalRef.current && mountedRef.current) {
+        pollingIntervalRef.current = setInterval(() => {
+          fetchOrdersImpl(false);
+        }, POLLING_FALLBACK_MS);
+      }
 
       // Don't reconnect if closed intentionally or component unmounted
       if (wsClosedIntentionallyRef.current || !mountedRef.current) return;
