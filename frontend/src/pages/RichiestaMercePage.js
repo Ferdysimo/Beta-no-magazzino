@@ -221,7 +221,6 @@ const RichiestaMercePage = () => {
               rows={4}
               value={errorReason}
               onChange={e => setErrorReason(e.target.value)}
-              placeholder="Es: Mancano 2 cestelli di pesto. Pecorino arrivato scaduto..."
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
               autoFocus
             />
