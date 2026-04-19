@@ -254,13 +254,45 @@ class ProductCreate(BaseModel):
     name: str
     unit: str = ""
     supplier: str = ""
+    quantity: int = 0
     image_data: str = ""  # Base64 on create, saved to disk
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
     unit: Optional[str] = None
     supplier: Optional[str] = None
+    quantity: Optional[int] = None
     image_data: Optional[str] = None  # New image if provided
+
+class ProductQuantityUpdate(BaseModel):
+    quantity: int
+
+# ==================== RICHIESTE MERCE (WAREHOUSE REQUESTS) ====================
+
+class RichiestaItem(BaseModel):
+    product_id: str
+    product_name: str
+    unit: str
+    supplier: str = ""
+    quantity: int
+
+class RichiestaCreate(BaseModel):
+    items: List[RichiestaItem]
+
+# Indirizzi locali (DESTINATARIO del DDT)
+LOCATION_ADDRESSES = {
+    "Flaminio": {"address": "Piazzale Flaminio 10", "postal_code": "00196", "city": "Roma"},
+    "Grazie": {"address": "Via delle Grazie 5", "postal_code": "00193", "city": "Roma"},
+    "Largo di Brazzà": {"address": "Largo Pietro Di Brazzà 27", "postal_code": "00187", "city": "Roma"},
+    "Brazza": {"address": "Largo Pietro Di Brazzà 27", "postal_code": "00187", "city": "Roma"},
+}
+
+MITTENTE_INFO = {
+    "name": "Pastasciutta Srl",
+    "address": "Via del Casale Santarelli, 125",
+    "postal_code": "00118",
+    "city": "Roma",
+}
 
 # Auth helpers
 def save_image_to_disk(base64_data: str, prefix: str) -> str:
@@ -1315,6 +1347,9 @@ async def get_products(supplier: str = None, token_data: dict = Depends(verify_t
             p["image_url"] = ""
         p.pop("image_file", None)
         p.pop("image_data", None)
+        # Ensure quantity field exists
+        if "quantity" not in p:
+            p["quantity"] = 0
     return products
 
 @api_router.post("/products")
@@ -1331,6 +1366,7 @@ async def create_product(data: ProductCreate, token_data: dict = Depends(verify_
         "name": data.name,
         "unit": data.unit,
         "supplier": data.supplier,
+        "quantity": data.quantity,
         "image_file": image_filename,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
@@ -1356,6 +1392,8 @@ async def update_product(product_id: str, data: ProductUpdate, token_data: dict 
         update_fields["unit"] = data.unit
     if data.supplier is not None:
         update_fields["supplier"] = data.supplier
+    if data.quantity is not None:
+        update_fields["quantity"] = data.quantity
     if data.image_data:
         old_product = await db.products.find_one({"id": product_id})
         if old_product and old_product.get("image_file"):
@@ -1382,8 +1420,24 @@ async def update_product(product_id: str, data: ProductUpdate, token_data: dict 
     else:
         response["image_url"] = ""
     response.pop("image_file", None)
+    if "quantity" not in response:
+        response["quantity"] = 0
     
     return response
+
+@api_router.patch("/products/{product_id}/quantity")
+async def update_product_quantity(product_id: str, data: ProductQuantityUpdate, token_data: dict = Depends(verify_token)):
+    """Update stock quantity only. Magazziniere or admin only."""
+    if token_data.get("role") not in ("magazzino", "admin"):
+        raise HTTPException(status_code=403, detail="Solo il magazziniere può modificare le quantità")
+    result = await db.products.find_one_and_update(
+        {"id": product_id},
+        {"$set": {"quantity": max(0, data.quantity)}},
+        return_document=True
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Prodotto non trovato")
+    return {"id": product_id, "quantity": result.get("quantity", 0)}
 
 @api_router.delete("/products/{product_id}")
 async def delete_product(product_id: str, token_data: dict = Depends(verify_token)):
@@ -1399,6 +1453,222 @@ async def delete_product(product_id: str, token_data: dict = Depends(verify_toke
     
     await db.products.delete_one({"id": product_id})
     return {"message": "Prodotto eliminato"}
+
+# ==================== RICHIESTE MERCE (WAREHOUSE REQUESTS) - ENDPOINTS ====================
+
+async def _get_next_ddt_number() -> int:
+    """Atomic counter for DDT numbers (globale across all locations)."""
+    result = await db.counters.find_one_and_update(
+        {"_id": "ddt_number"},
+        {"$inc": {"value": 1}},
+        upsert=True,
+        return_document=True,
+    )
+    return int(result["value"])
+
+async def _enrich_richiesta(r: dict) -> dict:
+    """Attach restaurant info + clean _id for DDT display."""
+    r = {k: v for k, v in r.items() if k != "_id"}
+    rest = await db.restaurants.find_one({"id": r.get("restaurant_id")}, {"_id": 0, "password": 0})
+    if rest:
+        r["restaurant_name"] = rest.get("name", "")
+        r["restaurant_location"] = rest.get("location", "")
+        loc = rest.get("location", "")
+        addr = LOCATION_ADDRESSES.get(loc, {"address": loc, "postal_code": "", "city": ""})
+        r["destinatario"] = {
+            "name": loc,
+            "address": addr["address"],
+            "postal_code": addr["postal_code"],
+            "city": addr["city"],
+        }
+    r["mittente"] = MITTENTE_INFO
+    return r
+
+@api_router.get("/warehouse/products")
+async def get_warehouse_products_for_request(token_data: dict = Depends(verify_token)):
+    """
+    Product list for 'Nuova richiesta merce'. Each product carries:
+      - quantity (stock presente a magazzino)
+      - real_quantity = quantity - sum(pending requests from all locations for today)
+      - image_url, unit, supplier
+    """
+    # Fetch all products
+    products = await db.products.find({}, {"_id": 0}).sort("name", 1).to_list(1000)
+
+    # Compute total pending quantities per product across all pending (not yet evase) requests
+    pending_agg = await db.richieste.aggregate([
+        {"$match": {"status": "pending"}},
+        {"$unwind": "$items"},
+        {"$group": {"_id": "$items.product_id", "total": {"$sum": "$items.quantity"}}},
+    ]).to_list(5000)
+    pending_map = {p["_id"]: p["total"] for p in pending_agg}
+
+    for p in products:
+        if p.get("image_file"):
+            p["image_url"] = f"/api/uploads/{p['image_file']}"
+        elif p.get("image_data") and p["image_data"].startswith("data:"):
+            p["image_url"] = p["image_data"]
+        else:
+            p["image_url"] = ""
+        p.pop("image_file", None)
+        p.pop("image_data", None)
+        qty = int(p.get("quantity", 0) or 0)
+        pending = int(pending_map.get(p["id"], 0))
+        p["quantity"] = qty
+        p["real_quantity"] = max(0, qty - pending)
+    return products
+
+@api_router.post("/richieste")
+async def create_richiesta(data: RichiestaCreate, token_data: dict = Depends(verify_token)):
+    """Locale (or admin impersonating a locale) creates a new request."""
+    if token_data.get("role") == "magazzino":
+        raise HTTPException(status_code=403, detail="Il magazziniere non può creare richieste")
+    if not data.items:
+        raise HTTPException(status_code=400, detail="Aggiungi almeno un prodotto")
+
+    restaurant_id = token_data["restaurant_id"]
+    restaurant = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0, "password": 0})
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Locale non trovato")
+
+    # Filter out zero-quantity items
+    clean_items = [i.dict() for i in data.items if i.quantity and i.quantity > 0]
+    if not clean_items:
+        raise HTTPException(status_code=400, detail="Nessuna quantità richiesta")
+
+    ddt_number = await _get_next_ddt_number()
+    richiesta_id = str(uuid.uuid4())
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    doc = {
+        "id": richiesta_id,
+        "ddt_number": ddt_number,
+        "restaurant_id": restaurant_id,
+        "restaurant_location": restaurant.get("location", ""),
+        "items": clean_items,
+        "status": "pending",
+        "created_at": now_iso,
+        "evasa_at": None,
+        "confermata_at": None,
+    }
+    await db.richieste.insert_one(doc)
+    return await _enrich_richiesta(doc)
+
+@api_router.get("/richieste")
+async def list_richieste(token_data: dict = Depends(verify_token)):
+    """List requests for the current restaurant (pending + evase + confermate)."""
+    restaurant_id = token_data["restaurant_id"]
+    docs = await db.richieste.find(
+        {"restaurant_id": restaurant_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    return docs
+
+@api_router.get("/richieste/pending-all")
+async def list_all_pending(token_data: dict = Depends(verify_token)):
+    """Magazziniere only: all non-confermate across all restaurants (pending + evase)."""
+    if token_data.get("role") not in ("magazzino", "admin"):
+        raise HTTPException(status_code=403, detail="Solo magazziniere/admin")
+    docs = await db.richieste.find(
+        {"status": {"$in": ["pending", "evasa"]}}, {"_id": 0}
+    ).sort("created_at", 1).to_list(500)
+    # Attach restaurant location
+    for d in docs:
+        if not d.get("restaurant_location"):
+            rest = await db.restaurants.find_one({"id": d.get("restaurant_id")}, {"_id": 0})
+            if rest:
+                d["restaurant_location"] = rest.get("location", "")
+    return docs
+
+@api_router.get("/richieste/history-all")
+async def list_history_all(token_data: dict = Depends(verify_token)):
+    """Magazziniere only: confermate (storico evase e chiuse)."""
+    if token_data.get("role") not in ("magazzino", "admin"):
+        raise HTTPException(status_code=403, detail="Solo magazziniere/admin")
+    docs = await db.richieste.find(
+        {"status": "confermata"}, {"_id": 0}
+    ).sort("confermata_at", -1).limit(200).to_list(200)
+    for d in docs:
+        if not d.get("restaurant_location"):
+            rest = await db.restaurants.find_one({"id": d.get("restaurant_id")}, {"_id": 0})
+            if rest:
+                d["restaurant_location"] = rest.get("location", "")
+    return docs
+
+@api_router.get("/richieste/{richiesta_id}")
+async def get_richiesta(richiesta_id: str, token_data: dict = Depends(verify_token)):
+    """Get single request with MITTENTE/DESTINATARIO populated for DDT view."""
+    doc = await db.richieste.find_one({"id": richiesta_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Richiesta non trovata")
+    # Access control: restaurant can only see its own; magazziniere/admin can see all
+    role = token_data.get("role")
+    if role not in ("magazzino", "admin") and doc.get("restaurant_id") != token_data["restaurant_id"]:
+        raise HTTPException(status_code=403, detail="Non autorizzato")
+    return await _enrich_richiesta(doc)
+
+@api_router.patch("/richieste/{richiesta_id}/evade")
+async def evade_richiesta(richiesta_id: str, token_data: dict = Depends(verify_token)):
+    """Magazziniere marks the request as fulfilled. Decrements product stock."""
+    if token_data.get("role") not in ("magazzino", "admin"):
+        raise HTTPException(status_code=403, detail="Solo il magazziniere può evadere")
+    doc = await db.richieste.find_one({"id": richiesta_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Richiesta non trovata")
+    if doc.get("status") != "pending":
+        raise HTTPException(status_code=400, detail="La richiesta non è in stato 'pending'")
+
+    # Decrement stock atomically
+    for item in doc.get("items", []):
+        await db.products.update_one(
+            {"id": item["product_id"]},
+            {"$inc": {"quantity": -int(item.get("quantity", 0))}},
+        )
+    now_iso = datetime.now(timezone.utc).isoformat()
+    updated = await db.richieste.find_one_and_update(
+        {"id": richiesta_id},
+        {"$set": {"status": "evasa", "evasa_at": now_iso}},
+        return_document=True,
+    )
+    return await _enrich_richiesta(updated)
+
+@api_router.patch("/richieste/{richiesta_id}/conferma")
+async def conferma_richiesta(richiesta_id: str, token_data: dict = Depends(verify_token)):
+    """Locale (or admin) confirms reception of the goods."""
+    doc = await db.richieste.find_one({"id": richiesta_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Richiesta non trovata")
+    role = token_data.get("role")
+    if role == "magazzino":
+        raise HTTPException(status_code=403, detail="Il magazziniere non conferma")
+    if role != "admin" and doc.get("restaurant_id") != token_data["restaurant_id"]:
+        raise HTTPException(status_code=403, detail="Non autorizzato")
+    if doc.get("status") != "evasa":
+        raise HTTPException(status_code=400, detail="La richiesta deve essere evasa prima di confermarla")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    updated = await db.richieste.find_one_and_update(
+        {"id": richiesta_id},
+        {"$set": {"status": "confermata", "confermata_at": now_iso}},
+        return_document=True,
+    )
+    return await _enrich_richiesta(updated)
+
+@api_router.delete("/richieste/{richiesta_id}")
+async def delete_richiesta(richiesta_id: str, token_data: dict = Depends(verify_token)):
+    """Locale cancella una richiesta che ha creato (solo se pending). Admin può cancellare qualsiasi."""
+    doc = await db.richieste.find_one({"id": richiesta_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Richiesta non trovata")
+    role = token_data.get("role")
+    if role == "magazzino":
+        raise HTTPException(status_code=403, detail="Il magazziniere non può cancellare")
+    if role != "admin":
+        if doc.get("restaurant_id") != token_data["restaurant_id"]:
+            raise HTTPException(status_code=403, detail="Non autorizzato")
+        if doc.get("status") != "pending":
+            raise HTTPException(status_code=400, detail="Puoi cancellare solo richieste non ancora evase")
+    await db.richieste.delete_one({"id": richiesta_id})
+    return {"message": "Richiesta cancellata"}
+
 
 # ==================== VERSAMENTI (DEPOSITS) ====================
 

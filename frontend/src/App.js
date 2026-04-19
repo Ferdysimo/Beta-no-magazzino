@@ -18,6 +18,10 @@ import MonitorClientiPage from './pages/MonitorClientiPage';
 import MagazzinierePage from './pages/MagazzinierePage';
 import ProdottiMagazzinoPage from './pages/ProdottiMagazzinoPage';
 import MediaLocaliPage from './pages/MediaLocaliPage';
+import RichiestaMercePage from './pages/RichiestaMercePage';
+import NuovaRichiestaPage from './pages/NuovaRichiestaPage';
+import DDTViewPage from './pages/DDTViewPage';
+import MagazzinoRichiestePage from './pages/MagazzinoRichiestePage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -128,6 +132,26 @@ function AppRoutes() {
       <Route path="/magazzino/prodotti" element={
         <ProtectedRoute>
           <ProdottiMagazzinoPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/magazzino/richieste-in-arrivo" element={
+        <ProtectedRoute>
+          <MagazzinoRichiestePage />
+        </ProtectedRoute>
+      } />
+      <Route path="/richiesta-merce" element={
+        <ProtectedRoute>
+          <RichiestaMercePage />
+        </ProtectedRoute>
+      } />
+      <Route path="/richiesta-merce/nuova" element={
+        <ProtectedRoute>
+          <NuovaRichiestaPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/ddt/:id" element={
+        <ProtectedRoute>
+          <DDTViewPage />
         </ProtectedRoute>
       } />
       <Route path="/media-locali" element={

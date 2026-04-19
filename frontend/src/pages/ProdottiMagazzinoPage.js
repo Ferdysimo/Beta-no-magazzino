@@ -28,6 +28,7 @@ const ProdottiMagazzinoPage = () => {
   const [formSupplier, setFormSupplier] = useState('');
   const [formImagePreview, setFormImagePreview] = useState('');
   const [formImageData, setFormImageData] = useState('');
+  const [formQuantity, setFormQuantity] = useState(0);
   const [saving, setSaving] = useState(false);
 
   // New supplier
@@ -71,6 +72,7 @@ const ProdottiMagazzinoPage = () => {
     setFormName('');
     setFormUnit('');
     setFormSupplier('');
+    setFormQuantity(0);
     setFormImagePreview('');
     setFormImageData('');
     setEditingProduct(null);
@@ -84,6 +86,7 @@ const ProdottiMagazzinoPage = () => {
     setFormName(product.name);
     setFormUnit(product.unit || '');
     setFormSupplier(product.supplier || '');
+    setFormQuantity(product.quantity ?? 0);
     setFormImagePreview(product.image_url ? resolveImageSrc(product.image_url) : '');
     setFormImageData('');
     setShowForm(true);
@@ -124,6 +127,7 @@ const ProdottiMagazzinoPage = () => {
           name: formName.trim(),
           unit: formUnit.trim(),
           supplier: formSupplier,
+          quantity: Math.max(0, parseInt(formQuantity || 0, 10)),
         };
         if (formImageData) payload.image_data = formImageData;
         await axios.put(`${API}/products/${editingProduct.id}`, payload, { headers });
@@ -132,6 +136,7 @@ const ProdottiMagazzinoPage = () => {
           name: formName.trim(),
           unit: formUnit.trim(),
           supplier: formSupplier,
+          quantity: Math.max(0, parseInt(formQuantity || 0, 10)),
           image_data: formImageData,
         };
         await axios.post(`${API}/products`, payload, { headers });
@@ -212,6 +217,24 @@ const ProdottiMagazzinoPage = () => {
                     placeholder="es: cartoni, buste, cestelli"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Quantità presente a magazzino
+                </label>
+                <input
+                  data-testid="product-quantity-input"
+                  type="number"
+                  min="0"
+                  value={formQuantity}
+                  onChange={(e) => setFormQuantity(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="0"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Viene scalata automaticamente quando evadi una richiesta dei locali.
+                </p>
               </div>
 
               {/* Foto */}
@@ -362,6 +385,13 @@ const ProdottiMagazzinoPage = () => {
                 {/* Supplier column */}
                 <div className="w-48 text-sm text-gray-600 truncate px-4">
                   {product.supplier || '—'}
+                </div>
+
+                {/* Quantity badge */}
+                <div className="w-24 text-right px-2">
+                  <span className="inline-flex items-center px-2 py-1 rounded text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+                    Stock: {product.quantity ?? 0}
+                  </span>
                 </div>
 
                 {/* Actions */}

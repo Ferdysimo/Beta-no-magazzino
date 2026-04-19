@@ -1,0 +1,61 @@
+{
+  "summary": "Magazzino phase 2 — Richieste/DDT flow tested end-to-end. Backend 25/25 passed. Frontend flows all pass after fixing 1 critical missing useState bug on ProdottiMagazzinoPage (setFormQuantity was undefined, broke the entire edit form).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "ProdottiMagazzinoPage",
+        "issue": "Missing useState declaration for formQuantity/setFormQuantity. Caused ReferenceError: setFormQuantity is not defined at openEditForm, crashing the edit form completely. Fixed by testing agent.",
+        "selector": "[data-testid=\"edit-product-*\"] -> [data-testid=\"product-quantity-input\"]",
+        "priority": "CRITICAL (fixed)"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_richieste_merce.py",
+    "/app/test_reports/pytest/richieste_results.xml"
+  ],
+  "action_items": [
+    "Review the ProdottiMagazzinoPage fix (added const [formQuantity, setFormQuantity] = useState(0)). Main agent should verify the initial value logic matches intent.",
+    "Consider restoring a product quantity value that the frontend test updated during validation (one product was set to 99 to verify save flow; non-critical)."
+  ],
+  "critical_code_review_comments": [
+    "ProdottiMagazzinoPage.js had a missing useState hook for formQuantity despite referencing setFormQuantity in resetForm and openEditForm and formQuantity in save payload. Any change should include a smoke check that product edit opens without runtime errors.",
+    "server.py is ~1868 lines — approaching the 'should split' threshold (warehouse, richieste, products, orders, auth all in one file). Consider extracting richieste router and products router into separate modules.",
+    "LOCATION_ADDRESSES maps both 'Largo di Brazzà' and 'Brazza' to same address — defensive and good.",
+    "Global DDT counter uses atomic $inc with upsert — correct, handles concurrent restaurant requests properly.",
+    "_enrich_richiesta always sets mittente/destinatario and strips _id — consistent with frontend expectations.",
+    "evade endpoint correctly decrements stock atomically per item and rejects second evade (status != 'pending') — prevents double decrement."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_richieste_merce.py",
+    "/app/frontend/src/pages/ProdottiMagazzinoPage.js"
+  ],
+  "success_rate": {
+    "backend": "100% (25/25 tests passed)",
+    "frontend": "100% after bug fix (Flaminio create -> DDT redirect -> Magazziniere evade -> Flaminio conferma all verified end-to-end)"
+  },
+  "test_credentials": "Flaminio/Grazie/Brazza/Magazziniere/Admin all use password Pastasciutt4!",
+  "seed_data_creation": "During testing: created 2 richieste from Flaminio (DDT#? deleted via conferma path) and Grazie (deleted in test cleanup). Stock of 1 product was modified during PATCH quantity test (reverted); edit-form test set one product quantity to 99.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All Richieste/DDT endpoints and UI flows are working. The ProdottiMagazzinoPage.js had a missing useState hook for formQuantity/setFormQuantity that was fixed inline; main agent should confirm no other pages have similar missing hooks. DDT auto-increments globally (confirmed via back-to-back Flaminio+Grazie creates). real_quantity correctly subtracts pending items across all locations. Dialog-based confirmations use window.confirm — Playwright needs page.once('dialog', lambda d: d.accept()) before clicking btn-evadi / btn-conferma.",
+  "verified_flows": {
+    "login_all_accounts": "PASS",
+    "Flaminio_btn_magazzino_routes_richiesta_merce": "PASS",
+    "NuovaRichiesta_cards_inc_keypad_submit": "PASS (qty=5 via keypad)",
+    "DDT_redirect_and_layout": "PASS (Pastasciutta Srl, Piazzale Flaminio, DOCUMENTO DI TRASPORTO, btn-stampa-ddt present)",
+    "Magazziniere_auto_route_and_evade": "PASS",
+    "Flaminio_conferma_moves_to_closed": "PASS",
+    "ProdottiMagazzino_quantity_edit_and_save": "PASS (70 -> 99 persisted after fix)",
+    "Admin_impersonation_create_richiesta": "PASS via backend test (X-Admin-Restaurant-Id header)",
+    "role_based_403s": "PASS (magazziniere cannot create/conferma/delete; locale cannot evade/patch-quantity/see others' richieste)",
+    "ddt_autoincrement_global": "PASS (Flaminio DDT#n then Grazie DDT#n+1)",
+    "real_quantity_pending_subtraction": "PASS"
+  }
+}
