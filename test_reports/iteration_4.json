@@ -1,0 +1,79 @@
+{
+  "summary": "Backend + Frontend E2E testing of NEW Carichi Magazzino feature. All 17 backend tests PASS (17/17), covering POST validation, stock increment, GET/filter, PUT delta math, DELETE rollback, photo replace, concurrency, real_quantity integration. Frontend happy-path fully works: Magazziniere login → home → Carico button → /magazzino/carichi → Nuovo Carico → supplier filters products → photo required (submit disabled) → +/- and keypad → submit → redirect to list → edit page (supplier disabled, pre-filled, photo preview) → delete with confirm rolls back stock. Found 2 minor UX issues (edit preview label misleading; Flaminio direct URL not redirected).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "NuovoCaricoPage (edit mode)",
+        "issue": "In edit mode the 'Stock attuale: N → Nuovo: N+qty' preview is misleading. Example: product already has current stock 111 (which includes old +12 from this same carico). Editing qty=12 shows 'Stock attuale: 111 → Nuovo: 123', but actual backend delta is 0 so stock stays at 111. Magazziniere could think saving will double-count. Suggestion: in edit mode, base the preview on (currentStock - oldItemQty + newItemQty) so the 'Nuovo' value reflects reality. Backend math itself is correct (verified by test_edit_qty_applies_delta_not_full_readd).",
+        "selector": "[data-testid^=\"carico-prod-\"] .text-xs (Stock attuale → Nuovo label)",
+        "priority": "MEDIUM"
+      },
+      {
+        "component": "CarichiMagazzinoPage (RBAC)",
+        "issue": "Locale user (Flaminio) can open /magazzino/carichi directly via URL. Backend correctly returns 403 (2x AxiosError in console), but UI does not show an error or redirect — page renders as 'Nessun carico trovato' with an active 'Nuovo carico merce' button. Should add a role guard on the route (redirect to /home) or render a 403 error state. Security is fine (backend enforces), only UX.",
+        "selector": "/magazzino/carichi, /magazzino/carichi/nuovo, /magazzino/carichi/:id/modifica",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_carichi_magazzino.py",
+    "/app/test_reports/pytest/carichi_results.xml"
+  ],
+  "action_items": [
+    "Fix edit-mode preview math in NuovoCaricoPage so 'Nuovo: N' reflects delta (currentStock - oldQty + newQty), not a naive add.",
+    "Add route-level role guard on /magazzino/carichi* to redirect non-magazzino/admin users (currently relies on backend 403 only)."
+  ],
+  "critical_code_review_comments": [
+    "server.py POST/PUT/DELETE /carichi correctly handles the photo file lifecycle: create saves, update deletes old + saves new, delete removes file. No orphaned files observed.",
+    "PUT delta computation (lines ~1798-1811) uses a union of old and new product_ids and $inc per delta — correct for add/remove/modify cases. Duplicate product_id entries in the same carico are summed before delta — robust.",
+    "All 4 carico endpoints (POST/GET list/GET one/PUT/DELETE) have identical role check `role not in (magazzino, admin)`; DRY could be extracted but current explicit form is readable.",
+    "_serialize_carico strips _id and maps photo_file → photo_url: clean, no ObjectId leakage.",
+    "save_image_to_disk is sync file I/O called from async handlers (uses pathlib write_bytes). For small DDT photos this is acceptable, but under load it will block the event loop. Consider aiofiles or a thread executor if volumes grow.",
+    "server.py is now ~2040 lines. Recommend splitting magazzino (carichi + richieste + products + warehouse) into its own router module.",
+    "CaricoUpdate.items: None means 'no change', but if client sends [] it would pass validation then fail with 400 inside the handler — acceptable; consider explicit Pydantic validator.",
+    "No transactional guarantee across insert + multiple product $inc. If the process dies mid-loop, carico is created but stock partially updated. For single-pod deployments with MongoDB standalone this is a minor risk; a follow-up could wrap in a session transaction if MongoDB is replica-set.",
+    "Frontend NuovoCaricoPage: the keypad and +/- UX work cleanly; photo required enforcement is correct (submit disabled via isDisabled when !photoData && !isEdit)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_carichi_magazzino.py (created)"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17 carichi tests passed)",
+    "frontend": "95% — all core flows work; 2 minor UX issues (edit preview math, locale RBAC redirect)"
+  },
+  "test_credentials": "Magazziniere/Flaminio/Admin all Pastasciutt4!",
+  "seed_data_creation": "Backend tests created 2 products (TEST_Carico_Prod_A/B) with supplier TEST_Supplier_Carico and tore them down via DELETE /api/products/{id} after the suite. Frontend test created one carico on supplier Derrate (DDT-UITEST-001) with Pecorino +12; stock went 99→111→99 after deletion — CONFIRMED restored. No residue left in DB.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Carichi endpoints and NuovoCaricoPage/CarichiMagazzinoPage fully verified end-to-end. Stock math (create/edit-delta/delete-rollback) is correct at the backend layer. The only remaining polish items are UI-side: (1) edit preview shows misleading 'Nuovo' number because it double-counts the already-applied old carico; (2) no frontend route guard for locale users on /magazzino/carichi*. Backend RBAC is solid (403). Pesto/Pomodorella/Pecorino current stocks were not permanently modified.",
+  "verified_flows": {
+    "POST_carichi_validation": "PASS (empty_photo, empty_items, all_zero_qty, missing_supplier, locale 403 all rejected correctly)",
+    "POST_carichi_success_increments_stock": "PASS (+25 applied, photo_url returned, _id excluded)",
+    "GET_list_desc_sort_and_supplier_filter": "PASS",
+    "GET_single_and_404": "PASS",
+    "PUT_delta_math_100_to_50": "PASS (final = initial+50, not initial+150)",
+    "PUT_remove_item_rolls_back": "PASS",
+    "PUT_add_new_product": "PASS",
+    "PUT_replace_photo_file": "PASS (new URL, old file deleted)",
+    "PUT_ddt_only_no_stock_change": "PASS",
+    "DELETE_rollback_all": "PASS",
+    "DELETE_requires_role": "PASS (Flaminio 403)",
+    "Concurrent_5x_POST_sum": "PASS (init+5 exactly)",
+    "real_quantity_includes_carico_increase": "PASS (+60 reflected)",
+    "Frontend_Magazziniere_btn_route": "PASS (mag-btn-carico-verso-il-magazzino → /magazzino/carichi)",
+    "Frontend_NuovoCarico_supplier_filter_products": "PASS (Derrate → 2 products)",
+    "Frontend_photo_required_disables_submit": "PASS (submit disabled=true without photo, false after upload)",
+    "Frontend_inc_dec_and_keypad": "PASS (3x + → 3, keypad → 12)",
+    "Frontend_submit_redirects_and_shows_in_list": "PASS (new row appears with DDT-UITEST-001, supplier Derrate, +12 Pecorino)",
+    "Frontend_edit_page_supplier_disabled_prefill_existing_photo": "PASS",
+    "Frontend_delete_with_confirm_dialog_rolls_back_stock": "PASS (99→111→99 verified)",
+    "Frontend_Flaminio_direct_URL_blocked_by_backend": "PASS backend 403; UI does not redirect — minor"
+  }
+}
