@@ -368,11 +368,11 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security), 
 # Routes
 @api_router.get("/")
 async def root():
-    return {"message": "Pastasciutta Roma API", "version": "2026041910"}
+    return {"message": "Pastasciutta Roma API", "version": "2026041911"}
 
 @api_router.get("/version")
 async def version_check():
-    return {"version": "2026041910", "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {"version": "2026041911", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 @api_router.get("/uploads/{filename}")
 async def serve_upload(filename: str):
@@ -1718,6 +1718,93 @@ async def delete_richiesta(richiesta_id: str, token_data: dict = Depends(verify_
             raise HTTPException(status_code=400, detail="Puoi cancellare solo richieste non ancora evase")
     await db.richieste.delete_one({"id": richiesta_id})
     return {"message": "Richiesta cancellata"}
+
+# ==================== DIAGNOSTICA GOOGLE SHEETS ====================
+
+@api_router.get("/admin/diagnostics/google-sheets")
+async def diagnostics_google_sheets(token_data: dict = Depends(verify_token)):
+    """Verifica setup Google Sheets. Admin only."""
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo admin")
+
+    result = {
+        "expected_path": GOOGLE_CREDS_FILE,
+        "backend_dir": os.path.dirname(__file__),
+        "file_exists": False,
+        "file_readable": False,
+        "client_email": None,
+        "project_id": None,
+        "gspread_installed": False,
+        "sheet_accessible": False,
+        "test_write_ok": False,
+        "spreadsheet_id": SPREADSHEET_ID,
+        "error": None,
+    }
+
+    # 1) Check gspread
+    try:
+        import gspread as _gs  # noqa
+        result["gspread_installed"] = True
+    except Exception as e:
+        result["error"] = f"gspread non installato: {e}"
+        return result
+
+    # 2) Check file exists
+    if not os.path.exists(GOOGLE_CREDS_FILE):
+        result["error"] = f"File non trovato in {GOOGLE_CREDS_FILE}"
+        # Also check nearby common paths to hint user
+        nearby = []
+        for p in ["/opt/pastasciutta/backend", "/app/backend", "/root/pasta-app/backend", os.path.expanduser("~")]:
+            c = os.path.join(p, "google_credentials.json")
+            if os.path.exists(c):
+                nearby.append(c)
+        result["nearby_matches"] = nearby
+        return result
+    result["file_exists"] = True
+
+    # 3) Try to read and parse JSON
+    try:
+        import json as _json
+        with open(GOOGLE_CREDS_FILE, "r") as f:
+            creds_json = _json.load(f)
+        result["file_readable"] = True
+        result["client_email"] = creds_json.get("client_email")
+        result["project_id"] = creds_json.get("project_id")
+    except Exception as e:
+        result["error"] = f"JSON illeggibile o malformato: {e}"
+        return result
+
+    # 4) Try to open the sheet
+    try:
+        client = get_sheets_client()
+        if not client:
+            result["error"] = "get_sheets_client() ha ritornato None — vedi log per dettagli"
+            return result
+        sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+        _ = sheet.row_values(1)  # must be allowed to read
+        result["sheet_accessible"] = True
+    except Exception as e:
+        msg = str(e)
+        hint = ""
+        if "permission" in msg.lower() or "403" in msg:
+            hint = " → Condividi il foglio con la client_email come Editor"
+        elif "API has not been used" in msg or "api is not enabled" in msg.lower():
+            hint = " → Attiva 'Google Sheets API' su Google Cloud Console"
+        elif "invalid_grant" in msg.lower() or "jwt" in msg.lower():
+            hint = " → Orologio del VPS sfasato: esegui 'sudo timedatectl set-ntp on'"
+        result["error"] = f"Accesso foglio fallito: {type(e).__name__}: {msg}{hint}"
+        return result
+
+    # 5) Test write
+    try:
+        sheet.append_row(["TEST_DIAGNOSTICA", "Riga di test dal pannello admin"])
+        result["test_write_ok"] = True
+    except Exception as e:
+        result["error"] = f"Scrittura fallita: {e}"
+        return result
+
+    return result
+
 
 # ==================== CARICHI MAGAZZINO - ENDPOINTS ====================
 

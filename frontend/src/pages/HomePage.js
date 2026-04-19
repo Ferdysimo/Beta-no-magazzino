@@ -11,6 +11,23 @@ const HomePage = () => {
   const { restaurant, token, isAdmin, effectiveRestaurant, selectRestaurant, clearSelectedRestaurant } = useAuth();
   const navigate = useNavigate();
   const [restaurants, setRestaurants] = useState([]);
+  const [diagnosticResult, setDiagnosticResult] = useState(null);
+  const [runningDiag, setRunningDiag] = useState(false);
+
+  const runSheetsDiagnostic = async () => {
+    setRunningDiag(true);
+    setDiagnosticResult(null);
+    try {
+      const res = await axios.get(`${API}/admin/diagnostics/google-sheets`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setDiagnosticResult(res.data);
+    } catch (e) {
+      setDiagnosticResult({ error: e.response?.data?.detail || e.message });
+    } finally {
+      setRunningDiag(false);
+    }
+  };
 
   // Magazziniere goes straight to magazzino
   useEffect(() => {
@@ -70,7 +87,53 @@ const HomePage = () => {
               >
                 <span className="font-bold text-lg text-gray-800">Media locali</span>
               </button>
+              <button
+                data-testid="admin-diagnostica-sheets"
+                onClick={runSheetsDiagnostic}
+                disabled={runningDiag}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-blue-50 border border-gray-300 hover:border-blue-400 rounded-lg transition-colors disabled:opacity-60"
+              >
+                <span className="font-bold text-lg text-gray-800">
+                  {runningDiag ? 'Diagnostica in corso...' : 'Diagnostica Google Sheets'}
+                </span>
+                <span className="block text-xs text-gray-500 mt-0.5">Verifica setup sync del foglio Google</span>
+              </button>
             </div>
+
+            {diagnosticResult && (
+              <div className="mt-4 p-4 bg-white border-2 border-blue-300 rounded-lg text-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="font-bold text-gray-900">Risultato diagnostica</div>
+                  <button
+                    onClick={() => setDiagnosticResult(null)}
+                    className="text-xs text-gray-500 hover:text-gray-800"
+                  >Chiudi ✕</button>
+                </div>
+                <ul className="space-y-1 font-mono text-xs">
+                  <li>Path atteso: <code className="bg-gray-100 px-1 rounded">{diagnosticResult.expected_path || '—'}</code></li>
+                  <li>File esiste: {diagnosticResult.file_exists ? '✅ Sì' : '❌ NO'}</li>
+                  <li>JSON leggibile: {diagnosticResult.file_readable ? '✅ Sì' : '❌ NO'}</li>
+                  <li>client_email: <code className="bg-gray-100 px-1 rounded break-all">{diagnosticResult.client_email || '—'}</code></li>
+                  <li>project_id: {diagnosticResult.project_id || '—'}</li>
+                  <li>gspread installato: {diagnosticResult.gspread_installed ? '✅' : '❌'}</li>
+                  <li>Foglio accessibile: {diagnosticResult.sheet_accessible ? '✅ Sì' : '❌ NO'}</li>
+                  <li>Test scrittura: {diagnosticResult.test_write_ok ? '✅ OK (riga TEST aggiunta)' : '❌ NO'}</li>
+                  {diagnosticResult.nearby_matches?.length > 0 && (
+                    <li className="mt-2 text-amber-700">
+                      Trovato file in altre posizioni:<br />
+                      {diagnosticResult.nearby_matches.map(p => (
+                        <code key={p} className="block bg-amber-50 px-1 rounded">{p}</code>
+                      ))}
+                    </li>
+                  )}
+                  {diagnosticResult.error && (
+                    <li className="mt-3 p-2 bg-red-50 border border-red-200 text-red-800 rounded">
+                      <strong>Errore:</strong> {diagnosticResult.error}
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
           </div>
         </main>
       </div>
