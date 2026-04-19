@@ -542,7 +542,7 @@ const CassaPage = () => {
       {/* Fixed bottom print bar */}
       {selectedForPrint.size > 0 && (
         <div className="fixed bottom-0 left-0 right-0 bg-blue-600 text-white px-6 py-3 flex items-center justify-between shadow-lg z-50">
-          <span className="font-medium">{selectedForPrint.size} pasta{selectedForPrint.size > 1 ? 'e' : ''} selezionat{selectedForPrint.size > 1 ? 'e' : 'a'}</span>
+          <span className="font-medium">{selectedForPrint.size} {selectedForPrint.size === 1 ? 'pasta selezionata' : 'paste selezionate'}</span>
           <div className="flex gap-3">
             <button
               data-testid="clear-selection-btn"
