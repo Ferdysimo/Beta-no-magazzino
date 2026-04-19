@@ -13,7 +13,7 @@ const MagazzinierePage = () => {
 
   const secondaryButtons = [
     { label: 'Inventario / Forza il sistema', path: '/magazzino/inventario' },
-    { label: 'Per analisi', path: null },
+    { label: 'Analisi', path: '/magazzino/analisi' },
   ];
 
   return (

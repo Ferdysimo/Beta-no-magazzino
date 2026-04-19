@@ -25,6 +25,7 @@ import MagazzinoRichiestePage from './pages/MagazzinoRichiestePage';
 import CarichiMagazzinoPage from './pages/CarichiMagazzinoPage';
 import NuovoCaricoPage from './pages/NuovoCaricoPage';
 import InventarioPage from './pages/InventarioPage';
+import AnalisiPage from './pages/AnalisiPage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -160,6 +161,11 @@ function AppRoutes() {
       <Route path="/magazzino/inventario" element={
         <ProtectedRoute>
           <InventarioPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/magazzino/analisi" element={
+        <ProtectedRoute>
+          <AnalisiPage />
         </ProtectedRoute>
       } />
       <Route path="/richiesta-merce" element={

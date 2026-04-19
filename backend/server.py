@@ -365,11 +365,11 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security), 
 # Routes
 @api_router.get("/")
 async def root():
-    return {"message": "Pastasciutta Roma API", "version": "2026041907"}
+    return {"message": "Pastasciutta Roma API", "version": "2026041908"}
 
 @api_router.get("/version")
 async def version_check():
-    return {"version": "2026041907", "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {"version": "2026041908", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 @api_router.get("/uploads/{filename}")
 async def serve_upload(filename: str):
@@ -1839,6 +1839,120 @@ async def delete_carico(carico_id: str, token_data: dict = Depends(verify_token)
             p.unlink()
     await db.carichi_magazzino.delete_one({"id": carico_id})
     return {"message": "Carico cancellato e stock ripristinato"}
+
+# ==================== ANALISI MAGAZZINO ====================
+
+@api_router.get("/analisi/magazzino")
+async def analisi_magazzino(
+    date_from: str,
+    date_to: str,
+    token_data: dict = Depends(verify_token),
+):
+    """
+    Analisi movimenti magazzino in un range di date.
+    date_from/date_to in formato YYYY-MM-DD (inclusivi).
+    Ritorna per ogni prodotto con almeno un movimento:
+      - incoming: unità entrate (dai carichi)
+      - outgoing: dict {location: unità uscite}  (richieste evase)
+    """
+    if token_data.get("role") not in ("magazzino", "admin"):
+        raise HTTPException(status_code=403, detail="Solo magazziniere/admin")
+
+    # ISO range strings. Stored created_at/evasa_at have format "YYYY-MM-DDTHH:MM:SS.ffffff+00:00".
+    # Use [from, next_day) lexicographic interval for correctness.
+    try:
+        dt_from = datetime.strptime(date_from, "%Y-%m-%d")
+        dt_to = datetime.strptime(date_to, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato data non valido (attendo YYYY-MM-DD)")
+    if dt_to < dt_from:
+        raise HTTPException(status_code=400, detail="La data finale deve essere >= data iniziale")
+    from_iso = dt_from.strftime("%Y-%m-%dT00:00:00")
+    next_day = dt_to + timedelta(days=1)
+    to_iso_excl = next_day.strftime("%Y-%m-%dT00:00:00")
+
+    # Active restaurant locations (columns)
+    restaurants = await db.restaurants.find(
+        {"role": "restaurant"}, {"_id": 0, "location": 1}
+    ).to_list(20)
+    locations = [r["location"] for r in restaurants if r.get("location")]
+
+    # Incoming: from carichi_magazzino
+    incoming_agg = await db.carichi_magazzino.aggregate([
+        {"$match": {"created_at": {"$gte": from_iso, "$lt": to_iso_excl}}},
+        {"$unwind": "$items"},
+        {"$group": {
+            "_id": "$items.product_id",
+            "total": {"$sum": "$items.quantity_added"},
+        }},
+    ]).to_list(5000)
+    incoming_map = {r["_id"]: int(r["total"]) for r in incoming_agg}
+
+    # Outgoing: from richieste evase (use evasa_at date)
+    outgoing_agg = await db.richieste.aggregate([
+        {"$match": {
+            "evasa_at": {"$gte": from_iso, "$lt": to_iso_excl},
+            "status": {"$in": ["evasa", "confermata"]},
+        }},
+        {"$unwind": "$items"},
+        {"$group": {
+            "_id": {
+                "product_id": "$items.product_id",
+                "location": "$restaurant_location",
+            },
+            "total": {"$sum": "$items.quantity"},
+        }},
+    ]).to_list(10000)
+
+    outgoing_map: Dict[str, Dict[str, int]] = {}
+    for r in outgoing_agg:
+        pid = r["_id"]["product_id"]
+        loc = r["_id"]["location"] or ""
+        outgoing_map.setdefault(pid, {})[loc] = int(r["total"])
+
+    # Union of product_ids with activity
+    active_ids = set(incoming_map.keys()) | set(outgoing_map.keys())
+    if not active_ids:
+        return {
+            "date_from": date_from,
+            "date_to": date_to,
+            "locations": locations,
+            "products": [],
+        }
+
+    # Fetch product metadata for those ids
+    products = await db.products.find(
+        {"id": {"$in": list(active_ids)}}, {"_id": 0}
+    ).sort("name", 1).to_list(5000)
+
+    result_products = []
+    for p in products:
+        pid = p["id"]
+        image_url = ""
+        if p.get("image_file"):
+            image_url = f"/api/uploads/{p['image_file']}"
+        elif p.get("image_data", "").startswith("data:"):
+            image_url = p["image_data"]
+
+        out = outgoing_map.get(pid, {})
+        result_products.append({
+            "product_id": pid,
+            "name": p.get("name", ""),
+            "unit": p.get("unit", ""),
+            "supplier": p.get("supplier", ""),
+            "image_url": image_url,
+            "incoming": incoming_map.get(pid, 0),
+            "outgoing": {loc: out.get(loc, 0) for loc in locations},
+            "outgoing_total": sum(out.values()),
+        })
+
+    return {
+        "date_from": date_from,
+        "date_to": date_to,
+        "locations": locations,
+        "products": result_products,
+    }
+
 
 
 
