@@ -35,6 +35,7 @@ const NuovoCaricoPage = () => {
   const [photoData, setPhotoData] = useState(''); // base64 for upload
   const [existingPhotoUrl, setExistingPhotoUrl] = useState('');
   const [cart, setCart] = useState({}); // product_id -> qty to add
+  const [originalCart, setOriginalCart] = useState({}); // edit mode: snapshot of saved qtys
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [keypadProductId, setKeypadProductId] = useState(null);
@@ -61,6 +62,7 @@ const NuovoCaricoPage = () => {
           const map = {};
           (c.items || []).forEach(it => { map[it.product_id] = it.quantity_added; });
           setCart(map);
+          setOriginalCart(map);
         }
       } catch (e) {
         console.error(e);
