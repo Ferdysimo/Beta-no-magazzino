@@ -38,6 +38,7 @@ const CassaPage = () => {
   const [showLogs, setShowLogs] = useState(false);
   const [selectedForPrint, setSelectedForPrint] = useState(new Set());
   const [isDragging, setIsDragging] = useState(false);
+  const [printData, setPrintData] = useState(null); // {orario, rows: [{number, description}]}
   const inputRef = useRef(null);
   const [tick, setTick] = useState(0);
 
@@ -137,47 +138,27 @@ const CassaPage = () => {
   const handlePrintSelected = () => {
     const toPrint = pendingOrders.filter(o => selectedForPrint.has(o.id));
     if (toPrint.length === 0) return;
-    
-    const rows = toPrint.map(o => `
-      <tr>
-        <td style="font-size:18px;font-weight:bold;padding:2px 12px 2px 0;">${String(o.order_number).slice(-2).padStart(2,'0')}</td>
-        <td style="font-size:18px;font-weight:bold;padding:2px 0;">${o.description}</td>
-      </tr>
-    `).join('');
-    
+
     const now = new Date();
     const orario = now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-    
-    // Use hidden iframe instead of window.open to avoid mini window
-    let iframe = document.getElementById('print-frame');
-    if (!iframe) {
-      iframe = document.createElement('iframe');
-      iframe.id = 'print-frame';
-      iframe.style.position = 'fixed';
-      iframe.style.left = '-9999px';
-      iframe.style.width = '0';
-      iframe.style.height = '0';
-      document.body.appendChild(iframe);
-    }
-    
-    const doc = iframe.contentDocument || iframe.contentWindow.document;
-    doc.open();
-    doc.write(`
-      <html><head><style>
-        @page { margin: 5mm; }
-        body { font-family: Arial, sans-serif; padding: 0; margin: 0; }
-        table { border-collapse: collapse; }
-        .orario { font-size: 14px; margin-bottom: 4px; }
-      </style></head><body>
-        <div class="orario">${orario}</div>
-        <table>${rows}</table>
-      </body></html>
-    `);
-    doc.close();
-    
-    iframe.contentWindow.focus();
-    iframe.contentWindow.print();
+    const rows = toPrint.map(o => ({
+      number: String(o.order_number).slice(-2).padStart(2, '0'),
+      description: o.description,
+    }));
+
+    // Render the print-only area inside the main document, then call window.print()
+    // from the top-level — this is required for Chrome's --kiosk-printing flag to
+    // suppress the print dialog (it does NOT apply to iframe.contentWindow.print()).
+    setPrintData({ orario, rows });
     setSelectedForPrint(new Set());
+
+    // Wait for React to paint the print area, then trigger top-level print
+    setTimeout(() => {
+      window.focus();
+      window.print();
+      // Clean up after print dialog closes (or immediately in kiosk mode)
+      setTimeout(() => setPrintData(null), 500);
+    }, 50);
   };
 
   const handleComplete = async (orderId) => {
@@ -266,6 +247,44 @@ const CassaPage = () => {
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
+      {/* Print-only styles: hide the whole app during print except #cassa-print-area */}
+      <style>{`
+        @media print {
+          @page { margin: 5mm; }
+          body * { visibility: hidden !important; }
+          #cassa-print-area, #cassa-print-area * { visibility: visible !important; }
+          #cassa-print-area {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: white !important;
+          }
+        }
+      `}</style>
+
+      {/* Hidden print area rendered in the top-level document so window.print()
+          respects Chrome's --kiosk-printing flag */}
+      {printData && (
+        <div id="cassa-print-area" aria-hidden="true" style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+          <div style={{ fontFamily: 'Arial, sans-serif', fontSize: '14px', marginBottom: '4px' }}>
+            {printData.orario}
+          </div>
+          <table style={{ borderCollapse: 'collapse', fontFamily: 'Arial, sans-serif' }}>
+            <tbody>
+              {printData.rows.map((r, i) => (
+                <tr key={i}>
+                  <td style={{ fontSize: '18px', fontWeight: 'bold', padding: '2px 12px 2px 0' }}>{r.number}</td>
+                  <td style={{ fontSize: '18px', fontWeight: 'bold', padding: '2px 0' }}>{r.description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <Header />
       
       <main className="max-w-6xl mx-auto p-6">
