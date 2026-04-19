@@ -18,8 +18,6 @@ import jwt
 import asyncio
 from zoneinfo import ZoneInfo
 from passlib.context import CryptContext
-import gspread
-from google.oauth2.service_account import Credentials
 
 ROOT_DIR = Path(__file__).parent
 UPLOADS_DIR = ROOT_DIR.parent / "uploads"
@@ -55,42 +53,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 ROME_TZ = ZoneInfo("Europe/Rome")
-
-# Google Sheets integration
-SPREADSHEET_ID = "1stWnCov8ipM_KzkYJiW2Iq4HmobLBJ19jGXj3oVrdyQ"
-GOOGLE_CREDS_FILE = os.path.join(os.path.dirname(__file__), "google_credentials.json")
-gs_client = None
-
-def get_sheets_client():
-    global gs_client
-    if gs_client is None:
-        try:
-            creds = Credentials.from_service_account_file(GOOGLE_CREDS_FILE, scopes=[
-                "https://www.googleapis.com/auth/spreadsheets"
-            ])
-            gs_client = gspread.authorize(creds)
-            logger.info("Google Sheets client initialized")
-        except Exception as e:
-            logger.error(f"Google Sheets init error: {e}")
-            return None
-    return gs_client
-
-def sync_append_to_sheets(order_number, description, restaurant_location):
-    try:
-        client = get_sheets_client()
-        if not client:
-            return
-        now = datetime.now(ROME_TZ)
-        orario = now.strftime("%H:%M")
-        data_str = now.strftime("%d/%m/%Y")
-        
-        sheet = client.open_by_key(SPREADSHEET_ID).sheet1
-        sheet.append_row([order_number, description])
-        logger.info(f"Sheets: added order #{order_number} for {restaurant_location}")
-    except Exception as e:
-        logger.error(f"Sheets append error: {e}")
-        global gs_client
-        gs_client = None
 
 # Midnight reset: archive orders and reset counters
 async def midnight_reset():
@@ -368,11 +330,11 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security), 
 # Routes
 @api_router.get("/")
 async def root():
-    return {"message": "Pastasciutta Roma API", "version": "2026041912"}
+    return {"message": "Pastasciutta Roma API", "version": "2026041913"}
 
 @api_router.get("/version")
 async def version_check():
-    return {"version": "2026041912", "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {"version": "2026041913", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 @api_router.get("/uploads/{filename}")
 async def serve_upload(filename: str):
@@ -583,10 +545,6 @@ async def create_order(data: OrderCreate, token_data: dict = Depends(verify_toke
         backup_file = UPLOADS_DIR / "backup_flaminio.txt"
         with open(backup_file, "a") as f:
             f.write(f"{order_number} {data.description}\n")
-    
-    # Append to Google Sheets in background
-    location = restaurant["location"] if restaurant else restaurant_id
-    asyncio.get_event_loop().run_in_executor(None, sync_append_to_sheets, order_number, data.description, location)
     
     # Broadcast to all connected clients
     await manager.broadcast_to_restaurant(restaurant_id, {
@@ -1719,91 +1677,6 @@ async def delete_richiesta(richiesta_id: str, token_data: dict = Depends(verify_
     await db.richieste.delete_one({"id": richiesta_id})
     return {"message": "Richiesta cancellata"}
 
-# ==================== DIAGNOSTICA GOOGLE SHEETS ====================
-
-@api_router.get("/admin/diagnostics/google-sheets")
-async def diagnostics_google_sheets(token_data: dict = Depends(verify_token)):
-    """Verifica setup Google Sheets. Admin only."""
-    if token_data.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Solo admin")
-    result = {
-        "expected_path": GOOGLE_CREDS_FILE,
-        "backend_dir": os.path.dirname(__file__),
-        "file_exists": False,
-        "file_readable": False,
-        "client_email": None,
-        "project_id": None,
-        "gspread_installed": False,
-        "sheet_accessible": False,
-        "test_write_ok": False,
-        "spreadsheet_id": SPREADSHEET_ID,
-        "error": None,
-    }
-
-    # 1) Check gspread
-    try:
-        import gspread as _gs  # noqa
-        result["gspread_installed"] = True
-    except Exception as e:
-        result["error"] = f"gspread non installato: {e}"
-        return result
-
-    # 2) Check file exists
-    if not os.path.exists(GOOGLE_CREDS_FILE):
-        result["error"] = f"File non trovato in {GOOGLE_CREDS_FILE}"
-        # Also check nearby common paths to hint user
-        nearby = []
-        for p in ["/opt/pastasciutta/backend", "/app/backend", "/root/pasta-app/backend", os.path.expanduser("~")]:
-            c = os.path.join(p, "google_credentials.json")
-            if os.path.exists(c):
-                nearby.append(c)
-        result["nearby_matches"] = nearby
-        return result
-    result["file_exists"] = True
-
-    # 3) Try to read and parse JSON
-    try:
-        import json as _json
-        with open(GOOGLE_CREDS_FILE, "r") as f:
-            creds_json = _json.load(f)
-        result["file_readable"] = True
-        result["client_email"] = creds_json.get("client_email")
-        result["project_id"] = creds_json.get("project_id")
-    except Exception as e:
-        result["error"] = f"JSON illeggibile o malformato: {e}"
-        return result
-
-    # 4) Try to open the sheet
-    try:
-        client = get_sheets_client()
-        if not client:
-            result["error"] = "get_sheets_client() ha ritornato None — vedi log per dettagli"
-            return result
-        sheet = client.open_by_key(SPREADSHEET_ID).sheet1
-        _ = sheet.row_values(1)  # must be allowed to read
-        result["sheet_accessible"] = True
-    except Exception as e:
-        msg = str(e)
-        hint = ""
-        if "permission" in msg.lower() or "403" in msg:
-            hint = " → Condividi il foglio con la client_email come Editor"
-        elif "API has not been used" in msg or "api is not enabled" in msg.lower():
-            hint = " → Attiva 'Google Sheets API' su Google Cloud Console"
-        elif "invalid_grant" in msg.lower() or "jwt" in msg.lower():
-            hint = " → Orologio del VPS sfasato: esegui 'sudo timedatectl set-ntp on'"
-        result["error"] = f"Accesso foglio fallito: {type(e).__name__}: {msg}{hint}"
-        return result
-
-    # 5) Test write
-    try:
-        sheet.append_row(["TEST_DIAGNOSTICA", "Riga di test dal pannello admin"])
-        result["test_write_ok"] = True
-    except Exception as e:
-        result["error"] = f"Scrittura fallita: {e}"
-        return result
-
-    return result
-
 
 # ==================== CARICHI MAGAZZINO - ENDPOINTS ====================
 
@@ -2211,63 +2084,6 @@ async def get_chiusure(
     query = {"restaurant_id": restaurant_id}
     
     # Filter by tipologia
-    if tipologia and tipologia != "all":
-        query["tipologia"] = tipologia
-    
-    # Search in description
-    if search:
-        query["description"] = {"$regex": search, "$options": "i"}
-    
-    chiusure = await db.chiusure.find(query, {"_id": 0}).sort("chiusura_date", -1).to_list(500)
-    
-    for c in chiusure:
-        if c.get("image_file"):
-            c["image_data"] = f"/api/uploads/{c['image_file']}"
-        c.pop("image_file", None)
-    
-    return chiusure
-
-@api_router.delete("/chiusure/{chiusura_id}")
-async def delete_chiusura(chiusura_id: str, token_data: dict = Depends(verify_token)):
-    restaurant_id = token_data["restaurant_id"]
-    
-    result = await db.chiusure.delete_one({
-        "id": chiusura_id,
-        "restaurant_id": restaurant_id
-    })
-    
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Chiusura non trovata")
-    
-    return {"message": "Chiusura eliminata"}
-
-# Include the router in the main app
-app.include_router(api_router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
-
-@app.on_event("startup")
-async def startup_scheduler():
-    asyncio.create_task(midnight_scheduler())
-    
-    # Create MongoDB indexes for faster queries
-    await db.orders.create_index([("restaurant_id", 1), ("status", 1)])
-    await db.orders.create_index([("restaurant_id", 1), ("created_at", -1)])
-    await db.orders.create_index([("restaurant_id", 1), ("kitchen_completed", 1)])
-    await db.archived_orders.create_index([("restaurant_id", 1), ("created_at", -1)])
-    await db.deletion_logs.create_index([("restaurant_id", 1), ("deleted_at", -1)])
-    logger.info("MongoDB indexes created")
-lter by tipologia
     if tipologia and tipologia != "all":
         query["tipologia"] = tipologia
     
