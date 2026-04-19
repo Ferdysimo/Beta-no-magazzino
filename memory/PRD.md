@@ -47,6 +47,12 @@ Sistema di gestione ordini pasta per multi-ristorante (Flaminio, Grazie, Largo d
   - Vista DDT stampabile A4 con MITTENTE (Pastasciutta Srl) + DESTINATARIO (indirizzi hardcoded per locale) + tabella articoli
   - Magazziniere ha pagina `/magazzino/richieste-in-arrivo` con sezioni "Da evadere" / "Evase in attesa conferma" / "Storico confermate"
   - Admin può impersonare qualsiasi locale via `X-Admin-Restaurant-Id`
+- **Magazzino Fase 2 — Carico merce dai fornitori** (19/04/2026):
+  - Magazziniere → "Carico verso il magazzino" → lista `/magazzino/carichi` con foto DDT miniatura, filtri fornitore + search full-text
+  - Nuovo carico `/magazzino/carichi/nuovo`: select fornitore (mostra solo suoi prodotti), numero DDT fornitore, **foto DDT obbligatoria** (con `capture="environment"` per camera mobile), card prodotti con +/- e keypad, preview "Stock attuale → Nuovo stock"
+  - Lightbox per zoom foto DDT in lista
+  - Edit `/magazzino/carichi/:id/modifica` calcola delta e riapplica allo stock atomicamente
+  - Delete con rollback totale delle quantità
 - **Fornitori**: lista resettata con 41 nomi ufficiali (19/04/2026)
 - **Media Locali** (Admin): Report medie giornaliere per locale (ultimo mese rolling)
 
@@ -82,10 +88,9 @@ Sistema di gestione ordini pasta per multi-ristorante (Flaminio, Grazie, Largo d
 - Aggiornamento: `git pull && cd frontend && npm run build && sudo systemctl restart pastasciutta-backend`
 
 ## Backlog P0 - Magazzino Fase 2 (rimanenti)
-- Carico merce (Stock Loading)
-- Scarico merce verso i locali (Stock Dispatch)
-- Inventario (Inventory Management)
-- Analisi/Statistiche (Analytics)
+- Scarico merce verso i locali (Stock Dispatch — alternativa alle richieste dal basso)
+- Inventario (Inventory Management — forza sistema, conta fisica)
+- Analisi/Statistiche magazzino
 
 ## Backlog P1 - Performance
 - Indici MongoDB

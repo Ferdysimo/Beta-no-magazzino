@@ -294,6 +294,26 @@ MITTENTE_INFO = {
     "city": "Roma",
 }
 
+# ==================== CARICHI MAGAZZINO (INCOMING GOODS FROM SUPPLIERS) ====================
+
+class CaricoItem(BaseModel):
+    product_id: str
+    product_name: str
+    unit: str = ""
+    quantity_added: int
+
+class CaricoCreate(BaseModel):
+    supplier_name: str
+    ddt_number_fornitore: str
+    photo_data: str  # required base64
+    items: List[CaricoItem]
+
+class CaricoUpdate(BaseModel):
+    supplier_name: Optional[str] = None
+    ddt_number_fornitore: Optional[str] = None
+    photo_data: Optional[str] = None  # optional on update
+    items: Optional[List[CaricoItem]] = None
+
 # Auth helpers
 def save_image_to_disk(base64_data: str, prefix: str) -> str:
     """Save base64 image to disk, return filename."""
@@ -1668,6 +1688,158 @@ async def delete_richiesta(richiesta_id: str, token_data: dict = Depends(verify_
             raise HTTPException(status_code=400, detail="Puoi cancellare solo richieste non ancora evase")
     await db.richieste.delete_one({"id": richiesta_id})
     return {"message": "Richiesta cancellata"}
+
+# ==================== CARICHI MAGAZZINO - ENDPOINTS ====================
+
+def _serialize_carico(c: dict) -> dict:
+    c = {k: v for k, v in c.items() if k != "_id"}
+    photo = c.pop("photo_file", None)
+    c["photo_url"] = f"/api/uploads/{photo}" if photo else ""
+    return c
+
+@api_router.post("/carichi")
+async def create_carico(data: CaricoCreate, token_data: dict = Depends(verify_token)):
+    """Magazziniere: register incoming goods from a supplier. Increments product stock."""
+    if token_data.get("role") not in ("magazzino", "admin"):
+        raise HTTPException(status_code=403, detail="Solo il magazziniere può caricare merce")
+    if not data.supplier_name:
+        raise HTTPException(status_code=400, detail="Seleziona un fornitore")
+    if not data.photo_data:
+        raise HTTPException(status_code=400, detail="La foto del DDT è obbligatoria")
+    clean_items = [i.dict() for i in (data.items or []) if i.quantity_added and i.quantity_added > 0]
+    if not clean_items:
+        raise HTTPException(status_code=400, detail="Aggiungi almeno un prodotto con quantità > 0")
+
+    photo_filename = save_image_to_disk(data.photo_data, "carico")
+    carico_id = str(uuid.uuid4())
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    doc = {
+        "id": carico_id,
+        "supplier_name": data.supplier_name,
+        "ddt_number_fornitore": data.ddt_number_fornitore or "",
+        "photo_file": photo_filename,
+        "items": clean_items,
+        "created_at": now_iso,
+        "updated_at": now_iso,
+        "created_by_id": token_data.get("restaurant_id"),
+    }
+    await db.carichi_magazzino.insert_one(doc)
+
+    # Increment product stock
+    for it in clean_items:
+        await db.products.update_one(
+            {"id": it["product_id"]},
+            {"$inc": {"quantity": int(it["quantity_added"])}},
+        )
+
+    return _serialize_carico(doc)
+
+@api_router.get("/carichi")
+async def list_carichi(
+    supplier: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    token_data: dict = Depends(verify_token),
+):
+    """List all carichi (magazziniere/admin only) sorted desc by date."""
+    if token_data.get("role") not in ("magazzino", "admin"):
+        raise HTTPException(status_code=403, detail="Solo magazziniere/admin")
+    query = {}
+    if supplier:
+        query["supplier_name"] = supplier
+    if date_from or date_to:
+        r = {}
+        if date_from:
+            r["$gte"] = date_from
+        if date_to:
+            r["$lte"] = date_to
+        query["created_at"] = r
+    docs = await db.carichi_magazzino.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return [_serialize_carico(d) for d in docs]
+
+@api_router.get("/carichi/{carico_id}")
+async def get_carico(carico_id: str, token_data: dict = Depends(verify_token)):
+    if token_data.get("role") not in ("magazzino", "admin"):
+        raise HTTPException(status_code=403, detail="Solo magazziniere/admin")
+    doc = await db.carichi_magazzino.find_one({"id": carico_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Carico non trovato")
+    return _serialize_carico(doc)
+
+@api_router.put("/carichi/{carico_id}")
+async def update_carico(carico_id: str, data: CaricoUpdate, token_data: dict = Depends(verify_token)):
+    """Edit a carico: rolls back old stock delta and applies new one atomically-ish."""
+    if token_data.get("role") not in ("magazzino", "admin"):
+        raise HTTPException(status_code=403, detail="Solo magazziniere/admin")
+    old = await db.carichi_magazzino.find_one({"id": carico_id})
+    if not old:
+        raise HTTPException(status_code=404, detail="Carico non trovato")
+
+    update_fields: Dict = {}
+    if data.supplier_name is not None:
+        update_fields["supplier_name"] = data.supplier_name
+    if data.ddt_number_fornitore is not None:
+        update_fields["ddt_number_fornitore"] = data.ddt_number_fornitore
+
+    if data.photo_data:
+        # Replace photo file
+        old_photo = old.get("photo_file")
+        if old_photo:
+            op = UPLOADS_DIR / old_photo
+            if op.exists():
+                op.unlink()
+        update_fields["photo_file"] = save_image_to_disk(data.photo_data, "carico")
+
+    if data.items is not None:
+        new_items = [i.dict() for i in data.items if i.quantity_added and i.quantity_added > 0]
+        if not new_items:
+            raise HTTPException(status_code=400, detail="Deve esserci almeno un prodotto")
+        # Compute deltas: subtract old, add new per product_id
+        old_map: Dict[str, int] = {}
+        for it in old.get("items", []):
+            old_map[it["product_id"]] = old_map.get(it["product_id"], 0) + int(it.get("quantity_added", 0))
+        new_map: Dict[str, int] = {}
+        for it in new_items:
+            new_map[it["product_id"]] = new_map.get(it["product_id"], 0) + int(it["quantity_added"])
+
+        all_ids = set(old_map) | set(new_map)
+        for pid in all_ids:
+            delta = new_map.get(pid, 0) - old_map.get(pid, 0)
+            if delta != 0:
+                await db.products.update_one({"id": pid}, {"$inc": {"quantity": delta}})
+        update_fields["items"] = new_items
+
+    update_fields["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    updated = await db.carichi_magazzino.find_one_and_update(
+        {"id": carico_id}, {"$set": update_fields}, return_document=True
+    )
+    return _serialize_carico(updated)
+
+@api_router.delete("/carichi/{carico_id}")
+async def delete_carico(carico_id: str, token_data: dict = Depends(verify_token)):
+    """Delete a carico: rolls back the stock addition."""
+    if token_data.get("role") not in ("magazzino", "admin"):
+        raise HTTPException(status_code=403, detail="Solo magazziniere/admin")
+    old = await db.carichi_magazzino.find_one({"id": carico_id})
+    if not old:
+        raise HTTPException(status_code=404, detail="Carico non trovato")
+    # Rollback stock
+    for it in old.get("items", []):
+        await db.products.update_one(
+            {"id": it["product_id"]},
+            {"$inc": {"quantity": -int(it.get("quantity_added", 0))}},
+        )
+    # Delete photo file
+    ph = old.get("photo_file")
+    if ph:
+        p = UPLOADS_DIR / ph
+        if p.exists():
+            p.unlink()
+    await db.carichi_magazzino.delete_one({"id": carico_id})
+    return {"message": "Carico cancellato e stock ripristinato"}
+
 
 
 # ==================== VERSAMENTI (DEPOSITS) ====================
