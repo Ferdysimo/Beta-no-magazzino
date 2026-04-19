@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrders } from '../contexts/OrderContext';
 import Header from '../components/Header';
@@ -247,28 +248,24 @@ const CassaPage = () => {
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
-      {/* Print-only styles: hide the whole app during print except #cassa-print-area */}
+      {/* Print-only styles: hide the entire React app during print; the print-area
+          is rendered as a direct child of <body> via a React portal so that
+          `body > *` selector can hide everything except the print area. */}
       <style>{`
         @media print {
           @page { margin: 5mm; }
-          body * { visibility: hidden !important; }
-          #cassa-print-area, #cassa-print-area * { visibility: visible !important; }
-          #cassa-print-area {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            background: white !important;
-          }
+          html, body { background: white !important; margin: 0 !important; padding: 0 !important; }
+          body > *:not(#cassa-print-area) { display: none !important; }
+          #cassa-print-area { display: block !important; }
         }
+        #cassa-print-area { display: none; }
+        @media print { #cassa-print-area { display: block; } }
       `}</style>
 
-      {/* Hidden print area rendered in the top-level document so window.print()
-          respects Chrome's --kiosk-printing flag */}
-      {printData && (
-        <div id="cassa-print-area" aria-hidden="true" style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+      {/* Portal: render print area directly under <body> to avoid the React app layout
+          affecting the print scale */}
+      {printData && createPortal(
+        <div id="cassa-print-area">
           <div style={{ fontFamily: 'Arial, sans-serif', fontSize: '14px', marginBottom: '4px' }}>
             {printData.orario}
           </div>
@@ -282,7 +279,8 @@ const CassaPage = () => {
               ))}
             </tbody>
           </table>
-        </div>
+        </div>,
+        document.body,
       )}
 
       <Header />
