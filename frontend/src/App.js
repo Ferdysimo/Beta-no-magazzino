@@ -24,7 +24,6 @@ import DDTViewPage from './pages/DDTViewPage';
 import MagazzinoRichiestePage from './pages/MagazzinoRichiestePage';
 import CarichiMagazzinoPage from './pages/CarichiMagazzinoPage';
 import NuovoCaricoPage from './pages/NuovoCaricoPage';
-import OrdinaPage from './pages/OrdinaPage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -67,8 +66,6 @@ const PublicRoute = ({ children }) => {
 function AppRoutes() {
   return (
     <Routes>
-      {/* Public QR-order page — NO auth */}
-      <Route path="/ordina/:location" element={<OrdinaPage />} />
       <Route path="/" element={
         <PublicRoute>
           <LoginPage />

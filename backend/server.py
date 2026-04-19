@@ -249,8 +249,6 @@ class OrderResponse(BaseModel):
     monitor_visible: bool = False
     hidden_generale: bool = False
     hidden_generale_timer: int = 0
-    source: str = "internal"  # 'internal' | 'qr'
-    customer_name: Optional[str] = None
 
 class ProductCreate(BaseModel):
     name: str
@@ -367,11 +365,11 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security), 
 # Routes
 @api_router.get("/")
 async def root():
-    return {"message": "Pastasciutta Roma API", "version": "2026041902"}
+    return {"message": "Pastasciutta Roma API", "version": "2026041903"}
 
 @api_router.get("/version")
 async def version_check():
-    return {"version": "2026041902", "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {"version": "2026041903", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 @api_router.get("/uploads/{filename}")
 async def serve_upload(filename: str):
@@ -594,115 +592,6 @@ async def create_order(data: OrderCreate, token_data: dict = Depends(verify_toke
     })
     
     return OrderResponse(**{k: v for k, v in order.items() if k != "_id"})
-
-# ==================== PUBLIC QR ORDER (NO AUTH) ====================
-
-# Simple menu for QR ordering test
-PUBLIC_MENU = [
-    {"id": "carbonara", "name": "Carbonara", "price": 9.0},
-    {"id": "amatriciana", "name": "Amatriciana", "price": 9.0},
-]
-
-# Map URL slug → location
-LOCATION_SLUGS = {
-    "flaminio": "Flaminio",
-    "grazie": "Grazie",
-    "brazza": "Largo di Brazzà",
-}
-
-class PublicOrderItem(BaseModel):
-    id: str
-    name: str
-    quantity: int
-
-class PublicOrderCreate(BaseModel):
-    location_slug: str
-    items: List[PublicOrderItem]
-    customer_name: str
-
-@api_router.get("/public/menu/{location_slug}")
-async def get_public_menu(location_slug: str):
-    loc = LOCATION_SLUGS.get(location_slug.lower())
-    if not loc:
-        raise HTTPException(status_code=404, detail="Locale non trovato")
-    restaurant = await db.restaurants.find_one({"location": loc, "role": "restaurant"}, {"_id": 0, "password": 0})
-    if not restaurant:
-        raise HTTPException(status_code=404, detail="Locale non trovato")
-    return {
-        "location": loc,
-        "menu": PUBLIC_MENU,
-    }
-
-@api_router.post("/public/order")
-async def create_public_order(data: PublicOrderCreate):
-    """Public endpoint: customer scans QR, sends order. No auth. Special number 9001+."""
-    loc = LOCATION_SLUGS.get(data.location_slug.lower())
-    if not loc:
-        raise HTTPException(status_code=404, detail="Locale non trovato")
-    restaurant = await db.restaurants.find_one({"location": loc, "role": "restaurant"})
-    if not restaurant:
-        raise HTTPException(status_code=404, detail="Locale non trovato")
-    if not data.customer_name.strip():
-        raise HTTPException(status_code=400, detail="Inserisci il tuo nome")
-    clean_items = [i for i in (data.items or []) if i.quantity and i.quantity > 0]
-    if not clean_items:
-        raise HTTPException(status_code=400, detail="Carrello vuoto")
-
-    restaurant_id = restaurant["id"]
-
-    # Dedicated QR counter starting at 9000 — "C" + number keeps visual distinction
-    result = await db.restaurants.find_one_and_update(
-        {"id": restaurant_id},
-        {"$inc": {"qr_order_counter": 1}},
-        return_document=True,
-    )
-    qr_count = int(result.get("qr_order_counter") or 1)
-    if qr_count < 1:
-        qr_count = 1
-    order_number = 9000 + qr_count  # 9001, 9002, ...
-
-    # Build description
-    desc_parts = [f"{it.quantity}× {it.name}" for it in clean_items]
-    description = " + ".join(desc_parts) + f" — {data.customer_name.strip()}"
-
-    order_id = str(uuid.uuid4())
-    order = {
-        "id": order_id,
-        "order_number": order_number,
-        "description": description,
-        "restaurant_id": restaurant_id,
-        "status": "pending",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "timer_started": False,
-        "timer_start_time": None,
-        "timer_paused": False,
-        "timer_elapsed": 0,
-        "kitchen_completed": False,
-        "monitor_visible": False,
-        "hidden_generale": False,
-        "hidden_generale_timer": 0,
-        "source": "qr",
-        "customer_name": data.customer_name.strip(),
-    }
-    await db.orders.insert_one(order)
-
-    # Append to Google Sheets in background
-    asyncio.get_event_loop().run_in_executor(None, sync_append_to_sheets, order_number, description, loc)
-
-    # Broadcast via WebSocket to the restaurant tablets
-    await manager.broadcast_to_restaurant(restaurant_id, {
-        "type": "order_created",
-        "order": {k: v for k, v in order.items() if k != "_id"},
-    })
-
-    return {
-        "order_number": order_number,
-        "display_code": f"C{qr_count}",
-        "location": loc,
-        "customer_name": data.customer_name.strip(),
-        "description": description,
-    }
-
 
 @api_router.get("/orders", response_model=List[OrderResponse])
 async def get_orders(

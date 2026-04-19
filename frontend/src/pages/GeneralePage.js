@@ -114,14 +114,11 @@ const GeneralePage = () => {
               >
                 {/* Order Number */}
                 <span className={`w-20 font-bold text-xl ${isHighlighted ? 'text-white' : 'text-gray-800'}`}>
-                  {order.source === 'qr' ? `C${order.order_number - 9000}` : order.order_number}
+                  {order.order_number}
                 </span>
-
+                
                 {/* Order Description */}
                 <span className={`flex-1 text-lg ${isHighlighted ? 'text-white' : 'text-gray-800'} ${isUppercase(order.description) ? 'font-bold' : 'font-medium'}`}>
-                  {order.source === 'qr' && (
-                    <span className="inline-block mr-2 px-2 py-0.5 text-xs font-bold bg-[#F5C518] text-gray-900 rounded align-middle">QR</span>
-                  )}
                   {order.description}
                 </span>
                 

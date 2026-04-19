@@ -40,13 +40,8 @@ const OrderRow = memo(({ order, tick, onStart, onPause, onReset, onComplete }) =
       data-testid={`bollitore-row-${order.order_number}`}
       className={`flex items-center px-2 py-1 border-b border-gray-100 transition-colors ${rowColor}`}
     >
-      <span className="w-14 font-bold text-lg text-black">
-        {order.source === 'qr' ? `C${order.order_number - 9000}` : order.order_number}
-      </span>
+      <span className="w-14 font-bold text-lg text-black">{order.order_number}</span>
       <span className={`flex-1 text-lg text-black font-bold`}>
-        {order.source === 'qr' && (
-          <span className="inline-block mr-2 px-2 py-0.5 text-xs font-bold bg-[#F5C518] text-gray-900 rounded align-middle">QR</span>
-        )}
         {order.description}
       </span>
 
