@@ -368,15 +368,9 @@ export const OrderProvider = ({ children }) => {
       o.id === orderId ? { ...o, timer_started: true, timer_start_time: now, timer_paused: false } : o
     ));
     try {
-      const response = await axios.post(`${API}/orders/${orderId}/timer/start`, {}, {
+      await axios.post(`${API}/orders/${orderId}/timer/start`, {}, {
         headers: { Authorization: `Bearer ${tokenRef.current}` }
       });
-      // Update with server's exact start time
-      if (response.data.timer_start_time) {
-        setOrders(prev => prev.map(o =>
-          o.id === orderId ? { ...o, timer_start_time: response.data.timer_start_time } : o
-        ));
-      }
     } catch (error) {
       optimisticGuardRef.current.delete(orderId);
       fetchOrdersImpl(true);
