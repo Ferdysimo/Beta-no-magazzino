@@ -37,7 +37,17 @@ Sistema di gestione ordini pasta per multi-ristorante (Flaminio, Grazie, Largo d
 - **Report Cassa**: Report giornaliero con ordini attivi + archiviati
 - **Report Excel**: Export dati
 - **Fatture/Versamenti/Chiusure**: Gestione documenti con immagini su filesystem
-- **Magazzino Fase 1**: CRUD prodotti con ruolo Magazziniere
+- **Magazzino Fase 1**: CRUD prodotti con ruolo Magazziniere (foto, unità, fornitore, quantità stock)
+- **Magazzino Fase 2 — Richieste Merce & DDT** (19/04/2026):
+  - Ogni locale ha una pagina `/richiesta-merce` con elenco richieste da evadere + evase
+  - Pagina `/richiesta-merce/nuova` mobile-first: card prodotto con foto, −/+ grossi, tastierino numerico, filtri per fornitore + search, sticky bottom INVIA
+  - `real_quantity` = `quantity` − somma prodotti in richieste pending (multi-locale, così un locale vede cosa è già stato prenotato)
+  - Contatore DDT **globale** auto-incrementale atomico (MongoDB `$inc` + upsert)
+  - Workflow 3 stati: `pending` (locale crea) → `evasa` (magazziniere evade + decrementa stock) → `confermata` (locale conferma ricezione)
+  - Vista DDT stampabile A4 con MITTENTE (Pastasciutta Srl) + DESTINATARIO (indirizzi hardcoded per locale) + tabella articoli
+  - Magazziniere ha pagina `/magazzino/richieste-in-arrivo` con sezioni "Da evadere" / "Evase in attesa conferma" / "Storico confermate"
+  - Admin può impersonare qualsiasi locale via `X-Admin-Restaurant-Id`
+- **Fornitori**: lista resettata con 41 nomi ufficiali (19/04/2026)
 - **Media Locali** (Admin): Report medie giornaliere per locale (ultimo mese rolling)
 
 ### Account Amministratore
@@ -71,7 +81,7 @@ Sistema di gestione ordini pasta per multi-ristorante (Flaminio, Grazie, Largo d
 - Script `setup.sh` per installazione automatica
 - Aggiornamento: `git pull && cd frontend && npm run build && sudo systemctl restart pastasciutta-backend`
 
-## Backlog P0 - Magazzino Fase 2
+## Backlog P0 - Magazzino Fase 2 (rimanenti)
 - Carico merce (Stock Loading)
 - Scarico merce verso i locali (Stock Dispatch)
 - Inventario (Inventory Management)
