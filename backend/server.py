@@ -279,6 +279,9 @@ class RichiestaItem(BaseModel):
 class RichiestaCreate(BaseModel):
     items: List[RichiestaItem]
 
+class RichiestaErrorReport(BaseModel):
+    reason: str
+
 # Indirizzi locali (DESTINATARIO del DDT)
 LOCATION_ADDRESSES = {
     "Flaminio": {"address": "Piazzale Flaminio 10", "postal_code": "00196", "city": "Roma"},
@@ -365,11 +368,11 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security), 
 # Routes
 @api_router.get("/")
 async def root():
-    return {"message": "Pastasciutta Roma API", "version": "2026041909"}
+    return {"message": "Pastasciutta Roma API", "version": "2026041910"}
 
 @api_router.get("/version")
 async def version_check():
-    return {"version": "2026041909", "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {"version": "2026041910", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 @api_router.get("/uploads/{filename}")
 async def serve_upload(filename: str):
@@ -1601,12 +1604,12 @@ async def list_all_pending(token_data: dict = Depends(verify_token)):
 
 @api_router.get("/richieste/history-all")
 async def list_history_all(token_data: dict = Depends(verify_token)):
-    """Magazziniere only: confermate (storico evase e chiuse)."""
+    """Magazziniere only: confermate + errori (storico)."""
     if token_data.get("role") not in ("magazzino", "admin"):
         raise HTTPException(status_code=403, detail="Solo magazziniere/admin")
     docs = await db.richieste.find(
-        {"status": "confermata"}, {"_id": 0}
-    ).sort("confermata_at", -1).limit(200).to_list(200)
+        {"status": {"$in": ["confermata", "errore"]}}, {"_id": 0}
+    ).sort([("confermata_at", -1), ("error_reported_at", -1)]).limit(200).to_list(200)
     for d in docs:
         if not d.get("restaurant_location"):
             rest = await db.restaurants.find_one({"id": d.get("restaurant_id")}, {"_id": 0})
@@ -1668,6 +1671,33 @@ async def conferma_richiesta(richiesta_id: str, token_data: dict = Depends(verif
     updated = await db.richieste.find_one_and_update(
         {"id": richiesta_id},
         {"$set": {"status": "confermata", "confermata_at": now_iso}},
+        return_document=True,
+    )
+    return await _enrich_richiesta(updated)
+
+@api_router.patch("/richieste/{richiesta_id}/errore")
+async def segnala_errore_richiesta(richiesta_id: str, data: RichiestaErrorReport, token_data: dict = Depends(verify_token)):
+    """Locale (or admin) flags the request as 'errore' (wrong/incomplete delivery)."""
+    doc = await db.richieste.find_one({"id": richiesta_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Richiesta non trovata")
+    role = token_data.get("role")
+    if role == "magazzino":
+        raise HTTPException(status_code=403, detail="Il magazziniere non segnala errori")
+    if role != "admin" and doc.get("restaurant_id") != token_data["restaurant_id"]:
+        raise HTTPException(status_code=403, detail="Non autorizzato")
+    if doc.get("status") != "evasa":
+        raise HTTPException(status_code=400, detail="Puoi segnalare l'errore solo su richieste evase")
+    if not data.reason or not data.reason.strip():
+        raise HTTPException(status_code=400, detail="Spiega il motivo dell'errore")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    updated = await db.richieste.find_one_and_update(
+        {"id": richiesta_id},
+        {"$set": {
+            "status": "errore",
+            "error_reason": data.reason.strip(),
+            "error_reported_at": now_iso,
+        }},
         return_document=True,
     )
     return await _enrich_richiesta(updated)

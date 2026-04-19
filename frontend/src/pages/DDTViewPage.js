@@ -115,9 +115,15 @@ const DDTViewPage = () => {
 
         {/* Status footer */}
         <div className="mt-10 text-xs text-gray-500 border-t border-gray-200 pt-3 print:hidden">
-          Stato: <strong>{ddt.status}</strong>
+          Stato: <strong className={ddt.status === 'errore' ? 'text-red-700' : ''}>{ddt.status}</strong>
           {ddt.evasa_at && <span> · Evasa il {formatItalianDate(ddt.evasa_at)}</span>}
           {ddt.confermata_at && <span> · Confermata il {formatItalianDate(ddt.confermata_at)}</span>}
+          {ddt.error_reported_at && (
+            <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded text-red-800">
+              <div className="font-bold">⚠ Errore segnalato dal locale il {formatItalianDate(ddt.error_reported_at)}</div>
+              {ddt.error_reason && <div className="italic mt-1">"{ddt.error_reason}"</div>}
+            </div>
+          )}
         </div>
       </div>
 

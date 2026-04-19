@@ -13,6 +13,9 @@ const RichiestaMercePage = () => {
   const navigate = useNavigate();
   const [richieste, setRichieste] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [errorModal, setErrorModal] = useState(null); // {id, ddt_number}
+  const [errorReason, setErrorReason] = useState('');
+  const [submittingError, setSubmittingError] = useState(false);
 
   const headers = () => {
     const h = { Authorization: `Bearer ${token}` };
@@ -42,7 +45,7 @@ const RichiestaMercePage = () => {
 
   const showLocation = effectiveRestaurant?.location || restaurant?.location;
   const daEvadere = richieste.filter(r => r.status === 'pending' || r.status === 'evasa');
-  const evase = richieste.filter(r => r.status === 'confermata');
+  const evase = richieste.filter(r => r.status === 'confermata' || r.status === 'errore');
 
   const handleConferma = async (id) => {
     if (!window.confirm('Confermi di aver ricevuto la merce?')) return;
@@ -51,6 +54,33 @@ const RichiestaMercePage = () => {
       fetchRichieste();
     } catch (e) {
       alert(e.response?.data?.detail || 'Errore conferma');
+    }
+  };
+
+  const openErrorModal = (r) => {
+    setErrorModal({ id: r.id, ddt_number: r.ddt_number });
+    setErrorReason('');
+  };
+
+  const submitError = async () => {
+    if (!errorReason.trim()) {
+      alert('Spiega il motivo dell\'errore');
+      return;
+    }
+    setSubmittingError(true);
+    try {
+      await axios.patch(
+        `${API}/richieste/${errorModal.id}/errore`,
+        { reason: errorReason.trim() },
+        { headers: headers() }
+      );
+      setErrorModal(null);
+      setErrorReason('');
+      fetchRichieste();
+    } catch (e) {
+      alert(e.response?.data?.detail || 'Errore segnalazione');
+    } finally {
+      setSubmittingError(false);
     }
   };
 
@@ -105,13 +135,22 @@ const RichiestaMercePage = () => {
                 </div>
                 <div className="flex gap-2">
                   {r.status === 'evasa' && (
-                    <button
-                      data-testid={`btn-conferma-${r.ddt_number}`}
-                      onClick={() => handleConferma(r.id)}
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-semibold"
-                    >
-                      Conferma ricezione
-                    </button>
+                    <>
+                      <button
+                        data-testid={`btn-conferma-${r.ddt_number}`}
+                        onClick={() => handleConferma(r.id)}
+                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-semibold"
+                      >
+                        Conferma ricezione
+                      </button>
+                      <button
+                        data-testid={`btn-errore-${r.ddt_number}`}
+                        onClick={() => openErrorModal(r)}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm font-semibold"
+                      >
+                        Errore
+                      </button>
+                    </>
                   )}
                   {r.status === 'pending' && (
                     <button
@@ -133,24 +172,79 @@ const RichiestaMercePage = () => {
           <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100">
             {evase.length === 0 ? (
               <div className="p-4 text-gray-400 text-center text-sm">Nessuna richiesta evasa.</div>
-            ) : evase.map(r => (
-              <div key={r.id} data-testid={`richiesta-closed-${r.ddt_number}`} className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-start gap-3">
-                <button
-                  onClick={() => navigate(`/ddt/${r.id}`)}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded border border-gray-300 text-sm font-semibold whitespace-nowrap self-start"
+            ) : evase.map(r => {
+              const isError = r.status === 'errore';
+              return (
+                <div
+                  key={r.id}
+                  data-testid={`richiesta-closed-${r.ddt_number}`}
+                  className={`p-3 sm:p-4 flex flex-col sm:flex-row sm:items-start gap-3 ${isError ? 'bg-red-50' : ''}`}
                 >
-                  VEDI DDT {r.ddt_number}
-                </button>
-                <div className="flex-1 text-sm text-gray-700 space-y-0.5">
-                  <div>Richiesta del <strong>{formatItalianDateTime(r.created_at)}</strong></div>
-                  {r.evasa_at && <div>Evasa il <strong>{formatItalianDateTime(r.evasa_at)}</strong></div>}
-                  {r.confermata_at && <div>Confermata il <strong>{formatItalianDateTime(r.confermata_at)}</strong></div>}
+                  <button
+                    onClick={() => navigate(`/ddt/${r.id}`)}
+                    className={`px-4 py-2 rounded border text-sm font-semibold whitespace-nowrap self-start ${isError ? 'bg-red-100 hover:bg-red-200 border-red-300 text-red-800' : 'bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-800'}`}
+                  >
+                    VEDI DDT {r.ddt_number}
+                  </button>
+                  <div className={`flex-1 text-sm space-y-0.5 ${isError ? 'text-red-800' : 'text-gray-700'}`}>
+                    <div>Richiesta del <strong>{formatItalianDateTime(r.created_at)}</strong></div>
+                    {r.evasa_at && <div>Evasa il <strong>{formatItalianDateTime(r.evasa_at)}</strong></div>}
+                    {r.confermata_at && <div>Confermata il <strong>{formatItalianDateTime(r.confermata_at)}</strong></div>}
+                    {isError && (
+                      <>
+                        <div className="font-bold">⚠ Segnalata come errata il <strong>{formatItalianDateTime(r.error_reported_at)}</strong></div>
+                        {r.error_reason && <div className="italic">Motivo: "{r.error_reason}"</div>}
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       </main>
+
+      {/* Error reason modal */}
+      {errorModal && (
+        <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4" onClick={() => !submittingError && setErrorModal(null)}>
+          <div className="bg-white rounded-xl w-full max-w-md p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 text-xl font-bold">!</div>
+              <div>
+                <div className="font-bold text-gray-900">Segnala un errore</div>
+                <div className="text-xs text-gray-500">DDT n° {errorModal.ddt_number}</div>
+              </div>
+            </div>
+            <label className="block text-sm text-gray-700 mb-1">Motivo dell'errore</label>
+            <textarea
+              data-testid="error-reason-input"
+              rows={4}
+              value={errorReason}
+              onChange={e => setErrorReason(e.target.value)}
+              placeholder="Es: Mancano 2 cestelli di pesto. Pecorino arrivato scaduto..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+              autoFocus
+            />
+            <div className="flex gap-2 mt-4 justify-end">
+              <button
+                onClick={() => setErrorModal(null)}
+                disabled={submittingError}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-50"
+              >
+                Annulla
+              </button>
+              <button
+                data-testid="btn-submit-errore"
+                onClick={submitError}
+                disabled={submittingError || !errorReason.trim()}
+                className="px-5 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-semibold rounded-lg"
+              >
+                {submittingError ? 'Invio...' : 'Segnala errore'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

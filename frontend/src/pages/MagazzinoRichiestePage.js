@@ -133,25 +133,35 @@ const MagazzinoRichiestePage = () => {
         {/* Storico */}
         <section>
           <h2 className="text-lg font-bold text-gray-800 mb-3">
-            Storico confermate <span className="text-sm text-gray-500 font-normal">({history.length})</span>
+            Storico <span className="text-sm text-gray-500 font-normal">({history.length})</span>
           </h2>
           <div className="bg-white border border-gray-200 rounded-lg divide-y max-h-96 overflow-y-auto">
             {history.length === 0 ? (
               <div className="p-4 text-gray-400 text-center text-sm">Nessuna richiesta nello storico.</div>
-            ) : history.map(r => (
-              <div key={r.id} className="p-3 flex flex-col sm:flex-row sm:items-center gap-2 text-sm">
-                <button
-                  onClick={() => navigate(`/ddt/${r.id}`)}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1.5 rounded border border-gray-300 text-xs font-semibold whitespace-nowrap"
-                >
-                  DDT {r.ddt_number}
-                </button>
-                <div className="flex-1">
-                  <span className="font-semibold">{r.restaurant_location}</span>
-                  <span className="text-gray-500"> · Confermata il {formatItalianDateTime(r.confermata_at)}</span>
+            ) : history.map(r => {
+              const isError = r.status === 'errore';
+              return (
+                <div key={r.id} className={`p-3 flex flex-col sm:flex-row sm:items-center gap-2 text-sm ${isError ? 'bg-red-50' : ''}`}>
+                  <button
+                    onClick={() => navigate(`/ddt/${r.id}`)}
+                    className={`px-3 py-1.5 rounded border text-xs font-semibold whitespace-nowrap ${isError ? 'bg-red-100 hover:bg-red-200 border-red-300 text-red-800' : 'bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-800'}`}
+                  >
+                    DDT {r.ddt_number}
+                  </button>
+                  <div className={`flex-1 ${isError ? 'text-red-800' : ''}`}>
+                    <span className="font-semibold">{r.restaurant_location}</span>
+                    {isError ? (
+                      <>
+                        <span> · ⚠ Errore segnalato il {formatItalianDateTime(r.error_reported_at)}</span>
+                        {r.error_reason && <div className="italic text-xs text-red-700">Motivo: "{r.error_reason}"</div>}
+                      </>
+                    ) : (
+                      <span className="text-gray-500"> · Confermata il {formatItalianDateTime(r.confermata_at)}</span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       </main>
