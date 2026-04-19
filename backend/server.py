@@ -345,11 +345,11 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security), 
 # Routes
 @api_router.get("/")
 async def root():
-    return {"message": "Pastasciutta Roma API", "version": "2026031501"}
+    return {"message": "Pastasciutta Roma API", "version": "2026041901"}
 
 @api_router.get("/version")
 async def version_check():
-    return {"version": "2026031501", "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {"version": "2026041901", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 @api_router.get("/uploads/{filename}")
 async def serve_upload(filename: str):
