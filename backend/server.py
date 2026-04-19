@@ -368,11 +368,11 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security), 
 # Routes
 @api_router.get("/")
 async def root():
-    return {"message": "Pastasciutta Roma API", "version": "2026041911"}
+    return {"message": "Pastasciutta Roma API", "version": "2026041912"}
 
 @api_router.get("/version")
 async def version_check():
-    return {"version": "2026041911", "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {"version": "2026041912", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 @api_router.get("/uploads/{filename}")
 async def serve_upload(filename: str):
@@ -1726,7 +1726,6 @@ async def diagnostics_google_sheets(token_data: dict = Depends(verify_token)):
     """Verifica setup Google Sheets. Admin only."""
     if token_data.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Solo admin")
-
     result = {
         "expected_path": GOOGLE_CREDS_FILE,
         "backend_dir": os.path.dirname(__file__),
@@ -2212,6 +2211,63 @@ async def get_chiusure(
     query = {"restaurant_id": restaurant_id}
     
     # Filter by tipologia
+    if tipologia and tipologia != "all":
+        query["tipologia"] = tipologia
+    
+    # Search in description
+    if search:
+        query["description"] = {"$regex": search, "$options": "i"}
+    
+    chiusure = await db.chiusure.find(query, {"_id": 0}).sort("chiusura_date", -1).to_list(500)
+    
+    for c in chiusure:
+        if c.get("image_file"):
+            c["image_data"] = f"/api/uploads/{c['image_file']}"
+        c.pop("image_file", None)
+    
+    return chiusure
+
+@api_router.delete("/chiusure/{chiusura_id}")
+async def delete_chiusura(chiusura_id: str, token_data: dict = Depends(verify_token)):
+    restaurant_id = token_data["restaurant_id"]
+    
+    result = await db.chiusure.delete_one({
+        "id": chiusura_id,
+        "restaurant_id": restaurant_id
+    })
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Chiusura non trovata")
+    
+    return {"message": "Chiusura eliminata"}
+
+# Include the router in the main app
+app.include_router(api_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    client.close()
+
+@app.on_event("startup")
+async def startup_scheduler():
+    asyncio.create_task(midnight_scheduler())
+    
+    # Create MongoDB indexes for faster queries
+    await db.orders.create_index([("restaurant_id", 1), ("status", 1)])
+    await db.orders.create_index([("restaurant_id", 1), ("created_at", -1)])
+    await db.orders.create_index([("restaurant_id", 1), ("kitchen_completed", 1)])
+    await db.archived_orders.create_index([("restaurant_id", 1), ("created_at", -1)])
+    await db.deletion_logs.create_index([("restaurant_id", 1), ("deleted_at", -1)])
+    logger.info("MongoDB indexes created")
+lter by tipologia
     if tipologia and tipologia != "all":
         query["tipologia"] = tipologia
     

@@ -13,6 +13,8 @@ const HomePage = () => {
   const [restaurants, setRestaurants] = useState([]);
   const [diagnosticResult, setDiagnosticResult] = useState(null);
   const [runningDiag, setRunningDiag] = useState(false);
+  const [uploadingCreds, setUploadingCreds] = useState(false);
+  const credsFileRef = React.useRef(null);
 
   const runSheetsDiagnostic = async () => {
     setRunningDiag(true);
@@ -26,6 +28,28 @@ const HomePage = () => {
       setDiagnosticResult({ error: e.response?.data?.detail || e.message });
     } finally {
       setRunningDiag(false);
+    }
+  };
+
+  const uploadCredentials = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingCreds(true);
+    try {
+      const content = await file.text();
+      const res = await axios.post(
+        `${API}/admin/google-credentials/upload`,
+        { content },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      alert(`✅ Credenziali caricate!\n\nSalvato in: ${res.data.path}\nClient email: ${res.data.client_email}\n\nOra ricontrolla con "Diagnostica Google Sheets".`);
+      // Run diagnostic automatically after upload
+      runSheetsDiagnostic();
+    } catch (err) {
+      alert(`❌ Errore: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setUploadingCreds(false);
+      if (credsFileRef.current) credsFileRef.current.value = '';
     }
   };
 
@@ -98,6 +122,24 @@ const HomePage = () => {
                 </span>
                 <span className="block text-xs text-gray-500 mt-0.5">Verifica setup sync del foglio Google</span>
               </button>
+              <button
+                data-testid="admin-upload-creds"
+                onClick={() => credsFileRef.current?.click()}
+                disabled={uploadingCreds}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-emerald-50 border border-gray-300 hover:border-emerald-400 rounded-lg transition-colors disabled:opacity-60"
+              >
+                <span className="font-bold text-lg text-gray-800">
+                  {uploadingCreds ? 'Caricamento...' : 'Carica credenziali Google (.json)'}
+                </span>
+                <span className="block text-xs text-gray-500 mt-0.5">Seleziona il file del Service Account; sarà salvato nella posizione corretta</span>
+              </button>
+              <input
+                ref={credsFileRef}
+                type="file"
+                accept=".json,application/json"
+                onChange={uploadCredentials}
+                className="hidden"
+              />
             </div>
 
             {diagnosticResult && (
