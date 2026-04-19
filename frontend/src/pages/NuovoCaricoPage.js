@@ -17,8 +17,15 @@ const resolveImage = (url) => {
 const NuovoCaricoPage = () => {
   const { id } = useParams(); // edit mode if id present
   const isEdit = Boolean(id);
-  const { token } = useAuth();
+  const { token, restaurant } = useAuth();
   const navigate = useNavigate();
+
+  // Role guard: only magazziniere/admin
+  useEffect(() => {
+    if (restaurant && restaurant.role !== 'magazzino' && restaurant.role !== 'admin') {
+      navigate('/home', { replace: true });
+    }
+  }, [restaurant, navigate]);
 
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
@@ -220,8 +227,12 @@ const NuovoCaricoPage = () => {
             <div className="space-y-3">
               {supplierProducts.map(p => {
                 const qty = cart[p.id] || 0;
+                const oldQty = originalCart[p.id] || 0;
                 const currentStock = p.quantity ?? 0;
-                const newStock = currentStock + qty;
+                // In edit mode stock already includes oldQty → preview = stock - oldQty + newQty
+                // In create mode preview = stock + newQty
+                const newStock = isEdit ? (currentStock - oldQty + qty) : (currentStock + qty);
+                const delta = qty - oldQty;
                 return (
                   <div
                     key={p.id}
@@ -242,7 +253,14 @@ const NuovoCaricoPage = () => {
                       </div>
                       <div className="text-xs text-gray-500 mt-0.5">
                         Stock attuale: <strong className="text-gray-700">{currentStock}</strong>
-                        {qty > 0 && <span className="text-emerald-700"> → Nuovo: <strong>{newStock}</strong></span>}
+                        {(qty > 0 || (isEdit && oldQty > 0)) && (
+                          <span className={delta === 0 ? 'text-gray-500' : delta > 0 ? 'text-emerald-700' : 'text-amber-700'}>
+                            {' '}→ Nuovo: <strong>{newStock}</strong>
+                            {isEdit && delta !== 0 && (
+                              <span className="ml-1">({delta > 0 ? '+' : ''}{delta})</span>
+                            )}
+                          </span>
+                        )}
                       </div>
 
                       <div className="mt-2 flex items-center gap-2">

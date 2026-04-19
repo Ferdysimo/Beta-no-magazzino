@@ -16,13 +16,20 @@ const resolveImage = (url) => {
 };
 
 const CarichiMagazzinoPage = () => {
-  const { token } = useAuth();
+  const { token, restaurant } = useAuth();
   const navigate = useNavigate();
   const [carichi, setCarichi] = useState([]);
   const [loading, setLoading] = useState(true);
   const [supplierFilter, setSupplierFilter] = useState('');
   const [search, setSearch] = useState('');
   const [photoLightbox, setPhotoLightbox] = useState(null);
+
+  // Role guard: only magazziniere/admin
+  useEffect(() => {
+    if (restaurant && restaurant.role !== 'magazzino' && restaurant.role !== 'admin') {
+      navigate('/home', { replace: true });
+    }
+  }, [restaurant, navigate]);
 
   const headers = { Authorization: `Bearer ${token}` };
 
