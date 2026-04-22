@@ -365,8 +365,8 @@ const CassaPage = () => {
         )}
 
         {/* Input Section */}
-        <form onSubmit={handleSubmit} className="mb-6">
-          <div className="flex items-center gap-2 bg-white p-2 rounded-lg shadow-sm border border-gray-200">
+        <form onSubmit={handleSubmit} className="mb-4">
+          <div className="flex items-center gap-2 bg-white p-1.5 rounded-lg shadow-sm border border-gray-200">
             {/* Editable Order Number */}
             <input
               data-testid="order-number-input"
@@ -376,7 +376,7 @@ const CassaPage = () => {
                 setOrderNumber(e.target.value.replace(/\D/g, ''));
                 setUserEditedNumber(true);
               }}
-              className="w-20 h-12 text-lg font-bold text-center px-2 border border-gray-300 rounded focus:border-blue-500 focus:outline-none"
+              className="w-20 h-10 text-lg font-bold text-center px-2 border border-gray-300 rounded focus:border-blue-500 focus:outline-none"
               placeholder="N°"
             />
             
@@ -387,7 +387,7 @@ const CassaPage = () => {
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="flex-1 h-12 text-lg px-4 border-0 focus:ring-0 focus:outline-none"
+              className="flex-1 h-10 text-lg px-4 border-0 focus:ring-0 focus:outline-none"
               placeholder=""
               disabled={loading}
             />
@@ -395,7 +395,7 @@ const CassaPage = () => {
               data-testid="order-submit"
               type="submit"
               disabled={loading || !description.trim()}
-              className="action-button h-12 px-6 disabled:opacity-50"
+              className="action-button h-10 px-6 disabled:opacity-50"
             >
               {loading ? <Loader2 className="animate-spin" size={20} /> : 'Invia'}
             </button>
