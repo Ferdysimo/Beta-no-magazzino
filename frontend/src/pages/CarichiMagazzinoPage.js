@@ -196,11 +196,8 @@ const CarichiMagazzinoPage = () => {
         {/* List */}
         <div className="space-y-3">
           {!loading && missingFatturaCount > 0 && (
-            <div className="bg-amber-100 border-l-4 border-amber-500 text-amber-900 px-4 py-2.5 rounded-md text-sm flex items-center gap-2" data-testid="missing-fattura-banner">
-              <Receipt size={16} className="flex-shrink-0" />
-              <span>
-                <strong>{missingFatturaCount}</strong> {missingFatturaCount === 1 ? 'DDT senza fattura' : 'DDT senza fattura'} — evidenziat{missingFatturaCount === 1 ? 'o' : 'i'} in giallo in cima alla lista.
-              </span>
+            <div className="bg-amber-100 border-l-4 border-amber-500 text-amber-900 px-4 py-2.5 rounded-md text-sm font-semibold" data-testid="missing-fattura-banner">
+              {missingFatturaCount} DDT senza fattura
             </div>
           )}
           {loading ? (
