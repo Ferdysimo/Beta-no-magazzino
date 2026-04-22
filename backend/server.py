@@ -334,7 +334,7 @@ async def root():
 
 @api_router.get("/version")
 async def version_check():
-    return {"version": "2026041913", "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {"version": "2026041914", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 @api_router.get("/uploads/{filename}")
 async def serve_upload(filename: str):
@@ -950,7 +950,7 @@ async def get_daily_report(date: str = None, token_data: dict = Depends(verify_t
             "created_at": {"$gte": day_start.isoformat(), "$lte": day_end.isoformat()}
         },
         {"_id": 0}
-    ).sort("order_number", 1).to_list(1000)
+    ).sort("order_number", 1).to_list(None)
     
     archived = await db.archived_orders.find(
         {
@@ -958,7 +958,7 @@ async def get_daily_report(date: str = None, token_data: dict = Depends(verify_t
             "created_at": {"$gte": day_start.isoformat(), "$lte": day_end.isoformat()}
         },
         {"_id": 0}
-    ).sort("order_number", 1).to_list(1000)
+    ).sort("order_number", 1).to_list(None)
     
     # Merge, avoiding duplicates by order id
     seen_ids = {o["id"] for o in orders}
@@ -974,7 +974,7 @@ async def get_daily_report(date: str = None, token_data: dict = Depends(verify_t
             "deleted_at": {"$gte": day_start.isoformat(), "$lte": day_end.isoformat()}
         },
         {"_id": 0}
-    ).to_list(1000)
+    ).to_list(None)
     
     # Get modifications for this day
     modifications = await db.modification_logs.find(
@@ -983,7 +983,7 @@ async def get_daily_report(date: str = None, token_data: dict = Depends(verify_t
             "modified_at": {"$gte": day_start.isoformat(), "$lte": day_end.isoformat()}
         },
         {"_id": 0}
-    ).to_list(1000)
+    ).to_list(None)
     
     # Build report items - combine orders and deleted orders
     report_items = []
