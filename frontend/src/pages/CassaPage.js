@@ -317,51 +317,74 @@ const CassaPage = () => {
           <span className="text-gray-500 text-sm">{showLogs ? '▲ Chiudi' : '▼ Dettagli'}</span>
         </div>
 
-        {/* Logs Detail Panel */}
+        {/* Logs Detail Drawer (side panel, doesn't shift pasta list) */}
         {showLogs && (
-          <div className="mb-4 bg-white rounded-lg shadow-sm border border-gray-200 p-4 max-h-64 overflow-y-auto">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Deletions */}
-              <div>
-                <h3 className="font-bold text-red-600 mb-2 flex items-center gap-2">
-                  <Trash2 size={16} /> Cancellazioni
-                </h3>
-                {logs.deletions.logs.length === 0 ? (
-                  <p className="text-gray-500 text-sm">Nessuna cancellazione oggi</p>
-                ) : (
-                  <ul className="space-y-1">
-                    {logs.deletions.logs.map((log) => (
-                      <li key={log.id} className="text-sm bg-red-50 p-2 rounded">
-                        <span className="font-bold">#{log.order_number}</span> - {log.description}
-                        <br />
-                        <span className="text-gray-500">Cancellato: {formatTime(log.deleted_at)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+          <>
+            {/* Backdrop (click to close) */}
+            <div
+              className="fixed inset-0 bg-black/30 z-40"
+              onClick={() => setShowLogs(false)}
+              data-testid="logs-backdrop"
+            />
+            {/* Side drawer */}
+            <aside
+              className="fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl border-l border-gray-200 z-50 flex flex-col"
+              data-testid="logs-side-drawer"
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <h2 className="font-heading text-lg font-bold text-gray-900 uppercase">Dettagli log</h2>
+                <button
+                  onClick={() => setShowLogs(false)}
+                  className="w-8 h-8 flex items-center justify-center bg-white hover:bg-gray-100 border border-gray-300 rounded-md text-gray-700"
+                  title="Chiudi"
+                  data-testid="logs-close-btn"
+                >
+                  ✕
+                </button>
               </div>
-              
-              {/* Modifications */}
-              <div>
-                <h3 className="font-bold text-amber-600 mb-2 flex items-center gap-2">
-                  <Edit2 size={16} /> Modifiche
-                </h3>
-                {logs.modifications.logs.length === 0 ? (
-                  <p className="text-gray-500 text-sm">Nessuna modifica oggi</p>
-                ) : (
-                  <ul className="space-y-1">
-                    {logs.modifications.logs.map((log) => (
-                      <li key={log.id} className="text-sm bg-amber-50 p-2 rounded">
-                        <span className="font-bold">#{log.order_number}</span>: {log.old_description} → {log.new_description}
-                        <br />
-                        <span className="text-gray-500">Modificato: {formatTime(log.modified_at)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+              <div className="flex-1 overflow-y-auto p-4 space-y-5">
+                {/* Deletions */}
+                <div>
+                  <h3 className="font-bold text-red-600 mb-2 flex items-center gap-2">
+                    <Trash2 size={16} /> Cancellazioni ({logs.deletions.count})
+                  </h3>
+                  {logs.deletions.logs.length === 0 ? (
+                    <p className="text-gray-500 text-sm">Nessuna cancellazione oggi</p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {logs.deletions.logs.map((log) => (
+                        <li key={log.id} className="text-sm bg-red-50 p-2 rounded">
+                          <span className="font-bold">#{log.order_number}</span> - {log.description}
+                          <br />
+                          <span className="text-gray-500">Cancellato: {formatTime(log.deleted_at)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {/* Modifications */}
+                <div>
+                  <h3 className="font-bold text-amber-600 mb-2 flex items-center gap-2">
+                    <Edit2 size={16} /> Modifiche ({logs.modifications.count})
+                  </h3>
+                  {logs.modifications.logs.length === 0 ? (
+                    <p className="text-gray-500 text-sm">Nessuna modifica oggi</p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {logs.modifications.logs.map((log) => (
+                        <li key={log.id} className="text-sm bg-amber-50 p-2 rounded">
+                          <span className="font-bold">#{log.order_number}</span>: {log.old_description} → {log.new_description}
+                          <br />
+                          <span className="text-gray-500">Modificato: {formatTime(log.modified_at)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
-            </div>
-          </div>
+            </aside>
+          </>
         )}
 
         {/* Input Section */}
