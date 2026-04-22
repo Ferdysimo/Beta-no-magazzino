@@ -4,7 +4,7 @@ import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import { formatItalianDateTime } from '../utils/formatDate';
-import { Plus, Search, X, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Search, X, Edit2, Trash2, Receipt, Upload } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -23,6 +23,11 @@ const CarichiMagazzinoPage = () => {
   const [supplierFilter, setSupplierFilter] = useState('');
   const [search, setSearch] = useState('');
   const [photoLightbox, setPhotoLightbox] = useState(null);
+  const [fatturaUploadId, setFatturaUploadId] = useState(null); // id of carico currently uploading
+
+  // Hidden file input for fattura uploads
+  const fatturaFileInputRef = React.useRef(null);
+  const [fatturaTargetId, setFatturaTargetId] = useState(null);
 
   // Role guard: only magazziniere/admin
   useEffect(() => {
@@ -77,9 +82,61 @@ const CarichiMagazzinoPage = () => {
     }
   };
 
+  const handleFatturaBtnClick = (caricoId) => {
+    setFatturaTargetId(caricoId);
+    // Reset value so selecting the same file again re-triggers onChange
+    if (fatturaFileInputRef.current) fatturaFileInputRef.current.value = '';
+    fatturaFileInputRef.current?.click();
+  };
+
+  const handleFatturaFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    const caricoId = fatturaTargetId;
+    if (!file || !caricoId) return;
+    setFatturaUploadId(caricoId);
+    try {
+      const b64 = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
+      await axios.put(
+        `${API}/carichi/${caricoId}/fattura`,
+        { fattura_data: b64 },
+        { headers }
+      );
+      await fetch();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Errore upload fattura');
+    } finally {
+      setFatturaUploadId(null);
+      setFatturaTargetId(null);
+    }
+  };
+
+  const handleFatturaDelete = async (c) => {
+    if (!window.confirm(`Rimuovere la fattura associata al carico di ${c.supplier_name}?`)) return;
+    try {
+      await axios.delete(`${API}/carichi/${c.id}/fattura`, { headers });
+      fetch();
+    } catch (e) {
+      alert(e.response?.data?.detail || 'Errore rimozione fattura');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
       <Header />
+      {/* Hidden file input for fattura upload */}
+      <input
+        ref={fatturaFileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFatturaFileChange}
+        data-testid="fattura-file-input"
+      />
       <main className="max-w-4xl mx-auto p-4 sm:p-6">
         <div className="flex items-center justify-between mb-5">
           <h1 className="font-heading text-2xl sm:text-3xl font-bold text-gray-900 uppercase tracking-wide">
@@ -136,17 +193,62 @@ const CarichiMagazzinoPage = () => {
             </div>
           ) : filtered.map(c => (
             <div key={c.id} data-testid={`carico-${c.id}`} className="bg-white rounded-lg border border-gray-200 p-3 flex gap-3">
+              {/* DDT photo */}
               {c.photo_url ? (
                 <button
                   onClick={() => setPhotoLightbox(c.photo_url)}
-                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-200 hover:ring-2 hover:ring-[#F5C518] transition-all"
+                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-200 hover:ring-2 hover:ring-[#F5C518] transition-all relative group"
+                  title="Foto DDT"
                 >
                   <img src={resolveImage(c.photo_url)} alt="DDT" className="w-full h-full object-cover" />
+                  <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] py-0.5 text-center">DDT</span>
                 </button>
               ) : (
                 <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg bg-gray-100 flex items-center justify-center text-gray-300 text-xs flex-shrink-0 border border-gray-200">
                   No foto
                 </div>
+              )}
+
+              {/* Fattura photo / upload */}
+              {c.fattura_url ? (
+                <div className="relative flex-shrink-0 group">
+                  <button
+                    onClick={() => setPhotoLightbox(c.fattura_url)}
+                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg bg-gray-100 overflow-hidden border border-gray-200 hover:ring-2 hover:ring-[#F5C518] transition-all relative block"
+                    data-testid={`fattura-view-${c.id}`}
+                    title="Foto fattura"
+                  >
+                    <img src={resolveImage(c.fattura_url)} alt="Fattura" className="w-full h-full object-cover" />
+                    <span className="absolute bottom-0 left-0 right-0 bg-emerald-700/80 text-white text-[10px] py-0.5 text-center flex items-center justify-center gap-1">
+                      <Receipt size={10} /> Fattura
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => handleFatturaDelete(c)}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Rimuovi fattura"
+                    data-testid={`fattura-remove-${c.id}`}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => handleFatturaBtnClick(c.id)}
+                  disabled={fatturaUploadId === c.id}
+                  data-testid={`fattura-upload-${c.id}`}
+                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg bg-emerald-50 hover:bg-emerald-100 border-2 border-dashed border-emerald-300 hover:border-emerald-500 flex flex-col items-center justify-center text-emerald-700 text-[10px] flex-shrink-0 transition-colors disabled:opacity-50 disabled:cursor-wait"
+                  title="Aggiungi foto fattura"
+                >
+                  {fatturaUploadId === c.id ? (
+                    <span className="text-[10px]">Carico...</span>
+                  ) : (
+                    <>
+                      <Upload size={18} className="mb-1" />
+                      <span className="font-semibold leading-tight text-center">Aggiungi<br/>Fattura</span>
+                    </>
+                  )}
+                </button>
               )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">

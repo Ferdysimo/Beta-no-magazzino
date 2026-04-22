@@ -271,13 +271,18 @@ class CaricoCreate(BaseModel):
     supplier_name: str
     ddt_number_fornitore: str
     photo_data: str  # required base64
+    fattura_data: Optional[str] = None  # optional base64 fattura
     items: List[CaricoItem]
 
 class CaricoUpdate(BaseModel):
     supplier_name: Optional[str] = None
     ddt_number_fornitore: Optional[str] = None
     photo_data: Optional[str] = None  # optional on update
+    fattura_data: Optional[str] = None  # optional on update
     items: Optional[List[CaricoItem]] = None
+
+class FatturaUpload(BaseModel):
+    fattura_data: str
 
 # Auth helpers
 def save_image_to_disk(base64_data: str, prefix: str) -> str:
@@ -1684,6 +1689,8 @@ def _serialize_carico(c: dict) -> dict:
     c = {k: v for k, v in c.items() if k != "_id"}
     photo = c.pop("photo_file", None)
     c["photo_url"] = f"/api/uploads/{photo}" if photo else ""
+    fattura = c.pop("fattura_file", None)
+    c["fattura_url"] = f"/api/uploads/{fattura}" if fattura else ""
     return c
 
 @api_router.post("/carichi")
@@ -1700,6 +1707,7 @@ async def create_carico(data: CaricoCreate, token_data: dict = Depends(verify_to
         raise HTTPException(status_code=400, detail="Aggiungi almeno un prodotto con quantità > 0")
 
     photo_filename = save_image_to_disk(data.photo_data, "carico")
+    fattura_filename = save_image_to_disk(data.fattura_data, "fattura_carico") if data.fattura_data else ""
     carico_id = str(uuid.uuid4())
     now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -1708,6 +1716,7 @@ async def create_carico(data: CaricoCreate, token_data: dict = Depends(verify_to
         "supplier_name": data.supplier_name,
         "ddt_number_fornitore": data.ddt_number_fornitore or "",
         "photo_file": photo_filename,
+        "fattura_file": fattura_filename,
         "items": clean_items,
         "created_at": now_iso,
         "updated_at": now_iso,
@@ -1780,6 +1789,15 @@ async def update_carico(carico_id: str, data: CaricoUpdate, token_data: dict = D
                 op.unlink()
         update_fields["photo_file"] = save_image_to_disk(data.photo_data, "carico")
 
+    if data.fattura_data:
+        # Replace fattura file
+        old_fattura = old.get("fattura_file")
+        if old_fattura:
+            op = UPLOADS_DIR / old_fattura
+            if op.exists():
+                op.unlink()
+        update_fields["fattura_file"] = save_image_to_disk(data.fattura_data, "fattura_carico")
+
     if data.items is not None:
         new_items = [i.dict() for i in data.items if i.quantity_added and i.quantity_added > 0]
         if not new_items:
@@ -1826,8 +1844,58 @@ async def delete_carico(carico_id: str, token_data: dict = Depends(verify_token)
         p = UPLOADS_DIR / ph
         if p.exists():
             p.unlink()
+    # Delete fattura file
+    ft = old.get("fattura_file")
+    if ft:
+        p = UPLOADS_DIR / ft
+        if p.exists():
+            p.unlink()
     await db.carichi_magazzino.delete_one({"id": carico_id})
     return {"message": "Carico cancellato e stock ripristinato"}
+
+
+@api_router.put("/carichi/{carico_id}/fattura")
+async def upload_carico_fattura(carico_id: str, data: FatturaUpload, token_data: dict = Depends(verify_token)):
+    """Attach/replace the fattura image for a given carico."""
+    if token_data.get("role") not in ("magazzino", "admin"):
+        raise HTTPException(status_code=403, detail="Solo magazziniere/admin")
+    doc = await db.carichi_magazzino.find_one({"id": carico_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Carico non trovato")
+    if not data.fattura_data:
+        raise HTTPException(status_code=400, detail="Immagine fattura mancante")
+    old_fattura = doc.get("fattura_file")
+    if old_fattura:
+        op = UPLOADS_DIR / old_fattura
+        if op.exists():
+            op.unlink()
+    filename = save_image_to_disk(data.fattura_data, "fattura_carico")
+    updated = await db.carichi_magazzino.find_one_and_update(
+        {"id": carico_id},
+        {"$set": {"fattura_file": filename, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        return_document=True,
+    )
+    return _serialize_carico(updated)
+
+
+@api_router.delete("/carichi/{carico_id}/fattura")
+async def delete_carico_fattura(carico_id: str, token_data: dict = Depends(verify_token)):
+    """Remove the fattura image from a carico."""
+    if token_data.get("role") not in ("magazzino", "admin"):
+        raise HTTPException(status_code=403, detail="Solo magazziniere/admin")
+    doc = await db.carichi_magazzino.find_one({"id": carico_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Carico non trovato")
+    old_fattura = doc.get("fattura_file")
+    if old_fattura:
+        op = UPLOADS_DIR / old_fattura
+        if op.exists():
+            op.unlink()
+    await db.carichi_magazzino.update_one(
+        {"id": carico_id},
+        {"$unset": {"fattura_file": ""}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"message": "Fattura rimossa"}
 
 # ==================== ANALISI MAGAZZINO ====================
 
