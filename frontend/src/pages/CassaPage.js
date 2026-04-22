@@ -199,6 +199,8 @@ const CassaPage = () => {
       setEditValue('');
       // Refresh logs after modification
       setTimeout(fetchLogs, 500);
+      // Return focus to the "send next pasta" input so cashier can keep typing
+      setTimeout(() => inputRef.current?.focus(), 50);
     } catch (error) {
       console.error('Error updating order:', error);
     }
