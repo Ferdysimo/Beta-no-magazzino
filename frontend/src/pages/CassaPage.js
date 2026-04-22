@@ -294,28 +294,24 @@ const CassaPage = () => {
           </p>
         </div>
 
-        {/* Logs Counter Bar */}
-        <div 
-          className="mb-4 bg-white rounded-lg shadow-sm border border-gray-200 p-3 flex items-center justify-between cursor-pointer hover:bg-gray-50"
+        {/* Floating side-tab trigger (fixed on right edge, always visible) */}
+        <button
           onClick={() => setShowLogs(!showLogs)}
           data-testid="logs-counter-bar"
+          title="Dettagli log giornata"
+          className="fixed top-1/2 -translate-y-1/2 right-0 z-30 bg-white hover:bg-gray-50 border border-r-0 border-gray-300 rounded-l-lg shadow-md px-2 py-3 flex flex-col items-center gap-2 text-xs"
         >
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <Trash2 size={18} className="text-red-500" />
-              <span className="font-medium">
-                Cancellate oggi: <strong className="text-red-600">{logs.deletions.count}</strong>
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Edit2 size={18} className="text-amber-500" />
-              <span className="font-medium">
-                Modificate oggi: <strong className="text-amber-600">{logs.modifications.count}</strong>
-              </span>
-            </div>
+          <div className="flex items-center gap-1 text-red-600 font-bold">
+            <Trash2 size={14} />
+            <span>{logs.deletions.count}</span>
           </div>
-          <span className="text-gray-500 text-sm">{showLogs ? '▲ Chiudi' : '▼ Dettagli'}</span>
-        </div>
+          <div className="h-px w-5 bg-gray-200" />
+          <div className="flex items-center gap-1 text-amber-600 font-bold">
+            <Edit2 size={14} />
+            <span>{logs.modifications.count}</span>
+          </div>
+          <div className="text-[9px] text-gray-500 mt-1 [writing-mode:vertical-rl] rotate-180 tracking-wide">LOG</div>
+        </button>
 
         {/* Logs Detail Drawer (side panel, doesn't shift pasta list) */}
         {showLogs && (
