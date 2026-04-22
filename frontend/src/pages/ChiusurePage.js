@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import axios from 'axios';
 import { X, FileText, Trash2, Eye, Search } from 'lucide-react';
+import { compressImage, friendlyUploadError } from '../utils/compressImage';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -27,6 +28,9 @@ const ChiusurePage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [compressing, setCompressing] = useState(false);
+  const [compressedData, setCompressedData] = useState(null);
   
   // List state
   const [chiusure, setChiusure] = useState([]);
@@ -65,73 +69,78 @@ const ChiusurePage = () => {
   }, [token, searchTerm, filterTipologia]);
 
   // Handle file selection
-  const handleFileSelect = (e) => {
+  const handleFileSelect = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
-    if (file.size > 16 * 1024 * 1024) {
-      setError('File troppo grande. Massimo 16 MB.');
+
+    if (file.size > 30 * 1024 * 1024) {
+      setError('File troppo grande. Massimo 30 MB.');
       return;
     }
-    
+
     setSelectedFile(file);
     setError('');
-    
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPreview(reader.result);
-    };
-    reader.readAsDataURL(file);
+    setCompressing(true);
+    try {
+      const { dataUrl } = await compressImage(file);
+      setPreview(dataUrl);
+      setCompressedData(dataUrl);
+    } catch (err) {
+      setError('Errore elaborazione foto: ' + (err.message || 'riprova'));
+      setSelectedFile(null);
+      setPreview(null);
+      setCompressedData(null);
+    } finally {
+      setCompressing(false);
+    }
   };
 
   // Handle form submit
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!selectedFile) {
+
+    if (!selectedFile || !compressedData) {
       setError('Seleziona un file per la chiusura');
       return;
     }
-    
+
     setLoading(true);
     setError('');
-    
+    setUploadProgress(0);
+
     try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        try {
-          await axios.post(`${API}/chiusure`, {
-            description,
-            tipologia,
-            control_code: controlCode,
-            image_data: reader.result,
-            chiusura_date: new Date(chiusuraDate).toISOString()
-          }, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          
-          // Reset form
-          setSelectedFile(null);
-          setPreview(null);
-          setDescription('');
-          setTipologia('Piatti');
-          setControlCode('');
-          const now = new Date();
-          setChiusuraDate(new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
-          setSuccess('Chiusura caricata con successo!');
-          setTimeout(() => setSuccess(''), 3000);
-          
-          fetchChiusure();
-        } catch (err) {
-          setError(err.response?.data?.detail || 'Errore nel caricamento');
-        } finally {
-          setLoading(false);
-        }
-      };
-      reader.readAsDataURL(selectedFile);
+      await axios.post(`${API}/chiusure`, {
+        description,
+        tipologia,
+        control_code: controlCode,
+        image_data: compressedData,
+        chiusura_date: new Date(chiusuraDate).toISOString()
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 120000,
+        onUploadProgress: (evt) => {
+          if (evt.total) setUploadProgress(Math.round((evt.loaded / evt.total) * 100));
+        },
+      });
+
+      // Reset form
+      setSelectedFile(null);
+      setPreview(null);
+      setCompressedData(null);
+      setDescription('');
+      setTipologia('Piatti');
+      setControlCode('');
+      const now = new Date();
+      setChiusuraDate(new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+      setSuccess('Chiusura caricata con successo!');
+      setTimeout(() => setSuccess(''), 3000);
+
+      fetchChiusure();
     } catch (err) {
-      setError('Errore nella lettura del file');
+      setError(friendlyUploadError(err));
+    } finally {
       setLoading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -290,11 +299,15 @@ const ChiusurePage = () => {
             <div className="bg-gray-50 -mx-6 -mb-6 mt-6 px-6 py-4 rounded-b-lg">
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || compressing}
                 className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-md font-medium transition-colors disabled:opacity-50"
                 data-testid="chiusura-upload-btn"
               >
-                {loading ? 'Caricamento...' : 'Carica chiusura'}
+                {compressing
+                  ? 'Elaboro foto...'
+                  : loading
+                    ? (uploadProgress > 0 && uploadProgress < 100 ? `Caricamento... ${uploadProgress}%` : 'Caricamento...')
+                    : 'Carica chiusura'}
               </button>
             </div>
           </form>

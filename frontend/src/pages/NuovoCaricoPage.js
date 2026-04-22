@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import { Camera, Minus, Plus, X } from 'lucide-react';
+import { compressImage, friendlyUploadError } from '../utils/compressImage';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -38,6 +39,8 @@ const NuovoCaricoPage = () => {
   const [originalCart, setOriginalCart] = useState({}); // edit mode: snapshot of saved qtys
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [photoProcessing, setPhotoProcessing] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [keypadProductId, setKeypadProductId] = useState(null);
   const [keypadValue, setKeypadValue] = useState('');
   const fileRef = useRef(null);
@@ -94,15 +97,19 @@ const NuovoCaricoPage = () => {
   const inc = (p) => setQty(p.id, (cart[p.id] || 0) + 1);
   const dec = (p) => setQty(p.id, (cart[p.id] || 0) - 1);
 
-  const handleFile = (e) => {
+  const handleFile = async (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    const r = new FileReader();
-    r.onload = () => {
-      setPhotoPreview(r.result);
-      setPhotoData(r.result);
-    };
-    r.readAsDataURL(f);
+    setPhotoProcessing(true);
+    try {
+      const { dataUrl } = await compressImage(f);
+      setPhotoPreview(dataUrl);
+      setPhotoData(dataUrl);
+    } catch (err) {
+      alert('Errore elaborazione foto: ' + (err.message || 'riprova'));
+    } finally {
+      setPhotoProcessing(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -119,6 +126,7 @@ const NuovoCaricoPage = () => {
     if (items.length === 0) { alert('Inserisci almeno un prodotto con quantità > 0'); return; }
 
     setSubmitting(true);
+    setUploadProgress(0);
     try {
       const body = {
         supplier_name: selectedSupplier,
@@ -127,16 +135,25 @@ const NuovoCaricoPage = () => {
       };
       if (photoData) body.photo_data = photoData;
 
+      const axiosConfig = {
+        headers,
+        timeout: 120000,
+        onUploadProgress: (evt) => {
+          if (evt.total) setUploadProgress(Math.round((evt.loaded / evt.total) * 100));
+        },
+      };
+
       if (isEdit) {
-        await axios.put(`${API}/carichi/${id}`, body, { headers });
+        await axios.put(`${API}/carichi/${id}`, body, axiosConfig);
       } else {
-        await axios.post(`${API}/carichi`, { ...body, photo_data: photoData }, { headers });
+        await axios.post(`${API}/carichi`, { ...body, photo_data: photoData }, axiosConfig);
       }
       navigate('/magazzino/carichi');
     } catch (e) {
-      alert(e.response?.data?.detail || 'Errore salvataggio');
+      alert(friendlyUploadError(e));
     } finally {
       setSubmitting(false);
+      setUploadProgress(0);
     }
   };
 
@@ -203,10 +220,11 @@ const NuovoCaricoPage = () => {
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
+                disabled={photoProcessing}
                 data-testid="carico-photo-btn"
-                className="flex items-center gap-2 px-4 py-3 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-lg text-sm font-medium text-gray-700"
+                className="flex items-center gap-2 px-4 py-3 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 disabled:opacity-60 disabled:cursor-wait"
               >
-                <Camera size={18} /> {photoPreview || existingPhotoUrl ? 'Cambia foto' : 'Scatta / Carica foto'}
+                <Camera size={18} /> {photoProcessing ? 'Elaboro foto...' : (photoPreview || existingPhotoUrl ? 'Cambia foto' : 'Scatta / Carica foto')}
               </button>
               <input
                 ref={fileRef}
@@ -321,7 +339,11 @@ const NuovoCaricoPage = () => {
             disabled={totalItems === 0 || submitting || !selectedSupplier || (!isEdit && !photoData)}
             className="flex-1 px-5 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow"
           >
-            {submitting ? 'Salvataggio...' : (isEdit ? 'SALVA MODIFICHE' : 'CARICA NEL MAGAZZINO')}
+            {submitting
+              ? (uploadProgress > 0 && uploadProgress < 100
+                  ? `Caricamento... ${uploadProgress}%`
+                  : 'Salvataggio...')
+              : (isEdit ? 'SALVA MODIFICHE' : 'CARICA NEL MAGAZZINO')}
           </button>
         </div>
       </div>

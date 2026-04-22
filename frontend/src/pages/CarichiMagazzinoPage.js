@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import { formatItalianDateTime } from '../utils/formatDate';
 import { Plus, Search, X, Edit2, Trash2, Receipt, Upload } from 'lucide-react';
+import { compressImage, friendlyUploadError } from '../utils/compressImage';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -107,20 +108,15 @@ const CarichiMagazzinoPage = () => {
     if (!file || !caricoId) return;
     setFatturaUploadId(caricoId);
     try {
-      const b64 = await new Promise((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(r.result);
-        r.onerror = reject;
-        r.readAsDataURL(file);
-      });
+      const { dataUrl } = await compressImage(file);
       await axios.put(
         `${API}/carichi/${caricoId}/fattura`,
-        { fattura_data: b64 },
-        { headers }
+        { fattura_data: dataUrl },
+        { headers, timeout: 120000 }
       );
       await fetch();
     } catch (err) {
-      alert(err.response?.data?.detail || 'Errore upload fattura');
+      alert(friendlyUploadError(err));
     } finally {
       setFatturaUploadId(null);
       setFatturaTargetId(null);
