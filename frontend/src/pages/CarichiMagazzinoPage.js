@@ -62,7 +62,7 @@ const CarichiMagazzinoPage = () => {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return carichi.filter(c => {
+    const list = carichi.filter(c => {
       if (supplierFilter && c.supplier_name !== supplierFilter) return false;
       if (q) {
         const hay = `${c.supplier_name} ${c.ddt_number_fornitore} ${(c.items || []).map(i => i.product_name).join(' ')}`.toLowerCase();
@@ -70,7 +70,19 @@ const CarichiMagazzinoPage = () => {
       }
       return true;
     });
+    // DDT without fattura on top (as reminder), then by created_at desc
+    return list.sort((a, b) => {
+      const aMissing = !a.fattura_url ? 0 : 1;
+      const bMissing = !b.fattura_url ? 0 : 1;
+      if (aMissing !== bMissing) return aMissing - bMissing;
+      return (b.created_at || '').localeCompare(a.created_at || '');
+    });
   }, [carichi, supplierFilter, search]);
+
+  const missingFatturaCount = useMemo(
+    () => filtered.filter(c => !c.fattura_url).length,
+    [filtered]
+  );
 
   const handleDelete = async (c) => {
     if (!window.confirm(`Cancellare il carico di ${c.supplier_name}? Le quantità verranno sottratte dal magazzino.`)) return;
@@ -183,6 +195,14 @@ const CarichiMagazzinoPage = () => {
 
         {/* List */}
         <div className="space-y-3">
+          {!loading && missingFatturaCount > 0 && (
+            <div className="bg-amber-100 border-l-4 border-amber-500 text-amber-900 px-4 py-2.5 rounded-md text-sm flex items-center gap-2" data-testid="missing-fattura-banner">
+              <Receipt size={16} className="flex-shrink-0" />
+              <span>
+                <strong>{missingFatturaCount}</strong> {missingFatturaCount === 1 ? 'DDT senza fattura' : 'DDT senza fattura'} — evidenziat{missingFatturaCount === 1 ? 'o' : 'i'} in giallo in cima alla lista.
+              </span>
+            </div>
+          )}
           {loading ? (
             <div className="bg-white rounded-lg border border-gray-200 p-6 text-center text-gray-400">
               Caricamento...
@@ -191,8 +211,18 @@ const CarichiMagazzinoPage = () => {
             <div className="bg-white rounded-lg border border-gray-200 p-6 text-center text-gray-400 text-sm">
               Nessun carico trovato.
             </div>
-          ) : filtered.map(c => (
-            <div key={c.id} data-testid={`carico-${c.id}`} className="bg-white rounded-lg border border-gray-200 p-3 flex gap-3">
+          ) : filtered.map(c => {
+            const missingFattura = !c.fattura_url;
+            return (
+            <div
+              key={c.id}
+              data-testid={`carico-${c.id}`}
+              className={`rounded-lg border p-3 flex gap-3 transition-colors ${
+                missingFattura
+                  ? 'bg-amber-50 border-amber-300 border-l-4 border-l-amber-500'
+                  : 'bg-white border-gray-200'
+              }`}
+            >
               {/* DDT photo */}
               {c.photo_url ? (
                 <button
@@ -289,7 +319,8 @@ const CarichiMagazzinoPage = () => {
                 </ul>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </main>
 
