@@ -1413,9 +1413,9 @@ async def update_product(product_id: str, data: ProductUpdate, token_data: dict 
 
 @api_router.patch("/products/{product_id}/quantity")
 async def update_product_quantity(product_id: str, data: ProductQuantityUpdate, token_data: dict = Depends(verify_token)):
-    """Update stock quantity only. Magazziniere or admin only."""
-    if token_data.get("role") not in ("magazzino", "admin"):
-        raise HTTPException(status_code=403, detail="Solo il magazziniere può modificare le quantità")
+    """Force stock override. ADMIN ONLY (Inventario / Forza il sistema)."""
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo l'Admin può forzare le quantità")
     result = await db.products.find_one_and_update(
         {"id": product_id},
         {"$set": {"quantity": max(0, data.quantity)}},

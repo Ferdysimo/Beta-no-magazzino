@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
-import { Search } from 'lucide-react';
+import { Search, Check, X, Pencil } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -21,6 +21,11 @@ const InventarioPage = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [supplierFilter, setSupplierFilter] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editValue, setEditValue] = useState('');
+  const [savingId, setSavingId] = useState(null);
+
+  const isAdmin = restaurant?.role === 'admin';
 
   // Role guard: only magazziniere/admin
   useEffect(() => {
@@ -62,6 +67,36 @@ const InventarioPage = () => {
     () => filtered.reduce((s, p) => s + (Number(p.quantity) || 0), 0),
     [filtered]
   );
+
+  const startEdit = (p) => {
+    setEditingId(p.id);
+    setEditValue(String(p.quantity ?? 0));
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditValue('');
+  };
+  const saveEdit = async (p) => {
+    const n = parseInt(editValue, 10);
+    if (Number.isNaN(n) || n < 0) {
+      alert('Inserisci un numero intero >= 0');
+      return;
+    }
+    setSavingId(p.id);
+    try {
+      const res = await axios.patch(
+        `${API}/products/${p.id}/quantity`,
+        { quantity: n },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setProducts(list => list.map(x => x.id === p.id ? { ...x, quantity: res.data.quantity } : x));
+      cancelEdit();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Errore salvataggio');
+    } finally {
+      setSavingId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -117,7 +152,7 @@ const InventarioPage = () => {
             <div className="flex-1 px-3">Prodotto</div>
             <div className="w-32">Unità</div>
             <div className="w-48">Fornitore</div>
-            <div className="w-28 text-right">Quantità</div>
+            <div className="w-40 text-right">Quantità</div>
           </div>
 
           {loading ? (
@@ -147,10 +182,56 @@ const InventarioPage = () => {
                   </div>
                   <div className="w-32 text-sm text-gray-600 hidden sm:block">{p.unit || '—'}</div>
                   <div className="w-48 text-sm text-gray-600 hidden sm:block truncate">{p.supplier || '—'}</div>
-                  <div className="w-full sm:w-28 sm:text-right">
-                    <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-bold bg-blue-50 text-blue-700 border border-blue-100">
-                      {p.quantity ?? 0}
-                    </span>
+                  <div className="w-full sm:w-40 sm:text-right">
+                    {editingId === p.id ? (
+                      <div className="flex items-center gap-1 sm:justify-end">
+                        <input
+                          data-testid={`inv-edit-input-${p.id}`}
+                          type="number"
+                          min="0"
+                          value={editValue}
+                          onChange={e => setEditValue(e.target.value.replace(/[^0-9]/g, ''))}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') saveEdit(p);
+                            if (e.key === 'Escape') cancelEdit();
+                          }}
+                          autoFocus
+                          className="w-20 h-8 px-2 border border-blue-300 rounded-md text-sm text-right focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                        />
+                        <button
+                          data-testid={`inv-save-${p.id}`}
+                          onClick={() => saveEdit(p)}
+                          disabled={savingId === p.id}
+                          className="w-8 h-8 flex items-center justify-center bg-emerald-500 hover:bg-emerald-600 text-white rounded-md disabled:opacity-50"
+                          title="Salva"
+                        >
+                          <Check size={16} />
+                        </button>
+                        <button
+                          onClick={cancelEdit}
+                          className="w-8 h-8 flex items-center justify-center bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md"
+                          title="Annulla"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 sm:justify-end">
+                        <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                          {p.quantity ?? 0}
+                        </span>
+                        {isAdmin && (
+                          <button
+                            data-testid={`inv-edit-btn-${p.id}`}
+                            onClick={() => startEdit(p)}
+                            className="w-8 h-8 flex items-center justify-center bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-md"
+                            title="Forza quantità (Admin)"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </li>
               ))}
@@ -159,7 +240,9 @@ const InventarioPage = () => {
         </div>
 
         <p className="mt-4 text-xs text-gray-400">
-          Sola visualizzazione — la modifica delle quantità verrà gestita da un account dedicato in futuro.
+          {isAdmin
+            ? 'Modalità Admin: puoi forzare/sovrascrivere le quantità a magazzino (cliccando la matita).'
+            : 'Sola visualizzazione — la modifica delle quantità è riservata all\'Admin.'}
         </p>
       </main>
     </div>
