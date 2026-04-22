@@ -68,6 +68,18 @@ async def midnight_reset():
             await db.orders.delete_many({})
             logger.info(f"Archived {len(all_orders)} orders")
         
+        # Archive and clear today's cancellation/modification logs
+        del_logs = await db.deletion_logs.find({}, {"_id": 0}).to_list(10000)
+        if del_logs:
+            await db.archived_deletion_logs.insert_many([{**l} for l in del_logs])
+            await db.deletion_logs.delete_many({})
+            logger.info(f"Archived {len(del_logs)} deletion logs")
+        mod_logs = await db.modification_logs.find({}, {"_id": 0}).to_list(10000)
+        if mod_logs:
+            await db.archived_modification_logs.insert_many([{**l} for l in mod_logs])
+            await db.modification_logs.delete_many({})
+            logger.info(f"Archived {len(mod_logs)} modification logs")
+
         # Reset all restaurant counters to 0
         await db.restaurants.update_many(
             {"role": "restaurant"},
@@ -906,25 +918,29 @@ async def get_modification_logs(token_data: dict = Depends(verify_token)):
 @api_router.get("/logs/today")
 async def get_today_logs(token_data: dict = Depends(verify_token)):
     restaurant_id = token_data["restaurant_id"]
-    
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    
+
+    # Cut-off at midnight in Rome timezone (operating day), converted to UTC
+    # because logs are stored with UTC isoformat strings.
+    now_rome = datetime.now(ROME_TZ)
+    midnight_rome = now_rome.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start_utc = midnight_rome.astimezone(timezone.utc)
+
     deletions = await db.deletion_logs.find(
         {
             "restaurant_id": restaurant_id,
-            "deleted_at": {"$gte": today_start.isoformat()}
+            "deleted_at": {"$gte": today_start_utc.isoformat()}
         },
         {"_id": 0}
     ).sort("deleted_at", -1).to_list(500)
-    
+
     modifications = await db.modification_logs.find(
         {
             "restaurant_id": restaurant_id,
-            "modified_at": {"$gte": today_start.isoformat()}
+            "modified_at": {"$gte": today_start_utc.isoformat()}
         },
         {"_id": 0}
     ).sort("modified_at", -1).to_list(500)
-    
+
     return {
         "deletions": {"count": len(deletions), "logs": deletions},
         "modifications": {"count": len(modifications), "logs": modifications}
