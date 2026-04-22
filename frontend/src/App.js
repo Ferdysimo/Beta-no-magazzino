@@ -26,6 +26,7 @@ import CarichiMagazzinoPage from './pages/CarichiMagazzinoPage';
 import NuovoCaricoPage from './pages/NuovoCaricoPage';
 import InventarioPage from './pages/InventarioPage';
 import AnalisiPage from './pages/AnalisiPage';
+import UpdateBanner from './components/UpdateBanner';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -195,6 +196,7 @@ function AppRoutes() {
 function App() {
   return (
     <div className="App">
+      <UpdateBanner />
       <BrowserRouter>
         <AuthProvider>
           <AppRoutes />
