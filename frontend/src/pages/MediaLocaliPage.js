@@ -30,7 +30,7 @@ const MediaLocaliPage = () => {
     return (
       <div className="min-h-screen bg-[#F5F5F5]">
         <Header />
-        <main className="max-w-5xl mx-auto p-6">
+        <main className="max-w-3xl mx-auto p-6">
           <p className="text-gray-600">Caricamento...</p>
         </main>
       </div>
@@ -41,7 +41,7 @@ const MediaLocaliPage = () => {
     return (
       <div className="min-h-screen bg-[#F5F5F5]">
         <Header />
-        <main className="max-w-5xl mx-auto p-6">
+        <main className="max-w-3xl mx-auto p-6">
           <p className="text-red-600">Errore nel caricamento dei dati</p>
         </main>
       </div>
@@ -51,7 +51,7 @@ const MediaLocaliPage = () => {
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
       <Header />
-      <main className="max-w-5xl mx-auto p-6">
+      <main className="max-w-3xl mx-auto p-6">
         <h1 className="font-heading text-3xl font-bold text-gray-800 mb-6">
           Numeri - report totali di giornata
         </h1>
