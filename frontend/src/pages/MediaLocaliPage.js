@@ -56,41 +56,64 @@ const MediaLocaliPage = () => {
           Numeri - report totali di giornata
         </h1>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-300">
-                <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Giorno</th>
-                {data.locations.map(loc => (
-                  <th key={loc} className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">{loc}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {/* Media row */}
-              <tr className="border-b-2 border-gray-400 bg-gray-50">
-                <td className="px-4 py-3 font-bold text-gray-800">Media</td>
-                {data.locations.map(loc => (
-                  <td key={loc} className="px-4 py-3 font-bold text-gray-800">
-                    {data.averages[loc]?.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0'}
-                  </td>
-                ))}
-              </tr>
+        {(() => {
+          const displayName = (loc) => (loc === 'Largo di Brazzà' ? 'Brazzà' : loc);
+          const averagesCeil = Object.fromEntries(
+            data.locations.map(loc => [loc, Math.ceil(data.averages[loc] || 0)])
+          );
+          const totalAverage = data.locations.reduce((sum, loc) => sum + averagesCeil[loc], 0);
 
-              {/* Daily rows */}
-              {data.days.map((day, idx) => (
-                <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-2 text-gray-700 text-sm">{day.date}</td>
-                  {data.locations.map(loc => (
-                    <td key={loc} className="px-4 py-2 text-gray-800 text-sm">
-                      {day.locations[loc] || ''}
+          return (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-300">
+                    <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Giorno</th>
+                    {data.locations.map(loc => (
+                      <th key={loc} className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">{displayName(loc)}</th>
+                    ))}
+                    <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Totale</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Media row */}
+                  <tr className="border-b-2 border-gray-400 bg-gray-50">
+                    <td className="px-4 py-3 font-bold text-gray-800">Media</td>
+                    {data.locations.map(loc => (
+                      <td key={loc} className="px-4 py-3 font-bold text-gray-800">
+                        {averagesCeil[loc].toLocaleString('it-IT')}
+                      </td>
+                    ))}
+                    <td className="px-4 py-3 font-bold text-gray-800">
+                      {totalAverage.toLocaleString('it-IT')}
                     </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </tr>
+
+                  {/* Daily rows */}
+                  {data.days.map((day, idx) => {
+                    const dailyTotal = data.locations.reduce(
+                      (sum, loc) => sum + (Number(day.locations[loc]) || 0),
+                      0
+                    );
+                    return (
+                      <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="px-4 py-2 text-gray-700 text-sm">{day.date}</td>
+                        {data.locations.map(loc => (
+                          <td key={loc} className="px-4 py-2 text-gray-800 text-sm">
+                            {day.locations[loc] || ''}
+                          </td>
+                        ))}
+                        <td className="px-4 py-2 font-semibold text-gray-800 text-sm">
+                          {dailyTotal > 0 ? dailyTotal.toLocaleString('it-IT') : ''}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
       </main>
     </div>
   );
