@@ -285,41 +285,39 @@ const CassaPage = () => {
 
       <Header />
       
-      <main className="max-w-6xl mx-auto p-6">
-        {/* Page Header */}
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="font-heading text-4xl font-bold text-gray-900 uppercase">Cassa</h1>
-          <p className="font-heading text-xl text-gray-600" data-testid="cassa-location">
-            {restaurant?.location}
-          </p>
-        </div>
-
-        {/* Logs Counter Bar */}
-        <div 
-          className="mb-4 bg-white rounded-lg shadow-sm border border-gray-200 p-3 flex items-center justify-between cursor-pointer hover:bg-gray-50"
+      <main className="max-w-6xl mx-auto px-6 py-3">
+        {/* Compact combined header: title + location + logs counters */}
+        <div
+          className="mb-2 bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-2 flex items-center justify-between cursor-pointer hover:bg-gray-50"
           onClick={() => setShowLogs(!showLogs)}
           data-testid="logs-counter-bar"
         >
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <Trash2 size={18} className="text-red-500" />
-              <span className="font-medium">
-                Cancellate oggi: <strong className="text-red-600">{logs.deletions.count}</strong>
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Edit2 size={18} className="text-amber-500" />
-              <span className="font-medium">
-                Modificate oggi: <strong className="text-amber-600">{logs.modifications.count}</strong>
-              </span>
-            </div>
+          <div className="flex items-center gap-4">
+            <h1 className="font-heading text-2xl font-bold text-gray-900 uppercase leading-none">Cassa</h1>
+            <span className="font-heading text-base text-gray-500" data-testid="cassa-location">
+              {restaurant?.location}
+            </span>
           </div>
-          <span className="text-gray-500 text-sm">{showLogs ? '▲ Chiudi' : '▼ Dettagli'}</span>
+          <div className="flex items-center gap-5">
+            <div className="flex items-center gap-1.5">
+              <Trash2 size={16} className="text-red-500" />
+              <span className="text-sm font-medium">
+                Cancellate: <strong className="text-red-600">{logs.deletions.count}</strong>
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Edit2 size={16} className="text-amber-500" />
+              <span className="text-sm font-medium">
+                Modificate: <strong className="text-amber-600">{logs.modifications.count}</strong>
+              </span>
+            </div>
+            <span className="text-gray-500 text-xs">{showLogs ? '▲' : '▼'}</span>
+          </div>
         </div>
 
         {/* Logs Detail Panel */}
         {showLogs && (
-          <div className="mb-4 bg-white rounded-lg shadow-sm border border-gray-200 p-4 max-h-64 overflow-y-auto">
+          <div className="mb-2 bg-white rounded-lg shadow-sm border border-gray-200 p-4 max-h-64 overflow-y-auto">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Deletions */}
               <div>
@@ -365,8 +363,8 @@ const CassaPage = () => {
         )}
 
         {/* Input Section */}
-        <form onSubmit={handleSubmit} className="mb-6">
-          <div className="flex items-center gap-2 bg-white p-2 rounded-lg shadow-sm border border-gray-200">
+        <form onSubmit={handleSubmit} className="mb-3">
+          <div className="flex items-center gap-2 bg-white p-1.5 rounded-lg shadow-sm border border-gray-200">
             {/* Editable Order Number */}
             <input
               data-testid="order-number-input"
@@ -376,7 +374,7 @@ const CassaPage = () => {
                 setOrderNumber(e.target.value.replace(/\D/g, ''));
                 setUserEditedNumber(true);
               }}
-              className="w-20 h-12 text-lg font-bold text-center px-2 border border-gray-300 rounded focus:border-blue-500 focus:outline-none"
+              className="w-16 h-10 text-base font-bold text-center px-2 border border-gray-300 rounded focus:border-blue-500 focus:outline-none"
               placeholder="N°"
             />
             
@@ -387,7 +385,7 @@ const CassaPage = () => {
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="flex-1 h-12 text-lg px-4 border-0 focus:ring-0 focus:outline-none"
+              className="flex-1 h-10 text-base px-3 border-0 focus:ring-0 focus:outline-none"
               placeholder=""
               disabled={loading}
             />
@@ -395,9 +393,9 @@ const CassaPage = () => {
               data-testid="order-submit"
               type="submit"
               disabled={loading || !description.trim()}
-              className="action-button h-12 px-6 disabled:opacity-50"
+              className="action-button h-10 px-5 text-base disabled:opacity-50"
             >
-              {loading ? <Loader2 className="animate-spin" size={20} /> : 'Invia'}
+              {loading ? <Loader2 className="animate-spin" size={18} /> : 'Invia'}
             </button>
           </div>
         </form>
