@@ -4,12 +4,26 @@ import { useOrders } from '../contexts/OrderContext';
 import Header from '../components/Header';
 import { Check, Trash2, Camera, RefreshCw, Lock, Unlock } from 'lucide-react';
 
+const HIGHLIGHT_STORAGE_KEY = 'generale_highlighted_orders';
+
+const loadHighlighted = () => {
+  try {
+    const raw = sessionStorage.getItem(HIGHLIGHT_STORAGE_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+};
+
 const GeneralePage = () => {
   const { restaurant } = useAuth();
   const { orders, hideFromGenerale, toggleMonitor, newOrdersAvailable, pauseUpdates, setPauseUpdates, refreshOrders } = useOrders();
-  
-  // Track highlighted orders (local state, not saved to DB)
-  const [highlightedOrders, setHighlightedOrders] = useState(new Set());
+
+  // Track highlighted orders — persisted in sessionStorage so the selection
+  // survives navigation to Home and back. Cleared when the tab is closed.
+  const [highlightedOrders, setHighlightedOrders] = useState(loadHighlighted);
 
   // Filter only pending orders that are NOT hidden from generale, sorted by order_number ascending
   const pendingOrders = orders
@@ -23,7 +37,7 @@ const GeneralePage = () => {
     return letters === letters.toUpperCase();
   };
 
-  // Toggle highlight for an order
+  // Toggle highlight for an order (also persists in sessionStorage)
   const toggleHighlight = (orderId) => {
     setHighlightedOrders(prev => {
       const newSet = new Set(prev);
@@ -31,6 +45,11 @@ const GeneralePage = () => {
         newSet.delete(orderId);
       } else {
         newSet.add(orderId);
+      }
+      try {
+        sessionStorage.setItem(HIGHLIGHT_STORAGE_KEY, JSON.stringify([...newSet]));
+      } catch {
+        // ignore quota / privacy-mode errors
       }
       return newSet;
     });
