@@ -6,9 +6,18 @@ import axios from 'axios';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+const todayRomeIso = () => {
+  // Europe/Rome current date as YYYY-MM-DD (avoids UTC midnight skew in nighttime)
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Rome',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+  return parts;
+};
+
 const ReportPage = () => {
   const { restaurant, token } = useAuth();
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(todayRomeIso());
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
 

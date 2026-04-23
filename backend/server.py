@@ -948,20 +948,25 @@ async def get_today_logs(token_data: dict = Depends(verify_token)):
 
 @api_router.get("/report/daily")
 async def get_daily_report(date: str = None, token_data: dict = Depends(verify_token)):
-    """Get daily report with all orders and their status changes"""
+    """Get daily report with all orders and their status changes.
+    `date` is interpreted as an Italian (Europe/Rome) calendar day."""
     restaurant_id = token_data["restaurant_id"]
-    
-    # Parse date or use today
+
+    # Parse date string as Rome-local day; default to today Rome.
     if date:
         try:
-            report_date = datetime.fromisoformat(date.replace('Z', '+00:00'))
-        except:
-            report_date = datetime.now(timezone.utc)
+            parsed = datetime.fromisoformat(date.replace('Z', '+00:00'))
+            if parsed.tzinfo is None:
+                day_rome = parsed.replace(tzinfo=ROME_TZ, hour=0, minute=0, second=0, microsecond=0)
+            else:
+                day_rome = parsed.astimezone(ROME_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+        except Exception:
+            day_rome = datetime.now(ROME_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
     else:
-        report_date = datetime.now(timezone.utc)
-    
-    day_start = report_date.replace(hour=0, minute=0, second=0, microsecond=0)
-    day_end = day_start.replace(hour=23, minute=59, second=59, microsecond=999999)
+        day_rome = datetime.now(ROME_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    day_start = day_rome.astimezone(timezone.utc)
+    day_end = (day_rome + timedelta(days=1) - timedelta(microseconds=1)).astimezone(timezone.utc)
     
     # Get all orders created on this day (including completed ones)
     # Check both active orders and archived orders
@@ -1062,7 +1067,7 @@ async def get_daily_report(date: str = None, token_data: dict = Depends(verify_t
     report_items.sort(key=lambda x: x["order_number"])
     
     return {
-        "date": day_start.isoformat(),
+        "date": day_rome.date().isoformat(),
         "total_orders": len(report_items),
         "completed": len([r for r in report_items if r["status"] == "completed"]),
         "deleted": len([r for r in report_items if r["status"] == "deleted"]),
