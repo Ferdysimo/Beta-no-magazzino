@@ -1179,18 +1179,29 @@ async def websocket_endpoint(websocket: WebSocket, restaurant_id: str):
 
 # ==================== INVOICES (FATTURE) ====================
 
+def _today_rome_utc_range():
+    """Returns (start_utc_iso, end_utc_iso) for today's Rome operating day."""
+    now_rome = datetime.now(ROME_TZ)
+    day_rome = now_rome.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_utc = day_rome.astimezone(timezone.utc).isoformat()
+    end_utc = (day_rome + timedelta(days=1) - timedelta(microseconds=1)).astimezone(timezone.utc).isoformat()
+    return start_utc, end_utc
+
+
 @api_router.post("/invoices")
 async def create_invoice(data: InvoiceCreate, token_data: dict = Depends(verify_token)):
     restaurant_id = token_data["restaurant_id"]
     restaurant_name = token_data["restaurant_name"]
-    
-    # Check for duplicate control code
+
+    # Check for duplicate control code within today (Rome day)
+    start_utc, end_utc = _today_rome_utc_range()
     existing = await db.invoices.find_one({
         "restaurant_id": restaurant_id,
-        "control_code": data.control_code
+        "control_code": data.control_code,
+        "created_at": {"$gte": start_utc, "$lte": end_utc}
     })
     if existing:
-        raise HTTPException(status_code=400, detail="Codice di controllo già esistente")
+        raise HTTPException(status_code=400, detail="Codice di controllo già usato oggi")
     
     invoice_id = str(uuid.uuid4())
     
@@ -2047,14 +2058,16 @@ async def create_versamento(data: VersamentoCreate, token_data: dict = Depends(v
     restaurant_id = token_data["restaurant_id"]
     restaurant_name = token_data["restaurant_name"]
     
-    # Check for duplicate control code if provided
+    # Check for duplicate control code within today if provided
     if data.control_code:
+        start_utc, end_utc = _today_rome_utc_range()
         existing = await db.versamenti.find_one({
             "restaurant_id": restaurant_id,
-            "control_code": data.control_code
+            "control_code": data.control_code,
+            "created_at": {"$gte": start_utc, "$lte": end_utc}
         })
         if existing:
-            raise HTTPException(status_code=400, detail="Codice di controllo già esistente")
+            raise HTTPException(status_code=400, detail="Codice di controllo già usato oggi")
     
     versamento_id = str(uuid.uuid4())
     
@@ -2129,14 +2142,16 @@ async def create_chiusura(data: ChiusuraCreate, token_data: dict = Depends(verif
     restaurant_id = token_data["restaurant_id"]
     restaurant_name = token_data["restaurant_name"]
     
-    # Check for duplicate control code if provided
+    # Check for duplicate control code within today if provided
     if data.control_code:
+        start_utc, end_utc = _today_rome_utc_range()
         existing = await db.chiusure.find_one({
             "restaurant_id": restaurant_id,
-            "control_code": data.control_code
+            "control_code": data.control_code,
+            "created_at": {"$gte": start_utc, "$lte": end_utc}
         })
         if existing:
-            raise HTTPException(status_code=400, detail="Codice di controllo già esistente")
+            raise HTTPException(status_code=400, detail="Codice di controllo già usato oggi")
     
     chiusura_id = str(uuid.uuid4())
     
