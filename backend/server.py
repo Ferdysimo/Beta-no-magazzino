@@ -884,35 +884,39 @@ async def reset_timer(order_id: str, token_data: dict = Depends(verify_token)):
 @api_router.get("/logs/deletions")
 async def get_deletion_logs(token_data: dict = Depends(verify_token)):
     restaurant_id = token_data["restaurant_id"]
-    
-    # Get today's deletions
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    
+
+    # Today's deletions — Rome operating day
+    now_rome = datetime.now(ROME_TZ)
+    midnight_rome = now_rome.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start_utc = midnight_rome.astimezone(timezone.utc)
+
     logs = await db.deletion_logs.find(
         {
             "restaurant_id": restaurant_id,
-            "deleted_at": {"$gte": today_start.isoformat()}
+            "deleted_at": {"$gte": today_start_utc.isoformat()}
         },
         {"_id": 0}
     ).sort("deleted_at", -1).to_list(500)
-    
+
     return {"count": len(logs), "logs": logs}
 
 @api_router.get("/logs/modifications")
 async def get_modification_logs(token_data: dict = Depends(verify_token)):
     restaurant_id = token_data["restaurant_id"]
-    
-    # Get today's modifications
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    
+
+    # Today's modifications — Rome operating day
+    now_rome = datetime.now(ROME_TZ)
+    midnight_rome = now_rome.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start_utc = midnight_rome.astimezone(timezone.utc)
+
     logs = await db.modification_logs.find(
         {
             "restaurant_id": restaurant_id,
-            "modified_at": {"$gte": today_start.isoformat()}
+            "modified_at": {"$gte": today_start_utc.isoformat()}
         },
         {"_id": 0}
     ).sort("modified_at", -1).to_list(500)
-    
+
     return {"count": len(logs), "logs": logs}
 
 @api_router.get("/logs/today")

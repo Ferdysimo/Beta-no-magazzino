@@ -250,11 +250,15 @@ const FatturePage = () => {
   // Generate last 30 days for filter
   const generateDateOptions = () => {
     const options = [{ value: '', label: 'Tutti i giorni' }];
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Rome',
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    });
     for (let i = 0; i < 30; i++) {
       const date = new Date();
       date.setDate(date.getDate() - i);
       options.push({
-        value: date.toISOString().split('T')[0],
+        value: fmt.format(date),
         label: date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })
       });
     }

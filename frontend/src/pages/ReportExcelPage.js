@@ -7,9 +7,14 @@ import { Download } from 'lucide-react';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+const todayRomeIso = () => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Rome',
+  year: 'numeric', month: '2-digit', day: '2-digit'
+}).format(new Date());
+
 const ReportExcelPage = () => {
   const { restaurant, token } = useAuth();
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(todayRomeIso());
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -41,11 +46,15 @@ const ReportExcelPage = () => {
   // Generate date options for dropdown (last 30 days)
   const generateDateOptions = () => {
     const options = [];
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Rome',
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    });
     for (let i = 0; i < 30; i++) {
       const date = new Date();
       date.setDate(date.getDate() - i);
       options.push({
-        value: date.toISOString().split('T')[0],
+        value: fmt.format(date),
         label: formatDateDisplay(date)
       });
     }
