@@ -161,13 +161,19 @@ const ChiusurePage = () => {
     }
   };
 
-  // Build the flat list of photos (report + piatti) to power the lightbox
+  // The primary photo's type equals the chiusura's tipologia.
+  // The secondary photo (stored in piatti_file/piatti_url) represents the OTHER type.
+  const otherTipologia = (t) => (String(t).toLowerCase() === 'piatti' ? 'Report' : 'Piatti');
+
+  // Build the flat list of photos for the lightbox, respecting tipologia
   const lightboxPhotos = useMemo(() => {
     const arr = [];
     chiusure.forEach((c) => {
-      const label = `${c.tipologia || 'Chiusura'}${c.description ? ' — ' + c.description : ''}`;
-      if (c.image_data) arr.push({ url: c.image_data, label: `Report · ${label}` });
-      if (c.piatti_url) arr.push({ url: c.piatti_url, label: `Piatti · ${label}` });
+      const suffix = `${c.tipologia || 'Chiusura'}${c.description ? ' — ' + c.description : ''}`;
+      const primaryLabel = c.tipologia || 'Report';
+      const secondaryLabel = otherTipologia(c.tipologia);
+      if (c.image_data) arr.push({ url: c.image_data, label: `${primaryLabel} · ${suffix}` });
+      if (c.piatti_url) arr.push({ url: c.piatti_url, label: `${secondaryLabel} · ${suffix}` });
     });
     return arr;
   }, [chiusure]);
@@ -437,38 +443,40 @@ const ChiusurePage = () => {
                 className="bg-white rounded-lg border border-gray-200 p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors"
                 data-testid={`chiusura-${chiusura.id}`}
               >
-                {/* Report Thumbnail */}
+                {/* Primary photo thumbnail (type = tipologia) */}
                 <div
                   className="w-14 h-14 bg-gray-100 rounded-md flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0 relative group"
                   onClick={() => openLightboxFor(chiusura.image_data)}
-                  title="Foto report"
+                  title={`Foto ${chiusura.tipologia}`}
                 >
                   {chiusura.image_data ? (
-                    <img src={resolveImageSrc(chiusura.image_data)} alt="Report" className="w-full h-full object-cover" />
+                    <img src={resolveImageSrc(chiusura.image_data)} alt={chiusura.tipologia} className="w-full h-full object-cover" />
                   ) : (
                     <FileText className="text-gray-400" size={24} />
                   )}
-                  <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] py-0.5 text-center">REPORT</span>
+                  <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] py-0.5 text-center uppercase">
+                    {chiusura.tipologia || 'foto'}
+                  </span>
                 </div>
 
-                {/* Piatti Thumbnail or Upload */}
+                {/* Secondary photo thumbnail or upload (type = the OTHER tipologia) */}
                 {chiusura.piatti_url ? (
                   <div className="relative group flex-shrink-0">
                     <div
                       className="w-14 h-14 bg-gray-100 rounded-md overflow-hidden cursor-pointer relative"
                       onClick={() => openLightboxFor(chiusura.piatti_url)}
-                      title="Foto piatti"
+                      title={`Foto ${otherTipologia(chiusura.tipologia)}`}
                       data-testid={`piatti-view-${chiusura.id}`}
                     >
-                      <img src={resolveImageSrc(chiusura.piatti_url)} alt="Piatti" className="w-full h-full object-cover" />
-                      <span className="absolute bottom-0 left-0 right-0 bg-emerald-700/80 text-white text-[9px] py-0.5 text-center flex items-center justify-center gap-0.5">
-                        <Receipt size={9} /> PIATTI
+                      <img src={resolveImageSrc(chiusura.piatti_url)} alt={otherTipologia(chiusura.tipologia)} className="w-full h-full object-cover" />
+                      <span className="absolute bottom-0 left-0 right-0 bg-emerald-700/80 text-white text-[9px] py-0.5 text-center flex items-center justify-center gap-0.5 uppercase">
+                        <Receipt size={9} /> {otherTipologia(chiusura.tipologia)}
                       </span>
                     </div>
                     <button
                       onClick={() => removePiatti(chiusura)}
                       className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Rimuovi foto piatti"
+                      title={`Rimuovi foto ${otherTipologia(chiusura.tipologia)}`}
                       data-testid={`piatti-remove-${chiusura.id}`}
                     >
                       <X size={10} />
@@ -480,14 +488,14 @@ const ChiusurePage = () => {
                     disabled={piattiUploadingId === chiusura.id}
                     data-testid={`piatti-upload-${chiusura.id}`}
                     className="w-14 h-14 rounded-md bg-emerald-50 hover:bg-emerald-100 border-2 border-dashed border-emerald-300 hover:border-emerald-500 flex flex-col items-center justify-center text-emerald-700 text-[9px] flex-shrink-0 transition-colors disabled:opacity-50 disabled:cursor-wait"
-                    title="Aggiungi foto piatti"
+                    title={`Aggiungi foto ${otherTipologia(chiusura.tipologia)}`}
                   >
                     {piattiUploadingId === chiusura.id ? (
                       <span>...</span>
                     ) : (
                       <>
                         <Upload size={14} />
-                        <span className="font-semibold leading-tight text-center">PIATTI</span>
+                        <span className="font-semibold leading-tight text-center uppercase">{otherTipologia(chiusura.tipologia)}</span>
                       </>
                     )}
                   </button>
