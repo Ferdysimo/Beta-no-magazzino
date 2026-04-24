@@ -6,6 +6,7 @@ import Header from '../components/Header';
 import { formatItalianDateTime } from '../utils/formatDate';
 import { Plus, Search, X, Edit2, Trash2, Receipt, Upload } from 'lucide-react';
 import { compressImage, friendlyUploadError } from '../utils/compressImage';
+import PhotoLightbox from '../components/PhotoLightbox';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -23,7 +24,7 @@ const CarichiMagazzinoPage = () => {
   const [loading, setLoading] = useState(true);
   const [supplierFilter, setSupplierFilter] = useState('');
   const [search, setSearch] = useState('');
-  const [photoLightbox, setPhotoLightbox] = useState(null);
+  const [lightboxIndex, setLightboxIndex] = useState(-1);
   const [fatturaUploadId, setFatturaUploadId] = useState(null); // id of carico currently uploading
 
   // Hidden file input for fattura uploads
@@ -84,6 +85,22 @@ const CarichiMagazzinoPage = () => {
     () => filtered.filter(c => !c.fattura_url).length,
     [filtered]
   );
+
+  // Flat list of photos for the lightbox (DDT + Fattura for each carico in order)
+  const lightboxPhotos = useMemo(() => {
+    const arr = [];
+    filtered.forEach((c) => {
+      const label = `${c.supplier_name}${c.ddt_number_fornitore ? ' · DDT ' + c.ddt_number_fornitore : ''}`;
+      if (c.photo_url) arr.push({ url: c.photo_url, label: `DDT · ${label}` });
+      if (c.fattura_url) arr.push({ url: c.fattura_url, label: `Fattura · ${label}` });
+    });
+    return arr;
+  }, [filtered]);
+
+  const openLightboxFor = (url) => {
+    const i = lightboxPhotos.findIndex((p) => p.url === url);
+    if (i >= 0) setLightboxIndex(i);
+  };
 
   const handleDelete = async (c) => {
     if (!window.confirm(`Cancellare il carico di ${c.supplier_name}? Le quantità verranno sottratte dal magazzino.`)) return;
@@ -219,7 +236,7 @@ const CarichiMagazzinoPage = () => {
               {/* DDT photo */}
               {c.photo_url ? (
                 <button
-                  onClick={() => setPhotoLightbox(c.photo_url)}
+                  onClick={() => openLightboxFor(c.photo_url)}
                   className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-200 hover:ring-2 hover:ring-[#F5C518] transition-all relative group"
                   title="Foto DDT"
                 >
@@ -236,7 +253,7 @@ const CarichiMagazzinoPage = () => {
               {c.fattura_url ? (
                 <div className="relative flex-shrink-0 group">
                   <button
-                    onClick={() => setPhotoLightbox(c.fattura_url)}
+                    onClick={() => openLightboxFor(c.fattura_url)}
                     className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg bg-gray-100 overflow-hidden border border-gray-200 hover:ring-2 hover:ring-[#F5C518] transition-all relative block"
                     data-testid={`fattura-view-${c.id}`}
                     title="Foto fattura"
@@ -317,26 +334,14 @@ const CarichiMagazzinoPage = () => {
         </div>
       </main>
 
-      {/* Photo lightbox */}
-      {photoLightbox && (
-        <div
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
-          onClick={() => setPhotoLightbox(null)}
-        >
-          <button
-            className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white rounded-full"
-            onClick={() => setPhotoLightbox(null)}
-          >
-            <X size={24} />
-          </button>
-          <img
-            src={resolveImage(photoLightbox)}
-            alt="DDT"
-            className="max-w-full max-h-full object-contain"
-            onClick={e => e.stopPropagation()}
-          />
-        </div>
-      )}
+      {/* Photo lightbox with navigation */}
+      <PhotoLightbox
+        photos={lightboxPhotos}
+        index={lightboxIndex}
+        onChangeIndex={setLightboxIndex}
+        onClose={() => setLightboxIndex(-1)}
+        resolve={resolveImage}
+      />
     </div>
   );
 };

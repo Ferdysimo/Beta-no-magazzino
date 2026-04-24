@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import axios from 'axios';
 import { X, FileText, Trash2, Eye, Search } from 'lucide-react';
 import { compressImage, friendlyUploadError } from '../utils/compressImage';
+import PhotoLightbox from '../components/PhotoLightbox';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -34,7 +35,21 @@ const VersamentiPage = () => {
   // List state
   const [versamenti, setVersamenti] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewingVersamento, setViewingVersamento] = useState(null);
+  const [lightboxIndex, setLightboxIndex] = useState(-1);
+
+  const lightboxPhotos = useMemo(() => (
+    (versamenti || [])
+      .filter(v => v.image_data)
+      .map(v => ({
+        url: v.image_data,
+        label: `${v.description || 'Versamento'}${v.control_code ? ' · ' + v.control_code : ''}`
+      }))
+  ), [versamenti]);
+
+  const openLightboxFor = (url) => {
+    const i = lightboxPhotos.findIndex((p) => p.url === url);
+    if (i >= 0) setLightboxIndex(i);
+  };
 
   // Set current date/time on load
   useEffect(() => {
@@ -327,7 +342,7 @@ const VersamentiPage = () => {
                 {/* Thumbnail */}
                 <div 
                   className="w-14 h-14 bg-gray-100 rounded-md flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
-                  onClick={() => setViewingVersamento(versamento)}
+                  onClick={() => openLightboxFor(versamento.image_data)}
                 >
                   {versamento.image_data ? (
                     <img src={resolveImageSrc(versamento.image_data)} alt="Versamento" className="w-full h-full object-cover" />
@@ -356,7 +371,7 @@ const VersamentiPage = () => {
                 {/* Actions */}
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setViewingVersamento(versamento)}
+                    onClick={() => openLightboxFor(versamento.image_data)}
                     className="w-10 h-10 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
                     title="Visualizza"
                   >
@@ -383,33 +398,13 @@ const VersamentiPage = () => {
       </main>
 
       {/* Image Viewer Modal */}
-      {viewingVersamento && (
-        <div 
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
-          onClick={() => setViewingVersamento(null)}
-        >
-          <div className="relative max-w-4xl max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={() => setViewingVersamento(null)}
-              className="absolute -top-4 -right-4 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg"
-            >
-              <X size={24} />
-            </button>
-            <img 
-              src={resolveImageSrc(viewingVersamento.image_data)} 
-              alt="Versamento" 
-              className="max-w-full max-h-[85vh] object-contain rounded-lg"
-            />
-            <div className="bg-white p-3 rounded-b-lg mt-1">
-              <p><strong>Descrizione:</strong> {viewingVersamento.description || 'Nessuna'}</p>
-              {viewingVersamento.control_code && (
-                <p><strong>Codice:</strong> {viewingVersamento.control_code}</p>
-              )}
-              <p><strong>Data:</strong> {formatDateItalian(viewingVersamento.versamento_date)}</p>
-            </div>
-          </div>
-        </div>
-      )}
+      <PhotoLightbox
+        photos={lightboxPhotos}
+        index={lightboxIndex}
+        onChangeIndex={setLightboxIndex}
+        onClose={() => setLightboxIndex(-1)}
+        resolve={resolveImageSrc}
+      />
     </div>
   );
 };

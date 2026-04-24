@@ -2157,7 +2157,11 @@ class ChiusuraCreate(BaseModel):
     tipologia: str = "Piatti"
     control_code: str = ""
     image_data: str = ""
+    piatti_data: Optional[str] = None
     chiusura_date: str = None
+
+class ChiusuraPiattiUpload(BaseModel):
+    piatti_data: str
 
 @api_router.post("/chiusure")
 async def create_chiusura(data: ChiusuraCreate, token_data: dict = Depends(verify_token)):
@@ -2177,9 +2181,10 @@ async def create_chiusura(data: ChiusuraCreate, token_data: dict = Depends(verif
     
     chiusura_id = str(uuid.uuid4())
     
-    # Save image to disk instead of DB
+    # Save images to disk
     image_filename = save_image_to_disk(data.image_data, "chiusura")
-    
+    piatti_filename = save_image_to_disk(data.piatti_data, "chiusura_piatti") if data.piatti_data else ""
+
     chiusura = {
         "id": chiusura_id,
         "restaurant_id": restaurant_id,
@@ -2187,6 +2192,7 @@ async def create_chiusura(data: ChiusuraCreate, token_data: dict = Depends(verif
         "tipologia": data.tipologia,
         "control_code": data.control_code,
         "image_file": image_filename,
+        "piatti_file": piatti_filename,
         "chiusura_date": data.chiusura_date or datetime.now(timezone.utc).isoformat(),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "uploaded_by": restaurant_name
@@ -2223,7 +2229,9 @@ async def get_chiusure(
         if c.get("image_file"):
             c["image_data"] = f"/api/uploads/{c['image_file']}"
         c.pop("image_file", None)
-    
+        piatti = c.pop("piatti_file", None)
+        c["piatti_url"] = f"/api/uploads/{piatti}" if piatti else ""
+
     return chiusure
 
 @api_router.delete("/chiusure/{chiusura_id}")
@@ -2244,8 +2252,59 @@ async def delete_chiusura(chiusura_id: str, token_data: dict = Depends(verify_to
             created = datetime.now(timezone.utc)
         if datetime.now(timezone.utc) - created > timedelta(minutes=20):
             raise HTTPException(status_code=403, detail="Puoi cancellare solo entro 20 minuti dal caricamento. Solo l'Admin può cancellare in qualsiasi momento.")
+    # Remove associated images from disk
+    for key in ("image_file", "piatti_file"):
+        fn = doc.get(key)
+        if fn:
+            p = UPLOADS_DIR / fn
+            if p.exists():
+                p.unlink()
     await db.chiusure.delete_one({"id": chiusura_id})
     return {"message": "Chiusura eliminata"}
+
+
+@api_router.put("/chiusure/{chiusura_id}/piatti")
+async def upload_chiusura_piatti(chiusura_id: str, data: ChiusuraPiattiUpload, token_data: dict = Depends(verify_token)):
+    """Attach/replace the 'piatti' photo for a given chiusura."""
+    is_admin = token_data.get("role") == "admin"
+    query = {"id": chiusura_id}
+    if not is_admin:
+        query["restaurant_id"] = token_data["restaurant_id"]
+    doc = await db.chiusure.find_one(query)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Chiusura non trovata")
+    if not data.piatti_data:
+        raise HTTPException(status_code=400, detail="Immagine piatti mancante")
+    old = doc.get("piatti_file")
+    if old:
+        p = UPLOADS_DIR / old
+        if p.exists():
+            p.unlink()
+    filename = save_image_to_disk(data.piatti_data, "chiusura_piatti")
+    await db.chiusure.update_one(
+        {"id": chiusura_id},
+        {"$set": {"piatti_file": filename}}
+    )
+    return {"piatti_url": f"/api/uploads/{filename}"}
+
+
+@api_router.delete("/chiusure/{chiusura_id}/piatti")
+async def delete_chiusura_piatti(chiusura_id: str, token_data: dict = Depends(verify_token)):
+    """Remove the 'piatti' photo from a chiusura."""
+    is_admin = token_data.get("role") == "admin"
+    query = {"id": chiusura_id}
+    if not is_admin:
+        query["restaurant_id"] = token_data["restaurant_id"]
+    doc = await db.chiusure.find_one(query)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Chiusura non trovata")
+    old = doc.get("piatti_file")
+    if old:
+        p = UPLOADS_DIR / old
+        if p.exists():
+            p.unlink()
+    await db.chiusure.update_one({"id": chiusura_id}, {"$unset": {"piatti_file": ""}})
+    return {"message": "Foto piatti rimossa"}
 
 # Include the router in the main app
 app.include_router(api_router)

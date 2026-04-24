@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import axios from 'axios';
-import { X, FileText, Trash2, Eye, Search } from 'lucide-react';
+import { X, FileText, Trash2, Eye, Search, Upload, Receipt } from 'lucide-react';
 import { compressImage, friendlyUploadError } from '../utils/compressImage';
+import PhotoLightbox from '../components/PhotoLightbox';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -36,7 +37,10 @@ const ChiusurePage = () => {
   const [chiusure, setChiusure] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTipologia, setFilterTipologia] = useState('all');
-  const [viewingChiusura, setViewingChiusura] = useState(null);
+  const [lightboxIndex, setLightboxIndex] = useState(-1);
+  const piattiInputRef = useRef(null);
+  const [piattiTargetId, setPiattiTargetId] = useState(null);
+  const [piattiUploadingId, setPiattiUploadingId] = useState(null);
 
   // Set current date/time on load
   useEffect(() => {
@@ -147,14 +151,68 @@ const ChiusurePage = () => {
   // Delete chiusura
   const deleteChiusura = async (chiusuraId) => {
     if (!window.confirm('Sei sicuro di voler eliminare questa chiusura?')) return;
-    
     try {
       await axios.delete(`${API}/chiusure/${chiusuraId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       fetchChiusure();
     } catch (err) {
-      console.error('Error deleting chiusura:', err);
+      alert(err.response?.data?.detail || 'Errore cancellazione');
+    }
+  };
+
+  // Build the flat list of photos (report + piatti) to power the lightbox
+  const lightboxPhotos = useMemo(() => {
+    const arr = [];
+    chiusure.forEach((c) => {
+      const label = `${c.tipologia || 'Chiusura'}${c.description ? ' — ' + c.description : ''}`;
+      if (c.image_data) arr.push({ url: c.image_data, label: `Report · ${label}` });
+      if (c.piatti_url) arr.push({ url: c.piatti_url, label: `Piatti · ${label}` });
+    });
+    return arr;
+  }, [chiusure]);
+
+  const openLightboxFor = (url) => {
+    const i = lightboxPhotos.findIndex((p) => p.url === url);
+    if (i >= 0) setLightboxIndex(i);
+  };
+
+  const triggerPiattiUpload = (chiusuraId) => {
+    setPiattiTargetId(chiusuraId);
+    if (piattiInputRef.current) piattiInputRef.current.value = '';
+    piattiInputRef.current?.click();
+  };
+
+  const handlePiattiFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    const cid = piattiTargetId;
+    if (!file || !cid) return;
+    setPiattiUploadingId(cid);
+    try {
+      const { dataUrl } = await compressImage(file);
+      await axios.put(
+        `${API}/chiusure/${cid}/piatti`,
+        { piatti_data: dataUrl },
+        { headers: { Authorization: `Bearer ${token}` }, timeout: 120000 }
+      );
+      await fetchChiusure();
+    } catch (err) {
+      alert(friendlyUploadError(err));
+    } finally {
+      setPiattiUploadingId(null);
+      setPiattiTargetId(null);
+    }
+  };
+
+  const removePiatti = async (c) => {
+    if (!window.confirm('Rimuovere la foto piatti di questa chiusura?')) return;
+    try {
+      await axios.delete(`${API}/chiusure/${c.id}/piatti`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchChiusure();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Errore rimozione');
     }
   };
 
@@ -376,23 +434,67 @@ const ChiusurePage = () => {
             {chiusure.map((chiusura) => (
               <div
                 key={chiusura.id}
-                className="bg-white rounded-lg border border-gray-200 p-4 flex items-center gap-4 hover:bg-gray-50 transition-colors"
+                className="bg-white rounded-lg border border-gray-200 p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors"
                 data-testid={`chiusura-${chiusura.id}`}
               >
-                {/* Thumbnail */}
-                <div 
-                  className="w-14 h-14 bg-gray-100 rounded-md flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
-                  onClick={() => setViewingChiusura(chiusura)}
+                {/* Report Thumbnail */}
+                <div
+                  className="w-14 h-14 bg-gray-100 rounded-md flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0 relative group"
+                  onClick={() => openLightboxFor(chiusura.image_data)}
+                  title="Foto report"
                 >
                   {chiusura.image_data ? (
-                    <img src={resolveImageSrc(chiusura.image_data)} alt="Chiusura" className="w-full h-full object-cover" />
+                    <img src={resolveImageSrc(chiusura.image_data)} alt="Report" className="w-full h-full object-cover" />
                   ) : (
                     <FileText className="text-gray-400" size={24} />
                   )}
+                  <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] py-0.5 text-center">REPORT</span>
                 </div>
 
+                {/* Piatti Thumbnail or Upload */}
+                {chiusura.piatti_url ? (
+                  <div className="relative group flex-shrink-0">
+                    <div
+                      className="w-14 h-14 bg-gray-100 rounded-md overflow-hidden cursor-pointer relative"
+                      onClick={() => openLightboxFor(chiusura.piatti_url)}
+                      title="Foto piatti"
+                      data-testid={`piatti-view-${chiusura.id}`}
+                    >
+                      <img src={resolveImageSrc(chiusura.piatti_url)} alt="Piatti" className="w-full h-full object-cover" />
+                      <span className="absolute bottom-0 left-0 right-0 bg-emerald-700/80 text-white text-[9px] py-0.5 text-center flex items-center justify-center gap-0.5">
+                        <Receipt size={9} /> PIATTI
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => removePiatti(chiusura)}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Rimuovi foto piatti"
+                      data-testid={`piatti-remove-${chiusura.id}`}
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => triggerPiattiUpload(chiusura.id)}
+                    disabled={piattiUploadingId === chiusura.id}
+                    data-testid={`piatti-upload-${chiusura.id}`}
+                    className="w-14 h-14 rounded-md bg-emerald-50 hover:bg-emerald-100 border-2 border-dashed border-emerald-300 hover:border-emerald-500 flex flex-col items-center justify-center text-emerald-700 text-[9px] flex-shrink-0 transition-colors disabled:opacity-50 disabled:cursor-wait"
+                    title="Aggiungi foto piatti"
+                  >
+                    {piattiUploadingId === chiusura.id ? (
+                      <span>...</span>
+                    ) : (
+                      <>
+                        <Upload size={14} />
+                        <span className="font-semibold leading-tight text-center">PIATTI</span>
+                      </>
+                    )}
+                  </button>
+                )}
+
                 {/* Info */}
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <span className="text-gray-600 text-sm">
                     {chiusura.tipologia.toLowerCase()}
                   </span>
@@ -416,9 +518,9 @@ const ChiusurePage = () => {
                 {/* Actions */}
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setViewingChiusura(chiusura)}
+                    onClick={() => openLightboxFor(chiusura.image_data)}
                     className="w-10 h-10 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
-                    title="Visualizza"
+                    title="Visualizza report"
                   >
                     <Eye size={18} />
                   </button>
@@ -442,37 +544,24 @@ const ChiusurePage = () => {
         </div>
       </main>
 
-      {/* Image Viewer Modal */}
-      {viewingChiusura && (
-        <div 
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
-          onClick={() => setViewingChiusura(null)}
-        >
-          <div className="relative max-w-4xl max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={() => setViewingChiusura(null)}
-              className="absolute -top-4 -right-4 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg"
-            >
-              <X size={24} />
-            </button>
-            <img 
-              src={resolveImageSrc(viewingChiusura.image_data)} 
-              alt="Chiusura" 
-              className="max-w-full max-h-[85vh] object-contain rounded-lg"
-            />
-            <div className="bg-white p-3 rounded-b-lg mt-1">
-              <p><strong>Tipologia:</strong> {viewingChiusura.tipologia}</p>
-              {viewingChiusura.description && (
-                <p><strong>Descrizione:</strong> {viewingChiusura.description}</p>
-              )}
-              {viewingChiusura.control_code && (
-                <p><strong>Codice:</strong> {viewingChiusura.control_code}</p>
-              )}
-              <p><strong>Data:</strong> {formatDateItalian(viewingChiusura.chiusura_date)}</p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Hidden file input for piatti upload */}
+      <input
+        ref={piattiInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handlePiattiFileChange}
+        data-testid="piatti-file-input"
+      />
+
+      {/* Lightbox with navigation */}
+      <PhotoLightbox
+        photos={lightboxPhotos}
+        index={lightboxIndex}
+        onChangeIndex={setLightboxIndex}
+        onClose={() => setLightboxIndex(-1)}
+        resolve={resolveImageSrc}
+      />
     </div>
   );
 };

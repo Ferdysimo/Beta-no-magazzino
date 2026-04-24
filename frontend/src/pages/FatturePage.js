@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import axios from 'axios';
 import { Upload, Check, Trash2, Eye, X, FileText, Edit2, Plus, Settings } from 'lucide-react';
+import PhotoLightbox from '../components/PhotoLightbox';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -34,7 +35,21 @@ const FatturePage = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [filterDate, setFilterDate] = useState('');
   const [filterSupplier, setFilterSupplier] = useState('all');
-  const [viewingInvoice, setViewingInvoice] = useState(null);
+  const [lightboxIndex, setLightboxIndex] = useState(-1);
+
+  const lightboxPhotos = useMemo(() => (
+    (invoices || [])
+      .filter(i => i.image_data)
+      .map(i => ({
+        url: i.image_data,
+        label: `${i.supplier || 'Fornitore'}${i.control_code ? ' · ' + i.control_code : ''}`
+      }))
+  ), [invoices]);
+
+  const openLightboxFor = (url) => {
+    const idx = lightboxPhotos.findIndex((p) => p.url === url);
+    if (idx >= 0) setLightboxIndex(idx);
+  };
   
   // Supplier management modal
   const [showSupplierModal, setShowSupplierModal] = useState(false);
@@ -472,7 +487,7 @@ const FatturePage = () => {
                 {/* Thumbnail */}
                 <div 
                   className="w-16 h-16 bg-gray-100 rounded-md flex items-center justify-center cursor-pointer overflow-hidden"
-                  onClick={() => setViewingInvoice(invoice)}
+                  onClick={() => openLightboxFor(invoice.image_data)}
                 >
                   {invoice.image_data ? (
                     <img src={resolveImageSrc(invoice.image_data)} alt="Fattura" className="w-full h-full object-cover" />
@@ -505,7 +520,7 @@ const FatturePage = () => {
                 {/* Actions */}
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setViewingInvoice(invoice)}
+                    onClick={() => openLightboxFor(invoice.image_data)}
                     className="w-10 h-10 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
                     title="Visualizza"
                   >
@@ -637,33 +652,14 @@ const FatturePage = () => {
         </div>
       )}
 
-      {/* Image Viewer Modal */}
-      {viewingInvoice && (
-        <div 
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
-          onClick={() => setViewingInvoice(null)}
-        >
-          <div className="relative max-w-4xl max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={() => setViewingInvoice(null)}
-              className="absolute -top-4 -right-4 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg"
-            >
-              <X size={24} />
-            </button>
-            <img 
-              src={resolveImageSrc(viewingInvoice.image_data)} 
-              alt="Fattura" 
-              className="max-w-full max-h-[85vh] object-contain rounded-lg"
-            />
-            <div className="bg-white p-3 rounded-b-lg mt-1">
-              <p><strong>Fornitore:</strong> {viewingInvoice.supplier}</p>
-              <p><strong>Codice:</strong> {viewingInvoice.control_code}</p>
-              <p><strong>Data fattura:</strong> {formatDate(viewingInvoice.invoice_date)}</p>
-              <p><strong>Stato:</strong> {viewingInvoice.paid ? '✅ Pagato' : '⏳ Non pagato'}</p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Image Viewer Lightbox with navigation */}
+      <PhotoLightbox
+        photos={lightboxPhotos}
+        index={lightboxIndex}
+        onChangeIndex={setLightboxIndex}
+        onClose={() => setLightboxIndex(-1)}
+        resolve={resolveImageSrc}
+      />
     </div>
   );
 };
