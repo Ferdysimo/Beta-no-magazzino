@@ -507,7 +507,7 @@ const CassaPage = () => {
               <span className="w-24 text-gray-600 text-sm">{formatTime(order.created_at)}</span>
               
               <span 
-                className={`w-24 text-sm font-mono font-bold ${getTimerColor(order)}`}
+                className={`w-24 text-base font-mono font-bold ${getTimerColor(order)}`}
               >
                 {getTimerDisplay(order)}
               </span>
