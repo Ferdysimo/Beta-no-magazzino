@@ -504,10 +504,10 @@ const CassaPage = () => {
                 </span>
               )}
               
-              <span className="w-24 text-gray-600 text-sm">{formatTime(order.created_at)}</span>
+              <span className="w-24 text-gray-600 text-lg">{formatTime(order.created_at)}</span>
               
               <span 
-                className={`w-24 text-base font-mono font-bold ${getTimerColor(order)}`}
+                className={`w-24 text-lg font-mono font-bold ${getTimerColor(order)}`}
               >
                 {getTimerDisplay(order)}
               </span>
@@ -545,8 +545,8 @@ const CassaPage = () => {
             >
               <span className="w-16 font-bold text-green-700 text-lg">{order.order_number}</span>
               <span className="flex-1 font-medium text-green-700">{order.description}</span>
-              <span className="w-24 text-green-600 text-sm">{formatTime(order.created_at)}</span>
-              <span className="w-24 text-green-600 text-sm">--:--:--</span>
+              <span className="w-24 text-green-600 text-lg">{formatTime(order.created_at)}</span>
+              <span className="w-24 text-green-600 text-lg">--:--:--</span>
               <div className="flex gap-2 ml-4">
                 <div className="w-8 h-8 flex items-center justify-center bg-green-600 text-white rounded">
                   <Check size={16} />

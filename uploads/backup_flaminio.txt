@@ -1088,3 +1088,10 @@
 28 cacio
 27 CIAO
 20 carb
+1 carb
+2 amat
+3 cacio
+4 esto
+5 pom
+6 carb
+7 amat
