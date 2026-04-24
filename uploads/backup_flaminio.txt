@@ -1095,3 +1095,10 @@
 5 pom
 6 carb
 7 amat
+1 carb
+2 amat
+3 cacio
+4 tart
+5 pom
+6 cacio
+7 pesto

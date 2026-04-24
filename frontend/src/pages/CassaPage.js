@@ -499,7 +499,7 @@ const CassaPage = () => {
                   </button>
                 </div>
               ) : (
-                <span className={`flex-1 text-gray-800 ${isUppercase(order.description) ? 'font-bold' : 'font-medium'}`}>
+                <span className={`flex-1 text-lg text-gray-800 ${isUppercase(order.description) ? 'font-bold' : 'font-medium'}`}>
                   {order.description}
                 </span>
               )}
@@ -544,7 +544,7 @@ const CassaPage = () => {
               className="flex items-center px-4 py-1.5 border-b border-gray-100 bg-green-50"
             >
               <span className="w-16 font-bold text-green-700 text-lg">{order.order_number}</span>
-              <span className="flex-1 font-medium text-green-700">{order.description}</span>
+              <span className="flex-1 text-lg font-medium text-green-700">{order.description}</span>
               <span className="w-24 text-green-600 text-lg">{formatTime(order.created_at)}</span>
               <span className="w-24 text-green-600 text-lg">--:--:--</span>
               <div className="flex gap-2 ml-4">
