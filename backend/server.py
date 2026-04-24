@@ -1287,12 +1287,23 @@ async def update_invoice(invoice_id: str, paid: bool, token_data: dict = Depends
 
 @api_router.delete("/invoices/{invoice_id}")
 async def delete_invoice(invoice_id: str, token_data: dict = Depends(verify_token)):
-    result = await db.invoices.delete_one({
-        "id": invoice_id,
-        "restaurant_id": token_data["restaurant_id"]
-    })
-    if result.deleted_count == 0:
+    is_admin = token_data.get("role") == "admin"
+    query = {"id": invoice_id}
+    if not is_admin:
+        query["restaurant_id"] = token_data["restaurant_id"]
+    doc = await db.invoices.find_one(query)
+    if not doc:
         raise HTTPException(status_code=404, detail="Fattura non trovata")
+    if not is_admin:
+        try:
+            created = datetime.fromisoformat(doc["created_at"].replace('Z', '+00:00'))
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+        except Exception:
+            created = datetime.now(timezone.utc)
+        if datetime.now(timezone.utc) - created > timedelta(minutes=20):
+            raise HTTPException(status_code=403, detail="Puoi cancellare solo entro 20 minuti dal caricamento. Solo l'Admin può cancellare in qualsiasi momento.")
+    await db.invoices.delete_one({"id": invoice_id})
     return {"message": "Fattura eliminata"}
 
 @api_router.get("/suppliers")
@@ -2120,16 +2131,23 @@ async def get_versamenti(
 
 @api_router.delete("/versamenti/{versamento_id}")
 async def delete_versamento(versamento_id: str, token_data: dict = Depends(verify_token)):
-    restaurant_id = token_data["restaurant_id"]
-    
-    result = await db.versamenti.delete_one({
-        "id": versamento_id,
-        "restaurant_id": restaurant_id
-    })
-    
-    if result.deleted_count == 0:
+    is_admin = token_data.get("role") == "admin"
+    query = {"id": versamento_id}
+    if not is_admin:
+        query["restaurant_id"] = token_data["restaurant_id"]
+    doc = await db.versamenti.find_one(query)
+    if not doc:
         raise HTTPException(status_code=404, detail="Versamento non trovato")
-    
+    if not is_admin:
+        try:
+            created = datetime.fromisoformat(doc["created_at"].replace('Z', '+00:00'))
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+        except Exception:
+            created = datetime.now(timezone.utc)
+        if datetime.now(timezone.utc) - created > timedelta(minutes=20):
+            raise HTTPException(status_code=403, detail="Puoi cancellare solo entro 20 minuti dal caricamento. Solo l'Admin può cancellare in qualsiasi momento.")
+    await db.versamenti.delete_one({"id": versamento_id})
     return {"message": "Versamento eliminato"}
 
 # ==================== CHIUSURE (CLOSURES) ====================
@@ -2210,16 +2228,23 @@ async def get_chiusure(
 
 @api_router.delete("/chiusure/{chiusura_id}")
 async def delete_chiusura(chiusura_id: str, token_data: dict = Depends(verify_token)):
-    restaurant_id = token_data["restaurant_id"]
-    
-    result = await db.chiusure.delete_one({
-        "id": chiusura_id,
-        "restaurant_id": restaurant_id
-    })
-    
-    if result.deleted_count == 0:
+    is_admin = token_data.get("role") == "admin"
+    query = {"id": chiusura_id}
+    if not is_admin:
+        query["restaurant_id"] = token_data["restaurant_id"]
+    doc = await db.chiusure.find_one(query)
+    if not doc:
         raise HTTPException(status_code=404, detail="Chiusura non trovata")
-    
+    if not is_admin:
+        try:
+            created = datetime.fromisoformat(doc["created_at"].replace('Z', '+00:00'))
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+        except Exception:
+            created = datetime.now(timezone.utc)
+        if datetime.now(timezone.utc) - created > timedelta(minutes=20):
+            raise HTTPException(status_code=403, detail="Puoi cancellare solo entro 20 minuti dal caricamento. Solo l'Admin può cancellare in qualsiasi momento.")
+    await db.chiusure.delete_one({"id": chiusura_id})
     return {"message": "Chiusura eliminata"}
 
 # Include the router in the main app
