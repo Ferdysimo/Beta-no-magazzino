@@ -114,10 +114,22 @@ const CassaPage = () => {
     }
   };
 
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const pendingDeleteTimerRef = useRef(null);
+
   const handleDelete = async (orderId) => {
+    // Two-step confirm: first click arms, second click (within 3s) deletes.
+    if (pendingDeleteId !== orderId) {
+      setPendingDeleteId(orderId);
+      if (pendingDeleteTimerRef.current) clearTimeout(pendingDeleteTimerRef.current);
+      pendingDeleteTimerRef.current = setTimeout(() => setPendingDeleteId(null), 3000);
+      return;
+    }
+    // Confirmed
+    if (pendingDeleteTimerRef.current) clearTimeout(pendingDeleteTimerRef.current);
+    setPendingDeleteId(null);
     try {
       await deleteOrder(orderId);
-      // Refresh logs after deletion
       setTimeout(fetchLogs, 500);
     } catch (error) {
       console.error('Error deleting order:', error);
@@ -511,9 +523,14 @@ const CassaPage = () => {
                 <button
                   data-testid={`delete-btn-${order.order_number}`}
                   onClick={(e) => { e.stopPropagation(); handleDelete(order.id); }}
-                  className="w-8 h-8 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
+                  className={`w-8 h-8 flex items-center justify-center text-white rounded transition-colors ${
+                    pendingDeleteId === order.id
+                      ? 'bg-yellow-500 hover:bg-yellow-600 ring-2 ring-yellow-300 animate-pulse'
+                      : 'bg-red-500 hover:bg-red-600'
+                  }`}
+                  title={pendingDeleteId === order.id ? 'Conferma cancellazione' : 'Cancella'}
                 >
-                  <Trash2 size={16} />
+                  {pendingDeleteId === order.id ? <span className="font-bold text-sm">?</span> : <Trash2 size={16} />}
                 </button>
               </div>
             </div>
@@ -544,9 +561,14 @@ const CassaPage = () => {
                 <button
                   data-testid={`delete-btn-completed-${order.order_number}`}
                   onClick={() => handleDelete(order.id)}
-                  className="w-8 h-8 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
+                  className={`w-8 h-8 flex items-center justify-center text-white rounded transition-colors ${
+                    pendingDeleteId === order.id
+                      ? 'bg-yellow-500 hover:bg-yellow-600 ring-2 ring-yellow-300 animate-pulse'
+                      : 'bg-red-500 hover:bg-red-600'
+                  }`}
+                  title={pendingDeleteId === order.id ? 'Conferma cancellazione' : 'Cancella'}
                 >
-                  <Trash2 size={16} />
+                  {pendingDeleteId === order.id ? <span className="font-bold text-sm">?</span> : <Trash2 size={16} />}
                 </button>
               </div>
             </div>
