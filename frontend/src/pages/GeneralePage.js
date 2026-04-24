@@ -137,7 +137,7 @@ const GeneralePage = () => {
                 </span>
                 
                 {/* Order Description */}
-                <span className={`flex-1 text-xl ${isHighlighted ? 'text-white' : 'text-gray-800'} ${isUppercase(order.description) ? 'font-bold' : 'font-medium'}`}>
+                <span className={`flex-1 text-2xl ${isHighlighted ? 'text-white' : 'text-gray-800'} ${isUppercase(order.description) ? 'font-bold' : 'font-medium'}`}>
                   {order.description}
                 </span>
                 
