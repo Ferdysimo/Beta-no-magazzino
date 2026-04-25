@@ -54,46 +54,138 @@ logger = logging.getLogger(__name__)
 
 ROME_TZ = ZoneInfo("Europe/Rome")
 
+
+def _today_rome_bounds_utc():
+    """Return (start_utc_iso, end_utc_iso) for the current day in Europe/Rome."""
+    now_rome = datetime.now(ROME_TZ)
+    start_rome = now_rome.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_rome = start_rome + timedelta(days=1)
+    return (
+        start_rome.astimezone(timezone.utc).isoformat(),
+        end_rome.astimezone(timezone.utc).isoformat(),
+    )
+
+
+async def _atomic_archive_and_clear(collection_name: str, archive_name: str) -> int:
+    """Atomically archive a collection then clear it. Returns archived count.
+
+    Strategy: read all -> insert_many into archive -> verify inserted_count matches ->
+    only THEN delete from source. If insert fails or count mismatches, abort and keep
+    the source untouched.
+    """
+    src = db[collection_name]
+    arc = db[archive_name]
+    docs = await src.find({}, {"_id": 0}).to_list(100000)
+    if not docs:
+        return 0
+    try:
+        result = await arc.insert_many([{**d} for d in docs], ordered=False)
+        if len(result.inserted_ids) != len(docs):
+            logger.error(
+                f"[ATOMIC] {collection_name}: archived {len(result.inserted_ids)}/{len(docs)}, "
+                f"ABORTING delete to prevent data loss"
+            )
+            return 0
+    except Exception as e:
+        logger.error(f"[ATOMIC] Failed to archive {collection_name}: {e}. NOT deleting source.")
+        return 0
+    # Archive succeeded -> safe to delete source
+    delete_res = await src.delete_many({})
+    logger.info(f"[ATOMIC] {collection_name}: archived={len(docs)}, deleted={delete_res.deleted_count}")
+    return len(docs)
+
+
 # Midnight reset: archive orders and reset counters
 async def midnight_reset():
     logger.info("Running midnight reset - archiving orders and resetting counters")
+    archived_count = 0
     try:
-        # Get all orders
-        all_orders = await db.orders.find({}, {"_id": 0}).to_list(10000)
-        
-        if all_orders:
-            # Insert into archived_orders
-            await db.archived_orders.insert_many([{**o} for o in all_orders])
-            # Delete all orders
-            await db.orders.delete_many({})
-            logger.info(f"Archived {len(all_orders)} orders")
-        
-        # Archive and clear today's cancellation/modification logs
-        del_logs = await db.deletion_logs.find({}, {"_id": 0}).to_list(10000)
-        if del_logs:
-            await db.archived_deletion_logs.insert_many([{**l} for l in del_logs])
-            await db.deletion_logs.delete_many({})
-            logger.info(f"Archived {len(del_logs)} deletion logs")
-        mod_logs = await db.modification_logs.find({}, {"_id": 0}).to_list(10000)
-        if mod_logs:
-            await db.archived_modification_logs.insert_many([{**l} for l in mod_logs])
-            await db.modification_logs.delete_many({})
-            logger.info(f"Archived {len(mod_logs)} modification logs")
+        archived_count = await _atomic_archive_and_clear("orders", "archived_orders")
+        await _atomic_archive_and_clear("deletion_logs", "archived_deletion_logs")
+        await _atomic_archive_and_clear("modification_logs", "archived_modification_logs")
 
-        # Reset all restaurant counters to 0
+        # Reset all restaurant counters to 0 ONLY if archive of orders succeeded
+        # (or there were no orders to archive)
         await db.restaurants.update_many(
             {"role": "restaurant"},
             {"$set": {"order_counter": 0}}
         )
-        logger.info("Order counters reset to 0")
-        
+        logger.info(f"Order counters reset to 0 (archived {archived_count} orders)")
+
         # Broadcast reset to all connected clients
         for rid in list(manager.active_connections.keys()):
             await manager.broadcast_to_restaurant(rid, {
                 "type": "daily_reset"
             })
     except Exception as e:
-        logger.error(f"Midnight reset error: {e}")
+        logger.error(f"Midnight reset error: {e}", exc_info=True)
+
+
+async def recover_stale_orders():
+    """Self-healing: at boot, archive any orders whose created_at is before today's
+    Rome midnight. Prevents stale orders from yesterday polluting today's tablets
+    in case midnight_reset never ran (server downtime, deploy, crash)."""
+    try:
+        start_utc, _ = _today_rome_bounds_utc()
+        stale = await db.orders.find(
+            {"created_at": {"$lt": start_utc}}, {"_id": 0}
+        ).to_list(100000)
+        if not stale:
+            logger.info("[RECOVERY] No stale orders found at boot")
+            return
+        logger.warning(f"[RECOVERY] Found {len(stale)} stale orders at boot, archiving...")
+        # Archive stale orders atomically
+        result = await db.archived_orders.insert_many([{**o} for o in stale], ordered=False)
+        if len(result.inserted_ids) != len(stale):
+            logger.error(
+                f"[RECOVERY] Archive mismatch {len(result.inserted_ids)}/{len(stale)}, ABORTING"
+            )
+            return
+        stale_ids = [o["id"] for o in stale]
+        del_res = await db.orders.delete_many({"id": {"$in": stale_ids}})
+        logger.warning(f"[RECOVERY] Archived {len(stale)} stale orders, deleted {del_res.deleted_count}")
+
+        # Recompute order_counter per restaurant from remaining active orders
+        # so today's numbering continues correctly
+        for rid_doc in await db.restaurants.find({"role": "restaurant"}, {"_id": 0, "id": 1}).to_list(100):
+            rid = rid_doc["id"]
+            highest = await _highest_order_number_today(rid)
+            await db.restaurants.update_one(
+                {"id": rid}, {"$set": {"order_counter": highest}}
+            )
+            logger.warning(f"[RECOVERY] Restaurant {rid} counter set to {highest}")
+    except Exception as e:
+        logger.error(f"[RECOVERY] recover_stale_orders failed: {e}", exc_info=True)
+
+
+async def _highest_order_number_today(restaurant_id: str) -> int:
+    """Return the highest order_number used today for this restaurant across:
+    active orders, archived_orders of today, and deletion_logs of today.
+    Used to safely set order_counter without ever going backwards."""
+    start_utc, end_utc = _today_rome_bounds_utc()
+    max_n = 0
+    # Active orders
+    doc = await db.orders.find_one(
+        {"restaurant_id": restaurant_id},
+        sort=[("order_number", -1)], projection={"_id": 0, "order_number": 1}
+    )
+    if doc and doc.get("order_number"):
+        max_n = max(max_n, doc["order_number"])
+    # Archived orders of today
+    doc = await db.archived_orders.find_one(
+        {"restaurant_id": restaurant_id, "created_at": {"$gte": start_utc, "$lt": end_utc}},
+        sort=[("order_number", -1)], projection={"_id": 0, "order_number": 1}
+    )
+    if doc and doc.get("order_number"):
+        max_n = max(max_n, doc["order_number"])
+    # Deletion logs of today
+    doc = await db.deletion_logs.find_one(
+        {"restaurant_id": restaurant_id, "deleted_at": {"$gte": start_utc, "$lt": end_utc}},
+        sort=[("order_number", -1)], projection={"_id": 0, "order_number": 1}
+    )
+    if doc and doc.get("order_number"):
+        max_n = max(max_n, doc["order_number"])
+    return max_n
 
 async def midnight_scheduler():
     while True:
@@ -670,22 +762,17 @@ async def delete_order(order_id: str, token_data: dict = Depends(verify_token)):
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Order not found")
     
-    # Check if this was the highest order number and decrement counter
-    highest_order = await db.orders.find_one(
-        {"restaurant_id": restaurant_id},
-        sort=[("order_number", -1)]
+    # Recompute order_counter as the MAX across:
+    # - active orders (remaining)
+    # - archived orders of today
+    # - deletion logs of today
+    # This guarantees the counter NEVER goes backwards during the day,
+    # preventing reused numbers and duplicated orders on tablets/Excel.
+    new_counter = await _highest_order_number_today(restaurant_id)
+    await db.restaurants.update_one(
+        {"id": restaurant_id},
+        {"$set": {"order_counter": new_counter}}
     )
-    
-    if highest_order:
-        await db.restaurants.update_one(
-            {"id": restaurant_id},
-            {"$set": {"order_counter": highest_order["order_number"]}}
-        )
-    else:
-        await db.restaurants.update_one(
-            {"id": restaurant_id},
-            {"$set": {"order_counter": 0}}
-        )
     
     # Broadcast deletion
     await manager.broadcast_to_restaurant(restaurant_id, {
@@ -2324,6 +2411,10 @@ async def shutdown_db_client():
 @app.on_event("startup")
 async def startup_scheduler():
     asyncio.create_task(midnight_scheduler())
+    
+    # Self-healing: archive any stale orders left from previous day
+    # (in case midnight_reset never ran due to server downtime)
+    await recover_stale_orders()
     
     # Create MongoDB indexes for faster queries
     await db.orders.create_index([("restaurant_id", 1), ("status", 1)])
