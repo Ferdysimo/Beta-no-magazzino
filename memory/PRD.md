@@ -27,7 +27,9 @@ Sistema di gestione ordini pasta per multi-ristorante (Flaminio, Grazie, Largo d
 - CRUD ordini con numerazione incrementale
 - Timer cottura con colori (verde/rosso/grigio/blu)
 - WebSocket real-time + polling fallback 15s
-- Reset automatico a mezzanotte (ora italiana) con archiviazione ordini
+- Reset automatico a mezzanotte (ora italiana) con archiviazione ordini ATOMICA (verifica insert_many prima di delete_many)
+- Self-healing al boot: `recover_stale_orders()` archivia automaticamente ordini "stantii" se il midnight_reset non è girato
+- `delete_order` calcola counter come MAX storico del giorno (active + archived_today + deletion_logs_today) → counter monotonico, mai indietro
 
 ### Pagine
 - **Cassa**: Creazione ordini, modifica numero+descrizione, stampa selezione multipla, timer, cancellazione reale
