@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
+import SystemAlertsBanner from '../components/SystemAlertsBanner';
 import axios from 'axios';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -33,6 +34,7 @@ const HomePage = () => {
     return (
       <div className="min-h-screen bg-[#F5F5F5]">
         <Header />
+        <SystemAlertsBanner />
         <main className="max-w-3xl mx-auto p-6">
           <div className="bg-[#ECECEC] border border-gray-300 rounded-lg p-8">
             <div className="flex items-center gap-4 mb-6">
@@ -82,6 +84,7 @@ const HomePage = () => {
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
       <Header />
+      <SystemAlertsBanner />
       
       <main className="max-w-5xl mx-auto p-6">
         <div className="bg-[#ECECEC] border border-gray-300 rounded-lg p-8">

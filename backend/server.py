@@ -124,7 +124,8 @@ async def midnight_reset():
 async def recover_stale_orders():
     """Self-healing: at boot, archive any orders whose created_at is before today's
     Rome midnight. Prevents stale orders from yesterday polluting today's tablets
-    in case midnight_reset never ran (server downtime, deploy, crash)."""
+    in case midnight_reset never ran (server downtime, deploy, crash).
+    Records an alert in system_alerts collection if stale orders were found."""
     try:
         start_utc, _ = _today_rome_bounds_utc()
         stale = await db.orders.find(
@@ -147,13 +148,28 @@ async def recover_stale_orders():
 
         # Recompute order_counter per restaurant from remaining active orders
         # so today's numbering continues correctly
-        for rid_doc in await db.restaurants.find({"role": "restaurant"}, {"_id": 0, "id": 1}).to_list(100):
+        per_restaurant = {}
+        for rid_doc in await db.restaurants.find({"role": "restaurant"}, {"_id": 0, "id": 1, "location": 1}).to_list(100):
             rid = rid_doc["id"]
+            loc = rid_doc.get("location", "?")
+            count_for_rid = sum(1 for s in stale if s.get("restaurant_id") == rid)
             highest = await _highest_order_number_today(rid)
             await db.restaurants.update_one(
                 {"id": rid}, {"$set": {"order_counter": highest}}
             )
+            if count_for_rid > 0:
+                per_restaurant[loc] = count_for_rid
             logger.warning(f"[RECOVERY] Restaurant {rid} counter set to {highest}")
+
+        # Record alert for Admin dashboard
+        await db.system_alerts.insert_one({
+            "id": str(uuid.uuid4()),
+            "type": "stale_orders_recovered",
+            "stale_count": len(stale),
+            "per_restaurant": per_restaurant,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "acknowledged": False,
+        })
     except Exception as e:
         logger.error(f"[RECOVERY] recover_stale_orders failed: {e}", exc_info=True)
 
@@ -528,6 +544,31 @@ async def get_admin_restaurants(token_data: dict = Depends(verify_token)):
         {"_id": 0, "password": 0}
     ).to_list(100)
     return restaurants
+
+
+@api_router.get("/admin/system-alerts")
+async def get_system_alerts(token_data: dict = Depends(verify_token)):
+    """Return unacknowledged system alerts (e.g. stale orders recovered at boot)."""
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    alerts = await db.system_alerts.find(
+        {"acknowledged": False},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    return {"alerts": alerts}
+
+
+@api_router.post("/admin/system-alerts/{alert_id}/acknowledge")
+async def acknowledge_system_alert(alert_id: str, token_data: dict = Depends(verify_token)):
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    result = await db.system_alerts.update_one(
+        {"id": alert_id},
+        {"$set": {"acknowledged": True, "acknowledged_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return {"message": "Alert acknowledged"}
 
 @api_router.get("/admin/media-locali")
 async def get_media_locali(token_data: dict = Depends(verify_token)):
