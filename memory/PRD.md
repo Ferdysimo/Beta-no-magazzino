@@ -30,6 +30,10 @@ Sistema di gestione ordini pasta per multi-ristorante (Flaminio, Grazie, Largo d
 - Reset automatico a mezzanotte (ora italiana) con archiviazione ordini ATOMICA (verifica insert_many prima di delete_many)
 - Self-healing al boot: `recover_stale_orders()` archivia automaticamente ordini "stantii" se il midnight_reset non è girato
 - `delete_order` calcola counter come MAX storico del giorno (active + archived_today + deletion_logs_today) → counter monotonico, mai indietro
+- `create_order` ATOMICO via aggregation pipeline `$max(counter+1, requested)` su find_one_and_update — concorrenza-safe, immune a numeri duplicati anche con N richieste concorrenti
+- Endpoint `GET /api/orders/next-number` autoritativo per il frontend (no più calcoli dai soli pending)
+- Indice MongoDB UNIQUE su `(restaurant_id, order_number)` su `orders` come rete di sicurezza
+- Alert dashboard Admin: banner rosso quando il sistema rileva ordini stantii al boot
 
 ### Pagine
 - **Cassa**: Creazione ordini, modifica numero+descrizione, stampa selezione multipla, timer, cancellazione reale
