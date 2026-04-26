@@ -1,0 +1,41 @@
+{
+  "summary": "P0 atomic counter fix verified end-to-end. 13/13 new tests pass + 9/9 iteration-5 regression tests pass = 22/22 total. Covered: POST without order_number increments by 1; POST with higher order_number jumps the counter; POST with lower/already-used order_number returns counter+1 (KEY DUPLICATE-NUMBER FIX); POST with equal order_number returns counter+1; 10 parallel POSTs without explicit number produce 10 unique sequential numbers; 10 parallel POSTs all requesting order_number=100 produce 10 unique numbers (100..109) thanks to atomic $max in find_one_and_update; GET /api/orders/next-number returns counter+1 (1 initially, 4 after 3 creates, requires auth); UNIQUE index (restaurant_id, order_number) is created at startup and direct duplicate insert in MongoDB raises DuplicateKeyError; regressions intact (DELETE never lowers counter; GET /api/orders defaults to pending).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_order_counter_atomic_p0.py",
+    "/app/backend/tests/test_order_counter_p0.py",
+    "/app/test_reports/pytest/p0_atomic_results.xml",
+    "/app/test_reports/pytest/p0_counter_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "create_order (server.py L651-714) now uses an aggregation pipeline in find_one_and_update with $max(counter+1, requested). This is correctly atomic at the document level: motor/MongoDB serializes concurrent updates on the same restaurant doc, so the counter is monotonic and no two concurrent POSTs can ever read the same post-update value. Verified with 10 parallel POSTs (no duplicates) and 10 parallel POSTs with the same explicit order_number=100 (got 100..109).",
+    "GET /api/orders/next-number (L731-743) reads order_counter directly from the DB and returns counter+1. Verified to require auth (401/403 without token).",
+    "Unique index on (restaurant_id, order_number) (server.py L2492-2499) is created on startup; verified present via index_information() and verified to actually reject duplicate inserts with DuplicateKeyError. Note: index creation is wrapped in try/except so existing duplicates at boot only log a warning and do not crash startup - acceptable for migration safety.",
+    "MINOR/COSMETIC: server.py L2472/L2476 still uses deprecated @app.on_event(\"startup\")/(\"shutdown\"); same DeprecationWarning observed in iteration_5. Recommend migrating to FastAPI lifespan handlers when convenient.",
+    "MINOR: create_order's aggregation pipeline coerces requested via `data.order_number or 0`. If a client deliberately sends order_number=0 or negative, $max(counter+1, <=0) collapses to counter+1, which is the safe behavior. Pydantic does not constrain to >0 - consider adding `Field(gt=0)` if you want explicit 422 instead of silent fallback. Non-blocking.",
+    "MINOR: Backup file write to backup_flaminio.txt (L703-706) happens AFTER counter increment. If the disk write fails the order is still committed to DB and counter advanced, which is the correct precedence. Just noting.",
+    "OBSERVATION: The unique index protects only the active `orders` collection. After midnight_reset clears the collection, the next day starts fresh. archived_orders has no uniqueness constraint - acceptable since archives accumulate across days and order_number resets to 0 each day."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_order_counter_atomic_p0.py (created, 13 tests)"
+  ],
+  "success_rate": {
+    "backend": "100% (22/22: 13 new atomic tests + 9 iteration-5 regression tests)",
+    "frontend": "not tested (per instructions: backend only)"
+  },
+  "test_credentials": "Flaminio / Pastasciutt4! (used). Admin / Pastasciutt4! available but not needed.",
+  "seed_data_creation": "All TEST_-prefixed orders + per-restaurant deletion_logs + archived_orders are scrubbed before AND after each test via autouse fixture; restaurant order_counter is reset to 0 between tests. No production data left behind.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "P0 atomic counter + unique index + next-number endpoint are FIXED and fully covered by /app/backend/tests/test_order_counter_atomic_p0.py (13 tests) + /app/backend/tests/test_order_counter_p0.py (9 iteration-5 regression tests). To run: export REACT_APP_BACKEND_URL, MONGO_URL, DB_NAME and run `pytest /app/backend/tests/test_order_counter_atomic_p0.py -v`. Each test takes ~2s except concurrency tests (~10s each) and the 10s waits in $max validation - total suite ~80s. Cleanup is autouse so the suite is rerunnable safely; no production data is touched besides the Flaminio restaurant counter which is reset to 0 between tests (acceptable since it auto-rebuilds on next live order).",
+  "rca_of_the_issue": "ROOT CAUSE: pre-fix create_order had two separate code paths: (a) when client did NOT pass order_number, an atomic $inc on order_counter was used; (b) when client DID pass order_number, an `update_one` set order_counter to MAX(current, requested) WITHOUT being atomic with the subsequent insert. Two concurrent clients passing the same number could both read counter=N, both call update_one to N, and both insert with order_number=N -> duplicates. Additionally the frontend Cassa computed the next number from in-memory `pending` orders, which is a subset that empties as soon as orders are completed, so on a busy night the frontend would propose numbers that had already been issued and archived. FIX: (1) Single atomic aggregation-pipeline find_one_and_update with $max([counter+1, requested]) - guarantees monotonicity even if client sends a stale/duplicate number. (2) New GET /api/orders/next-number endpoint that returns the authoritative counter+1 from the DB, used by the Cassa frontend instead of computing from local pending list. (3) UNIQUE index (restaurant_id, order_number) on the active orders collection as last-line-of-defense against any remaining race or buggy direct insert. VERIFIED via tests: requested=5 with counter=10 returns 11 (not 5); 10 parallel POSTs with same order_number=100 yield 100..109 all unique; direct duplicate insert raises DuplicateKeyError; next-number returns counter+1."
+}

@@ -74,19 +74,39 @@ const CassaPage = () => {
     fetchLogs();
   }, [token]);
 
-  // Calculate next order number based on existing orders
+  // Calculate next order number based on existing orders.
+  // Pending list can shrink (orders move to completed/archived), so it's only
+  // a fallback. Authoritative value is fetched from /api/orders/next-number.
   const getNextOrderNumber = () => {
     if (orders.length === 0) return 1;
     const maxNumber = Math.max(...orders.map(o => o.order_number));
     return maxNumber + 1;
   };
 
-  // Update order number when orders change, only if user hasn't manually edited it
+  // Fetch authoritative next number from server (counter-based)
+  const fetchNextOrderNumber = async () => {
+    if (!token) return;
+    try {
+      const res = await axios.get(`${API}/orders/next-number`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const serverNext = res.data?.next_number;
+      if (typeof serverNext === 'number' && !userEditedNumber) {
+        setOrderNumber(String(serverNext));
+      }
+    } catch (e) {
+      console.error('Error fetching next number:', e);
+    }
+  };
+
+  // Update order number when orders change: prefer server's authoritative value
   useEffect(() => {
     if (!userEditedNumber) {
+      // Optimistic local guess first (so UI doesn't flicker), then reconcile with server
       setOrderNumber(String(getNextOrderNumber()));
+      fetchNextOrderNumber();
     }
-  }, [orders]);
+  }, [orders]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-focus input
   useEffect(() => {

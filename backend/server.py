@@ -652,22 +652,31 @@ class OrderCreate(BaseModel):
 async def create_order(data: OrderCreate, token_data: dict = Depends(verify_token)):
     restaurant_id = token_data["restaurant_id"]
     
-    # Use provided order number or get next one
-    if data.order_number:
-        order_number = data.order_number
-        # Update counter if provided number is higher
-        await db.restaurants.update_one(
-            {"id": restaurant_id, "order_counter": {"$lt": data.order_number}},
-            {"$set": {"order_counter": data.order_number}}
-        )
-    else:
-        # Get and increment order counter
-        result = await db.restaurants.find_one_and_update(
-            {"id": restaurant_id},
-            {"$inc": {"order_counter": 1}},
-            return_document=True
-        )
-        order_number = result["order_counter"]
+    # ATOMIC counter assignment: in a single MongoDB update we set the counter
+    # to MAX(current_counter + 1, client_supplied_number). This guarantees:
+    # - No two concurrent POSTs ever receive the same order_number
+    # - Counter never goes backwards (even if client passes an old number)
+    # - If client passes a higher number, counter jumps to that
+    requested = data.order_number or 0
+    result = await db.restaurants.find_one_and_update(
+        {"id": restaurant_id},
+        [
+            {
+                "$set": {
+                    "order_counter": {
+                        "$max": [
+                            {"$add": [{"$ifNull": ["$order_counter", 0]}, 1]},
+                            requested,
+                        ]
+                    }
+                }
+            }
+        ],
+        return_document=True,
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+    order_number = result["order_counter"]
     
     order_id = str(uuid.uuid4())
     
@@ -717,6 +726,21 @@ async def get_orders(
     
     orders = await db.orders.find(query, {"_id": 0}).sort("order_number", -1).to_list(500)
     return [OrderResponse(**o) for o in orders]
+
+
+@api_router.get("/orders/next-number")
+async def get_next_order_number(token_data: dict = Depends(verify_token)):
+    """Return the next order_number that would be assigned for this restaurant.
+    Reads `order_counter` directly from the DB (authoritative). Used by Cassa
+    to display the upcoming number without relying on a possibly-pruned local
+    pending list (which would otherwise reuse already-used numbers)."""
+    restaurant_id = token_data["restaurant_id"]
+    rest = await db.restaurants.find_one(
+        {"id": restaurant_id}, {"_id": 0, "order_counter": 1}
+    )
+    if not rest:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+    return {"next_number": (rest.get("order_counter", 0) or 0) + 1}
 
 @api_router.get("/orders/{order_id}", response_model=OrderResponse)
 async def get_order(order_id: str, token_data: dict = Depends(verify_token)):
@@ -2461,6 +2485,18 @@ async def startup_scheduler():
     await db.orders.create_index([("restaurant_id", 1), ("status", 1)])
     await db.orders.create_index([("restaurant_id", 1), ("created_at", -1)])
     await db.orders.create_index([("restaurant_id", 1), ("kitchen_completed", 1)])
+    # UNIQUE index: prevents two orders for the same restaurant having the same
+    # order_number in the active orders collection. Last-line-of-defense against
+    # the duplicate-number bug. Active orders are cleared every midnight so the
+    # uniqueness scope is naturally per-day.
+    try:
+        await db.orders.create_index(
+            [("restaurant_id", 1), ("order_number", 1)],
+            unique=True,
+            name="uniq_restaurant_order_number",
+        )
+    except Exception as e:
+        logger.warning(f"Could not create unique index on orders (likely existing duplicates): {e}")
     await db.archived_orders.create_index([("restaurant_id", 1), ("created_at", -1)])
     await db.deletion_logs.create_index([("restaurant_id", 1), ("deleted_at", -1)])
     logger.info("MongoDB indexes created")
