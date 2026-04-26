@@ -663,20 +663,16 @@ async def create_order(data: OrderCreate, token_data: dict = Depends(verify_toke
     #     consistent.
     if data.order_number and data.order_number > 0:
         requested = data.order_number
+        # Honour the cashier's explicit choice: set the counter to the
+        # requested number (forward OR backward). This lets the cashier
+        # restart the day's numbering at will (e.g. "annulla tutto, riparto
+        # da 1"). Concurrency safety against duplicates among ACTIVE orders
+        # is enforced by the UNIQUE index (restaurant_id, order_number) on
+        # the `orders` collection - any collision raises DuplicateKeyError
+        # and is translated to HTTP 409 below.
         result = await db.restaurants.find_one_and_update(
             {"id": restaurant_id},
-            [
-                {
-                    "$set": {
-                        "order_counter": {
-                            "$max": [
-                                {"$ifNull": ["$order_counter", 0]},
-                                requested,
-                            ]
-                        }
-                    }
-                }
-            ],
+            {"$set": {"order_counter": requested}},
             return_document=True,
         )
         if not result:
