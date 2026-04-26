@@ -99,11 +99,12 @@ const CassaPage = () => {
     }
   };
 
-  // Update order number when orders change: prefer server's authoritative value
+  // When the orders list changes (create/delete/complete), reconcile the
+  // input with the server's authoritative counter. We do NOT update from the
+  // local `pending` list because it can shrink (e.g. on delete) and would
+  // briefly show a stale lower number, causing a visual flicker.
   useEffect(() => {
     if (!userEditedNumber) {
-      // Optimistic local guess first (so UI doesn't flicker), then reconcile with server
-      setOrderNumber(String(getNextOrderNumber()));
       fetchNextOrderNumber();
     }
   }, [orders]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -119,10 +120,14 @@ const CassaPage = () => {
     
     setLoading(true);
     try {
-      await createOrder(description.trim(), parseInt(orderNumber) || getNextOrderNumber());
+      const created = await createOrder(description.trim(), parseInt(orderNumber) || getNextOrderNumber());
       setDescription('');
       setUserEditedNumber(false);
-      setOrderNumber(String(getNextOrderNumber() + 1));
+      // Use the actual assigned number from the server response (it may differ
+      // from the requested one if the cashier left auto and counter advanced).
+      if (created?.order_number) {
+        setOrderNumber(String(created.order_number + 1));
+      }
       // Focus input after a short delay to ensure DOM is updated
       setTimeout(() => {
         inputRef.current?.focus();
