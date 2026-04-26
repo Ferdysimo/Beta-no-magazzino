@@ -286,7 +286,11 @@ export const OrderProvider = ({ children }) => {
       headers: { Authorization: `Bearer ${tokenRef.current}` }
     });
     guardOrder(response.data.id);
-    setOrders(prev => [response.data, ...prev]);
+    // Dedup-by-id: if the WebSocket broadcast arrived BEFORE this HTTP response
+    // and already added the order to local state, do not prepend again.
+    setOrders(prev => prev.some(o => o.id === response.data.id)
+      ? prev.map(o => o.id === response.data.id ? response.data : o)
+      : [response.data, ...prev]);
     return response.data;
   };
 
