@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import DuplicateKeyError
 import os
 import logging
 import base64
@@ -652,31 +653,44 @@ class OrderCreate(BaseModel):
 async def create_order(data: OrderCreate, token_data: dict = Depends(verify_token)):
     restaurant_id = token_data["restaurant_id"]
     
-    # ATOMIC counter assignment: in a single MongoDB update we set the counter
-    # to MAX(current_counter + 1, client_supplied_number). This guarantees:
-    # - No two concurrent POSTs ever receive the same order_number
-    # - Counter never goes backwards (even if client passes an old number)
-    # - If client passes a higher number, counter jumps to that
-    requested = data.order_number or 0
-    result = await db.restaurants.find_one_and_update(
-        {"id": restaurant_id},
-        [
-            {
-                "$set": {
-                    "order_counter": {
-                        "$max": [
-                            {"$add": [{"$ifNull": ["$order_counter", 0]}, 1]},
-                            requested,
-                        ]
+    # Two distinct flows:
+    # (a) No order_number provided -> atomic $inc on counter (race-safe).
+    # (b) Explicit order_number provided -> honour the cashier's choice.
+    #     Uniqueness in active orders is enforced by the UNIQUE index on
+    #     (restaurant_id, order_number); concurrent collisions raise
+    #     DuplicateKeyError which we translate to 409. The counter is moved
+    #     forward to MAX(current, requested) so subsequent auto-numbers stay
+    #     consistent.
+    if data.order_number and data.order_number > 0:
+        requested = data.order_number
+        result = await db.restaurants.find_one_and_update(
+            {"id": restaurant_id},
+            [
+                {
+                    "$set": {
+                        "order_counter": {
+                            "$max": [
+                                {"$ifNull": ["$order_counter", 0]},
+                                requested,
+                            ]
+                        }
                     }
                 }
-            }
-        ],
-        return_document=True,
-    )
-    if not result:
-        raise HTTPException(status_code=404, detail="Restaurant not found")
-    order_number = result["order_counter"]
+            ],
+            return_document=True,
+        )
+        if not result:
+            raise HTTPException(status_code=404, detail="Restaurant not found")
+        order_number = requested
+    else:
+        result = await db.restaurants.find_one_and_update(
+            {"id": restaurant_id},
+            {"$inc": {"order_counter": 1}},
+            return_document=True,
+        )
+        if not result:
+            raise HTTPException(status_code=404, detail="Restaurant not found")
+        order_number = result["order_counter"]
     
     order_id = str(uuid.uuid4())
     
@@ -696,7 +710,17 @@ async def create_order(data: OrderCreate, token_data: dict = Depends(verify_toke
         "hidden_generale": False
     }
     
-    await db.orders.insert_one(order)
+    try:
+        await db.orders.insert_one(order)
+    except DuplicateKeyError:
+        # The unique index (restaurant_id, order_number) rejected the insert
+        # because that number is already in use among active orders. This can
+        # happen if the cashier explicitly requests a number that's currently
+        # active, or if two cashiers race on the same explicit number.
+        raise HTTPException(
+            status_code=409,
+            detail=f"Numero #{order_number} già in uso tra gli ordini attivi"
+        )
     
     # Backup to file for Flaminio
     restaurant = await db.restaurants.find_one({"id": restaurant_id})

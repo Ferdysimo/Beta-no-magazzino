@@ -1273,3 +1273,6 @@
 2 TEST_mid_1
 3 TEST_mid_2
 4 TEST_mid_3
+1 TEST_auto1
+50 TEST_explicit50
+5 TEST_lower5

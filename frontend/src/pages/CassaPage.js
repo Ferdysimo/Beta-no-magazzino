@@ -129,6 +129,13 @@ const CassaPage = () => {
       }, 100);
     } catch (error) {
       console.error('Error creating order:', error);
+      if (error?.response?.status === 409) {
+        const detail = error?.response?.data?.detail || `Numero #${orderNumber} già in uso`;
+        // Use native alert: minimal, blocking, works on any tablet without a toast lib
+        window.alert(`${detail}.\nScegli un numero diverso o lascia vuoto per usare il prossimo automatico.`);
+      } else {
+        window.alert('Errore nel creare la pasta. Riprova.');
+      }
     } finally {
       setLoading(false);
     }
