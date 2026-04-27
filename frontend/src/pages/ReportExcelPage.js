@@ -61,13 +61,18 @@ const ReportExcelPage = () => {
     return options;
   };
 
+  // Filter out deleted items: the Excel export should reflect only orders
+  // that actually went out of the kitchen (pending/completed). Deletions are
+  // tracked separately in the Report di Cassa.
+  const excelItems = (report?.items || []).filter(it => it.status !== 'deleted');
+
   // Export to CSV (Excel compatible)
   const exportToExcel = () => {
-    if (!report?.items?.length) return;
+    if (!excelItems.length) return;
     
     // Create CSV content
     let csv = 'Ordine\n';
-    report.items.forEach(item => {
+    excelItems.forEach(item => {
       csv += `${item.order_number} ${item.description}\n`;
     });
     
@@ -123,7 +128,7 @@ const ReportExcelPage = () => {
           <button
             data-testid="excel-download-btn"
             onClick={exportToExcel}
-            disabled={!report?.items?.length}
+            disabled={!excelItems.length}
             className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white h-10 px-4 rounded-md font-bold transition-colors disabled:opacity-50"
           >
             <Download size={18} />
@@ -140,7 +145,7 @@ const ReportExcelPage = () => {
               </tr>
             </thead>
             <tbody>
-              {report?.items?.map((item, index) => (
+              {excelItems.map((item, index) => (
                 <tr 
                   key={index}
                   data-testid={`excel-row-${item.order_number}`}
@@ -154,7 +159,7 @@ const ReportExcelPage = () => {
                 </tr>
               ))}
               
-              {(!report?.items || report.items.length === 0) && (
+              {excelItems.length === 0 && (
                 <tr>
                   <td className="px-6 py-8 text-center text-gray-500">
                     Nessun ordine per questa data
@@ -168,7 +173,7 @@ const ReportExcelPage = () => {
         {/* Total count */}
         {report && (
           <div className="mt-4 text-sm text-gray-600">
-            Totale ordini: <strong>{report.total_orders}</strong>
+            Totale ordini: <strong>{excelItems.length}</strong>
           </div>
         )}
       </main>
