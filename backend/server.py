@@ -361,6 +361,7 @@ class RichiestaItem(BaseModel):
 
 class RichiestaCreate(BaseModel):
     items: List[RichiestaItem]
+    extra_note: Optional[str] = None
 
 class RichiestaErrorReport(BaseModel):
     reason: str
@@ -1728,8 +1729,8 @@ async def create_richiesta(data: RichiestaCreate, token_data: dict = Depends(ver
     """Locale (or admin impersonating a locale) creates a new request."""
     if token_data.get("role") == "magazzino":
         raise HTTPException(status_code=403, detail="Il magazziniere non può creare richieste")
-    if not data.items:
-        raise HTTPException(status_code=400, detail="Aggiungi almeno un prodotto")
+    if not data.items and not (data.extra_note and data.extra_note.strip()):
+        raise HTTPException(status_code=400, detail="Aggiungi almeno un prodotto o un extra")
 
     restaurant_id = token_data["restaurant_id"]
     restaurant = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0, "password": 0})
@@ -1738,7 +1739,8 @@ async def create_richiesta(data: RichiestaCreate, token_data: dict = Depends(ver
 
     # Filter out zero-quantity items
     clean_items = [i.dict() for i in data.items if i.quantity and i.quantity > 0]
-    if not clean_items:
+    extra_note = (data.extra_note or "").strip()
+    if not clean_items and not extra_note:
         raise HTTPException(status_code=400, detail="Nessuna quantità richiesta")
 
     ddt_number = await _get_next_ddt_number()
@@ -1751,6 +1753,7 @@ async def create_richiesta(data: RichiestaCreate, token_data: dict = Depends(ver
         "restaurant_id": restaurant_id,
         "restaurant_location": restaurant.get("location", ""),
         "items": clean_items,
+        "extra_note": extra_note,
         "status": "pending",
         "created_at": now_iso,
         "evasa_at": None,

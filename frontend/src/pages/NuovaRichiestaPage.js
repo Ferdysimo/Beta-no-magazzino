@@ -25,6 +25,7 @@ const NuovaRichiestaPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [keypadProductId, setKeypadProductId] = useState(null);
   const [keypadValue, setKeypadValue] = useState('');
+  const [extraNote, setExtraNote] = useState('');
 
   const headers = () => {
     const h = { Authorization: `Bearer ${token}` };
@@ -70,6 +71,8 @@ const NuovaRichiestaPage = () => {
     [cart]
   );
 
+  const hasExtra = extraNote.trim().length > 0;
+
   const setQty = (productId, qty) => {
     const n = Math.max(0, Math.floor(Number(qty) || 0));
     setCart(c => {
@@ -109,13 +112,17 @@ const NuovaRichiestaPage = () => {
         quantity: cart[p.id],
       }));
 
-    if (items.length === 0) {
-      alert('Seleziona almeno un prodotto.');
+    if (items.length === 0 && !extraNote.trim()) {
+      alert('Seleziona almeno un prodotto o scrivi qualcosa nel campo Extra.');
       return;
     }
     setSubmitting(true);
     try {
-      const res = await axios.post(`${API}/richieste`, { items }, { headers: headers() });
+      const res = await axios.post(
+        `${API}/richieste`,
+        { items, extra_note: extraNote.trim() || null },
+        { headers: headers() }
+      );
       navigate(`/ddt/${res.data.id}`);
     } catch (e) {
       alert(e.response?.data?.detail || 'Errore invio richiesta');
@@ -228,14 +235,40 @@ const NuovaRichiestaPage = () => {
             })}
           </div>
         )}
+
+        {/* Extra free-text card — sits at the very bottom of the product list */}
+        <div className="mt-4 bg-white border-2 border-dashed border-[#F5C518] rounded-xl p-4 shadow-sm">
+          <label htmlFor="extra-note-input" className="flex items-center gap-2 mb-2">
+            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-[#F5C518] text-gray-900 font-bold text-sm">+</span>
+            <span className="font-bold text-gray-900">Extra</span>
+            <span className="text-xs text-gray-500">(qualsiasi cosa non in lista — verrà aggiunto in fondo alla bolla)</span>
+          </label>
+          <textarea
+            id="extra-note-input"
+            data-testid="richiesta-extra-note"
+            value={extraNote}
+            onChange={e => setExtraNote(e.target.value)}
+            placeholder="Es. 2 cassette pomodoro Pachino, 1 pacco di sale grosso..."
+            rows={3}
+            className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-base resize-y focus:ring-2 focus:ring-[#F5C518] focus:border-transparent"
+          />
+          {hasExtra && (
+            <div className="mt-2 text-xs text-emerald-700 font-medium">
+              ✓ Aggiunto come nota libera
+            </div>
+          )}
+        </div>
       </main>
 
       {/* Sticky bottom bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-3 py-3 shadow-lg z-20">
         <div className="max-w-3xl mx-auto flex items-center gap-3">
           <div className="flex-1">
-            <div className="text-xs text-gray-500">Prodotti nel carrello</div>
-            <div className="font-bold text-gray-900">{totalItems}</div>
+            <div className="text-xs text-gray-500">Prodotti / extra</div>
+            <div className="font-bold text-gray-900">
+              {totalItems}
+              {hasExtra && <span className="ml-1 text-[#F5C518]">+ extra</span>}
+            </div>
           </div>
           <button
             onClick={() => navigate('/richiesta-merce')}
@@ -246,7 +279,7 @@ const NuovaRichiestaPage = () => {
           <button
             data-testid="btn-invia-richiesta"
             onClick={handleSubmit}
-            disabled={totalItems === 0 || submitting}
+            disabled={(totalItems === 0 && !hasExtra) || submitting}
             className="flex-1 px-5 py-3 bg-gradient-to-r from-[#F5C518] to-[#F5A518] hover:from-[#F5A518] hover:to-[#E59500] disabled:opacity-40 disabled:cursor-not-allowed text-gray-900 font-bold rounded-lg shadow"
           >
             {submitting ? 'Invio...' : 'INVIA RICHIESTA'}

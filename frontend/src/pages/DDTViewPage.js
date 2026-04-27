@@ -110,6 +110,14 @@ const DDTViewPage = () => {
                 <td className="border border-gray-300 px-3 py-2 text-center font-semibold">{it.quantity}</td>
               </tr>
             ))}
+            {ddt.extra_note && ddt.extra_note.trim() && (
+              <tr className="bg-yellow-50">
+                <td colSpan={3} className="border border-gray-300 px-3 py-2">
+                  <div className="text-xs uppercase tracking-wide text-gray-600 font-bold mb-1">Extra</div>
+                  <div className="whitespace-pre-wrap text-sm text-gray-900">{ddt.extra_note}</div>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
 
