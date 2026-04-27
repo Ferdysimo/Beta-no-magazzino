@@ -248,7 +248,6 @@ const NuovaRichiestaPage = () => {
             data-testid="richiesta-extra-note"
             value={extraNote}
             onChange={e => setExtraNote(e.target.value)}
-            placeholder="Es. 2 cassette pomodoro Pachino, 1 pacco di sale grosso..."
             rows={3}
             className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-base resize-y focus:ring-2 focus:ring-[#F5C518] focus:border-transparent"
           />
