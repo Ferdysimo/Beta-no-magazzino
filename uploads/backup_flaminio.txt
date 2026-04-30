@@ -1310,3 +1310,10 @@
 12 carb
 13 carb
 14 amat
+15 carbà
+16 carb
+17 carb
+18 carb
+19 carb
+20 carb,
+21 carb
