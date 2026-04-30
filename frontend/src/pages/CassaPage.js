@@ -29,16 +29,6 @@ const getTimerColor = (order) => {
 
 const CassaPage = () => {
   const { restaurant, token, isAdmin } = useAuth();
-  const showBeverages = restaurant?.username === 'Flaminio' || (isAdmin && restaurant?.location === 'Flaminio');
-  const beveragesVisible = showBeverages && !hideBeverages;
-
-  const toggleBeverages = () => {
-    setHideBeverages(prev => {
-      const next = !prev;
-      try { localStorage.setItem('cassa_hide_beverages', next ? '1' : '0'); } catch (e) { /* ignore */ }
-      return next;
-    });
-  };
   const { orders, createOrder, deleteOrder, completeOrder, updateOrder } = useOrders();
   const [orderNumber, setOrderNumber] = useState('');
   const [userEditedNumber, setUserEditedNumber] = useState(false);
@@ -56,6 +46,17 @@ const CassaPage = () => {
   const [printData, setPrintData] = useState(null); // {orario, rows: [{number, description}]}
   const inputRef = useRef(null);
   const [tick, setTick] = useState(0);
+
+  const showBeverages = restaurant?.username === 'Flaminio' || (isAdmin && restaurant?.location === 'Flaminio');
+  const beveragesVisible = showBeverages && !hideBeverages;
+
+  const toggleBeverages = () => {
+    setHideBeverages(prev => {
+      const next = !prev;
+      try { localStorage.setItem('cassa_hide_beverages', next ? '1' : '0'); } catch (e) { /* ignore */ }
+      return next;
+    });
+  };
 
   // Tick every second for live timer colors
   useEffect(() => {
