@@ -152,11 +152,15 @@ const MagazzinoBevandePage = () => {
                             {c.invoice_date ? ` • fattura del ${c.invoice_date}` : ''}
                           </div>
                           <div className="mt-2 flex flex-wrap gap-1.5">
-                            {(c.items || []).map((it, i) => (
-                              <span key={i} className="inline-flex items-center gap-1 bg-gray-100 text-gray-800 rounded px-2 py-0.5 text-xs font-medium">
-                                <span className="font-bold">{it.sigla}</span> ×{it.quantity}
-                              </span>
-                            ))}
+                            {(c.items || []).map((it, i) => {
+                              const cases = it.cases ?? it.quantity ?? 0;
+                              const units = it.units ?? (cases * (c.units_per_case || 24));
+                              return (
+                                <span key={i} className="inline-flex items-center gap-1 bg-gray-100 text-gray-800 rounded px-2 py-0.5 text-xs font-medium">
+                                  <span className="font-bold">{it.sigla}</span> ×{cases} <span className="text-gray-500">({units}u.)</span>
+                                </span>
+                              );
+                            })}
                           </div>
                           {c.notes && <div className="mt-2 text-xs text-gray-600 italic">{c.notes}</div>}
                         </div>

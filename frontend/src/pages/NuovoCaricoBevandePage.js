@@ -120,9 +120,12 @@ const NuovoCaricoBevandePage = () => {
           <ArrowLeft size={18} /> Indietro
         </button>
 
-        <h1 className="font-heading text-2xl sm:text-3xl font-bold text-gray-900 uppercase mb-6">
+        <h1 className="font-heading text-2xl sm:text-3xl font-bold text-gray-900 uppercase mb-2">
           Nuovo Carico Bevande
         </h1>
+        <p className="text-sm text-gray-600 mb-4">
+          Inserisci il numero di <strong>casse</strong> ricevute. Una cassa = 24 unità.
+        </p>
 
         {/* Supplier + date */}
         <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4 space-y-3">
@@ -179,14 +182,22 @@ const NuovoCaricoBevandePage = () => {
 
         {/* Beverages */}
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-600 uppercase tracking-wide flex items-center justify-between">
+            <span>Bevanda</span>
+            <span>Casse (1 cassa = 24 u.)</span>
+          </div>
           {beverages.map(b => {
             const q = quantities[b.sigla] || 0;
+            const units = q * 24;
             return (
               <div key={b.sigla} data-testid={`bev-row-${b.sigla}`} className="flex items-center gap-3 px-3 py-3 border-b border-gray-100 last:border-b-0">
                 <div className="w-12 font-extrabold text-lg text-gray-900">{b.sigla}</div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-gray-900 truncate">{b.name}</div>
-                  <div className="text-xs text-gray-500">€ {b.price.toFixed(2)}</div>
+                  <div className="text-xs text-gray-500">
+                    € {b.price.toFixed(2)}
+                    {q > 0 && <span className="ml-2 text-emerald-700 font-semibold">→ {units} unità</span>}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1">
                   <button
@@ -224,8 +235,10 @@ const NuovoCaricoBevandePage = () => {
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-3 py-3 shadow-lg z-20">
         <div className="max-w-3xl mx-auto flex items-center gap-3">
           <div className="flex-1">
-            <div className="text-xs text-gray-500">Unità totali</div>
-            <div className="font-bold text-gray-900">{totalUnits}</div>
+            <div className="text-xs text-gray-500">Casse totali / unità</div>
+            <div className="font-bold text-gray-900">
+              {totalUnits}{' '}<span className="text-[#B8860B]">({totalUnits * 24} u.)</span>
+            </div>
           </div>
           <button
             onClick={() => navigate('/magazzino-bevande')}

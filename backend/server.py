@@ -382,9 +382,16 @@ BEVERAGES_CATALOG = [
     {"sigla": "VR", "name": "Vino rosso", "price": 2.50, "sort_order": 9},
 ]
 
+# A carico is entered in "casse" (cases); each case contains this many units.
+UNITS_PER_CASE = 24
+
 
 class BeverageCaricoItem(BaseModel):
     sigla: str
+    # Number of CASES (each case = UNITS_PER_CASE units).
+    # Kept named `quantity` to not break existing API consumers; the value
+    # semantically represents cases, and the stored record preserves both
+    # `cases` and `units` for clarity in the history view.
     quantity: int
 
 
@@ -2329,6 +2336,19 @@ async def create_beverage_carico(
             raise HTTPException(status_code=400, detail=f"Sigla non valida: {it.sigla}")
         if it.quantity <= 0:
             raise HTTPException(status_code=400, detail=f"Quantità non valida per {it.sigla}")
+    # Normalise items: store both `cases` and the resulting `units`
+    items_saved = [
+        {
+            "sigla": it.sigla,
+            "cases": int(it.quantity),
+            "units": int(it.quantity) * UNITS_PER_CASE,
+            # Back-compat: some downstream code may still look at `quantity`.
+            # We keep it equal to cases to preserve the "human-readable"
+            # count shown in the carico form.
+            "quantity": int(it.quantity),
+        }
+        for it in data.items
+    ]
     invoice_filename = save_image_to_disk(data.invoice_image_data, "beverage_invoice") if data.invoice_image_data else ""
     carico_id = str(uuid.uuid4())
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -2339,18 +2359,19 @@ async def create_beverage_carico(
         "invoice_file": invoice_filename,
         "invoice_url": f"/api/uploads/{invoice_filename}" if invoice_filename else "",
         "invoice_date": data.invoice_date or "",
-        "items": [it.dict() for it in data.items],
+        "items": items_saved,
+        "units_per_case": UNITS_PER_CASE,
         "notes": (data.notes or "").strip(),
         "created_at": now_iso,
         "created_by": token_data["restaurant_id"],
     }
     await db.beverage_carichi.insert_one(doc)
-    # Atomically increment inventory for each beverage
-    for it in data.items:
+    # Atomically increment inventory in UNITS for each beverage
+    for it in items_saved:
         await db.beverage_inventory.update_one(
-            {"restaurant_id": flaminio_id, "sigla": it.sigla},
+            {"restaurant_id": flaminio_id, "sigla": it["sigla"]},
             {
-                "$inc": {"quantity": it.quantity},
+                "$inc": {"quantity": it["units"]},
                 "$setOnInsert": {"id": str(uuid.uuid4())},
                 "$set": {"updated_at": now_iso},
             },
@@ -2383,11 +2404,12 @@ async def delete_beverage_carico(carico_id: str, token_data: dict = Depends(veri
         created = datetime.fromisoformat(doc["created_at"])
         if (datetime.now(timezone.utc) - created).total_seconds() > 20 * 60:
             raise HTTPException(status_code=403, detail="Carico modificabile solo entro 20 minuti")
-    # Revert inventory
+    # Revert inventory (in units, falling back to quantity×UPC for legacy items)
     for it in doc.get("items", []):
+        units = int(it.get("units") or (it.get("quantity", 0) * doc.get("units_per_case", UNITS_PER_CASE)))
         await db.beverage_inventory.update_one(
             {"restaurant_id": flaminio_id, "sigla": it["sigla"]},
-            {"$inc": {"quantity": -int(it.get("quantity", 0))}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+            {"$inc": {"quantity": -units}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
         )
     await db.beverage_carichi.delete_one({"id": carico_id})
     return {"message": "Carico eliminato"}
