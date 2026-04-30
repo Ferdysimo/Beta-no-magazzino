@@ -1328,3 +1328,15 @@
 30 carb
 31 carb
 32 carb
+1 carb
+2 amat
+3 cacio
+4 CARB
+5 AMAT
+6 CACIO
+7 POM
+8 PESTO
+9 AMAT
+10 amat
+11 mat
+9 CARB +2AL+2AG+2F

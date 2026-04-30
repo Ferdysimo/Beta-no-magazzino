@@ -10,6 +10,7 @@ const CassaBevandeBox = () => {
   const { token } = useAuth();
   const [rows, setRows] = useState([]);
   const [busy, setBusy] = useState({});
+  const [selectedIdx, setSelectedIdx] = useState(0);
 
   const fetchSales = useCallback(async () => {
     if (!token) return;
@@ -29,16 +30,24 @@ const CassaBevandeBox = () => {
     return () => clearInterval(iv);
   }, [fetchSales]);
 
-  const change = async (sigla, delta) => {
-    if (busy[sigla]) return;
-    // Optimistic update
+  const change = useCallback(async (sigla, delta) => {
+    if (!sigla) return;
+    setBusy(b => {
+      if (b[sigla]) return b;
+      return { ...b, [sigla]: true };
+    });
+    let proceeded = false;
     setRows(prev => prev.map(r => {
       if (r.sigla !== sigla) return r;
       const newCount = Math.max(0, r.count + delta);
-      if (newCount === r.count) return r; // no-op (minus at 0)
+      if (newCount === r.count) return r;
+      proceeded = true;
       return { ...r, count: newCount, inventory: r.inventory - delta };
     }));
-    setBusy(b => ({ ...b, [sigla]: true }));
+    if (!proceeded) {
+      setBusy(b => ({ ...b, [sigla]: false }));
+      return;
+    }
     try {
       if (delta > 0) {
         await axios.post(`${API}/beverages/sales`, { sigla }, {
@@ -50,12 +59,47 @@ const CassaBevandeBox = () => {
         });
       }
     } catch (e) {
-      // Revert optimistic on error and re-fetch truth
       await fetchSales();
     } finally {
       setBusy(b => ({ ...b, [sigla]: false }));
     }
-  };
+  }, [token, fetchSales]);
+
+  // Keyboard navigation: Up/Down to move selection, Right/Left to +/- selected.
+  // We ignore the event when focus is inside an INPUT/TEXTAREA so that typing
+  // an order description on the Cassa is not hijacked.
+  useEffect(() => {
+    if (rows.length === 0) return undefined;
+    const handler = (e) => {
+      const tag = (e.target?.tagName || '').toUpperCase();
+      const editable = tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable;
+      if (editable) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIdx(i => Math.min(rows.length - 1, i + 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIdx(i => Math.max(0, i - 1));
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        const cur = rows[selectedIdx];
+        if (cur) change(cur.sigla, 1);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const cur = rows[selectedIdx];
+        if (cur) change(cur.sigla, -1);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [rows, selectedIdx, change]);
+
+  // Keep selectedIdx in range if rows shrink (defensive)
+  useEffect(() => {
+    if (selectedIdx >= rows.length && rows.length > 0) {
+      setSelectedIdx(rows.length - 1);
+    }
+  }, [rows, selectedIdx]);
 
   if (rows.length === 0) {
     return (
@@ -65,15 +109,24 @@ const CassaBevandeBox = () => {
 
   return (
     <div className="p-2" data-testid="cassa-bev-box">
+      <div className="px-1 pb-1 text-[10px] text-gray-500 leading-tight">
+        ↑↓ scegli &nbsp;·&nbsp; ← - &nbsp; → +
+      </div>
       <div className="space-y-1">
-        {rows.map((r) => {
+        {rows.map((r, idx) => {
           const isBusy = !!busy[r.sigla];
           const lowStock = r.inventory <= 5;
+          const selected = idx === selectedIdx;
           return (
             <div
               key={r.sigla}
               data-testid={`bev-row-cassa-${r.sigla}`}
-              className="flex items-center gap-2 bg-white border border-gray-200 rounded px-2 py-1.5"
+              onClick={() => setSelectedIdx(idx)}
+              className={`flex items-center gap-2 border rounded px-2 py-1.5 cursor-pointer transition-colors ${
+                selected
+                  ? 'bg-yellow-50 border-[#F5C518] ring-2 ring-[#F5C518]'
+                  : 'bg-white border-gray-200 hover:bg-gray-50'
+              }`}
             >
               <div className="w-9 font-extrabold text-gray-900 text-lg leading-none">{r.sigla}</div>
               <div className={`flex-1 text-center font-bold text-xl tabular-nums ${r.count > 0 ? 'text-[#B8860B]' : 'text-gray-400'}`}>
