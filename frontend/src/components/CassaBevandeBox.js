@@ -66,14 +66,12 @@ const CassaBevandeBox = () => {
   }, [token, fetchSales]);
 
   // Keyboard navigation: Up/Down to move selection, Right/Left to +/- selected.
-  // We ignore the event when focus is inside an INPUT/TEXTAREA so that typing
-  // an order description on the Cassa is not hijacked.
+  // Active everywhere on the page (including while typing the order
+  // description) — the cassiere wants beverages reachable at any time.
+  // We preventDefault to stop the input cursor from also moving on Left/Right.
   useEffect(() => {
     if (rows.length === 0) return undefined;
     const handler = (e) => {
-      const tag = (e.target?.tagName || '').toUpperCase();
-      const editable = tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable;
-      if (editable) return;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         setSelectedIdx(i => Math.min(rows.length - 1, i + 1));
