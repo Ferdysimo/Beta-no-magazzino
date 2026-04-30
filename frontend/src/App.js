@@ -18,6 +18,7 @@ import MonitorClientiPage from './pages/MonitorClientiPage';
 import MagazzinierePage from './pages/MagazzinierePage';
 import ProdottiMagazzinoPage from './pages/ProdottiMagazzinoPage';
 import MediaLocaliPage from './pages/MediaLocaliPage';
+import DiagnosticaLivePage from './pages/DiagnosticaLivePage';
 import RichiestaMercePage from './pages/RichiestaMercePage';
 import NuovaRichiestaPage from './pages/NuovaRichiestaPage';
 import DDTViewPage from './pages/DDTViewPage';
@@ -187,6 +188,11 @@ function AppRoutes() {
       <Route path="/media-locali" element={
         <ProtectedRoute>
           <MediaLocaliPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/diagnostica" element={
+        <ProtectedRoute>
+          <DiagnosticaLivePage />
         </ProtectedRoute>
       } />
     </Routes>

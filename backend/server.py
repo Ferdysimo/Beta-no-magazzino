@@ -43,6 +43,41 @@ app = FastAPI()
 # Gzip compression - responses > 500 bytes get compressed
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
+
+# In-memory diagnostics middleware: records each /api/* HTTP call
+# (method, path, status, duration_ms, timestamp). Used by the Admin
+# Diagnostica Live page. Out-of-process tooling not needed.
+@app.middleware("http")
+async def diagnostics_middleware(request: Request, call_next):
+    import time as _t
+    start = _t.perf_counter()
+    status_code = 500
+    error_text = None
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    except Exception as e:
+        error_text = repr(e)
+        raise
+    finally:
+        try:
+            path = request.url.path
+            if path.startswith("/api/"):
+                duration_ms = int((_t.perf_counter() - start) * 1000)
+                entry = {
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "method": request.method,
+                    "path": path,
+                    "status": status_code,
+                    "ms": duration_ms,
+                }
+                api_call_log.append(entry)
+                if status_code >= 500 or error_text:
+                    api_error_log.append({**entry, "error": error_text or f"HTTP {status_code}"})
+        except Exception:
+            pass
+
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
@@ -220,12 +255,23 @@ async def midnight_scheduler():
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
+        # Per-connection metadata: ws -> {"restaurant_id", "connected_at", "last_seen"}
+        self.connection_meta: Dict[WebSocket, dict] = {}
+        # Per-restaurant: list of recent disconnect events (last 50)
+        # Used by the admin diagnostics page to spot flaky networks.
+        self.recent_disconnects: Dict[str, List[str]] = {}
     
     async def connect(self, websocket: WebSocket, restaurant_id: str):
         await websocket.accept()
         if restaurant_id not in self.active_connections:
             self.active_connections[restaurant_id] = []
         self.active_connections[restaurant_id].append(websocket)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        self.connection_meta[websocket] = {
+            "restaurant_id": restaurant_id,
+            "connected_at": now_iso,
+            "last_seen": now_iso,
+        }
         logger.info(f"WebSocket connected for restaurant {restaurant_id}")
     
     def disconnect(self, websocket: WebSocket, restaurant_id: str):
@@ -233,6 +279,18 @@ class ConnectionManager:
             if websocket in self.active_connections[restaurant_id]:
                 self.active_connections[restaurant_id].remove(websocket)
             logger.info(f"WebSocket disconnected for restaurant {restaurant_id}")
+        self.connection_meta.pop(websocket, None)
+        # Track disconnect for diagnostics
+        events = self.recent_disconnects.setdefault(restaurant_id, [])
+        events.append(datetime.now(timezone.utc).isoformat())
+        if len(events) > 50:
+            del events[: len(events) - 50]
+    
+    def touch(self, websocket: WebSocket):
+        """Update last_seen timestamp on ping/pong/message."""
+        meta = self.connection_meta.get(websocket)
+        if meta:
+            meta["last_seen"] = datetime.now(timezone.utc).isoformat()
     
     async def broadcast_to_restaurant(self, restaurant_id: str, message: dict):
         if restaurant_id in self.active_connections:
@@ -247,6 +305,13 @@ class ConnectionManager:
                 self.disconnect(conn, restaurant_id)
 
 manager = ConnectionManager()
+
+# ----- API call diagnostics (in-memory ring buffer) -----
+# Keeps the last 200 API calls and last 100 errors so the admin can spot
+# slow endpoints or 5xx spikes without external tooling.
+from collections import deque
+api_call_log: deque = deque(maxlen=200)
+api_error_log: deque = deque(maxlen=100)
 
 # Pydantic Models
 class RestaurantCreate(BaseModel):
@@ -571,6 +636,65 @@ async def acknowledge_system_alert(alert_id: str, token_data: dict = Depends(ver
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Alert not found")
     return {"message": "Alert acknowledged"}
+
+
+@api_router.get("/admin/diagnostics")
+async def get_diagnostics(token_data: dict = Depends(verify_token)):
+    """Live system diagnostics for the Admin dashboard.
+    Reports per-restaurant WebSocket state, recent disconnect events,
+    last 50 API calls and last 50 errors."""
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    now = datetime.now(timezone.utc)
+    cutoff_1h = (now - timedelta(hours=1)).isoformat()
+
+    # Per-restaurant WS state
+    restaurants = await db.restaurants.find(
+        {"role": {"$in": ["restaurant", "magazzino"]}},
+        {"_id": 0, "id": 1, "location": 1, "username": 1, "role": 1},
+    ).to_list(100)
+    ws_state = []
+    for r in restaurants:
+        rid = r["id"]
+        conns = manager.active_connections.get(rid, [])
+        last_seen = None
+        connected_since = None
+        for ws in conns:
+            meta = manager.connection_meta.get(ws)
+            if meta:
+                if last_seen is None or meta["last_seen"] > last_seen:
+                    last_seen = meta["last_seen"]
+                if connected_since is None or meta["connected_at"] < connected_since:
+                    connected_since = meta["connected_at"]
+        recent = manager.recent_disconnects.get(rid, [])
+        recent_disconnects_1h = [d for d in recent if d >= cutoff_1h]
+        ws_state.append({
+            "restaurant_id": rid,
+            "location": r.get("location", ""),
+            "username": r.get("username", ""),
+            "role": r.get("role", ""),
+            "active_connections": len(conns),
+            "connected_since": connected_since,
+            "last_seen": last_seen,
+            "disconnects_last_hour": len(recent_disconnects_1h),
+        })
+
+    # API calls (last 50, newest first)
+    recent_calls = list(api_call_log)[-50:][::-1]
+    recent_errors = list(api_error_log)[-50:][::-1]
+
+    # Aggregate slow endpoints (>500ms) in the buffer
+    slow_calls = [c for c in api_call_log if c.get("ms", 0) > 500]
+
+    return {
+        "server_time": now.isoformat(),
+        "websockets": ws_state,
+        "recent_calls": recent_calls,
+        "recent_errors": recent_errors,
+        "slow_calls_count": len(slow_calls),
+        "buffer_size": len(api_call_log),
+    }
 
 @api_router.get("/admin/media-locali")
 async def get_media_locali(token_data: dict = Depends(verify_token)):
@@ -1340,6 +1464,7 @@ async def websocket_endpoint(websocket: WebSocket, restaurant_id: str):
     try:
         while True:
             data = await websocket.receive_text()
+            manager.touch(websocket)
             try:
                 message = json.loads(data)
                 if message.get("type") == "ping":
