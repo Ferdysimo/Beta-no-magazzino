@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import CassaBevandeBox from '../components/CassaBevandeBox';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrders } from '../contexts/OrderContext';
@@ -27,7 +28,8 @@ const getTimerColor = (order) => {
 };
 
 const CassaPage = () => {
-  const { restaurant, token } = useAuth();
+  const { restaurant, token, isAdmin } = useAuth();
+  const showBeverages = restaurant?.username === 'Flaminio' || (isAdmin && restaurant?.location === 'Flaminio');
   const { orders, createOrder, deleteOrder, completeOrder, updateOrder } = useOrders();
   const [orderNumber, setOrderNumber] = useState('');
   const [userEditedNumber, setUserEditedNumber] = useState(false);
@@ -318,7 +320,7 @@ const CassaPage = () => {
 
       <Header />
       
-      <main className="max-w-6xl mx-auto p-6">
+      <main className={`max-w-6xl mx-auto p-6 ${showBeverages ? 'lg:pr-56' : ''}`}>
         {/* Page Header */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="font-heading text-4xl font-bold text-gray-900 uppercase">Cassa</h1>
@@ -327,12 +329,12 @@ const CassaPage = () => {
           </p>
         </div>
 
-        {/* Floating side-tab trigger (fixed on right edge, always visible) */}
+        {/* Floating side-tab trigger for LOGS (fixed on LEFT edge, always visible) */}
         <button
           onClick={() => setShowLogs(!showLogs)}
           data-testid="logs-counter-bar"
           title="Dettagli log giornata"
-          className="fixed top-1/2 -translate-y-1/2 right-0 z-30 bg-white hover:bg-gray-50 border border-r-0 border-gray-300 rounded-l-lg shadow-md px-2 py-3 flex flex-col items-center gap-2 text-xs"
+          className="fixed top-1/2 -translate-y-1/2 left-0 z-30 bg-white hover:bg-gray-50 border border-l-0 border-gray-300 rounded-r-lg shadow-md px-2 py-3 flex flex-col items-center gap-2 text-xs"
         >
           <div className="flex items-center gap-1 text-red-600 font-bold">
             <Trash2 size={14} />
@@ -346,6 +348,19 @@ const CassaPage = () => {
           <div className="text-[9px] text-gray-500 mt-1 [writing-mode:vertical-rl] rotate-180 tracking-wide">LOG</div>
         </button>
 
+        {/* Beverages sidebar (right, Flaminio only) */}
+        {showBeverages && (
+          <aside
+            className="hidden lg:flex fixed top-[70px] bottom-0 right-0 w-52 flex-col bg-gray-50 border-l border-gray-200 z-20 overflow-y-auto"
+            data-testid="cassa-bev-sidebar"
+          >
+            <div className="px-2 py-2 bg-[#F5C518] text-gray-900 font-extrabold text-center text-sm uppercase tracking-wide sticky top-0">
+              Bevande
+            </div>
+            <CassaBevandeBox />
+          </aside>
+        )}
+
         {/* Logs Detail Drawer (side panel, doesn't shift pasta list) */}
         {showLogs && (
           <>
@@ -357,7 +372,7 @@ const CassaPage = () => {
             />
             {/* Side drawer */}
             <aside
-              className="fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl border-l border-gray-200 z-50 flex flex-col"
+              className="fixed top-0 left-0 h-full w-full max-w-md bg-white shadow-2xl border-r border-gray-200 z-50 flex flex-col"
               data-testid="logs-side-drawer"
             >
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">

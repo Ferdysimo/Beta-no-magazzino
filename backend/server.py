@@ -139,6 +139,7 @@ async def midnight_reset():
         archived_count = await _atomic_archive_and_clear("orders", "archived_orders")
         await _atomic_archive_and_clear("deletion_logs", "archived_deletion_logs")
         await _atomic_archive_and_clear("modification_logs", "archived_modification_logs")
+        await _atomic_archive_and_clear("beverage_sales", "archived_beverage_sales")
 
         # Reset all restaurant counters to 0 ONLY if archive of orders succeeded
         # (or there were no orders to archive)
@@ -364,6 +365,49 @@ class ModificationLog(BaseModel):
     new_description: str
     restaurant_id: str
     modified_at: str
+
+
+# =========================
+# BEVERAGES (Flaminio only)
+# =========================
+BEVERAGES_CATALOG = [
+    {"sigla": "AL", "name": "Acqua naturale", "price": 1.00, "sort_order": 1},
+    {"sigla": "AG", "name": "Acqua leggermente frizzante", "price": 1.00, "sort_order": 2},
+    {"sigla": "C", "name": "Coca-Cola", "price": 2.00, "sort_order": 3},
+    {"sigla": "CZ", "name": "Coca-Cola Zero", "price": 2.00, "sort_order": 4},
+    {"sigla": "F", "name": "Fanta", "price": 2.00, "sort_order": 5},
+    {"sigla": "S", "name": "Sprite", "price": 2.00, "sort_order": 6},
+    {"sigla": "B", "name": "Peroni", "price": 2.50, "sort_order": 7},
+    {"sigla": "VB", "name": "Vino bianco", "price": 2.50, "sort_order": 8},
+    {"sigla": "VR", "name": "Vino rosso", "price": 2.50, "sort_order": 9},
+]
+
+
+class BeverageCaricoItem(BaseModel):
+    sigla: str
+    quantity: int
+
+
+class BeverageCaricoCreate(BaseModel):
+    supplier: str
+    invoice_image_data: Optional[str] = None  # base64 - optional
+    invoice_date: Optional[str] = None
+    items: List[BeverageCaricoItem]
+    notes: Optional[str] = None
+
+
+async def _get_flaminio_restaurant_id() -> Optional[str]:
+    r = await db.restaurants.find_one({"username": "Flaminio"}, {"_id": 0, "id": 1})
+    return r["id"] if r else None
+
+
+async def _ensure_beverages_seeded():
+    """Insert the beverage catalog the first time the backend starts."""
+    existing = await db.beverages.count_documents({})
+    if existing == 0:
+        await db.beverages.insert_many([{**b} for b in BEVERAGES_CATALOG])
+        logger.info(f"Seeded {len(BEVERAGES_CATALOG)} beverages")
+
 
 class InvoiceCreate(BaseModel):
     supplier: str
@@ -2244,6 +2288,277 @@ async def delete_carico_fattura(carico_id: str, token_data: dict = Depends(verif
     )
     return {"message": "Fattura rimossa"}
 
+# ==================== BEVANDE (FLAMINIO ONLY) ====================
+
+@api_router.get("/beverages")
+async def list_beverages(token_data: dict = Depends(verify_token)):
+    """Catalog of 9 beverages (sigla, name, price). Sorted by sort_order."""
+    docs = await db.beverages.find({}, {"_id": 0}).sort("sort_order", 1).to_list(20)
+    return docs
+
+
+@api_router.get("/beverages/inventory")
+async def get_beverage_inventory(token_data: dict = Depends(verify_token)):
+    """Current on-hand inventory at Flaminio for each beverage.
+    Returns a list of {sigla, name, price, quantity}."""
+    flaminio_id = await _get_flaminio_restaurant_id()
+    if not flaminio_id:
+        return []
+    beverages = await db.beverages.find({}, {"_id": 0}).sort("sort_order", 1).to_list(20)
+    inv_docs = await db.beverage_inventory.find(
+        {"restaurant_id": flaminio_id}, {"_id": 0}
+    ).to_list(20)
+    inv_map = {d["sigla"]: d.get("quantity", 0) for d in inv_docs}
+    return [{**b, "quantity": inv_map.get(b["sigla"], 0)} for b in beverages]
+
+
+@api_router.post("/beverages/carichi")
+async def create_beverage_carico(
+    data: BeverageCaricoCreate, token_data: dict = Depends(verify_token)
+):
+    """Register a beverage carico: increases inventory of each beverage at Flaminio."""
+    flaminio_id = await _get_flaminio_restaurant_id()
+    if not flaminio_id:
+        raise HTTPException(status_code=404, detail="Ristorante Flaminio non trovato")
+    if not data.items:
+        raise HTTPException(status_code=400, detail="Aggiungi almeno una bevanda")
+    # Validate siglas
+    valid_siglas = {b["sigla"] for b in BEVERAGES_CATALOG}
+    for it in data.items:
+        if it.sigla not in valid_siglas:
+            raise HTTPException(status_code=400, detail=f"Sigla non valida: {it.sigla}")
+        if it.quantity <= 0:
+            raise HTTPException(status_code=400, detail=f"Quantità non valida per {it.sigla}")
+    invoice_filename = save_image_to_disk(data.invoice_image_data, "beverage_invoice") if data.invoice_image_data else ""
+    carico_id = str(uuid.uuid4())
+    now_iso = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": carico_id,
+        "restaurant_id": flaminio_id,
+        "supplier": data.supplier.strip() or "Gioia",
+        "invoice_file": invoice_filename,
+        "invoice_url": f"/api/uploads/{invoice_filename}" if invoice_filename else "",
+        "invoice_date": data.invoice_date or "",
+        "items": [it.dict() for it in data.items],
+        "notes": (data.notes or "").strip(),
+        "created_at": now_iso,
+        "created_by": token_data["restaurant_id"],
+    }
+    await db.beverage_carichi.insert_one(doc)
+    # Atomically increment inventory for each beverage
+    for it in data.items:
+        await db.beverage_inventory.update_one(
+            {"restaurant_id": flaminio_id, "sigla": it.sigla},
+            {
+                "$inc": {"quantity": it.quantity},
+                "$setOnInsert": {"id": str(uuid.uuid4())},
+                "$set": {"updated_at": now_iso},
+            },
+            upsert=True,
+        )
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.get("/beverages/carichi")
+async def list_beverage_carichi(token_data: dict = Depends(verify_token)):
+    flaminio_id = await _get_flaminio_restaurant_id()
+    if not flaminio_id:
+        return []
+    docs = await db.beverage_carichi.find(
+        {"restaurant_id": flaminio_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    return docs
+
+
+@api_router.delete("/beverages/carichi/{carico_id}")
+async def delete_beverage_carico(carico_id: str, token_data: dict = Depends(verify_token)):
+    """Delete a carico and revert its inventory impact. Within 20min for non-admins."""
+    flaminio_id = await _get_flaminio_restaurant_id()
+    doc = await db.beverage_carichi.find_one({"id": carico_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Carico non trovato")
+    # 20-minute rule for non-admins
+    if token_data.get("role") != "admin":
+        created = datetime.fromisoformat(doc["created_at"])
+        if (datetime.now(timezone.utc) - created).total_seconds() > 20 * 60:
+            raise HTTPException(status_code=403, detail="Carico modificabile solo entro 20 minuti")
+    # Revert inventory
+    for it in doc.get("items", []):
+        await db.beverage_inventory.update_one(
+            {"restaurant_id": flaminio_id, "sigla": it["sigla"]},
+            {"$inc": {"quantity": -int(it.get("quantity", 0))}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+    await db.beverage_carichi.delete_one({"id": carico_id})
+    return {"message": "Carico eliminato"}
+
+
+@api_router.post("/beverages/sales")
+async def register_beverage_sale(
+    data: dict, token_data: dict = Depends(verify_token)
+):
+    """Register a +1 sale for a beverage. Decrements inventory by 1."""
+    sigla = data.get("sigla")
+    if not sigla:
+        raise HTTPException(status_code=400, detail="sigla mancante")
+    bev = await db.beverages.find_one({"sigla": sigla}, {"_id": 0})
+    if not bev:
+        raise HTTPException(status_code=404, detail="Bevanda non trovata")
+    flaminio_id = await _get_flaminio_restaurant_id()
+    if not flaminio_id:
+        raise HTTPException(status_code=404, detail="Ristorante Flaminio non trovato")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    sale = {
+        "id": str(uuid.uuid4()),
+        "restaurant_id": flaminio_id,
+        "sigla": sigla,
+        "name": bev["name"],
+        "quantity": 1,
+        "price_each": bev["price"],
+        "total": bev["price"],
+        "created_at": now_iso,
+        "created_by": token_data["restaurant_id"],
+    }
+    await db.beverage_sales.insert_one(sale)
+    # Atomically decrement inventory (allowed to go negative to reflect reality)
+    await db.beverage_inventory.update_one(
+        {"restaurant_id": flaminio_id, "sigla": sigla},
+        {
+            "$inc": {"quantity": -1},
+            "$setOnInsert": {"id": str(uuid.uuid4())},
+            "$set": {"updated_at": now_iso},
+        },
+        upsert=True,
+    )
+    sale.pop("_id", None)
+    return sale
+
+
+@api_router.post("/beverages/sales/undo")
+async def undo_beverage_sale(data: dict, token_data: dict = Depends(verify_token)):
+    """Undo the most recent TODAY sale for a given sigla. Restores inventory +1."""
+    sigla = data.get("sigla")
+    if not sigla:
+        raise HTTPException(status_code=400, detail="sigla mancante")
+    flaminio_id = await _get_flaminio_restaurant_id()
+    if not flaminio_id:
+        raise HTTPException(status_code=404, detail="Ristorante Flaminio non trovato")
+    # "Today" in Europe/Rome
+    start_utc, end_utc = _today_rome_bounds_utc()
+    last = await db.beverage_sales.find_one(
+        {
+            "restaurant_id": flaminio_id,
+            "sigla": sigla,
+            "created_at": {"$gte": start_utc, "$lt": end_utc},
+        },
+        sort=[("created_at", -1)],
+        projection={"_id": 0},
+    )
+    if not last:
+        raise HTTPException(status_code=400, detail="Nessuna vendita di oggi da stornare")
+    await db.beverage_sales.delete_one({"id": last["id"]})
+    await db.beverage_inventory.update_one(
+        {"restaurant_id": flaminio_id, "sigla": sigla},
+        {"$inc": {"quantity": 1}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"message": "Vendita stornata", "sigla": sigla}
+
+
+@api_router.get("/beverages/sales/today")
+async def get_beverage_sales_today(token_data: dict = Depends(verify_token)):
+    """Summary of today's sales per beverage for the Cassa box.
+    Returns [{sigla, name, price, count, inventory}]."""
+    flaminio_id = await _get_flaminio_restaurant_id()
+    if not flaminio_id:
+        return []
+    start_utc, end_utc = _today_rome_bounds_utc()
+    # Aggregate today's sales
+    pipeline = [
+        {"$match": {
+            "restaurant_id": flaminio_id,
+            "created_at": {"$gte": start_utc, "$lt": end_utc},
+        }},
+        {"$group": {"_id": "$sigla", "count": {"$sum": "$quantity"}}},
+    ]
+    agg = await db.beverage_sales.aggregate(pipeline).to_list(20)
+    count_map = {a["_id"]: a["count"] for a in agg}
+    # Inventory map
+    inv_docs = await db.beverage_inventory.find(
+        {"restaurant_id": flaminio_id}, {"_id": 0, "sigla": 1, "quantity": 1}
+    ).to_list(20)
+    inv_map = {d["sigla"]: d.get("quantity", 0) for d in inv_docs}
+    beverages = await db.beverages.find({}, {"_id": 0}).sort("sort_order", 1).to_list(20)
+    return [
+        {
+            "sigla": b["sigla"],
+            "name": b["name"],
+            "price": b["price"],
+            "count": count_map.get(b["sigla"], 0),
+            "inventory": inv_map.get(b["sigla"], 0),
+        }
+        for b in beverages
+    ]
+
+
+@api_router.get("/beverages/report")
+async def beverage_report(
+    date_from: str,
+    date_to: str,
+    token_data: dict = Depends(verify_token),
+):
+    """Aggregated sales between date_from and date_to (inclusive), Europe/Rome.
+    Returns per-beverage totals and grand total."""
+    flaminio_id = await _get_flaminio_restaurant_id()
+    if not flaminio_id:
+        return {"items": [], "grand_total": 0, "total_count": 0}
+    try:
+        from_date = datetime.strptime(date_from, "%Y-%m-%d")
+        to_date = datetime.strptime(date_to, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato data non valido, usa YYYY-MM-DD")
+    if to_date < from_date:
+        raise HTTPException(status_code=400, detail="date_to precede date_from")
+    start_rome = from_date.replace(tzinfo=ROME_TZ)
+    end_rome = (to_date + timedelta(days=1)).replace(tzinfo=ROME_TZ)
+    start_utc = start_rome.astimezone(timezone.utc).isoformat()
+    end_utc = end_rome.astimezone(timezone.utc).isoformat()
+    # Query BOTH current and archived sales collections (midnight reset archives)
+    beverages = await db.beverages.find({}, {"_id": 0}).sort("sort_order", 1).to_list(20)
+    bev_map = {b["sigla"]: b for b in beverages}
+
+    results = {b["sigla"]: {"sigla": b["sigla"], "name": b["name"], "price": b["price"], "count": 0, "total": 0.0} for b in beverages}
+
+    for coll in ("beverage_sales", "archived_beverage_sales"):
+        pipeline = [
+            {"$match": {
+                "restaurant_id": flaminio_id,
+                "created_at": {"$gte": start_utc, "$lt": end_utc},
+            }},
+            {"$group": {
+                "_id": "$sigla",
+                "count": {"$sum": "$quantity"},
+                "total": {"$sum": "$total"},
+            }},
+        ]
+        agg = await db[coll].aggregate(pipeline).to_list(20)
+        for a in agg:
+            sig = a["_id"]
+            if sig in results:
+                results[sig]["count"] += int(a["count"])
+                results[sig]["total"] += float(a["total"])
+
+    items = [results[b["sigla"]] for b in beverages]
+    grand_total = round(sum(x["total"] for x in items), 2)
+    total_count = sum(x["count"] for x in items)
+    return {
+        "from": date_from,
+        "to": date_to,
+        "items": items,
+        "grand_total": grand_total,
+        "total_count": total_count,
+    }
+
+
 # ==================== ANALISI MAGAZZINO ====================
 
 @api_router.get("/analisi/magazzino")
@@ -2628,6 +2943,9 @@ async def startup_scheduler():
     # Self-healing: archive any stale orders left from previous day
     # (in case midnight_reset never ran due to server downtime)
     await recover_stale_orders()
+    
+    # Seed beverage catalog if empty (9 beverages for Flaminio)
+    await _ensure_beverages_seeded()
     
     # Create MongoDB indexes for faster queries
     await db.orders.create_index([("restaurant_id", 1), ("status", 1)])

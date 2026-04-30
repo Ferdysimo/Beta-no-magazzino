@@ -19,6 +19,9 @@ import MagazzinierePage from './pages/MagazzinierePage';
 import ProdottiMagazzinoPage from './pages/ProdottiMagazzinoPage';
 import MediaLocaliPage from './pages/MediaLocaliPage';
 import DiagnosticaLivePage from './pages/DiagnosticaLivePage';
+import MagazzinoBevandePage from './pages/MagazzinoBevandePage';
+import NuovoCaricoBevandePage from './pages/NuovoCaricoBevandePage';
+import ReportBevandePage from './pages/ReportBevandePage';
 import RichiestaMercePage from './pages/RichiestaMercePage';
 import NuovaRichiestaPage from './pages/NuovaRichiestaPage';
 import DDTViewPage from './pages/DDTViewPage';
@@ -193,6 +196,21 @@ function AppRoutes() {
       <Route path="/diagnostica" element={
         <ProtectedRoute>
           <DiagnosticaLivePage />
+        </ProtectedRoute>
+      } />
+      <Route path="/magazzino-bevande" element={
+        <ProtectedRoute>
+          <MagazzinoBevandePage />
+        </ProtectedRoute>
+      } />
+      <Route path="/magazzino-bevande/nuovo-carico" element={
+        <ProtectedRoute>
+          <NuovoCaricoBevandePage />
+        </ProtectedRoute>
+      } />
+      <Route path="/report-bevande" element={
+        <ProtectedRoute>
+          <ReportBevandePage />
         </ProtectedRoute>
       } />
     </Routes>
