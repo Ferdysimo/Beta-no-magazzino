@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrders } from '../contexts/OrderContext';
 import Header from '../components/Header';
-import { Edit2, Trash2, Check, Loader2, AlertCircle, Printer } from 'lucide-react';
+import { Edit2, Trash2, Check, Loader2, AlertCircle, Printer, X, Plus } from 'lucide-react';
 import axios from 'axios';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -30,6 +30,15 @@ const getTimerColor = (order) => {
 const CassaPage = () => {
   const { restaurant, token, isAdmin } = useAuth();
   const showBeverages = restaurant?.username === 'Flaminio' || (isAdmin && restaurant?.location === 'Flaminio');
+  const beveragesVisible = showBeverages && !hideBeverages;
+
+  const toggleBeverages = () => {
+    setHideBeverages(prev => {
+      const next = !prev;
+      try { localStorage.setItem('cassa_hide_beverages', next ? '1' : '0'); } catch (e) { /* ignore */ }
+      return next;
+    });
+  };
   const { orders, createOrder, deleteOrder, completeOrder, updateOrder } = useOrders();
   const [orderNumber, setOrderNumber] = useState('');
   const [userEditedNumber, setUserEditedNumber] = useState(false);
@@ -39,6 +48,9 @@ const CassaPage = () => {
   const [editValue, setEditValue] = useState('');
   const [logs, setLogs] = useState({ deletions: { count: 0, logs: [] }, modifications: { count: 0, logs: [] } });
   const [showLogs, setShowLogs] = useState(false);
+  const [hideBeverages, setHideBeverages] = useState(() => {
+    try { return localStorage.getItem('cassa_hide_beverages') === '1'; } catch { return false; }
+  });
   const [selectedForPrint, setSelectedForPrint] = useState(new Set());
   const [isDragging, setIsDragging] = useState(false);
   const [printData, setPrintData] = useState(null); // {orario, rows: [{number, description}]}
@@ -320,7 +332,7 @@ const CassaPage = () => {
 
       <Header />
       
-      <main className={`max-w-6xl mx-auto p-6 ${showBeverages ? 'lg:pr-56' : ''}`}>
+      <main className={`max-w-6xl mx-auto p-6 ${beveragesVisible ? 'lg:pr-56' : ''}`}>
         {/* Page Header */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="font-heading text-4xl font-bold text-gray-900 uppercase">Cassa</h1>
@@ -348,17 +360,38 @@ const CassaPage = () => {
           <div className="text-[9px] text-gray-500 mt-1 [writing-mode:vertical-rl] rotate-180 tracking-wide">LOG</div>
         </button>
 
-        {/* Beverages sidebar (right, Flaminio only) */}
-        {showBeverages && (
+        {/* Beverages sidebar (right, Flaminio only, hideable) */}
+        {beveragesVisible && (
           <aside
             className="hidden lg:flex fixed top-[70px] bottom-0 right-0 w-52 flex-col bg-gray-50 border-l border-gray-200 z-20 overflow-y-auto"
             data-testid="cassa-bev-sidebar"
           >
-            <div className="px-2 py-2 bg-[#F5C518] text-gray-900 font-extrabold text-center text-sm uppercase tracking-wide sticky top-0">
-              Bevande
+            <div className="px-2 py-2 bg-[#F5C518] text-gray-900 font-extrabold text-center text-sm uppercase tracking-wide sticky top-0 flex items-center justify-between gap-1">
+              <span className="flex-1">Bevande</span>
+              <button
+                onClick={toggleBeverages}
+                data-testid="cassa-bev-hide"
+                title="Nascondi bevande"
+                className="w-6 h-6 flex items-center justify-center rounded hover:bg-yellow-300 transition-colors"
+              >
+                <X size={14} />
+              </button>
             </div>
             <CassaBevandeBox />
           </aside>
+        )}
+
+        {/* Tab to bring back the beverages sidebar when hidden */}
+        {showBeverages && hideBeverages && (
+          <button
+            onClick={toggleBeverages}
+            data-testid="cassa-bev-show"
+            title="Mostra bevande"
+            className="hidden lg:flex fixed top-1/2 -translate-y-1/2 right-0 z-30 bg-[#F5C518] hover:bg-[#E5A500] text-gray-900 border border-r-0 border-yellow-700 rounded-l-lg shadow-md px-2 py-3 flex-col items-center gap-1 text-xs font-bold"
+          >
+            <Plus size={14} />
+            <span className="[writing-mode:vertical-rl] rotate-180 tracking-wider uppercase">Bevande</span>
+          </button>
         )}
 
         {/* Logs Detail Drawer (side panel, doesn't shift pasta list) */}

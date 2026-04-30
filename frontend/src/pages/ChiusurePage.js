@@ -440,7 +440,7 @@ const ChiusurePage = () => {
             {chiusure.map((chiusura) => (
               <div
                 key={chiusura.id}
-                className="bg-white rounded-lg border border-gray-200 p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors"
+                className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 flex flex-wrap sm:flex-nowrap items-center gap-3 hover:bg-gray-50 transition-colors"
                 data-testid={`chiusura-${chiusura.id}`}
               >
                 {/* Primary photo thumbnail (type = tipologia) */}
@@ -502,29 +502,29 @@ const ChiusurePage = () => {
                 )}
 
                 {/* Info */}
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 order-2 sm:order-none basis-full sm:basis-auto">
                   <span className="text-gray-600 text-sm">
                     {chiusura.tipologia.toLowerCase()}
                   </span>
                   {chiusura.description && (
-                    <div className="text-gray-800 font-medium">
+                    <div className="text-gray-800 font-medium break-words">
                       {chiusura.description}
                     </div>
                   )}
                   {chiusura.control_code && (
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 break-words">
                       Codice: {chiusura.control_code}
                     </div>
                   )}
                 </div>
 
                 {/* Date */}
-                <div className="text-gray-600 text-sm">
+                <div className="text-gray-600 text-sm whitespace-nowrap order-3 sm:order-none">
                   {formatDateItalian(chiusura.chiusura_date)}
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 order-3 sm:order-none ml-auto">
                   <button
                     onClick={() => openLightboxFor(chiusura.image_data)}
                     className="w-10 h-10 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"

@@ -1340,3 +1340,9 @@
 10 amat
 11 mat
 9 CARB +2AL+2AG+2F
+9 carb
+10 amat
+11 cacio
+12 carb
+13 amat
+14 cacio
