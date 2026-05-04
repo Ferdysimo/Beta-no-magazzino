@@ -8,6 +8,13 @@ import { formatItalianDateTime } from '../utils/formatDate';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+const minutesSince = (iso) => {
+  try {
+    const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+    return Math.max(0, m);
+  } catch { return 0; }
+};
+
 const MagazzinoRichiestePage = () => {
   const { token } = useAuth();
   const navigate = useNavigate();
@@ -87,7 +94,18 @@ const MagazzinoRichiestePage = () => {
                   VEDI DDT {r.ddt_number}
                 </button>
                 <div className="flex-1 text-sm text-gray-700">
-                  <div className="font-semibold text-gray-900">{r.restaurant_location}</div>
+                  <div className="font-semibold text-gray-900 flex items-center gap-2 flex-wrap">
+                    {r.restaurant_location}
+                    {r.updated_at && r.updated_at !== r.created_at && (
+                      <span
+                        data-testid={`badge-modified-${r.ddt_number}`}
+                        title={formatItalianDateTime(r.updated_at)}
+                        className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-900 border border-yellow-300 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                      >
+                        ✏️ modificata {minutesSince(r.updated_at)} min fa
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-gray-500">{(r.items || []).length} articoli · {formatItalianDateTime(r.created_at)}</div>
                 </div>
                 <button
