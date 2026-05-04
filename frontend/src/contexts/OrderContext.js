@@ -143,7 +143,11 @@ export const OrderProvider = ({ children }) => {
         if (type === 'order_created') {
           if (!next.some(o => o.id === order.id)) next = [order, ...next];
         } else if (type === 'order_updated') {
-          if (isGuarded(order.id)) continue;
+          // Note: do NOT skip on guard. The server's order_updated payload is
+          // authoritative and contains the full latest document. Skipping it
+          // caused stale state on other tablets when actions overlapped (e.g.
+          // Flaminio with 2 bollitori), making old kitchen_completed orders
+          // appear to "reappear" until the page was reloaded.
           next = next.map(o => o.id === order.id ? order : o);
         } else if (type === 'order_deleted') {
           if (isGuarded(order_id)) continue;
