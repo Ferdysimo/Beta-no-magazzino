@@ -1990,6 +1990,49 @@ async def get_richiesta(richiesta_id: str, token_data: dict = Depends(verify_tok
         raise HTTPException(status_code=403, detail="Non autorizzato")
     return await _enrich_richiesta(doc)
 
+@api_router.patch("/richieste/{richiesta_id}")
+async def update_richiesta(
+    richiesta_id: str,
+    data: RichiestaCreate,
+    token_data: dict = Depends(verify_token),
+):
+    """Edit a pending richiesta. Only the requesting locale or an admin can
+    modify it, and only within 20 minutes from creation (admin bypasses).
+    A request that has already been evasa/confermata cannot be modified."""
+    doc = await db.richieste.find_one({"id": richiesta_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Richiesta non trovata")
+    role = token_data.get("role")
+    is_admin = role == "admin"
+    is_owner = doc.get("restaurant_id") == token_data["restaurant_id"]
+    if not (is_admin or is_owner):
+        raise HTTPException(status_code=403, detail="Non autorizzato")
+    if doc.get("status") != "pending":
+        raise HTTPException(status_code=400, detail="Richiesta già evasa o confermata, non modificabile")
+    if not is_admin:
+        try:
+            created = datetime.fromisoformat(doc["created_at"])
+            if (datetime.now(timezone.utc) - created).total_seconds() > 20 * 60:
+                raise HTTPException(status_code=403, detail="Modificabile solo entro 20 minuti dalla creazione")
+        except (KeyError, ValueError):
+            raise HTTPException(status_code=400, detail="Data creazione non valida")
+    # Validate items (same logic as create)
+    clean_items = [i.dict() for i in data.items if i.quantity and i.quantity > 0]
+    extra_note = (data.extra_note or "").strip()
+    if not clean_items and not extra_note:
+        raise HTTPException(status_code=400, detail="Aggiungi almeno un prodotto o un extra")
+    updated = await db.richieste.find_one_and_update(
+        {"id": richiesta_id},
+        {"$set": {
+            "items": clean_items,
+            "extra_note": extra_note,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        return_document=True,
+    )
+    return await _enrich_richiesta(updated)
+
+
 @api_router.patch("/richieste/{richiesta_id}/evade")
 async def evade_richiesta(richiesta_id: str, token_data: dict = Depends(verify_token)):
     """Magazziniere marks the request as fulfilled. Decrements product stock."""

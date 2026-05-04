@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import { formatItalianDate } from '../utils/formatDate';
-import { Printer, ArrowLeft } from 'lucide-react';
+import { Printer, ArrowLeft, Pencil } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -11,7 +11,7 @@ const API = `${BACKEND_URL}/api`;
 const DDTViewPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token, restaurant, isAdmin } = useAuth();
   const [ddt, setDdt] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -33,6 +33,20 @@ const DDTViewPage = () => {
 
   const handlePrint = () => window.print();
 
+  // Editable rules: status pending + (admin OR (owner AND within 20min))
+  const canEdit = (() => {
+    if (!ddt || ddt.status !== 'pending') return false;
+    if (isAdmin) return true;
+    const isOwner = ddt.restaurant_id === restaurant?.id;
+    if (!isOwner) return false;
+    try {
+      const ageMs = Date.now() - new Date(ddt.created_at).getTime();
+      return ageMs >= 0 && ageMs < 20 * 60 * 1000;
+    } catch {
+      return false;
+    }
+  })();
+
   if (loading) return <div className="p-8 text-center text-gray-400">Caricamento DDT...</div>;
   if (!ddt) return <div className="p-8 text-center text-red-600">DDT non trovato</div>;
 
@@ -49,13 +63,24 @@ const DDTViewPage = () => {
         >
           <ArrowLeft size={18} /> Indietro
         </button>
-        <button
-          data-testid="btn-stampa-ddt"
-          onClick={handlePrint}
-          className="flex items-center gap-2 bg-[#F5C518] hover:bg-[#E5B418] text-gray-900 font-semibold px-5 py-2 rounded-lg shadow-sm"
-        >
-          <Printer size={18} /> Stampa DDT
-        </button>
+        <div className="flex items-center gap-2">
+          {canEdit && (
+            <button
+              data-testid="btn-modifica-ddt"
+              onClick={() => navigate(`/richiesta-merce/${id}/modifica`)}
+              className="flex items-center gap-2 bg-white hover:bg-gray-50 border border-gray-300 text-gray-800 font-semibold px-4 py-2 rounded-lg shadow-sm"
+            >
+              <Pencil size={16} /> Modifica
+            </button>
+          )}
+          <button
+            data-testid="btn-stampa-ddt"
+            onClick={handlePrint}
+            className="flex items-center gap-2 bg-[#F5C518] hover:bg-[#E5B418] text-gray-900 font-semibold px-5 py-2 rounded-lg shadow-sm"
+          >
+            <Printer size={18} /> Stampa DDT
+          </button>
+        </div>
       </div>
 
       {/* A4 sheet */}

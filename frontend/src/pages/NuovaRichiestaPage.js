@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
@@ -17,6 +17,8 @@ const resolveImageSrc = (url) => {
 const NuovaRichiestaPage = () => {
   const { token, restaurant, effectiveRestaurant, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const { id: editId } = useParams(); // when present we are editing an existing richiesta
+  const isEdit = Boolean(editId);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -50,6 +52,30 @@ const NuovaRichiestaPage = () => {
     fetchProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Pre-fill the form when editing an existing richiesta
+  useEffect(() => {
+    if (!isEdit) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await axios.get(`${API}/richieste/${editId}`, { headers: headers() });
+        if (cancelled) return;
+        const r = res.data;
+        const c = {};
+        (r.items || []).forEach(it => {
+          if (it.product_id) c[it.product_id] = it.quantity;
+        });
+        setCart(c);
+        setExtraNote(r.extra_note || '');
+      } catch (e) {
+        alert(e?.response?.data?.detail || 'Errore caricamento richiesta');
+        navigate('/richiesta-merce');
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId, isEdit]);
 
   const suppliers = useMemo(() => {
     const set = new Set();
@@ -118,12 +144,11 @@ const NuovaRichiestaPage = () => {
     }
     setSubmitting(true);
     try {
-      const res = await axios.post(
-        `${API}/richieste`,
-        { items, extra_note: extraNote.trim() || null },
-        { headers: headers() }
-      );
-      navigate(`/ddt/${res.data.id}`);
+      const payload = { items, extra_note: extraNote.trim() || null };
+      const res = isEdit
+        ? await axios.patch(`${API}/richieste/${editId}`, payload, { headers: headers() })
+        : await axios.post(`${API}/richieste`, payload, { headers: headers() });
+      navigate(`/ddt/${res.data.id || editId}`);
     } catch (e) {
       alert(e.response?.data?.detail || 'Errore invio richiesta');
     } finally {
@@ -138,7 +163,7 @@ const NuovaRichiestaPage = () => {
       <Header />
       <main className="max-w-3xl mx-auto p-3 sm:p-6">
         <h1 className="font-heading text-xl sm:text-2xl font-bold text-gray-900 mb-4 uppercase">
-          Nuova richiesta · {showLocation}
+          {isEdit ? 'Modifica richiesta' : 'Nuova richiesta'} · {showLocation}
         </h1>
 
         {/* Sticky filters */}
@@ -281,7 +306,7 @@ const NuovaRichiestaPage = () => {
             disabled={(totalItems === 0 && !hasExtra) || submitting}
             className="flex-1 px-5 py-3 bg-gradient-to-r from-[#F5C518] to-[#F5A518] hover:from-[#F5A518] hover:to-[#E59500] disabled:opacity-40 disabled:cursor-not-allowed text-gray-900 font-bold rounded-lg shadow"
           >
-            {submitting ? 'Invio...' : 'INVIA RICHIESTA'}
+            {submitting ? 'Invio...' : (isEdit ? 'SALVA MODIFICHE' : 'INVIA RICHIESTA')}
           </button>
         </div>
       </div>

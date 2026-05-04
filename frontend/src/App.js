@@ -183,6 +183,11 @@ function AppRoutes() {
           <NuovaRichiestaPage />
         </ProtectedRoute>
       } />
+      <Route path="/richiesta-merce/:id/modifica" element={
+        <ProtectedRoute>
+          <NuovaRichiestaPage />
+        </ProtectedRoute>
+      } />
       <Route path="/ddt/:id" element={
         <ProtectedRoute>
           <DDTViewPage />
