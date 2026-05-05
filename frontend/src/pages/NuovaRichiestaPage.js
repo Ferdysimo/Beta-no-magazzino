@@ -14,6 +14,39 @@ const resolveImageSrc = (url) => {
   return `${BACKEND_URL}${url}`;
 };
 
+// Custom display order for the warehouse request page. Products not listed
+// here are appended at the bottom in alphabetical order. Matching is
+// case-insensitive on the trimmed product name.
+const PRODUCT_DISPLAY_ORDER = [
+  'PESTO',
+  'POMODORELLA',
+  'TARTUFO',
+  'POM SECCHI',
+  'RAGU DI CINGHIALE',
+  'PESTO DI PISTACCHI',
+  'CIME DI RAPA',
+  'PECORINO',
+  'GRANA',
+  'GUANCIALI',
+  'PASSATA VIANDER',
+  'FORCHETTE',
+  'PIATTI POLPA',
+  'BUSTE',
+  'SCODELLE',
+  'COPERCHI',
+  'VINO RAGU',
+  'RAGU DI CHIANINA',
+  'VINO BIANCO',
+  'VINO ROSSO',
+  'RAGU',
+];
+
+const productOrderRank = (name) => {
+  const n = (name || '').trim().toUpperCase();
+  const i = PRODUCT_DISPLAY_ORDER.indexOf(n);
+  return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+};
+
 const NuovaRichiestaPage = () => {
   const { token, restaurant, effectiveRestaurant, isAdmin } = useAuth();
   const navigate = useNavigate();
@@ -85,10 +118,17 @@ const NuovaRichiestaPage = () => {
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
-    return products.filter(p => {
+    const list = products.filter(p => {
       if (supplierFilter && p.supplier !== supplierFilter) return false;
       if (s && !p.name.toLowerCase().includes(s)) return false;
       return true;
+    });
+    return list.sort((a, b) => {
+      const ra = productOrderRank(a.name);
+      const rb = productOrderRank(b.name);
+      if (ra !== rb) return ra - rb;
+      // Both unranked (or both same rank) → alphabetical fallback
+      return (a.name || '').localeCompare(b.name || '', 'it');
     });
   }, [products, search, supplierFilter]);
 
