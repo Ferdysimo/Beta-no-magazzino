@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
-import { Search, Check, X, Pencil } from 'lucide-react';
+import { Search, Check, X, Pencil, History } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -220,6 +220,14 @@ const InventarioPage = () => {
                         <span className="inline-flex items-center px-3 py-1 rounded-md text-sm font-bold bg-blue-50 text-blue-700 border border-blue-100">
                           {p.quantity ?? 0}
                         </span>
+                        <button
+                          data-testid={`inv-history-btn-${p.id}`}
+                          onClick={() => navigate(`/magazzino/cronologia?product=${p.id}`)}
+                          className="w-8 h-8 flex items-center justify-center bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-md"
+                          title="Vedi cronologia movimenti"
+                        >
+                          <History size={14} />
+                        </button>
                         {isAdmin && (
                           <button
                             data-testid={`inv-edit-btn-${p.id}`}

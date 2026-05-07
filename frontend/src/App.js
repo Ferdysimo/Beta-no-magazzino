@@ -30,6 +30,7 @@ import CarichiMagazzinoPage from './pages/CarichiMagazzinoPage';
 import NuovoCaricoPage from './pages/NuovoCaricoPage';
 import InventarioPage from './pages/InventarioPage';
 import AnalisiPage from './pages/AnalisiPage';
+import CronologiaMovimentiPage from './pages/CronologiaMovimentiPage';
 import UpdateBanner from './components/UpdateBanner';
 
 // Protected Route Component
@@ -171,6 +172,11 @@ function AppRoutes() {
       <Route path="/magazzino/analisi" element={
         <ProtectedRoute>
           <AnalisiPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/magazzino/cronologia" element={
+        <ProtectedRoute>
+          <CronologiaMovimentiPage />
         </ProtectedRoute>
       } />
       <Route path="/richiesta-merce" element={
