@@ -64,15 +64,19 @@ const DDTViewPage = () => {
           <ArrowLeft size={18} /> Indietro
         </button>
         <div className="flex items-center gap-2">
-          {ddt.updated_at && ddt.updated_at !== ddt.created_at && (
-            <span
-              data-testid="ddt-modified-badge"
-              title={`Ultima modifica: ${ddt.updated_at}`}
-              className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-900 border border-yellow-300 rounded-full px-2.5 py-1 text-xs font-semibold"
-            >
-              ✏️ modificata {Math.max(0, Math.floor((Date.now() - new Date(ddt.updated_at).getTime()) / 60000))} min fa
-            </span>
-          )}
+          {ddt.updated_at && ddt.updated_at !== ddt.created_at && (() => {
+            const mins = Math.max(0, Math.floor((Date.now() - new Date(ddt.updated_at).getTime()) / 60000));
+            if (mins > 60) return null;
+            return (
+              <span
+                data-testid="ddt-modified-badge"
+                title={`Ultima modifica: ${ddt.updated_at}`}
+                className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-900 border border-yellow-300 rounded-full px-2.5 py-1 text-xs font-semibold"
+              >
+                ✏️ modificata {mins} min fa
+              </span>
+            );
+          })()}
           {canEdit && (
             <button
               data-testid="btn-modifica-ddt"
