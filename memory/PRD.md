@@ -110,6 +110,7 @@ Sistema di gestione ordini pasta per multi-ristorante (Flaminio, Grazie, Largo d
 - Archiviazione ordini vecchi
 - Timeout operazioni DB
 - Logging strutturato con rotazione
+- **Ledger `stock_movements`**: registrare ogni +N/-N su `products.quantity` con timestamp, autore, causale (carico/evasione/forzatura/rollback) e riferimento al documento sorgente. Permette audit trail completo e risoluzione rapida di discrepanze d'inventario. Aggiungere UI Admin per consultare la cronologia per prodotto.
 
 ## Backlog P2 - Futuro
 - Popolare lista fornitori
