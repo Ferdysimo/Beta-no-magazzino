@@ -96,7 +96,7 @@ const MagazzinoRichiestePage = () => {
                 <div className="flex-1 text-sm text-gray-700">
                   <div className="font-semibold text-gray-900 flex items-center gap-2 flex-wrap">
                     {r.restaurant_location}
-                    {r.updated_at && r.updated_at !== r.created_at && minutesSince(r.updated_at) <= 60 && (
+                    {r.updated_at && r.updated_at !== r.created_at && minutesSince(r.updated_at) <= 1440 && (
                       <span
                         data-testid={`badge-modified-${r.ddt_number}`}
                         title={formatItalianDateTime(r.updated_at)}

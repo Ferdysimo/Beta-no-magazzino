@@ -66,7 +66,7 @@ const DDTViewPage = () => {
         <div className="flex items-center gap-2">
           {ddt.updated_at && ddt.updated_at !== ddt.created_at && (() => {
             const mins = Math.max(0, Math.floor((Date.now() - new Date(ddt.updated_at).getTime()) / 60000));
-            if (mins > 60) return null;
+            if (mins > 1440) return null;
             return (
               <span
                 data-testid="ddt-modified-badge"
