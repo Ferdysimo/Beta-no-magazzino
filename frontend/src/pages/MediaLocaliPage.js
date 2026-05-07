@@ -51,8 +51,8 @@ const MediaLocaliPage = () => {
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
       <Header />
-      <main className="max-w-3xl mx-auto p-6">
-        <h1 className="font-heading text-3xl font-bold text-gray-800 mb-6">
+      <main className="max-w-3xl mx-auto p-2 sm:p-6">
+        <h1 className="font-heading text-xl sm:text-3xl font-bold text-gray-800 mb-3 sm:mb-6 px-1">
           Numeri - report totali di giornata
         </h1>
 
@@ -64,27 +64,27 @@ const MediaLocaliPage = () => {
           const totalAverage = data.locations.reduce((sum, loc) => sum + averagesCeil[loc], 0);
 
           return (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto">
-              <table className="w-full">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <table className="w-full table-fixed">
                 <thead>
                   <tr className="border-b border-gray-300">
-                    <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Giorno</th>
+                    <th className="text-left px-1.5 sm:px-4 py-2 sm:py-3 font-semibold text-gray-700 text-[11px] sm:text-sm">Giorno</th>
                     {data.locations.map(loc => (
-                      <th key={loc} className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">{displayName(loc)}</th>
+                      <th key={loc} className="text-left px-1.5 sm:px-4 py-2 sm:py-3 font-semibold text-gray-700 text-[11px] sm:text-sm truncate">{displayName(loc)}</th>
                     ))}
-                    <th className="text-left px-4 py-3 font-semibold text-gray-700 text-sm">Totale</th>
+                    <th className="text-left px-1.5 sm:px-4 py-2 sm:py-3 font-semibold text-gray-700 text-[11px] sm:text-sm">Totale</th>
                   </tr>
                 </thead>
                 <tbody>
                   {/* Media row */}
                   <tr className="border-b-2 border-gray-400 bg-gray-50">
-                    <td className="px-4 py-3 font-bold text-gray-800">Media</td>
+                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 font-bold text-gray-800 text-[11px] sm:text-base">Media</td>
                     {data.locations.map(loc => (
-                      <td key={loc} className="px-4 py-3 font-bold text-gray-800">
+                      <td key={loc} className="px-1.5 sm:px-4 py-2 sm:py-3 font-bold text-gray-800 text-[11px] sm:text-base">
                         {averagesCeil[loc].toLocaleString('it-IT')}
                       </td>
                     ))}
-                    <td className="px-4 py-3 font-bold text-gray-800">
+                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 font-bold text-gray-800 text-[11px] sm:text-base">
                       {totalAverage.toLocaleString('it-IT')}
                     </td>
                   </tr>
@@ -97,13 +97,13 @@ const MediaLocaliPage = () => {
                     );
                     return (
                       <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="px-4 py-2 text-gray-700 text-sm">{day.date}</td>
+                        <td className="px-1.5 sm:px-4 py-1.5 sm:py-2 text-gray-700 text-[11px] sm:text-sm">{day.date}</td>
                         {data.locations.map(loc => (
-                          <td key={loc} className="px-4 py-2 text-gray-800 text-sm">
+                          <td key={loc} className="px-1.5 sm:px-4 py-1.5 sm:py-2 text-gray-800 text-[11px] sm:text-sm">
                             {day.locations[loc] || ''}
                           </td>
                         ))}
-                        <td className="px-4 py-2 font-semibold text-gray-800 text-sm">
+                        <td className="px-1.5 sm:px-4 py-1.5 sm:py-2 font-semibold text-gray-800 text-[11px] sm:text-sm">
                           {dailyTotal > 0 ? dailyTotal.toLocaleString('it-IT') : ''}
                         </td>
                       </tr>

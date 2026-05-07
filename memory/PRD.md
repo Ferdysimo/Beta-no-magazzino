@@ -87,6 +87,7 @@ Sistema di gestione ordini pasta per multi-ristorante (Flaminio, Grazie, Largo d
 - Polling rispetta guardie ottimistiche (zero flickering)
 - Righe compatte nei tablet bollitore (px-2 py-1)
 - Testo nero grassetto nei bollitore per leggibilità
+- Tabella "Numeri" Admin responsive su mobile (table-fixed, padding e font ridotti, no scroll orizzontale a 375px) — 07/05/2026
 
 ## Self-Hosting
 - VPS OVHcloud con Ubuntu
