@@ -4,13 +4,19 @@ Reset Analisi Magazzino — riporta a 0 tutti i valori della pagina Analisi.
 
 Cosa fa:
   1) Cancella TUTTI i documenti in `carichi_magazzino` (azzera "Quantità entrate")
-  2) Cancella TUTTE le richieste con status "evasa" o "confermata"
-     (azzera "Trasporti a [locale]")
+  2) Cancella SOLO le richieste con status "confermata" (già chiuse nello storico)
+     — azzera la maggior parte di "Trasporti a [locale]"
 
-Cosa NON tocca:
+Cosa NON tocca (flussi attivi PRESERVATI):
+  - Richieste `pending` (in attesa di evasione)
+  - Richieste `evasa` (evase ma in attesa di conferma del locale)  ← restano!
+  - Richieste in `errore`
   - Inventario corrente (`products.stock`)
-  - Richieste pending o in errore
   - Ordini, archivi, bevande, anagrafica fornitori/prodotti
+
+NOTA: le richieste `evasa` (non ancora confermate) continueranno a comparire
+nella pagina Analisi finche' il locale non le conferma. E' corretto cosi':
+la merce e' fisicamente uscita dal magazzino, quindi rappresenta un trasporto reale.
 
 Uso:
   python reset_analisi.py             # dry-run, mostra solo cosa farebbe
@@ -46,15 +52,19 @@ async def main():
 
     n_carichi = await db.carichi_magazzino.count_documents({})
     n_richieste = await db.richieste.count_documents(
-        {"status": {"$in": ["evasa", "confermata"]}}
+        {"status": "confermata"}
+    )
+    n_evase_pending = await db.richieste.count_documents(
+        {"status": "evasa"}
     )
 
     print("=" * 60)
     print(f"DB: {DB_NAME}")
     print(f"Data: {datetime.now(timezone.utc).isoformat()}")
     print("-" * 60)
-    print(f"  carichi_magazzino da cancellare: {n_carichi}")
-    print(f"  richieste evase/confermate da cancellare: {n_richieste}")
+    print(f"  carichi_magazzino da cancellare:           {n_carichi}")
+    print(f"  richieste 'confermata' da cancellare:      {n_richieste}")
+    print(f"  richieste 'evasa' (attive) PRESERVATE:     {n_evase_pending}")
     print("-" * 60)
 
     if not apply:
@@ -73,16 +83,16 @@ async def main():
             return
 
     res1 = await db.carichi_magazzino.delete_many({})
-    res2 = await db.richieste.delete_many(
-        {"status": {"$in": ["evasa", "confermata"]}}
-    )
+    res2 = await db.richieste.delete_many({"status": "confermata"})
 
     print()
     print("FATTO:")
-    print(f"  carichi_magazzino cancellati: {res1.deleted_count}")
-    print(f"  richieste cancellate:         {res2.deleted_count}")
+    print(f"  carichi_magazzino cancellati:        {res1.deleted_count}")
+    print(f"  richieste 'confermata' cancellate:   {res2.deleted_count}")
+    print(f"  richieste 'evasa' attive preservate: {n_evase_pending}")
     print()
-    print("La pagina Analisi ora mostrera' 0 su tutte le righe del periodo.")
+    print("Le richieste 'evasa' in attesa di conferma del locale restano,")
+    print("e continueranno a comparire in Analisi finche' non vengono confermate.")
 
     client.close()
 
