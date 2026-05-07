@@ -44,6 +44,12 @@ app = FastAPI()
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
 
+# Cache di restaurant_id -> location, popolata al boot. Usata dal middleware
+# diagnostico per allegare il nome del locale a ogni log API senza colpire
+# il DB ad ogni richiesta.
+RESTAURANT_LOCATION_CACHE: Dict[str, str] = {}
+
+
 # In-memory diagnostics middleware: records each /api/* HTTP call
 # (method, path, status, duration_ms, timestamp). Used by the Admin
 # Diagnostica Live page. Out-of-process tooling not needed.
@@ -65,12 +71,42 @@ async def diagnostics_middleware(request: Request, call_next):
             path = request.url.path
             if path.startswith("/api/"):
                 duration_ms = int((_t.perf_counter() - start) * 1000)
+                # Best-effort extraction of caller restaurant from JWT.
+                # We tolerate any failure (no token, expired, etc.) silently.
+                rid = ""
+                rname = ""
+                role = ""
+                try:
+                    auth = request.headers.get("authorization") or request.headers.get("Authorization")
+                    if auth and auth.lower().startswith("bearer "):
+                        payload = jwt.decode(
+                            auth.split(" ", 1)[1],
+                            SECRET_KEY,
+                            algorithms=[ALGORITHM],
+                            options={"verify_exp": False},
+                        )
+                        rid = payload.get("restaurant_id", "") or ""
+                        rname = payload.get("restaurant_name", "") or ""
+                        role = payload.get("role", "") or ""
+                        # Admin overriding a specific restaurant via header
+                        if role == "admin":
+                            override = request.headers.get("X-Admin-Restaurant-Id")
+                            if override:
+                                rid = override
+                                rname = f"(admin → {RESTAURANT_LOCATION_CACHE.get(rid, rid[:8])})"
+                except Exception:
+                    pass
+                location = RESTAURANT_LOCATION_CACHE.get(rid, "")
                 entry = {
                     "ts": datetime.now(timezone.utc).isoformat(),
                     "method": request.method,
                     "path": path,
                     "status": status_code,
                     "ms": duration_ms,
+                    "restaurant_id": rid,
+                    "location": location,
+                    "user": rname,
+                    "role": role,
                 }
                 api_call_log.append(entry)
                 if status_code >= 500 or error_text:
