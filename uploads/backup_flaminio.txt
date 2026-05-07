@@ -1368,3 +1368,9 @@
 1 g
 2 TEST_DUP_A
 3 TEST_DUP_B
+4 carb
+5 amat
+6 cacio
+7 tart
+8 esto
+9 pom
