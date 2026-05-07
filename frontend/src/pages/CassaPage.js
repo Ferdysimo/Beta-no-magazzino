@@ -249,6 +249,14 @@ const CassaPage = () => {
       setTimeout(() => inputRef.current?.focus(), 50);
     } catch (error) {
       console.error('Error updating order:', error);
+      const detail = error.response?.data?.detail;
+      if (error.response?.status === 400 && detail) {
+        // Surface the conflict (e.g. duplicate order_number) clearly
+        // and KEEP edit mode active so cashier can fix the number.
+        window.alert(detail);
+      } else {
+        window.alert('Errore nel modificare la pasta. Riprova.');
+      }
     }
   };
 

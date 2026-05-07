@@ -962,7 +962,29 @@ async def update_order(
         raise HTTPException(status_code=404, detail="Order not found")
     
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
-    
+
+    # Pre-check: if order_number is being changed, ensure it isn't already used
+    # by another active order of the same restaurant. The unique compound index
+    # on (restaurant_id, order_number) is the last line of defense, but we
+    # surface a clean 400 message here so the cashier knows what happened
+    # instead of seeing 500 retries.
+    if "order_number" in update_data:
+        new_number = int(update_data["order_number"])
+        if new_number != int(original_order.get("order_number", -1)):
+            clash = await db.orders.find_one(
+                {
+                    "restaurant_id": restaurant_id,
+                    "order_number": new_number,
+                    "id": {"$ne": order_id},
+                },
+                {"_id": 0, "id": 1},
+            )
+            if clash:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Numero {new_number} già usato per un altro ordine attivo di questo locale. Scegli un altro numero.",
+                )
+
     # Log modification if description changed
     if "description" in update_data and update_data["description"] != original_order["description"]:
         modification_log = {
@@ -975,13 +997,22 @@ async def update_order(
             "modified_at": datetime.now(timezone.utc).isoformat()
         }
         await db.modification_logs.insert_one(modification_log)
-    
-    result = await db.orders.find_one_and_update(
-        {"id": order_id, "restaurant_id": restaurant_id},
-        {"$set": update_data},
-        return_document=True
-    )
-    
+
+    try:
+        result = await db.orders.find_one_and_update(
+            {"id": order_id, "restaurant_id": restaurant_id},
+            {"$set": update_data},
+            return_document=True
+        )
+    except DuplicateKeyError:
+        # Race: another concurrent request took the same order_number between
+        # our pre-check and the find_one_and_update. Fall back to the same
+        # human-readable error.
+        raise HTTPException(
+            status_code=400,
+            detail=f"Numero {update_data.get('order_number')} già usato per un altro ordine attivo di questo locale. Scegli un altro numero.",
+        )
+
     if not result:
         raise HTTPException(status_code=404, detail="Order not found")
     
