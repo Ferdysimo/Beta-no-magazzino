@@ -14,7 +14,6 @@ const MagazzinierePage = () => {
   const secondaryButtons = [
     { label: 'Inventario / Forza il sistema', path: '/magazzino/inventario' },
     { label: 'Analisi', path: '/magazzino/analisi' },
-    { label: 'Cronologia movimenti', path: '/magazzino/cronologia' },
   ];
 
   return (

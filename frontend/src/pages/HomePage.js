@@ -80,6 +80,14 @@ const HomePage = () => {
                 <span className="font-bold text-lg text-gray-800">Diagnostica live</span>
                 <span className="block text-xs text-gray-500 mt-0.5">WebSocket, latenze e errori in tempo reale</span>
               </button>
+              <button
+                data-testid="admin-cronologia"
+                onClick={() => navigate('/magazzino/cronologia')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Cronologia movimenti</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Storico carichi, evasioni e forzature di magazzino</span>
+              </button>
             </div>
           </div>
         </main>
