@@ -1754,7 +1754,26 @@ async def create_product(data: ProductCreate, token_data: dict = Depends(verify_
     }
     
     await db.products.insert_one(product)
-    
+
+    # Log initial stock as opening movement (cause = stock_iniziale)
+    initial_qty = int(data.quantity or 0)
+    if initial_qty > 0:
+        await db.stock_movements.insert_one({
+            "id": str(uuid.uuid4()),
+            "product_id": product_id,
+            "product_name": data.name,
+            "delta": initial_qty,
+            "balance_after": initial_qty,
+            "cause": "stock_iniziale",
+            "ref_type": "admin",
+            "ref_id": product_id,
+            "user_id": token_data.get("restaurant_id", ""),
+            "user_name": token_data.get("restaurant_name", ""),
+            "user_role": token_data.get("role", ""),
+            "note": "Creazione prodotto",
+            "timestamp": product["created_at"],
+        })
+
     response = {k: v for k, v in product.items() if k != "_id"}
     if response.get("image_file"):
         response["image_url"] = f"/api/uploads/{response['image_file']}"
@@ -1774,7 +1793,8 @@ async def update_product(product_id: str, data: ProductUpdate, token_data: dict 
         update_fields["unit"] = data.unit
     if data.supplier is not None:
         update_fields["supplier"] = data.supplier
-    if data.quantity is not None:
+    quantity_change_requested = data.quantity is not None
+    if quantity_change_requested:
         update_fields["quantity"] = data.quantity
     if data.image_data:
         old_product = await db.products.find_one({"id": product_id})
@@ -1786,12 +1806,42 @@ async def update_product(product_id: str, data: ProductUpdate, token_data: dict 
     
     if not update_fields:
         raise HTTPException(status_code=400, detail="Nessun campo da aggiornare")
-    
-    result = await db.products.find_one_and_update(
-        {"id": product_id},
-        {"$set": update_fields},
-        return_document=True
-    )
+
+    # If quantity was explicitly provided, log the delta as a forzatura.
+    if quantity_change_requested:
+        old_doc = await db.products.find_one({"id": product_id}, {"_id": 0, "quantity": 1, "name": 1})
+        if not old_doc:
+            raise HTTPException(status_code=404, detail="Prodotto non trovato")
+        new_qty = max(0, int(data.quantity))
+        update_fields["quantity"] = new_qty
+        delta = new_qty - int(old_doc.get("quantity", 0))
+        result = await db.products.find_one_and_update(
+            {"id": product_id},
+            {"$set": update_fields},
+            return_document=True,
+        )
+        if delta != 0:
+            await db.stock_movements.insert_one({
+                "id": str(uuid.uuid4()),
+                "product_id": product_id,
+                "product_name": old_doc.get("name", ""),
+                "delta": delta,
+                "balance_after": new_qty,
+                "cause": "forzatura_admin",
+                "ref_type": "admin",
+                "ref_id": product_id,
+                "user_id": token_data.get("restaurant_id", ""),
+                "user_name": token_data.get("restaurant_name", ""),
+                "user_role": token_data.get("role", ""),
+                "note": "PUT /products",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+    else:
+        result = await db.products.find_one_and_update(
+            {"id": product_id},
+            {"$set": update_fields},
+            return_document=True
+        )
     
     if not result:
         raise HTTPException(status_code=404, detail="Prodotto non trovato")
@@ -1812,14 +1862,95 @@ async def update_product_quantity(product_id: str, data: ProductQuantityUpdate, 
     """Force stock override. ADMIN ONLY (Inventario / Forza il sistema)."""
     if token_data.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Solo l'Admin può forzare le quantità")
-    result = await db.products.find_one_and_update(
-        {"id": product_id},
-        {"$set": {"quantity": max(0, data.quantity)}},
-        return_document=True
+    result = await _set_stock_absolute(
+        product_id=product_id,
+        new_quantity=max(0, data.quantity),
+        cause="forzatura_admin",
+        ref_type="admin",
+        ref_id=product_id,
+        token_data=token_data,
     )
     if not result:
         raise HTTPException(status_code=404, detail="Prodotto non trovato")
     return {"id": product_id, "quantity": result.get("quantity", 0)}
+
+
+# ==================== STOCK MOVEMENTS LEDGER - QUERY ENDPOINTS ====================
+
+@api_router.get("/products/{product_id}/movements")
+async def get_product_movements(
+    product_id: str,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    cause: Optional[str] = None,
+    limit: int = 500,
+    token_data: dict = Depends(verify_token),
+):
+    """
+    Cronologia movimenti di stock per un prodotto. Magazziniere/Admin.
+    Filtri opzionali:
+      - date_from / date_to (YYYY-MM-DD, inclusivi)
+      - cause: carico | carico_modifica | carico_cancellato | evasione |
+               forzatura_admin | stock_iniziale
+    """
+    if token_data.get("role") not in ("magazzino", "admin"):
+        raise HTTPException(status_code=403, detail="Solo magazziniere/admin")
+    query: Dict = {"product_id": product_id}
+    if date_from or date_to:
+        ts: Dict = {}
+        if date_from:
+            ts["$gte"] = f"{date_from}T00:00:00"
+        if date_to:
+            try:
+                dt_to = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+                ts["$lt"] = dt_to.strftime("%Y-%m-%dT00:00:00")
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Formato date_to non valido")
+        query["timestamp"] = ts
+    if cause:
+        query["cause"] = cause
+    docs = await db.stock_movements.find(query, {"_id": 0}).sort("timestamp", -1).to_list(max(1, min(limit, 5000)))
+    # Bilancio corrente
+    product = await db.products.find_one({"id": product_id}, {"_id": 0, "name": 1, "quantity": 1})
+    return {
+        "product_id": product_id,
+        "product_name": product.get("name", "") if product else "",
+        "current_quantity": int(product.get("quantity", 0)) if product else 0,
+        "count": len(docs),
+        "movements": docs,
+    }
+
+
+@api_router.get("/stock-movements")
+async def list_stock_movements(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    cause: Optional[str] = None,
+    user_id: Optional[str] = None,
+    limit: int = 500,
+    token_data: dict = Depends(verify_token),
+):
+    """Cronologia globale di tutti i movimenti. Magazziniere/Admin."""
+    if token_data.get("role") not in ("magazzino", "admin"):
+        raise HTTPException(status_code=403, detail="Solo magazziniere/admin")
+    query: Dict = {}
+    if date_from or date_to:
+        ts: Dict = {}
+        if date_from:
+            ts["$gte"] = f"{date_from}T00:00:00"
+        if date_to:
+            try:
+                dt_to = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+                ts["$lt"] = dt_to.strftime("%Y-%m-%dT00:00:00")
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Formato date_to non valido")
+        query["timestamp"] = ts
+    if cause:
+        query["cause"] = cause
+    if user_id:
+        query["user_id"] = user_id
+    docs = await db.stock_movements.find(query, {"_id": 0}).sort("timestamp", -1).to_list(max(1, min(limit, 5000)))
+    return {"count": len(docs), "movements": docs}
 
 @api_router.delete("/products/{product_id}")
 async def delete_product(product_id: str, token_data: dict = Depends(verify_token)):
@@ -2044,12 +2175,19 @@ async def evade_richiesta(richiesta_id: str, token_data: dict = Depends(verify_t
     if doc.get("status") != "pending":
         raise HTTPException(status_code=400, detail="La richiesta non è in stato 'pending'")
 
-    # Decrement stock atomically
+    # Decrement stock atomically + log movement
     for item in doc.get("items", []):
-        await db.products.update_one(
-            {"id": item["product_id"]},
-            {"$inc": {"quantity": -int(item.get("quantity", 0))}},
-        )
+        qty = int(item.get("quantity", 0))
+        if qty:
+            await _apply_stock_delta(
+                product_id=item["product_id"],
+                delta=-qty,
+                cause="evasione",
+                ref_type="richiesta",
+                ref_id=richiesta_id,
+                token_data=token_data,
+                note=f"DDT {doc.get('ddt_number', '')} -> {doc.get('restaurant_location', '')}",
+            )
     now_iso = datetime.now(timezone.utc).isoformat()
     updated = await db.richieste.find_one_and_update(
         {"id": richiesta_id},
@@ -2126,6 +2264,101 @@ async def delete_richiesta(richiesta_id: str, token_data: dict = Depends(verify_
 
 # ==================== CARICHI MAGAZZINO - ENDPOINTS ====================
 
+# ---- Stock movements ledger ----
+# Every change to products.quantity is logged in `stock_movements` for audit.
+async def _apply_stock_delta(
+    product_id: str,
+    delta: int,
+    cause: str,
+    ref_type: str,
+    ref_id: str,
+    token_data: dict,
+    note: str = "",
+) -> Optional[int]:
+    """
+    Atomically apply +/- delta to product.quantity AND log the movement.
+    Returns the new balance (post-mutation) or None if product not found.
+
+    `cause`:    one of "carico", "carico_modifica", "carico_cancellato",
+                       "evasione", "forzatura_admin", "stock_iniziale".
+    `ref_type`: "carico" | "richiesta" | "admin" | "backfill".
+    `ref_id`:   id of the source document (carico_id, richiesta_id, etc).
+    """
+    if delta == 0:
+        return None
+    updated = await db.products.find_one_and_update(
+        {"id": product_id},
+        {"$inc": {"quantity": int(delta)}},
+        return_document=True,
+        projection={"_id": 0, "quantity": 1, "name": 1},
+    )
+    if not updated:
+        return None
+    balance_after = int(updated.get("quantity", 0))
+    await db.stock_movements.insert_one({
+        "id": str(uuid.uuid4()),
+        "product_id": product_id,
+        "product_name": updated.get("name", ""),
+        "delta": int(delta),
+        "balance_after": balance_after,
+        "cause": cause,
+        "ref_type": ref_type,
+        "ref_id": ref_id,
+        "user_id": token_data.get("restaurant_id", ""),
+        "user_name": token_data.get("restaurant_name", ""),
+        "user_role": token_data.get("role", ""),
+        "note": note,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
+    return balance_after
+
+
+async def _set_stock_absolute(
+    product_id: str,
+    new_quantity: int,
+    cause: str,
+    ref_type: str,
+    ref_id: str,
+    token_data: dict,
+    note: str = "",
+) -> Optional[dict]:
+    """
+    Force-set product.quantity to an absolute value AND log the resulting delta.
+    Used by Admin "Forza il sistema". Returns the updated product or None.
+    """
+    new_quantity = max(0, int(new_quantity))
+    # Capture old quantity first so we can compute delta after the set.
+    old = await db.products.find_one({"id": product_id}, {"_id": 0, "quantity": 1, "name": 1})
+    if not old:
+        return None
+    old_qty = int(old.get("quantity", 0))
+    delta = new_quantity - old_qty
+    updated = await db.products.find_one_and_update(
+        {"id": product_id},
+        {"$set": {"quantity": new_quantity}},
+        return_document=True,
+    )
+    if not updated:
+        return None
+    if delta != 0:
+        await db.stock_movements.insert_one({
+            "id": str(uuid.uuid4()),
+            "product_id": product_id,
+            "product_name": old.get("name", ""),
+            "delta": delta,
+            "balance_after": new_quantity,
+            "cause": cause,
+            "ref_type": ref_type,
+            "ref_id": ref_id,
+            "user_id": token_data.get("restaurant_id", ""),
+            "user_name": token_data.get("restaurant_name", ""),
+            "user_role": token_data.get("role", ""),
+            "note": note,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+    return updated
+
+
 def _serialize_carico(c: dict) -> dict:
     c = {k: v for k, v in c.items() if k != "_id"}
     photo = c.pop("photo_file", None)
@@ -2165,11 +2398,16 @@ async def create_carico(data: CaricoCreate, token_data: dict = Depends(verify_to
     }
     await db.carichi_magazzino.insert_one(doc)
 
-    # Increment product stock
+    # Increment product stock + log movement
     for it in clean_items:
-        await db.products.update_one(
-            {"id": it["product_id"]},
-            {"$inc": {"quantity": int(it["quantity_added"])}},
+        await _apply_stock_delta(
+            product_id=it["product_id"],
+            delta=int(it["quantity_added"]),
+            cause="carico",
+            ref_type="carico",
+            ref_id=carico_id,
+            token_data=token_data,
+            note=data.supplier_name or "",
         )
 
     return _serialize_carico(doc)
@@ -2255,7 +2493,14 @@ async def update_carico(carico_id: str, data: CaricoUpdate, token_data: dict = D
         for pid in all_ids:
             delta = new_map.get(pid, 0) - old_map.get(pid, 0)
             if delta != 0:
-                await db.products.update_one({"id": pid}, {"$inc": {"quantity": delta}})
+                await _apply_stock_delta(
+                    product_id=pid,
+                    delta=delta,
+                    cause="carico_modifica",
+                    ref_type="carico",
+                    ref_id=carico_id,
+                    token_data=token_data,
+                )
         update_fields["items"] = new_items
 
     update_fields["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -2273,12 +2518,18 @@ async def delete_carico(carico_id: str, token_data: dict = Depends(verify_token)
     old = await db.carichi_magazzino.find_one({"id": carico_id})
     if not old:
         raise HTTPException(status_code=404, detail="Carico non trovato")
-    # Rollback stock
+    # Rollback stock + log movement
     for it in old.get("items", []):
-        await db.products.update_one(
-            {"id": it["product_id"]},
-            {"$inc": {"quantity": -int(it.get("quantity_added", 0))}},
-        )
+        qty = int(it.get("quantity_added", 0))
+        if qty:
+            await _apply_stock_delta(
+                product_id=it["product_id"],
+                delta=-qty,
+                cause="carico_cancellato",
+                ref_type="carico",
+                ref_id=carico_id,
+                token_data=token_data,
+            )
     # Delete photo file
     ph = old.get("photo_file")
     if ph:
@@ -3030,4 +3281,8 @@ async def startup_scheduler():
         logger.warning(f"Could not create unique index on orders (likely existing duplicates): {e}")
     await db.archived_orders.create_index([("restaurant_id", 1), ("created_at", -1)])
     await db.deletion_logs.create_index([("restaurant_id", 1), ("deleted_at", -1)])
+    # Stock movements ledger
+    await db.stock_movements.create_index([("product_id", 1), ("timestamp", -1)])
+    await db.stock_movements.create_index([("timestamp", -1)])
+    await db.stock_movements.create_index([("cause", 1), ("timestamp", -1)])
     logger.info("MongoDB indexes created")

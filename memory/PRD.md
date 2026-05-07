@@ -110,7 +110,7 @@ Sistema di gestione ordini pasta per multi-ristorante (Flaminio, Grazie, Largo d
 - Archiviazione ordini vecchi
 - Timeout operazioni DB
 - Logging strutturato con rotazione
-- **Ledger `stock_movements`**: registrare ogni +N/-N su `products.quantity` con timestamp, autore, causale (carico/evasione/forzatura/rollback) e riferimento al documento sorgente. Permette audit trail completo e risoluzione rapida di discrepanze d'inventario. Aggiungere UI Admin per consultare la cronologia per prodotto.
+- **Ledger `stock_movements`** (BACKEND COMPLETATO 07/05/2026): tracciamento atomico di ogni mutazione di `products.quantity` con timestamp, autore, causale e ref al documento sorgente. Hook su POST/PUT/DELETE /carichi, PATCH /richieste/evade, PATCH /products/quantity, POST/PUT /products. Endpoint API `GET /products/{id}/movements` e `GET /stock-movements` con filtri (date_from/date_to/cause/user_id). Backfill script `backfill_stock_ledger.py` per popolare lo storico. UI Admin **DA FARE**.
 
 ## Backlog P2 - Futuro
 - Popolare lista fornitori
