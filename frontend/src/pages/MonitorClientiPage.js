@@ -52,7 +52,8 @@ const MonitorClientiPage = () => {
   const usableH = Math.max(0, vp.h - messagePx - PAD * 2);
 
   const { cols, side } = fitGrid(monitorOrders.length, usableW, usableH, GAP);
-  const boxSide = Math.max(80, side);
+  // Slightly smaller than the maximum that would fit, more breathing room.
+  const boxSide = Math.max(80, Math.floor(side * 0.85));
   const numberFontPx = Math.floor(boxSide * 0.72);
   const messageFontPx = Math.max(28, Math.min(80, Math.round(messagePx * 0.55)));
 
