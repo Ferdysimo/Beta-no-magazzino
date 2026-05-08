@@ -1,53 +1,108 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useOrders } from '../contexts/OrderContext';
 
 const BACKGROUND_IMAGE = 'https://customer-assets.emergentagent.com/job_0180d0f0-c7fa-4463-a43a-ab97d28ecc52/artifacts/2g29cupn_monitor%20clienti.jpg';
 
+// Compute the best grid (cols x rows) to fit N square cells inside (W x H),
+// maximizing the cell side length.
+const fitGrid = (count, W, H, gap) => {
+  if (count <= 0 || W <= 0 || H <= 0) return { cols: 1, rows: 1, side: 0 };
+  let best = { cols: 1, rows: count, side: 0 };
+  for (let cols = 1; cols <= count; cols++) {
+    const rows = Math.ceil(count / cols);
+    const cellW = (W - gap * (cols - 1)) / cols;
+    const cellH = (H - gap * (rows - 1)) / rows;
+    const side = Math.floor(Math.min(cellW, cellH));
+    if (side > best.side) best = { cols, rows, side };
+  }
+  return best;
+};
+
 const MonitorClientiPage = () => {
   const { orders } = useOrders();
+  const [vp, setVp] = useState(() => ({
+    w: typeof window !== 'undefined' ? window.innerWidth : 1920,
+    h: typeof window !== 'undefined' ? window.innerHeight : 1080,
+  }));
+
+  useEffect(() => {
+    const onResize = () => setVp({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const monitorOrders = orders
     .filter(o => o.monitor_visible)
     .sort((a, b) => a.order_number - b.order_number);
 
-  // No orders → full background image
   if (monitorOrders.length === 0) {
     return (
       <div
-        className="min-h-screen bg-cover bg-center flex items-center justify-center"
+        className="fixed inset-0 bg-cover bg-center"
         style={{ backgroundImage: `url('${BACKGROUND_IMAGE}')` }}
         data-testid="monitor-empty"
       />
     );
   }
 
-  // Orders visible → dark background with big numbers
+  const PAD = 24;                         // outer padding
+  const GAP = 24;                         // gap between boxes
+  const messagePx = Math.max(56, Math.min(140, Math.round(vp.h * 0.10)));
+  const usableW = Math.max(0, vp.w - PAD * 2);
+  const usableH = Math.max(0, vp.h - messagePx - PAD * 2);
+
+  const { cols, side } = fitGrid(monitorOrders.length, usableW, usableH, GAP);
+  const boxSide = Math.max(80, side);
+  const numberFontPx = Math.floor(boxSide * 0.72);
+  const messageFontPx = Math.max(28, Math.min(80, Math.round(messagePx * 0.55)));
+
   return (
     <div
-      className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-8"
+      className="fixed inset-0 bg-gray-900 flex flex-col overflow-hidden"
       data-testid="monitor-active"
     >
-      <h1 className="text-white text-3xl font-bold uppercase tracking-widest mb-12 opacity-60">
-        Pastasciutta Roma
-      </h1>
-
-      <div className="flex flex-wrap justify-center gap-10">
-        {monitorOrders.map((order) => (
-          <div
-            key={order.id}
-            data-testid={`monitor-order-${order.order_number}`}
-            className="bg-[#F5C518] rounded-3xl w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center shadow-2xl animate-pulse-slow"
-          >
-            <span className="text-gray-900 font-black leading-none text-[10rem] sm:text-[12rem]">
-              {order.order_number > 99 ? String(order.order_number).slice(1) : order.order_number}
-            </span>
-          </div>
-        ))}
+      <div
+        className="flex-1 flex items-center justify-center"
+        style={{ padding: `${PAD}px` }}
+      >
+        <div
+          className="grid"
+          style={{
+            gridTemplateColumns: `repeat(${cols}, ${boxSide}px)`,
+            gap: `${GAP}px`,
+            justifyItems: 'center',
+            alignItems: 'center',
+          }}
+        >
+          {monitorOrders.map((order) => (
+            <div
+              key={order.id}
+              data-testid={`monitor-order-${order.order_number}`}
+              className="bg-[#F5C518] rounded-2xl flex items-center justify-center shadow-2xl animate-pulse-slow"
+              style={{ width: `${boxSide}px`, height: `${boxSide}px` }}
+            >
+              <span
+                className="text-gray-900 font-black leading-none"
+                style={{ fontSize: `${numberFontPx}px` }}
+              >
+                {order.order_number > 99 ? String(order.order_number).slice(1) : order.order_number}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
-      <p className="text-white text-3xl sm:text-4xl font-bold mt-16 uppercase tracking-wider">
-        Il tuo piatto è pronto!
-      </p>
+      <div
+        className="flex items-center justify-center"
+        style={{ height: `${messagePx}px` }}
+      >
+        <p
+          className="text-white font-bold uppercase tracking-wider"
+          style={{ fontSize: `${messageFontPx}px` }}
+        >
+          Il tuo piatto è pronto!
+        </p>
+      </div>
     </div>
   );
 };
