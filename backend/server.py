@@ -843,11 +843,20 @@ async def get_media_locali(token_data: dict = Depends(verify_token)):
         result.append(day_data)
         current -= timedelta(days=1)
     
-    # Calculate averages per location
+    # Calculate averages per location, EXCLUDING days with 0/empty values
+    # so empty cells in the table don't dilute the average.
     averages = {}
     for rest in restaurants:
         loc = rest["location"]
-        values = [d["locations"].get(loc, 0) for d in result if d["locations"].get(loc, 0) > 0]
+        values = []
+        for d in result:
+            v = d["locations"].get(loc)
+            try:
+                v_int = int(v) if v else 0
+            except (TypeError, ValueError):
+                v_int = 0
+            if v_int > 0:
+                values.append(v_int)
         averages[loc] = round(sum(values) / len(values), 2) if values else 0
     
     return {
@@ -3353,3 +3362,14 @@ async def startup_scheduler():
     await db.stock_movements.create_index([("timestamp", -1)])
     await db.stock_movements.create_index([("cause", 1), ("timestamp", -1)])
     logger.info("MongoDB indexes created")
+
+    # Populate the in-memory restaurant->location cache used by the
+    # diagnostics middleware to attach `location` to each API log entry.
+    try:
+        async for r in db.restaurants.find({}, {"_id": 0, "id": 1, "location": 1, "username": 1}):
+            rid = r.get("id") or ""
+            if rid:
+                RESTAURANT_LOCATION_CACHE[rid] = r.get("location") or r.get("username") or rid[:8]
+        logger.info(f"Restaurant location cache populated: {len(RESTAURANT_LOCATION_CACHE)} entries")
+    except Exception as e:
+        logger.warning(f"Could not populate restaurant cache: {e}")

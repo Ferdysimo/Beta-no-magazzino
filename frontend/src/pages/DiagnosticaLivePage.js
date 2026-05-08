@@ -208,6 +208,7 @@ const DiagnosticaLivePage = () => {
                     <thead className="bg-red-100 text-red-900">
                       <tr>
                         <th className="text-left px-3 py-2 font-semibold">Orario</th>
+                        <th className="text-left px-3 py-2 font-semibold">Locale</th>
                         <th className="text-left px-3 py-2 font-semibold">Metodo</th>
                         <th className="text-left px-3 py-2 font-semibold">Path</th>
                         <th className="text-center px-3 py-2 font-semibold">Status</th>
@@ -218,6 +219,7 @@ const DiagnosticaLivePage = () => {
                       {data.recent_errors.map((e, i) => (
                         <tr key={i} className="border-t border-red-200">
                           <td className="px-3 py-2 text-red-800">{formatTime(e.ts)}</td>
+                          <td className="px-3 py-2 text-red-800 font-semibold whitespace-nowrap">{e.location || '—'}</td>
                           <td className="px-3 py-2 font-mono text-red-800">{e.method}</td>
                           <td className="px-3 py-2 font-mono text-red-800 break-all">{e.path}</td>
                           <td className="px-3 py-2 text-center font-bold text-red-800">{e.status}</td>
@@ -248,6 +250,7 @@ const DiagnosticaLivePage = () => {
                   <thead className="bg-gray-50 text-gray-700">
                     <tr>
                       <th className="text-left px-3 py-2 font-semibold">Orario</th>
+                      <th className="text-left px-3 py-2 font-semibold">Locale</th>
                       <th className="text-left px-3 py-2 font-semibold">Metodo</th>
                       <th className="text-left px-3 py-2 font-semibold">Path</th>
                       <th className="text-center px-3 py-2 font-semibold">Status</th>
@@ -256,13 +259,14 @@ const DiagnosticaLivePage = () => {
                   </thead>
                   <tbody>
                     {filteredCalls.length === 0 ? (
-                      <tr><td colSpan={5} className="px-3 py-8 text-center text-gray-400">Nessuna chiamata</td></tr>
+                      <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">Nessuna chiamata</td></tr>
                     ) : filteredCalls.map((c, i) => {
                       const isError = c.status >= 400;
                       const isSlow = c.ms > 500;
                       return (
                         <tr key={i} className={`border-t border-gray-100 ${isError ? 'bg-red-50' : isSlow ? 'bg-yellow-50' : ''}`}>
                           <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{formatTime(c.ts)}</td>
+                          <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{c.location || '—'}</td>
                           <td className="px-3 py-2 font-mono text-gray-700">{c.method}</td>
                           <td className="px-3 py-2 font-mono text-gray-800 break-all">{c.path}</td>
                           <td className={`px-3 py-2 text-center font-bold ${isError ? 'text-red-600' : 'text-green-700'}`}>{c.status}</td>

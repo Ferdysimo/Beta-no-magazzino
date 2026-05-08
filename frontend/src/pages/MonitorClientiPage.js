@@ -31,22 +31,22 @@ const MonitorClientiPage = () => {
         Pastasciutta Roma
       </h1>
 
-      <div className="flex flex-wrap justify-center gap-8">
+      <div className="flex flex-wrap justify-center gap-10">
         {monitorOrders.map((order) => (
           <div
             key={order.id}
             data-testid={`monitor-order-${order.order_number}`}
-            className="bg-[#F5C518] rounded-2xl w-40 h-40 flex items-center justify-center shadow-2xl animate-pulse-slow"
+            className="bg-[#F5C518] rounded-3xl w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center shadow-2xl animate-pulse-slow"
           >
-            <span className="text-gray-900 text-7xl font-black">
+            <span className="text-gray-900 font-black leading-none text-[10rem] sm:text-[12rem]">
               {order.order_number > 99 ? String(order.order_number).slice(1) : order.order_number}
             </span>
           </div>
         ))}
       </div>
 
-      <p className="text-white/40 text-lg mt-16 uppercase tracking-wider">
-        Il tuo ordine è pronto!
+      <p className="text-white text-3xl sm:text-4xl font-bold mt-16 uppercase tracking-wider">
+        Il tuo piatto è pronto!
       </p>
     </div>
   );
