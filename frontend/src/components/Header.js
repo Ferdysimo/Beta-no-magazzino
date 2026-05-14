@@ -16,6 +16,11 @@ const Header = () => {
   };
 
   const handleHome = () => {
+    // For an admin impersonating a restaurant, "Home" should go back to
+    // the admin main dashboard, not stay inside the impersonated locale.
+    if (isAdmin && effectiveRestaurant) {
+      clearSelectedRestaurant();
+    }
     navigate('/home');
   };
 

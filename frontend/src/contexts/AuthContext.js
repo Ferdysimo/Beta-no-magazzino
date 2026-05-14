@@ -41,7 +41,11 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const requestInterceptor = axios.interceptors.request.use((config) => {
       const adminRest = JSON.parse(localStorage.getItem('admin_selected_restaurant') || 'null');
-      if (adminRest) {
+      // Skip impersonation header on /auth/me so the admin keeps their real
+      // identity (role='admin') after a page reload.
+      const url = config.url || '';
+      const isAuthMe = url.endsWith('/auth/me') || url.includes('/auth/me?');
+      if (adminRest && !isAuthMe) {
         config.headers['X-Admin-Restaurant-Id'] = adminRest.id;
       }
       return config;
