@@ -62,6 +62,18 @@ const CarichiMagazzinoPage = () => {
     return Array.from(s).sort();
   }, [carichi]);
 
+  // Mirror backend rule: Derrate supplier or carichi made only of ragù items
+  // never require a fattura — so they must NOT be highlighted as missing.
+  const isFatturaExempt = (c) => {
+    const sup = (c?.supplier_name || '').trim().toLowerCase();
+    if (sup === 'derrate') return true;
+    const items = c?.items || [];
+    if (items.length > 0 && items.every(it => /rag[uù]/i.test(it?.product_name || ''))) return true;
+    return false;
+  };
+
+  const isFatturaPending = (c) => !c?.fattura_url && !isFatturaExempt(c);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const list = carichi.filter(c => {
@@ -72,17 +84,17 @@ const CarichiMagazzinoPage = () => {
       }
       return true;
     });
-    // DDT without fattura on top (as reminder), then by created_at desc
+    // DDT effectively missing fattura on top (as reminder), then by created_at desc
     return list.sort((a, b) => {
-      const aMissing = !a.fattura_url ? 0 : 1;
-      const bMissing = !b.fattura_url ? 0 : 1;
+      const aMissing = isFatturaPending(a) ? 0 : 1;
+      const bMissing = isFatturaPending(b) ? 0 : 1;
       if (aMissing !== bMissing) return aMissing - bMissing;
       return (b.created_at || '').localeCompare(a.created_at || '');
     });
   }, [carichi, supplierFilter, search]);
 
   const missingFatturaCount = useMemo(
-    () => filtered.filter(c => !c.fattura_url).length,
+    () => filtered.filter(isFatturaPending).length,
     [filtered]
   );
 
@@ -222,7 +234,8 @@ const CarichiMagazzinoPage = () => {
               Nessun carico trovato.
             </div>
           ) : filtered.map(c => {
-            const missingFattura = !c.fattura_url;
+            const missingFattura = isFatturaPending(c);
+            const fatturaExempt = isFatturaExempt(c);
             return (
             <div
               key={c.id}
@@ -272,6 +285,23 @@ const CarichiMagazzinoPage = () => {
                     <X size={12} />
                   </button>
                 </div>
+              ) : fatturaExempt ? (
+                <button
+                  onClick={() => handleFatturaBtnClick(c.id)}
+                  disabled={fatturaUploadId === c.id}
+                  data-testid={`fattura-exempt-${c.id}`}
+                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg bg-gray-50 hover:bg-gray-100 border border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-500 text-[10px] flex-shrink-0 transition-colors disabled:opacity-50"
+                  title="Fattura non richiesta per questo fornitore — opzionale"
+                >
+                  {fatturaUploadId === c.id ? (
+                    <span className="text-[10px]">Carico...</span>
+                  ) : (
+                    <>
+                      <Receipt size={16} className="mb-1 opacity-50" />
+                      <span className="font-semibold leading-tight text-center">Fattura<br/>non richiesta</span>
+                    </>
+                  )}
+                </button>
               ) : (
                 <button
                   onClick={() => handleFatturaBtnClick(c.id)}
