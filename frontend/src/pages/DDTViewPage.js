@@ -4,6 +4,17 @@ import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import { formatItalianDate } from '../utils/formatDate';
 import { Printer, ArrowLeft, Pencil } from 'lucide-react';
+import { sortByCanonicalOrder } from '../utils/productOrder';
+
+// For legacy DDTs (no dispatch_date stored), fall back to created_at + 1 day.
+const addOneDay = (iso) => {
+  if (!iso) return iso;
+  try {
+    const d = new Date(iso);
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString();
+  } catch { return iso; }
+};
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -110,7 +121,7 @@ const DDTViewPage = () => {
           <div className="border border-gray-400 px-6 py-4 text-sm min-w-[260px]">
             <div className="text-gray-600 uppercase tracking-wide text-xs mb-3">Documento di trasporto</div>
             <div className="text-right">
-              N°. <strong className="text-lg">{ddt.ddt_number}</strong> DEL <strong>{formatItalianDate(ddt.created_at)}</strong>
+              N°. <strong className="text-lg">{ddt.ddt_number}</strong> DEL <strong>{formatItalianDate(ddt.dispatch_date || addOneDay(ddt.created_at))}</strong>
             </div>
           </div>
         </div>
@@ -141,7 +152,7 @@ const DDTViewPage = () => {
             </tr>
           </thead>
           <tbody>
-            {(ddt.items || []).map((it, i) => (
+            {sortByCanonicalOrder(ddt.items || [], it => it.product_name).map((it, i) => (
               <tr key={i} className="odd:bg-white even:bg-gray-50">
                 <td className="border border-gray-300 px-3 py-2">{it.product_name}</td>
                 <td className="border border-gray-300 px-3 py-2 text-center">{it.unit || '—'}</td>

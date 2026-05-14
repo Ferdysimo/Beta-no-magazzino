@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import { Search, Check, X, Pencil, History } from 'lucide-react';
+import { compareProductsByCanonicalOrder } from '../utils/productOrder';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -56,11 +57,13 @@ const InventarioPage = () => {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return products.filter(p => {
-      if (supplierFilter && p.supplier !== supplierFilter) return false;
-      if (q && !p.name.toLowerCase().includes(q)) return false;
-      return true;
-    });
+    return products
+      .filter(p => {
+        if (supplierFilter && p.supplier !== supplierFilter) return false;
+        if (q && !p.name.toLowerCase().includes(q)) return false;
+        return true;
+      })
+      .sort(compareProductsByCanonicalOrder);
   }, [products, search, supplierFilter]);
 
   const totalStock = useMemo(

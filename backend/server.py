@@ -2129,6 +2129,12 @@ async def create_richiesta(data: RichiestaCreate, token_data: dict = Depends(ver
     ddt_number = await _get_next_ddt_number()
     richiesta_id = str(uuid.uuid4())
     now_iso = datetime.now(timezone.utc).isoformat()
+    # Dispatch date = day AFTER creation, in Europe/Rome time.
+    # The DDT is created the day before the goods are physically transported,
+    # so the printed DDT date reflects the actual transport day.
+    now_rome = datetime.now(ROME_TZ)
+    dispatch_rome = now_rome + timedelta(days=1)
+    dispatch_date_iso = dispatch_rome.replace(hour=12, minute=0, second=0, microsecond=0).astimezone(timezone.utc).isoformat()
 
     doc = {
         "id": richiesta_id,
@@ -2139,6 +2145,7 @@ async def create_richiesta(data: RichiestaCreate, token_data: dict = Depends(ver
         "extra_note": extra_note,
         "status": "pending",
         "created_at": now_iso,
+        "dispatch_date": dispatch_date_iso,
         "evasa_at": None,
         "confermata_at": None,
     }

@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import { Camera, Minus, Plus, X } from 'lucide-react';
 import { compressImage, friendlyUploadError } from '../utils/compressImage';
+import { compareProductsByCanonicalOrder } from '../utils/productOrder';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -79,7 +80,7 @@ const NuovoCaricoPage = () => {
 
   const supplierProducts = useMemo(() => {
     if (!selectedSupplier) return [];
-    return products.filter(p => p.supplier === selectedSupplier).sort((a, b) => a.name.localeCompare(b.name));
+    return products.filter(p => p.supplier === selectedSupplier).sort(compareProductsByCanonicalOrder);
   }, [products, selectedSupplier]);
 
   const totalUnits = useMemo(() => Object.values(cart).reduce((s, v) => s + (Number(v) || 0), 0), [cart]);

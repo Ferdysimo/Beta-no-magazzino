@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import { ArrowDownRight, ArrowUpRight, RefreshCw } from 'lucide-react';
+import { compareProductsByCanonicalOrder } from '../utils/productOrder';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -67,7 +68,7 @@ const CronologiaMovimentiPage = () => {
   // Load products list (for dropdown)
   useEffect(() => {
     axios.get(`${API}/products`, { headers })
-      .then(r => setProducts((r.data || []).sort((a, b) => a.name.localeCompare(b.name))))
+      .then(r => setProducts([...(r.data || [])].sort(compareProductsByCanonicalOrder)))
       .catch(() => {});
   }, [headers]);
 

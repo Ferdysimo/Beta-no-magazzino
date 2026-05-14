@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import { Edit2, Trash2, Plus, X, Upload, Search } from 'lucide-react';
 import axios from 'axios';
+import { compareProductsByCanonicalOrder } from '../utils/productOrder';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -42,7 +43,7 @@ const ProdottiMagazzinoPage = () => {
     try {
       const params = filterSupplier ? { supplier: filterSupplier } : {};
       const res = await axios.get(`${API}/products`, { headers, params });
-      setProducts(res.data);
+      setProducts([...(res.data || [])].sort(compareProductsByCanonicalOrder));
     } catch (err) {
       console.error('Error fetching products:', err);
     } finally {

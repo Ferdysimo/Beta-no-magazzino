@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import { Search, Minus, Plus, X } from 'lucide-react';
+import { productOrderRank } from '../utils/productOrder';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -12,39 +13,6 @@ const resolveImageSrc = (url) => {
   if (!url) return '';
   if (url.startsWith('data:') || url.startsWith('http')) return url;
   return `${BACKEND_URL}${url}`;
-};
-
-// Custom display order for the warehouse request page. Products not listed
-// here are appended at the bottom in alphabetical order. Matching is
-// case-insensitive on the trimmed product name.
-const PRODUCT_DISPLAY_ORDER = [
-  'PESTO',
-  'POMODORELLA',
-  'TARTUFO',
-  'POM SECCHI',
-  'RAGU DI CINGHIALE',
-  'PESTO DI PISTACCHI',
-  'CIME DI RAPA',
-  'PECORINO',
-  'GRANA',
-  'GUANCIALI',
-  'PASSATA VIANDER',
-  'FORCHETTE',
-  'PIATTI POLPA',
-  'BUSTE',
-  'SCODELLE',
-  'COPERCHI',
-  'VINO RAGU',
-  'RAGU DI CHIANINA',
-  'VINO BIANCO',
-  'VINO ROSSO',
-  'RAGU',
-];
-
-const productOrderRank = (name) => {
-  const n = (name || '').trim().toUpperCase();
-  const i = PRODUCT_DISPLAY_ORDER.indexOf(n);
-  return i === -1 ? Number.MAX_SAFE_INTEGER : i;
 };
 
 const NuovaRichiestaPage = () => {

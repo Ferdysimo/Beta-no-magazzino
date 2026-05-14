@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
+import { compareProductsByCanonicalOrder } from '../utils/productOrder';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -74,7 +75,10 @@ const AnalisiPage = () => {
   };
 
   const locations = data?.locations || [];
-  const products = data?.products || [];
+  const products = useMemo(
+    () => [...(data?.products || [])].sort(compareProductsByCanonicalOrder),
+    [data]
+  );
 
   // Column totals
   const totals = useMemo(() => {
