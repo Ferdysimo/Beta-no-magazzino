@@ -52,10 +52,15 @@ const MonitorClientiPage = () => {
   const usableH = Math.max(0, vp.h - messagePx - PAD * 2);
 
   const { cols, side } = fitGrid(monitorOrders.length, usableW, usableH, GAP);
-  // Slightly smaller than the maximum that would fit, more breathing room.
-  const boxSide = Math.max(80, Math.floor(side * 0.58));
-  const numberFontPx = Math.floor(boxSide * 0.72);
+  // Hard ceiling so a single order doesn't bloat into a full-screen square.
+  // 360px is roughly the size of a large phone — readable across the room
+  // without dominating the screen.
+  const MAX_BOX = 360;
+  const boxSide = Math.max(80, Math.min(MAX_BOX, Math.floor(side * 0.58)));
+  const numberFontPx = Math.floor(boxSide * 0.66);
   const messageFontPx = Math.max(28, Math.min(80, Math.round(messagePx * 0.55)));
+  // Rounded corners proportional to box size, then capped.
+  const radius = Math.min(36, Math.round(boxSide * 0.12));
 
   return (
     <div
@@ -79,12 +84,24 @@ const MonitorClientiPage = () => {
             <div
               key={order.id}
               data-testid={`monitor-order-${order.order_number}`}
-              className="bg-[#F5C518] rounded-2xl flex items-center justify-center shadow-2xl animate-pulse-slow"
-              style={{ width: `${boxSide}px`, height: `${boxSide}px` }}
+              className="flex items-center justify-center animate-pulse-slow"
+              style={{
+                width: `${boxSide}px`,
+                height: `${boxSide}px`,
+                borderRadius: `${radius}px`,
+                background: 'linear-gradient(135deg, #FFE070 0%, #F5C518 55%, #E0AC00 100%)',
+                boxShadow:
+                  '0 18px 40px -12px rgba(0,0,0,0.55), inset 0 2px 0 rgba(255,255,255,0.55), inset 0 -3px 0 rgba(0,0,0,0.15)',
+              }}
             >
               <span
-                className="text-gray-900 font-black leading-none"
-                style={{ fontSize: `${numberFontPx}px` }}
+                className="font-black leading-none"
+                style={{
+                  fontSize: `${numberFontPx}px`,
+                  color: '#1f1300',
+                  textShadow: '0 2px 0 rgba(255,255,255,0.35)',
+                  letterSpacing: '-0.02em',
+                }}
               >
                 {order.order_number > 99 ? String(order.order_number).slice(1) : order.order_number}
               </span>
