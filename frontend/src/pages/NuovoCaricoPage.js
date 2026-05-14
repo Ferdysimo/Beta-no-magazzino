@@ -86,6 +86,16 @@ const NuovoCaricoPage = () => {
   const totalUnits = useMemo(() => Object.values(cart).reduce((s, v) => s + (Number(v) || 0), 0), [cart]);
   const totalItems = useMemo(() => Object.values(cart).filter(v => v > 0).length, [cart]);
 
+  // Suppliers / categories that don't require a DDT photo (no fatture).
+  // Currently: supplier "Derrate", and any carico made of only "ragù" products.
+  const invoiceOptional = useMemo(() => {
+    const sup = (selectedSupplier || '').trim().toLowerCase();
+    if (sup === 'derrate') return true;
+    const selected = supplierProducts.filter(p => cart[p.id] > 0);
+    if (selected.length > 0 && selected.every(p => /rag[uù]/i.test(p.name || ''))) return true;
+    return false;
+  }, [selectedSupplier, supplierProducts, cart]);
+
   const setQty = (pid, qty) => {
     const n = Math.max(0, Math.floor(Number(qty) || 0));
     setCart(c => {
@@ -115,7 +125,6 @@ const NuovoCaricoPage = () => {
 
   const handleSubmit = async () => {
     if (!selectedSupplier) { alert('Seleziona un fornitore'); return; }
-    if (!isEdit && !photoData) { alert('Carica la foto del DDT (obbligatoria)'); return; }
     const items = supplierProducts
       .filter(p => cart[p.id] > 0)
       .map(p => ({
@@ -125,6 +134,10 @@ const NuovoCaricoPage = () => {
         quantity_added: cart[p.id],
       }));
     if (items.length === 0) { alert('Inserisci almeno un prodotto con quantità > 0'); return; }
+    if (!isEdit && !photoData && !invoiceOptional) {
+      alert('Carica la foto del DDT (obbligatoria)');
+      return;
+    }
 
     setSubmitting(true);
     setUploadProgress(0);
@@ -208,7 +221,11 @@ const NuovoCaricoPage = () => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Foto DDT {isEdit ? '(opzionale, sostituisce la precedente)' : <span className="text-red-600">*obbligatoria</span>}
+              Foto DDT {isEdit
+                ? '(opzionale, sostituisce la precedente)'
+                : invoiceOptional
+                  ? <span className="text-gray-500">(opzionale per Derrate / ragù)</span>
+                  : <span className="text-red-600">*obbligatoria</span>}
             </label>
             <div className="flex items-start gap-3">
               {(photoPreview || existingPhotoUrl) && (

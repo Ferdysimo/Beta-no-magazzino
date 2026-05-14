@@ -544,7 +544,7 @@ class CaricoItem(BaseModel):
 class CaricoCreate(BaseModel):
     supplier_name: str
     ddt_number_fornitore: str
-    photo_data: str  # required base64
+    photo_data: Optional[str] = None  # optional for suppliers without invoice (Derrate, ragù)
     fattura_data: Optional[str] = None  # optional base64 fattura
     items: List[CaricoItem]
 
@@ -2457,13 +2457,19 @@ async def create_carico(data: CaricoCreate, token_data: dict = Depends(verify_to
         raise HTTPException(status_code=403, detail="Solo il magazziniere può caricare merce")
     if not data.supplier_name:
         raise HTTPException(status_code=400, detail="Seleziona un fornitore")
-    if not data.photo_data:
-        raise HTTPException(status_code=400, detail="La foto del DDT è obbligatoria")
     clean_items = [i.dict() for i in (data.items or []) if i.quantity_added and i.quantity_added > 0]
     if not clean_items:
         raise HTTPException(status_code=400, detail="Aggiungi almeno un prodotto con quantità > 0")
 
-    photo_filename = save_image_to_disk(data.photo_data, "carico")
+    # Photo (DDT/fattura) is optional for the "Derrate" supplier and for
+    # carichi composed only of ragù items. Required in every other case.
+    supplier_lower = (data.supplier_name or "").strip().lower()
+    all_ragu = all("rag" in (it.get("product_name", "") or "").lower() for it in clean_items)
+    invoice_optional = supplier_lower == "derrate" or all_ragu
+    if not data.photo_data and not invoice_optional:
+        raise HTTPException(status_code=400, detail="La foto del DDT è obbligatoria")
+
+    photo_filename = save_image_to_disk(data.photo_data, "carico") if data.photo_data else ""
     fattura_filename = save_image_to_disk(data.fattura_data, "fattura_carico") if data.fattura_data else ""
     carico_id = str(uuid.uuid4())
     now_iso = datetime.now(timezone.utc).isoformat()
