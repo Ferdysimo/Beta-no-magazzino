@@ -149,6 +149,10 @@ const HomePage = () => {
                   className="bg-[#3B82F6] hover:bg-[#2563EB] text-white px-4 py-2 rounded-md font-medium text-sm transition-colors">
                   Report per Excel
                 </button>
+                <button data-testid="btn-report-beta" onClick={() => navigate('/report-beta')}
+                  className="bg-[#F5C518] hover:bg-[#E5B418] text-gray-900 px-4 py-2 rounded-md font-bold text-sm transition-colors border border-yellow-600">
+                  Report - Beta
+                </button>
               </div>
               
               <div className="flex flex-wrap gap-2">

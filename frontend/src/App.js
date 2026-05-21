@@ -31,6 +31,7 @@ import NuovoCaricoPage from './pages/NuovoCaricoPage';
 import InventarioPage from './pages/InventarioPage';
 import AnalisiPage from './pages/AnalisiPage';
 import CronologiaMovimentiPage from './pages/CronologiaMovimentiPage';
+import ReportBetaPage from './pages/ReportBetaPage';
 import UpdateBanner from './components/UpdateBanner';
 
 // Protected Route Component
@@ -107,6 +108,11 @@ function AppRoutes() {
       <Route path="/report-excel" element={
         <ProtectedRoute>
           <ReportExcelPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/report-beta" element={
+        <ProtectedRoute>
+          <ReportBetaPage />
         </ProtectedRoute>
       } />
       <Route path="/fatture" element={
