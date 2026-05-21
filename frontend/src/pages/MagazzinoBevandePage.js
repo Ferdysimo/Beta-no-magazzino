@@ -68,7 +68,20 @@ const MagazzinoBevandePage = () => {
 
   const toNum = (v) => {
     if (v === '' || v === null || v === undefined) return 0;
-    const n = parseFloat(String(v).replace(',', '.'));
+    const s = String(v).trim().replace(',', '.');
+    // Formula mode: se inizia con "=" valuta un'espressione aritmetica.
+    // Sicuro: accettiamo solo cifre, +, -, *, /, ., (, ), spazi.
+    if (s.startsWith('=')) {
+      const expr = s.slice(1).trim();
+      if (!expr) return 0;
+      if (!/^[\d+\-*/.() \s]*$/.test(expr)) return 0;
+      try {
+        // eslint-disable-next-line no-new-func
+        const v2 = Function(`"use strict"; return (${expr})`)();
+        return Number.isFinite(v2) ? v2 : 0;
+      } catch { return 0; }
+    }
+    const n = parseFloat(s);
     return Number.isNaN(n) ? 0 : n;
   };
 
@@ -79,7 +92,8 @@ const MagazzinoBevandePage = () => {
     const inUsc = toNum(c.inUsc);
     const scarti = toNum(c.scarti);
     const sera = toNum(c.sera);
-    const quantita = mattina + inUsc - scarti - sera;
+    // Se MAGAZZINO SERA è 0 (non ancora contato) la quantità venduta non è calcolabile -> 0
+    const quantita = sera === 0 ? 0 : (mattina + inUsc - scarti - sera);
     const incasso = Math.max(0, quantita) * (b.price || 0);
     return { ...b, mattina, inUsc, scarti, sera, quantita, incasso };
   }), [inventory, counts]);
@@ -153,19 +167,30 @@ const MagazzinoBevandePage = () => {
                       <div className="text-[10px] text-gray-500 truncate max-w-[160px]" title={r.name}>{r.name}</div>
                       <div className="text-[10px] text-gray-400">€{r.price?.toFixed(2)}</div>
                     </td>
-                    {['mattina', 'inUsc', 'scarti', 'sera'].map(field => (
-                      <td key={field} className="px-1 py-1 border-r border-gray-200">
-                        <input
-                          data-testid={`bev-${r.sigla}-${field}`}
-                          type="text"
-                          inputMode="decimal"
-                          value={(counts[r.sigla] || {})[field] ?? ''}
-                          onChange={(e) => setField(r.sigla, field, e.target.value)}
-                          className="w-16 h-9 border border-gray-200 rounded text-center font-bold text-sm focus:outline-none focus:border-[#F5C518]"
-                          placeholder="0"
-                        />
-                      </td>
-                    ))}
+                    {['mattina', 'inUsc', 'scarti', 'sera'].map(field => {
+                      const raw = (counts[r.sigla] || {})[field] ?? '';
+                      const isFormula = String(raw).trim().startsWith('=');
+                      const evaluated = isFormula ? toNum(raw) : null;
+                      return (
+                        <td key={field} className="px-1 py-1 border-r border-gray-200">
+                          <input
+                            data-testid={`bev-${r.sigla}-${field}`}
+                            type="text"
+                            inputMode="text"
+                            value={raw}
+                            onChange={(e) => setField(r.sigla, field, e.target.value)}
+                            title={(field === 'inUsc' || field === 'sera') ? 'Puoi usare formule: es. =12-2 oppure =5+3' : ''}
+                            className={`w-16 h-9 border rounded text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] ${isFormula ? 'bg-blue-50 border-blue-300 text-blue-900' : 'border-gray-200'}`}
+                            placeholder={(field === 'inUsc' || field === 'sera') ? '0 o =…' : '0'}
+                          />
+                          {isFormula && (
+                            <div className="text-[9px] text-blue-700 font-bold text-center mt-0.5 leading-none">
+                              = {evaluated}
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })}
                     <td className={`px-2 py-1.5 text-center font-black bg-yellow-50 border-l border-yellow-200 ${r.quantita < 0 ? 'text-rose-600' : 'text-gray-900'}`}>
                       {r.quantita}
                     </td>
@@ -200,8 +225,10 @@ const MagazzinoBevandePage = () => {
         )}
 
         <p className="mt-3 text-[11px] text-gray-500">
-          Quantità venduta = Magazzino Mattina + Ingressi/Uscite − Scarti − Magazzino Sera.
-          I valori si salvano automaticamente in locale e si resettano ad ogni cambio giornata.
+          • Quantità venduta = Magazzino Mattina + Ingressi/Uscite − Scarti − Magazzino Sera.<br/>
+          • Se "Magazzino Sera" è 0 (non ancora contato) la quantità resta a 0.<br/>
+          • Nelle caselle "Ingressi/Uscite" e "Magazzino Sera" puoi usare le formule: es. <code className="bg-blue-50 px-1 rounded">=12-2</code> per inserire 10, oppure <code className="bg-blue-50 px-1 rounded">=5+3+1</code> per 9.<br/>
+          • I valori si salvano automaticamente in locale e si resettano ad ogni cambio giornata.
         </p>
       </main>
     </div>
