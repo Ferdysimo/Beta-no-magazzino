@@ -127,59 +127,6 @@ const NuovoCaricoBevandePage = () => {
           Inserisci il numero di <strong>casse</strong> ricevute. Una cassa = 24 unità.
         </p>
 
-        {/* Supplier + date */}
-        <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4 space-y-3">
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Fornitore</label>
-            <input
-              type="text"
-              value={supplier}
-              onChange={e => setSupplier(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded text-base"
-              data-testid="bev-carico-supplier"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Data fattura</label>
-            <input
-              type="date"
-              value={invoiceDate}
-              onChange={e => setInvoiceDate(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded text-base"
-              data-testid="bev-carico-date"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Foto fattura (opzionale)</label>
-            {invoicePreview ? (
-              <div className="relative inline-block">
-                <img src={invoicePreview} alt="fattura" className="max-h-40 rounded border border-gray-300" />
-                <button
-                  onClick={removePhoto}
-                  className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            ) : (
-              <label className="flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 hover:border-[#F5C518] rounded-lg p-4 cursor-pointer text-gray-600">
-                <Camera size={20} />
-                <span className="text-sm font-medium">Scatta o carica</span>
-                <input type="file" accept="image/*" capture="environment" onChange={onPhotoSelect} className="hidden" data-testid="bev-carico-photo" />
-              </label>
-            )}
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Note (opzionale)</label>
-            <textarea
-              rows={2}
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm resize-y"
-            />
-          </div>
-        </div>
-
         {/* Beverages */}
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
           <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-600 uppercase tracking-wide flex items-center justify-between">

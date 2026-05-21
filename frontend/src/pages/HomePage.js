@@ -151,7 +151,7 @@ const HomePage = () => {
                 </button>
                 <button data-testid="btn-report-beta" onClick={() => navigate('/report-beta')}
                   className="bg-[#F5C518] hover:bg-[#E5B418] text-gray-900 px-4 py-2 rounded-md font-bold text-sm transition-colors border border-yellow-600">
-                  Report - Beta
+                  Report
                 </button>
               </div>
               

@@ -1,67 +1,93 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
-import { ArrowLeft, Plus, Trash2, Image as ImageIcon } from 'lucide-react';
-import PhotoLightbox from '../components/PhotoLightbox';
+import { ArrowLeft, Plus } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+
+// Chiave localStorage per i conteggi giornalieri della pagina (mattina/scarti/sera/in-usc)
+// Si resetta giorno per giorno: chiave include la data in fuso Roma.
+const todayRomeKey = () => {
+  try {
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit',
+    });
+    return fmt.format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+};
+
+const lsKey = (loc) => `bev_counts_${loc || 'flaminio'}_${todayRomeKey()}`;
 
 const MagazzinoBevandePage = () => {
   const { token, isAdmin, restaurant } = useAuth();
   const navigate = useNavigate();
   const [inventory, setInventory] = useState([]);
-  const [carichi, setCarichi] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [lightbox, setLightbox] = useState({ open: false, index: 0, urls: [] });
+  // counts[sigla] = { mattina, inUsc, scarti, sera }   tutti string per input libero
+  const [counts, setCounts] = useState({});
 
   const canAccess = isAdmin || restaurant?.username === 'Flaminio';
+  const storageKey = useMemo(() => lsKey(restaurant?.username), [restaurant]);
 
   useEffect(() => {
     if (!canAccess) return;
-    Promise.all([
-      axios.get(`${API}/beverages/inventory`, { headers: { Authorization: `Bearer ${token}` } }),
-      axios.get(`${API}/beverages/carichi`, { headers: { Authorization: `Bearer ${token}` } }),
-    ])
-      .then(([inv, ca]) => {
-        setInventory(inv.data);
-        setCarichi(ca.data);
-      })
+    axios.get(`${API}/beverages/inventory`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => setInventory(res.data || []))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [token, canAccess]);
 
-  const handleDeleteCarico = async (id) => {
-    if (!window.confirm('Eliminare questo carico? L\'inventario verrà ripristinato.')) return;
+  // Carica conteggi dal localStorage al primo render
+  useEffect(() => {
+    if (!canAccess) return;
     try {
-      await axios.delete(`${API}/beverages/carichi/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      // Refresh
-      const [inv, ca] = await Promise.all([
-        axios.get(`${API}/beverages/inventory`, { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`${API}/beverages/carichi`, { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
-      setInventory(inv.data);
-      setCarichi(ca.data);
-    } catch (e) {
-      alert(e?.response?.data?.detail || 'Errore eliminazione');
-    }
+      const raw = localStorage.getItem(storageKey);
+      if (raw) setCounts(JSON.parse(raw));
+    } catch { /* noop */ }
+  }, [storageKey, canAccess]);
+
+  // Salva conteggi nel localStorage ogni volta che cambiano
+  useEffect(() => {
+    if (!canAccess) return;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(counts));
+    } catch { /* noop */ }
+  }, [counts, storageKey, canAccess]);
+
+  const setField = (sigla, field, value) => {
+    setCounts(prev => ({
+      ...prev,
+      [sigla]: { ...(prev[sigla] || {}), [field]: value },
+    }));
   };
 
-  const openLightbox = (url) => {
-    setLightbox({ open: true, index: 0, urls: [`${BACKEND_URL}${url}`] });
+  const toNum = (v) => {
+    if (v === '' || v === null || v === undefined) return 0;
+    const n = parseFloat(String(v).replace(',', '.'));
+    return Number.isNaN(n) ? 0 : n;
   };
 
-  const formatDate = (iso) => {
-    try {
-      return new Date(iso).toLocaleString('it-IT', { timeZone: 'Europe/Rome' });
-    } catch {
-      return iso;
-    }
-  };
+  // Calcoli aggregati
+  const rows = useMemo(() => inventory.map(b => {
+    const c = counts[b.sigla] || {};
+    const mattina = toNum(c.mattina);
+    const inUsc = toNum(c.inUsc);
+    const scarti = toNum(c.scarti);
+    const sera = toNum(c.sera);
+    const quantita = mattina + inUsc - scarti - sera;
+    const incasso = Math.max(0, quantita) * (b.price || 0);
+    return { ...b, mattina, inUsc, scarti, sera, quantita, incasso };
+  }), [inventory, counts]);
+
+  const totalQuantita = rows.reduce((s, r) => s + Math.max(0, r.quantita), 0);
+  const totalIncasso = rows.reduce((s, r) => s + r.incasso, 0);
+
+  const fmtEur = (n) => n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   if (!canAccess) {
     return (
@@ -79,126 +105,105 @@ const MagazzinoBevandePage = () => {
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
       <Header />
-      <main className="max-w-4xl mx-auto p-4 sm:p-6">
-        <div className="flex items-center justify-between mb-6">
+      <main className="max-w-6xl mx-auto p-3 sm:p-6">
+        <div className="flex items-center justify-between mb-4">
           <button
             onClick={() => navigate('/')}
-            className="flex items-center gap-2 text-gray-700 hover:text-gray-900"
+            className="flex items-center gap-2 text-gray-700 hover:text-gray-900 text-sm"
           >
-            <ArrowLeft size={18} /> Indietro
+            <ArrowLeft size={16} /> Indietro
           </button>
           <button
             data-testid="btn-new-beverage-carico"
             onClick={() => navigate('/magazzino-bevande/nuovo-carico')}
-            className="flex items-center gap-2 bg-[#F5C518] hover:bg-[#E5A500] text-gray-900 font-bold px-4 py-2 rounded-lg shadow"
+            className="flex items-center gap-2 bg-[#F5C518] hover:bg-[#E5A500] text-gray-900 font-bold px-4 py-2 rounded-lg shadow text-sm"
           >
-            <Plus size={18} /> Nuovo Carico
+            <Plus size={16} /> INGRESSI/USCITE
           </button>
         </div>
 
-        <h1 className="font-heading text-2xl sm:text-3xl font-bold text-gray-900 uppercase mb-4">
+        <h1 className="font-heading text-xl sm:text-2xl font-bold text-gray-900 uppercase mb-4">
           Magazzino Bevande
         </h1>
 
         {loading ? (
           <div className="text-center text-gray-400 py-10">Caricamento...</div>
         ) : (
-          <>
-            {/* Inventory */}
-            <section className="mb-8">
-              <h2 className="text-lg font-bold text-gray-800 mb-3">Inventario attuale</h2>
-              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-gray-700">
-                    <tr>
-                      <th className="text-left px-3 py-2 font-semibold">Sigla</th>
-                      <th className="text-left px-3 py-2 font-semibold">Bevanda</th>
-                      <th className="text-right px-3 py-2 font-semibold">Prezzo</th>
-                      <th className="text-right px-3 py-2 font-semibold">Giacenza</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {inventory.map((b) => (
-                      <tr key={b.sigla} data-testid={`inv-${b.sigla}`} className="border-t border-gray-100">
-                        <td className="px-3 py-2 font-bold text-gray-900">{b.sigla}</td>
-                        <td className="px-3 py-2 text-gray-800">{b.name}</td>
-                        <td className="px-3 py-2 text-right text-gray-700">€ {b.price.toFixed(2)}</td>
-                        <td className={`px-3 py-2 text-right font-bold ${b.quantity <= 0 ? 'text-red-600' : b.quantity < 5 ? 'text-orange-600' : 'text-gray-900'}`}>
-                          {b.quantity}
-                        </td>
-                      </tr>
+          <div className="bg-white border border-gray-200 rounded-lg overflow-x-auto">
+            <table className="w-full text-sm" data-testid="beverage-table">
+              <thead className="bg-gray-50 text-gray-700 text-[11px] uppercase">
+                <tr>
+                  <th rowSpan={2} className="text-left px-2 py-2 font-bold border-r border-gray-200">Bevanda</th>
+                  <th rowSpan={2} className="text-center px-2 py-2 font-bold border-r border-gray-200">Magazzino<br/>Mattina</th>
+                  <th rowSpan={2} className="text-center px-2 py-2 font-bold border-r border-gray-200">Ingressi/<br/>Uscite</th>
+                  <th rowSpan={2} className="text-center px-2 py-2 font-bold border-r border-gray-200">Scarti</th>
+                  <th rowSpan={2} className="text-center px-2 py-2 font-bold border-r border-gray-200">Magazzino<br/>Sera</th>
+                  <th colSpan={2} className="text-center px-2 py-1 font-bold bg-yellow-50 border-l border-yellow-200">Vendite</th>
+                </tr>
+                <tr>
+                  <th className="text-center px-2 py-1 font-bold bg-yellow-50 border-l border-yellow-200">Quantità</th>
+                  <th className="text-center px-2 py-1 font-bold bg-yellow-50">Incasso</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.sigla} data-testid={`bev-row-${r.sigla}`} className="border-t border-gray-100">
+                    <td className="px-2 py-1.5 border-r border-gray-200">
+                      <div className="font-extrabold text-gray-900">{r.sigla}</div>
+                      <div className="text-[10px] text-gray-500 truncate max-w-[160px]" title={r.name}>{r.name}</div>
+                      <div className="text-[10px] text-gray-400">€{r.price?.toFixed(2)}</div>
+                    </td>
+                    {['mattina', 'inUsc', 'scarti', 'sera'].map(field => (
+                      <td key={field} className="px-1 py-1 border-r border-gray-200">
+                        <input
+                          data-testid={`bev-${r.sigla}-${field}`}
+                          type="text"
+                          inputMode="decimal"
+                          value={(counts[r.sigla] || {})[field] ?? ''}
+                          onChange={(e) => setField(r.sigla, field, e.target.value)}
+                          className="w-16 h-9 border border-gray-200 rounded text-center font-bold text-sm focus:outline-none focus:border-[#F5C518]"
+                          placeholder="0"
+                        />
+                      </td>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            {/* Carichi history */}
-            <section>
-              <h2 className="text-lg font-bold text-gray-800 mb-3">Storico carichi ({carichi.length})</h2>
-              {carichi.length === 0 ? (
-                <div className="text-center text-gray-400 py-8 bg-white border border-gray-200 rounded-lg">
-                  Nessun carico ancora. Clicca "Nuovo Carico" per aggiungere.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {carichi.map((c) => (
-                    <div key={c.id} className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1">
-                          <div className="font-bold text-gray-900">{c.supplier || 'Gioia'}</div>
-                          <div className="text-xs text-gray-500">
-                            {formatDate(c.created_at)}
-                            {c.invoice_date ? ` • fattura del ${c.invoice_date}` : ''}
-                          </div>
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {(c.items || []).map((it, i) => {
-                              const cases = it.cases ?? it.quantity ?? 0;
-                              const units = it.units ?? (cases * (c.units_per_case || 24));
-                              return (
-                                <span key={i} className="inline-flex items-center gap-1 bg-gray-100 text-gray-800 rounded px-2 py-0.5 text-xs font-medium">
-                                  <span className="font-bold">{it.sigla}</span> ×{cases} <span className="text-gray-500">({units}u.)</span>
-                                </span>
-                              );
-                            })}
-                          </div>
-                          {c.notes && <div className="mt-2 text-xs text-gray-600 italic">{c.notes}</div>}
-                        </div>
-                        <div className="flex flex-col items-end gap-2">
-                          {c.invoice_url && (
-                            <button
-                              onClick={() => openLightbox(c.invoice_url)}
-                              data-testid={`view-invoice-${c.id}`}
-                              className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs"
-                            >
-                              <ImageIcon size={14} /> Fattura
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleDeleteCarico(c.id)}
-                            data-testid={`delete-carico-${c.id}`}
-                            className="flex items-center gap-1 text-red-600 hover:text-red-800 text-xs"
-                          >
-                            <Trash2 size={14} /> Elimina
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    <td className={`px-2 py-1.5 text-center font-black bg-yellow-50 border-l border-yellow-200 ${r.quantita < 0 ? 'text-rose-600' : 'text-gray-900'}`}>
+                      {r.quantita}
+                    </td>
+                    <td className="px-2 py-1.5 text-center font-bold text-gray-900 bg-yellow-50">
+                      €{fmtEur(r.incasso)}
+                    </td>
+                  </tr>
+                ))}
+                {rows.length === 0 && (
+                  <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400 text-sm">
+                    Nessuna bevanda nell'inventario.
+                  </td></tr>
+                )}
+              </tbody>
+              {rows.length > 0 && (
+                <tfoot>
+                  <tr className="bg-gray-900 text-white">
+                    <td colSpan={5} className="px-3 py-2 font-bold text-right uppercase text-xs">
+                      Totali giornata
+                    </td>
+                    <td data-testid="total-vendite-quantita" className="px-2 py-2 text-center font-black text-lg bg-[#F5C518] text-gray-900">
+                      {totalQuantita}
+                    </td>
+                    <td data-testid="total-vendite-incasso" className="px-2 py-2 text-center font-black text-base bg-[#F5C518] text-gray-900">
+                      €{fmtEur(totalIncasso)}
+                    </td>
+                  </tr>
+                </tfoot>
               )}
-            </section>
-          </>
+            </table>
+          </div>
         )}
-      </main>
 
-      <PhotoLightbox
-        open={lightbox.open}
-        urls={lightbox.urls}
-        index={lightbox.index}
-        onClose={() => setLightbox({ ...lightbox, open: false })}
-        onIndexChange={(i) => setLightbox({ ...lightbox, index: i })}
-      />
+        <p className="mt-3 text-[11px] text-gray-500">
+          Quantità venduta = Magazzino Mattina + Ingressi/Uscite − Scarti − Magazzino Sera.
+          I valori si salvano automaticamente in locale e si resettano ad ogni cambio giornata.
+        </p>
+      </main>
     </div>
   );
 };
