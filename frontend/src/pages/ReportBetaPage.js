@@ -57,6 +57,21 @@ const evaluateValue = (v) => {
   return Number.isNaN(n) ? 0 : n;
 };
 
+// Definizione del riepilogo cassa Flaminio (Report)
+const CASH_FIELDS = [
+  { key: 'mattina', label: 'CASH MATTINA', op: 'base', readonly: false },
+  { key: 'altro',   label: 'ALTRO',        op: 'plus',  readonly: false },
+  { key: 'glo',     label: 'GLO',          op: 'minus', readonly: false },
+  { key: 'just',    label: 'JUST',         op: 'minus', readonly: false },
+  { key: 'delv',    label: 'DEL',          op: 'minus', readonly: false },
+  { key: 'bp',      label: 'BP',           op: 'minus', readonly: false },
+  { key: 'sat',     label: 'SAT',          op: 'minus', readonly: false },
+  { key: 'ft',      label: 'FT',           op: 'minus', readonly: false },
+  { key: 'pos',     label: 'POS',          op: 'minus', readonly: false },
+  { key: 'vers',    label: 'VERS',         op: 'minus', readonly: false },
+  { key: 'arr',     label: 'ARR',          op: 'plus',  readonly: false },
+];
+
 const ReportBetaPage = () => {
   const navigate = useNavigate();
   const { token } = useAuth();
@@ -66,6 +81,10 @@ const ReportBetaPage = () => {
   // Vendite bevande: lette dal backend, refresh periodico
   const [beverages, setBeverages] = useState([]);   // {sigla, name, price}
   const [bevCounts, setBevCounts] = useState({});   // {sigla: {mattina, inUsc, scarti, sera}}
+  // Riepilogo cassa Flaminio (persistente su DB)
+  const [cashRow, setCashRow] = useState(() => CASH_FIELDS.reduce((a, f) => { a[f.key] = ''; return a; }, {}));
+  const [cashLoaded, setCashLoaded] = useState(false);
+  const cashSaveTimer = React.useRef(null);
 
   // Carica catalogo bevande + conteggi giornata. Refresh ogni 15s così se il
   // cassiere aggiorna la pagina magazzino in un'altra tab vede subito qui.
@@ -101,6 +120,56 @@ const ReportBetaPage = () => {
     const id = setInterval(load, 15000);
     return () => { cancelled = true; clearInterval(id); };
   }, [token]);
+
+  // Riepilogo cassa: caricamento iniziale (no polling, è la sorgente di verità qui)
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await axios.get(`${API}/cash/daily`, { headers: { Authorization: `Bearer ${token}` } });
+        if (cancelled) return;
+        const data = res.data?.data || {};
+        const prev = res.data?.prev_cash_sera;
+        // Auto-fill MATTINA con CASH SERA del giorno prima se oggi è vuoto
+        const initial = CASH_FIELDS.reduce((a, f) => { a[f.key] = data[f.key] || ''; return a; }, {});
+        if (!initial.mattina && prev !== '' && prev !== null && prev !== undefined) {
+          initial.mattina = String(prev);
+        }
+        setCashRow(initial);
+        setCashLoaded(true);
+      } catch (e) {
+        // 403 se non Flaminio/Admin
+        setCashLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [token]);
+
+  // Debounced save del riepilogo cassa
+  useEffect(() => {
+    if (!cashLoaded || !token) return;
+    if (cashSaveTimer.current) clearTimeout(cashSaveTimer.current);
+    cashSaveTimer.current = setTimeout(() => {
+      axios.put(`${API}/cash/daily`, cashRow, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => { /* silenzioso */ });
+    }, 500);
+    return () => { if (cashSaveTimer.current) clearTimeout(cashSaveTimer.current); };
+  }, [cashRow, cashLoaded, token]);
+
+  const setCashRowValue = (key, v) => setCashRow(p => ({ ...p, [key]: v }));
+
+  // Calcolo CASH SERA in tempo reale
+  const cashSera = useMemo(() => {
+    let total = 0;
+    for (const f of CASH_FIELDS) {
+      const v = evaluateValue(cashRow[f.key]);
+      if (f.op === 'base' || f.op === 'plus') total += v;
+      else if (f.op === 'minus') total -= v;
+    }
+    return total;
+  }, [cashRow]);
 
   // Parsing paste — restituisce anche l'elenco delle non-riconosciute con indice stabile
   const pasteAnalysis = useMemo(() => {
@@ -366,6 +435,56 @@ const ReportBetaPage = () => {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* ============ RIEPILOGO CASSA ============ */}
+            <div className="bg-white rounded border border-gray-200 p-2">
+              <div className="flex items-baseline justify-between mb-2">
+                <h2 className="text-xs font-bold text-gray-800 uppercase">Riepilogo Cassa</h2>
+                <span className="text-[10px] text-gray-400">
+                  Mattina = Sera del giorno prima · supporta formule "=..."
+                </span>
+              </div>
+              <div className="flex items-stretch gap-1.5">
+                {CASH_FIELDS.map(f => {
+                  const computed = evaluateValue(cashRow[f.key]);
+                  const sign = f.op === 'minus' ? '−' : (f.op === 'plus' ? '+' : '=');
+                  return (
+                    <div key={f.key} className="flex-1 min-w-[60px] flex flex-col">
+                      <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={f.label}>
+                        {f.label}
+                      </label>
+                      <input
+                        data-testid={`cash-row-${f.key}`}
+                        type="text"
+                        inputMode="decimal"
+                        value={cashRow[f.key] || ''}
+                        onChange={(e) => setCashRowValue(f.key, e.target.value)}
+                        placeholder={f.op === 'base' ? '€' : (f.op === 'minus' ? '−' : '+')}
+                        className={`w-full h-11 border rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] ${
+                          f.op === 'minus' ? 'border-rose-200 bg-rose-50' :
+                          f.op === 'plus'  ? 'border-emerald-200 bg-emerald-50' :
+                                             'border-gray-200'
+                        }`}
+                      />
+                      <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
+                        {computed !== 0 ? `${sign}€${computed.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
+                      </span>
+                    </div>
+                  );
+                })}
+                {/* CASH SERA — totale */}
+                <div className="flex-1 min-w-[70px] flex flex-col">
+                  <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">CASH SERA</label>
+                  <div
+                    data-testid="cash-row-sera"
+                    className="w-full h-11 bg-gray-900 text-[#F5C518] rounded flex items-center justify-center font-black text-sm"
+                  >
+                    €{cashSera.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  <span className="text-[9px] text-gray-700 mt-0.5 text-center leading-none font-bold">totale</span>
+                </div>
+              </div>
             </div>
           </section>
         </div>

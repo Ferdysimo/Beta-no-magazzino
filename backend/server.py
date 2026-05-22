@@ -7,6 +7,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import DuplicateKeyError
 import os
+import re
 import logging
 import base64
 from pathlib import Path
@@ -2805,6 +2806,114 @@ async def get_beverage_daily_history(
     }
 
 
+# ---------- Cash daily counts (Report page — riepilogo cassa Flaminio) ----------
+
+# Helper: evaluate "=..." expressions safely; mirror of the JS evaluateValue
+def _eval_cash_value(v) -> float:
+    if v is None:
+        return 0.0
+    s = str(v).strip().replace(",", ".")
+    if not s:
+        return 0.0
+    if s.startswith("="):
+        expr = s[1:].strip()
+        if not expr:
+            return 0.0
+        if not re.match(r"^[\d+\-*/.() \s]*$", expr):
+            return 0.0
+        try:
+            # Safe: regex above only allows digits/operators
+            return float(eval(expr, {"__builtins__": {}}, {}))  # noqa: S307
+        except Exception:
+            return 0.0
+    try:
+        return float(s)
+    except Exception:
+        return 0.0
+
+
+def _compute_cash_sera(row: dict) -> float:
+    if not row:
+        return 0.0
+    plus = _eval_cash_value(row.get("mattina", "")) \
+        + _eval_cash_value(row.get("altro", "")) \
+        + _eval_cash_value(row.get("arr", ""))
+    minus = _eval_cash_value(row.get("glo", "")) \
+        + _eval_cash_value(row.get("just", "")) \
+        + _eval_cash_value(row.get("delv", "")) \
+        + _eval_cash_value(row.get("bp", "")) \
+        + _eval_cash_value(row.get("sat", "")) \
+        + _eval_cash_value(row.get("ft", "")) \
+        + _eval_cash_value(row.get("pos", "")) \
+        + _eval_cash_value(row.get("vers", ""))
+    return plus - minus
+
+
+CASH_FIELDS = ["mattina", "altro", "glo", "just", "delv", "bp", "sat", "ft", "pos", "vers", "arr"]
+
+
+class CashDailyUpsert(BaseModel):
+    mattina: Optional[str] = ""
+    altro: Optional[str] = ""
+    glo: Optional[str] = ""
+    just: Optional[str] = ""
+    delv: Optional[str] = ""
+    bp: Optional[str] = ""
+    sat: Optional[str] = ""
+    ft: Optional[str] = ""
+    pos: Optional[str] = ""
+    vers: Optional[str] = ""
+    arr: Optional[str] = ""
+
+
+@api_router.get("/cash/daily")
+async def get_cash_daily(token_data: dict = Depends(verify_token)):
+    """Returns today's cash row for Flaminio + previous-day computed cash_sera
+    so the frontend can auto-fill CASH MATTINA when starting a new day."""
+    flaminio_id = await _get_flaminio_restaurant_id()
+    today = _today_rome_str()
+    if not flaminio_id:
+        return {"date": today, "data": {}, "prev_cash_sera": ""}
+    today_doc = await db.cash_daily_counts.find_one(
+        {"restaurant_id": flaminio_id, "date_rome": today}, {"_id": 0}
+    ) or {}
+    data = {f: today_doc.get(f, "") for f in CASH_FIELDS}
+
+    prev_cash_sera = ""
+    last_doc = await db.cash_daily_counts.find_one(
+        {"restaurant_id": flaminio_id, "date_rome": {"$lt": today}},
+        sort=[("date_rome", -1)],
+        projection={"_id": 0},
+    )
+    if last_doc:
+        prev_cash_sera = round(_compute_cash_sera(last_doc), 2)
+    return {"date": today, "data": data, "prev_cash_sera": prev_cash_sera}
+
+
+@api_router.put("/cash/daily")
+async def upsert_cash_daily(
+    data: CashDailyUpsert, token_data: dict = Depends(verify_token)
+):
+    """Upsert today's cash row (auto-save from frontend)."""
+    flaminio_id = await _get_flaminio_restaurant_id()
+    if not flaminio_id:
+        raise HTTPException(status_code=404, detail="Ristorante Flaminio non trovato")
+    today = _today_rome_str()
+    payload = {f: (getattr(data, f) or "") for f in CASH_FIELDS}
+    await db.cash_daily_counts.update_one(
+        {"restaurant_id": flaminio_id, "date_rome": today},
+        {"$set": {
+            **payload,
+            "restaurant_id": flaminio_id,
+            "date_rome": today,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+
 @api_router.post("/beverages/carichi")
 async def create_beverage_carico(
     data: BeverageCaricoCreate, token_data: dict = Depends(verify_token)
@@ -3482,6 +3591,11 @@ async def startup_scheduler():
         [("restaurant_id", 1), ("date_rome", -1), ("sigla", 1)], unique=True
     )
     await db.beverage_daily_counts.create_index([("date_rome", -1)])
+    # Cash daily counts (Report page — riepilogo cassa)
+    await db.cash_daily_counts.create_index(
+        [("restaurant_id", 1), ("date_rome", -1)], unique=True
+    )
+    await db.cash_daily_counts.create_index([("date_rome", -1)])
     logger.info("MongoDB indexes created")
 
     # Populate the in-memory restaurant->location cache used by the
