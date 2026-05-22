@@ -2888,6 +2888,10 @@ class CashDailyUpsert(BaseModel):
     cd05: Optional[str] = ""
     vers_color: Optional[str] = ""
     comments: Optional[Dict[str, str]] = None
+    # Persistenza pagina Report (paste incollate, cassa banconote, prezzi manuali)
+    paste_text: Optional[str] = None
+    cash_banconote: Optional[Dict[str, str]] = None
+    manual_prices: Optional[Dict[str, str]] = None
 
 
 @api_router.get("/cash/daily")
@@ -2904,6 +2908,9 @@ async def get_cash_daily(token_data: dict = Depends(verify_token)):
     data = {f: today_doc.get(f, "") for f in ALL_CASH_FIELDS}
     vers_color = today_doc.get("vers_color", "") or ""
     comments = today_doc.get("comments") or {}
+    paste_text = today_doc.get("paste_text", "") or ""
+    cash_banconote = today_doc.get("cash_banconote") or {}
+    manual_prices = today_doc.get("manual_prices") or {}
 
     prev_cash_sera = ""
     last_doc = await db.cash_daily_counts.find_one(
@@ -2913,7 +2920,16 @@ async def get_cash_daily(token_data: dict = Depends(verify_token)):
     )
     if last_doc:
         prev_cash_sera = round(_compute_cash_sera(last_doc), 2)
-    return {"date": today, "data": data, "prev_cash_sera": prev_cash_sera, "comments": comments, "vers_color": vers_color}
+    return {
+        "date": today,
+        "data": data,
+        "prev_cash_sera": prev_cash_sera,
+        "comments": comments,
+        "vers_color": vers_color,
+        "paste_text": paste_text,
+        "cash_banconote": cash_banconote,
+        "manual_prices": manual_prices,
+    }
 
 
 @api_router.put("/cash/daily")
@@ -2936,6 +2952,17 @@ async def upsert_cash_daily(
     allowed_colors = {"", "black", "red", "green", "blue", "orange"}
     if data.vers_color is not None and data.vers_color in allowed_colors:
         set_payload["vers_color"] = data.vers_color
+    # Paste text (multiline area Report)
+    if data.paste_text is not None:
+        set_payload["paste_text"] = str(data.paste_text)[:50000]
+    # Cassa banconote (input pezzi/€)
+    if data.cash_banconote is not None:
+        clean_b = {str(k)[:20]: str(v)[:50] for k, v in (data.cash_banconote or {}).items() if isinstance(k, str)}
+        set_payload["cash_banconote"] = clean_b
+    # Prezzi manuali per le paste non riconosciute (idx → prezzo)
+    if data.manual_prices is not None:
+        clean_p = {str(k)[:20]: str(v)[:50] for k, v in (data.manual_prices or {}).items() if isinstance(k, (str, int))}
+        set_payload["manual_prices"] = clean_p
     # Sanitize commenti: solo str→str, max 500 char, scarto chiavi/valori vuoti
     if data.comments is not None:
         clean: Dict[str, str] = {}
@@ -2954,6 +2981,119 @@ async def upsert_cash_daily(
     return {"ok": True}
 
 
+# ---------- Storico Chiusure (Admin only) ----------
+
+async def _orders_aggregate_for_date(date_rome_str: str) -> Dict:
+    """Aggrega le paste della data indicata (Rome) leggendo da `archived_orders`
+    e da `orders` (per il giorno corrente, ancora non archiviato)."""
+    try:
+        d0 = datetime.strptime(date_rome_str, "%Y-%m-%d").replace(tzinfo=ROME_TZ)
+    except Exception:
+        return {"total_orders": 0, "by_restaurant": {}}
+    d1 = d0 + timedelta(days=1)
+    q = {"created_at": {"$gte": d0.isoformat(), "$lt": d1.isoformat()}}
+    results = {"total_orders": 0, "by_restaurant": {}}
+    for coll in ("archived_orders", "orders"):
+        async for o in db[coll].find(q, {"_id": 0}):
+            rid = o.get("restaurant_id") or "?"
+            entry = results["by_restaurant"].setdefault(rid, {"count": 0, "completed": 0})
+            entry["count"] += 1
+            if o.get("status") == "completed":
+                entry["completed"] += 1
+            results["total_orders"] += 1
+    return results
+
+
+@api_router.get("/admin/closures")
+async def list_closures(days: int = 60, token_data: dict = Depends(verify_token)):
+    """Lista delle chiusure (date) con riepilogo: incasso, # paste, # bevande, ecc."""
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    cutoff = (datetime.now(ROME_TZ) - timedelta(days=max(1, min(days, 365)))).strftime("%Y-%m-%d")
+    today = _today_rome_str()
+    dates: set = set()
+    async for d in db.cash_daily_counts.find({"date_rome": {"$gte": cutoff, "$lt": today}}, {"date_rome": 1, "_id": 0}):
+        dates.add(d["date_rome"])
+    async for d in db.beverage_daily_counts.find({"date_rome": {"$gte": cutoff, "$lt": today}}, {"date_rome": 1, "_id": 0}):
+        dates.add(d["date_rome"])
+    items = []
+    bev_prices = {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
+    for date_str in sorted(dates, reverse=True):
+        cash_doc = await db.cash_daily_counts.find_one(
+            {"date_rome": date_str}, {"_id": 0}
+        ) or {}
+        bev_docs = await db.beverage_daily_counts.find(
+            {"date_rome": date_str}, {"_id": 0}
+        ).to_list(50)
+        cash_sera = round(_compute_cash_sera(cash_doc), 2) if cash_doc else 0.0
+        bev_total_qty = 0
+        bev_total_inc = 0.0
+        for r in bev_docs:
+            m = _eval_cash_value(r.get("mattina")); u = _eval_cash_value(r.get("inUsc"))
+            s = _eval_cash_value(r.get("scarti"));  e = _eval_cash_value(r.get("sera"))
+            qty = 0 if e == 0 else (m + u - s - e)
+            if qty > 0:
+                bev_total_qty += int(qty)
+                bev_total_inc += qty * bev_prices.get(r["sigla"], 0)
+        orders_info = await _orders_aggregate_for_date(date_str)
+        items.append({
+            "date": date_str,
+            "cash_sera": cash_sera,
+            "bev_total_qty": bev_total_qty,
+            "bev_total_inc": round(bev_total_inc, 2),
+            "orders_total": orders_info["total_orders"],
+        })
+    return {"items": items}
+
+
+@api_router.get("/admin/closures/{date_str}")
+async def closure_detail(date_str: str, token_data: dict = Depends(verify_token)):
+    """Dettaglio completo di una chiusura (data Rome YYYY-MM-DD)."""
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
+        raise HTTPException(status_code=400, detail="Data non valida")
+    cash_doc = await db.cash_daily_counts.find_one(
+        {"date_rome": date_str}, {"_id": 0}
+    ) or {}
+    bev_docs = await db.beverage_daily_counts.find(
+        {"date_rome": date_str}, {"_id": 0}
+    ).to_list(50)
+    cash_sera = round(_compute_cash_sera(cash_doc), 2) if cash_doc else 0.0
+    bev_prices = {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
+    bev_names = {b["sigla"]: b["name"] for b in BEVERAGES_CATALOG}
+    bev_rows = []
+    bev_total_qty = 0
+    bev_total_inc = 0.0
+    for r in bev_docs:
+        m = _eval_cash_value(r.get("mattina")); u = _eval_cash_value(r.get("inUsc"))
+        s = _eval_cash_value(r.get("scarti"));  e = _eval_cash_value(r.get("sera"))
+        qty = 0 if e == 0 else (m + u - s - e)
+        inc = max(0, qty) * bev_prices.get(r["sigla"], 0)
+        bev_rows.append({
+            "sigla": r["sigla"],
+            "name": bev_names.get(r["sigla"], r["sigla"]),
+            "mattina": r.get("mattina", ""),
+            "inUsc": r.get("inUsc", ""),
+            "scarti": r.get("scarti", ""),
+            "sera": r.get("sera", ""),
+            "quantita": qty,
+            "incasso": round(inc, 2),
+            "comments": r.get("comments") or {},
+        })
+        if qty > 0:
+            bev_total_qty += int(qty)
+            bev_total_inc += inc
+    orders_info = await _orders_aggregate_for_date(date_str)
+    return {
+        "date": date_str,
+        "cash": cash_doc,
+        "cash_sera": cash_sera,
+        "beverages": bev_rows,
+        "bev_total_qty": bev_total_qty,
+        "bev_total_inc": round(bev_total_inc, 2),
+        "orders": orders_info,
+    }
 
 @api_router.post("/beverages/carichi")
 async def create_beverage_carico(

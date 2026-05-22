@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -181,6 +181,7 @@ const MagazzinoBevandePage = () => {
       const len = (commentPopover.value || '').length;
       try { commentInputRef.current.setSelectionRange(len, len); } catch (e) {}
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commentPopover?.sigla, commentPopover?.field]);
 
   // Calcoli aggregati
@@ -237,13 +238,6 @@ const MagazzinoBevandePage = () => {
               className="flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-800 border border-gray-300 font-bold px-3 py-2 rounded-lg text-sm"
             >
               Storico
-            </button>
-            <button
-              data-testid="btn-new-beverage-carico"
-              onClick={() => navigate('/magazzino-bevande/nuovo-carico')}
-              className="flex items-center gap-2 bg-[#F5C518] hover:bg-[#E5A500] text-gray-900 font-bold px-4 py-2 rounded-lg shadow text-sm"
-            >
-              <Plus size={16} /> INGRESSI/USCITE
             </button>
           </div>
         </div>

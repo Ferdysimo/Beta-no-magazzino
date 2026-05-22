@@ -234,6 +234,14 @@ const ReportBetaPage = () => {
         setCashRow(initial);
         setCashComments(res.data?.comments || {});
         setVersColor(res.data?.vers_color || '');
+        // Persistenza paste incollate + banconote + prezzi manuali
+        if (typeof res.data?.paste_text === 'string') setPasteText(res.data.paste_text);
+        if (res.data?.cash_banconote && typeof res.data.cash_banconote === 'object') {
+          setCash(res.data.cash_banconote);
+        }
+        if (res.data?.manual_prices && typeof res.data.manual_prices === 'object') {
+          setManualPrices(res.data.manual_prices);
+        }
         setCashLoaded(true);
       } catch (e) {
         // 403 se non Flaminio/Admin
@@ -248,12 +256,19 @@ const ReportBetaPage = () => {
     if (!cashLoaded || !token) return;
     if (cashSaveTimer.current) clearTimeout(cashSaveTimer.current);
     cashSaveTimer.current = setTimeout(() => {
-      axios.put(`${API}/cash/daily`, { ...cashRow, comments: cashComments, vers_color: versColor }, {
+      axios.put(`${API}/cash/daily`, {
+        ...cashRow,
+        comments: cashComments,
+        vers_color: versColor,
+        paste_text: pasteText,
+        cash_banconote: cash,
+        manual_prices: manualPrices,
+      }, {
         headers: { Authorization: `Bearer ${token}` },
       }).catch(() => { /* silenzioso */ });
     }, 500);
     return () => { if (cashSaveTimer.current) clearTimeout(cashSaveTimer.current); };
-  }, [cashRow, cashComments, versColor, cashLoaded, token]);
+  }, [cashRow, cashComments, versColor, pasteText, cash, manualPrices, cashLoaded, token]);
 
   // Info del quadratino attualmente selezionato (per la barra preview in basso)
   const previewInfo = useMemo(() => {
@@ -370,6 +385,7 @@ const ReportBetaPage = () => {
       const len = (commentPopover.value || '').length;
       try { commentInputRef.current.setSelectionRange(len, len); } catch (e) {}
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commentPopover?.key]);
 
   // Calcolo valori SPICCI per ogni taglio + totale euro

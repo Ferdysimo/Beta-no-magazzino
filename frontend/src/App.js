@@ -20,7 +20,6 @@ import ProdottiMagazzinoPage from './pages/ProdottiMagazzinoPage';
 import MediaLocaliPage from './pages/MediaLocaliPage';
 import DiagnosticaLivePage from './pages/DiagnosticaLivePage';
 import MagazzinoBevandePage from './pages/MagazzinoBevandePage';
-import NuovoCaricoBevandePage from './pages/NuovoCaricoBevandePage';
 import ReportBevandePage from './pages/ReportBevandePage';
 import RichiestaMercePage from './pages/RichiestaMercePage';
 import NuovaRichiestaPage from './pages/NuovaRichiestaPage';
@@ -33,6 +32,7 @@ import AnalisiPage from './pages/AnalisiPage';
 import CronologiaMovimentiPage from './pages/CronologiaMovimentiPage';
 import ReportBetaPage from './pages/ReportBetaPage';
 import StoricoBevandePage from './pages/StoricoBevandePage';
+import StoricoChiusurePage from './pages/StoricoChiusurePage';
 import UpdateBanner from './components/UpdateBanner';
 
 // Protected Route Component
@@ -221,11 +221,6 @@ function AppRoutes() {
           <MagazzinoBevandePage />
         </ProtectedRoute>
       } />
-      <Route path="/magazzino-bevande/nuovo-carico" element={
-        <ProtectedRoute>
-          <NuovoCaricoBevandePage />
-        </ProtectedRoute>
-      } />
       <Route path="/magazzino-bevande/storico" element={
         <ProtectedRoute>
           <StoricoBevandePage />
@@ -234,6 +229,11 @@ function AppRoutes() {
       <Route path="/report-bevande" element={
         <ProtectedRoute>
           <ReportBevandePage />
+        </ProtectedRoute>
+      } />
+      <Route path="/storico-chiusure" element={
+        <ProtectedRoute>
+          <StoricoChiusurePage />
         </ProtectedRoute>
       } />
     </Routes>
