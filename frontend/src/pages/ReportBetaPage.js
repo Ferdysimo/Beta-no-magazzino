@@ -72,6 +72,14 @@ const CASH_FIELDS = [
   { key: 'arr',     label: 'ARR',          op: 'plus',  readonly: false },
 ];
 
+// Definizione del box SPICCI (rotolini / mazzette aperte)
+const SPICCI_FIELDS = [
+  { key: 'sp5',  label: '5',   mult: 50 },
+  { key: 'sp2',  label: '2',   mult: 50 },
+  { key: 'sp1',  label: '1',   mult: 25 },
+  { key: 'sp05', label: '0,5', mult: 20 },
+];
+
 const ReportBetaPage = () => {
   const navigate = useNavigate();
   const { token } = useAuth();
@@ -81,8 +89,13 @@ const ReportBetaPage = () => {
   // Vendite bevande: lette dal backend, refresh periodico
   const [beverages, setBeverages] = useState([]);   // {sigla, name, price}
   const [bevCounts, setBevCounts] = useState({});   // {sigla: {mattina, inUsc, scarti, sera}}
-  // Riepilogo cassa Flaminio (persistente su DB)
-  const [cashRow, setCashRow] = useState(() => CASH_FIELDS.reduce((a, f) => { a[f.key] = ''; return a; }, {}));
+  // Riepilogo cassa Flaminio (persistente su DB) + SPICCI
+  const [cashRow, setCashRow] = useState(() => {
+    const init = {};
+    CASH_FIELDS.forEach(f => { init[f.key] = ''; });
+    SPICCI_FIELDS.forEach(f => { init[f.key] = ''; });
+    return init;
+  });
   const [cashLoaded, setCashLoaded] = useState(false);
   const cashSaveTimer = React.useRef(null);
 
@@ -132,7 +145,9 @@ const ReportBetaPage = () => {
         const data = res.data?.data || {};
         const prev = res.data?.prev_cash_sera;
         // Auto-fill MATTINA con CASH SERA del giorno prima se oggi è vuoto
-        const initial = CASH_FIELDS.reduce((a, f) => { a[f.key] = data[f.key] || ''; return a; }, {});
+        const initial = {};
+        CASH_FIELDS.forEach(f => { initial[f.key] = data[f.key] || ''; });
+        SPICCI_FIELDS.forEach(f => { initial[f.key] = data[f.key] || ''; });
         if (!initial.mattina && prev !== '' && prev !== null && prev !== undefined) {
           initial.mattina = String(prev);
         }
@@ -169,6 +184,16 @@ const ReportBetaPage = () => {
       else if (f.op === 'minus') total -= v;
     }
     return total;
+  }, [cashRow]);
+
+  // Calcolo valori SPICCI per ogni taglio + totale euro
+  const spicciValues = useMemo(() => {
+    const rows = SPICCI_FIELDS.map(f => {
+      const aperti = evaluateValue(cashRow[f.key]);
+      return { ...f, aperti, value: aperti * f.mult };
+    });
+    const total = rows.reduce((s, r) => s + r.value, 0);
+    return { rows, total };
   }, [cashRow]);
 
   // Parsing paste — restituisce anche l'elenco delle non-riconosciute con indice stabile
@@ -481,6 +506,56 @@ const ReportBetaPage = () => {
                     className="w-full h-11 bg-gray-900 text-[#F5C518] rounded flex items-center justify-center font-black text-sm"
                   >
                     €{cashSera.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  <span className="text-[9px] text-gray-700 mt-0.5 text-center leading-none font-bold">totale</span>
+                </div>
+              </div>
+            </div>
+
+            {/* ============ SPICCI ============ */}
+            <div className="bg-white rounded border border-gray-200 p-2">
+              <div className="flex items-baseline justify-between mb-2">
+                <h2 className="text-xs font-bold text-gray-800 uppercase">Spicci</h2>
+                <span className="text-[10px] text-gray-400">
+                  Aperti × valore rotolino/mazzetta
+                </span>
+              </div>
+              <div className="flex items-stretch gap-1.5">
+                {spicciValues.rows.map(r => (
+                  <div key={r.key} className="flex-1 min-w-[60px] flex flex-col">
+                    <label className="text-[10px] font-bold text-gray-800 text-center leading-none mb-0.5">
+                      {r.label}
+                    </label>
+                    <input
+                      data-testid={`spicci-aperti-${r.key}`}
+                      type="text"
+                      inputMode="decimal"
+                      value={cashRow[r.key] || ''}
+                      onChange={(e) => setCashRowValue(r.key, e.target.value)}
+                      placeholder="aperti"
+                      className="w-full h-11 border border-gray-200 rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518]"
+                    />
+                    <div
+                      data-testid={`spicci-valore-${r.key}`}
+                      className="w-full h-11 mt-1 bg-yellow-50 border border-yellow-200 rounded flex items-center justify-center font-black text-sm text-gray-900"
+                    >
+                      €{r.value.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                    </div>
+                    <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">×{r.mult}</span>
+                  </div>
+                ))}
+                {/* Totale spicci */}
+                <div className="flex-1 min-w-[70px] flex flex-col">
+                  <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">TOT</label>
+                  <div className="w-full h-11 border border-transparent rounded flex items-center justify-center text-[10px] text-gray-400 italic">
+                    {/* nessun input sul totale */}
+                    —
+                  </div>
+                  <div
+                    data-testid="spicci-totale"
+                    className="w-full h-11 mt-1 bg-gray-900 text-[#F5C518] rounded flex items-center justify-center font-black text-sm"
+                  >
+                    €{spicciValues.total.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                   </div>
                   <span className="text-[9px] text-gray-700 mt-0.5 text-center leading-none font-bold">totale</span>
                 </div>

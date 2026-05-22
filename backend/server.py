@@ -2850,6 +2850,8 @@ def _compute_cash_sera(row: dict) -> float:
 
 
 CASH_FIELDS = ["mattina", "altro", "glo", "just", "delv", "bp", "sat", "ft", "pos", "vers", "arr"]
+SPICCI_FIELDS = ["sp5", "sp2", "sp1", "sp05"]
+ALL_CASH_FIELDS = CASH_FIELDS + SPICCI_FIELDS
 
 
 class CashDailyUpsert(BaseModel):
@@ -2864,6 +2866,10 @@ class CashDailyUpsert(BaseModel):
     pos: Optional[str] = ""
     vers: Optional[str] = ""
     arr: Optional[str] = ""
+    sp5: Optional[str] = ""
+    sp2: Optional[str] = ""
+    sp1: Optional[str] = ""
+    sp05: Optional[str] = ""
 
 
 @api_router.get("/cash/daily")
@@ -2877,7 +2883,7 @@ async def get_cash_daily(token_data: dict = Depends(verify_token)):
     today_doc = await db.cash_daily_counts.find_one(
         {"restaurant_id": flaminio_id, "date_rome": today}, {"_id": 0}
     ) or {}
-    data = {f: today_doc.get(f, "") for f in CASH_FIELDS}
+    data = {f: today_doc.get(f, "") for f in ALL_CASH_FIELDS}
 
     prev_cash_sera = ""
     last_doc = await db.cash_daily_counts.find_one(
@@ -2899,7 +2905,7 @@ async def upsert_cash_daily(
     if not flaminio_id:
         raise HTTPException(status_code=404, detail="Ristorante Flaminio non trovato")
     today = _today_rome_str()
-    payload = {f: (getattr(data, f) or "") for f in CASH_FIELDS}
+    payload = {f: (getattr(data, f) or "") for f in ALL_CASH_FIELDS}
     await db.cash_daily_counts.update_one(
         {"restaurant_id": flaminio_id, "date_rome": today},
         {"$set": {
