@@ -308,20 +308,6 @@ const ReportBetaPage = () => {
     }
   }, [commentPopover]);
 
-  // Calcolo CASH SERA in tempo reale
-  // Include anche: TOT box Paste (incasso paste) + TOT box Bevande (incasso bev)
-  const cashSera = useMemo(() => {
-    let total = 0;
-    for (const f of CASH_FIELDS) {
-      const v = evaluateValue(cashRow[f.key]);
-      if (f.op === 'base' || f.op === 'plus') total += v;
-      else if (f.op === 'minus') total -= v;
-    }
-    total += pasteAnalysis.totalEuro;
-    total += bevTotalInc;
-    return total;
-  }, [cashRow, pasteAnalysis.totalEuro, bevTotalInc]);
-
   // Calcolo valori SPICCI per ogni taglio + totale euro
   const spicciValues = useMemo(() => {
     const rows = SPICCI_FIELDS.map(f => {
@@ -401,6 +387,20 @@ const ReportBetaPage = () => {
   }, [beverages, bevCounts]);
   const bevTotalQty = bevSales.reduce((s, r) => s + Math.max(0, r.qty), 0);
   const bevTotalInc = bevSales.reduce((s, r) => s + r.inc, 0);
+
+  // Calcolo CASH SERA in tempo reale
+  // Include anche: TOT box Paste (incasso paste) + TOT box Bevande (incasso bev)
+  const cashSera = useMemo(() => {
+    let total = 0;
+    for (const f of CASH_FIELDS) {
+      const v = evaluateValue(cashRow[f.key]);
+      if (f.op === 'base' || f.op === 'plus') total += v;
+      else if (f.op === 'minus') total -= v;
+    }
+    total += pasteAnalysis.totalEuro;
+    total += bevTotalInc;
+    return total;
+  }, [cashRow, pasteAnalysis.totalEuro, bevTotalInc]);
 
   const setCashValue = (key, v) => setCash(p => ({ ...p, [key]: v }));
   const setManualPrice = (idx, v) => setManualPrices(p => ({ ...p, [idx]: v }));
