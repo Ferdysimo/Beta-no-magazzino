@@ -2702,6 +2702,109 @@ async def get_beverage_inventory(token_data: dict = Depends(verify_token)):
     return [{**b, "quantity": inv_map.get(b["sigla"], 0)} for b in beverages]
 
 
+# ---------- Daily counts (Magazzino Bevande page persistence) ----------
+
+def _today_rome_str() -> str:
+    return datetime.now(ROME_TZ).strftime("%Y-%m-%d")
+
+
+class BeverageDailyUpsert(BaseModel):
+    sigla: str
+    mattina: Optional[str] = ""
+    inUsc: Optional[str] = ""
+    scarti: Optional[str] = ""
+    sera: Optional[str] = ""
+
+
+@api_router.get("/beverages/daily")
+async def get_beverage_daily_counts(token_data: dict = Depends(verify_token)):
+    """Returns today's counts for Flaminio + previous-day sera values
+    so the frontend can auto-fill MAGAZZINO MATTINA when starting a new day."""
+    flaminio_id = await _get_flaminio_restaurant_id()
+    if not flaminio_id:
+        return {"date": _today_rome_str(), "counts": {}, "prev_sera": {}}
+    today = _today_rome_str()
+    today_docs = await db.beverage_daily_counts.find(
+        {"restaurant_id": flaminio_id, "date_rome": today}, {"_id": 0}
+    ).to_list(50)
+    counts = {d["sigla"]: {
+        "mattina": d.get("mattina", ""),
+        "inUsc": d.get("inUsc", ""),
+        "scarti": d.get("scarti", ""),
+        "sera": d.get("sera", ""),
+    } for d in today_docs}
+
+    prev_sera = {}
+    last_day_doc = await db.beverage_daily_counts.find_one(
+        {"restaurant_id": flaminio_id, "date_rome": {"$lt": today}},
+        sort=[("date_rome", -1)],
+        projection={"_id": 0, "date_rome": 1},
+    )
+    if last_day_doc:
+        prev_date = last_day_doc["date_rome"]
+        prev_docs = await db.beverage_daily_counts.find(
+            {"restaurant_id": flaminio_id, "date_rome": prev_date},
+            {"_id": 0, "sigla": 1, "sera": 1},
+        ).to_list(50)
+        prev_sera = {d["sigla"]: d.get("sera", "") for d in prev_docs}
+
+    return {"date": today, "counts": counts, "prev_sera": prev_sera}
+
+
+@api_router.put("/beverages/daily")
+async def upsert_beverage_daily(
+    data: BeverageDailyUpsert, token_data: dict = Depends(verify_token)
+):
+    """Upsert a single beverage row for today's counts (auto-save from frontend)."""
+    flaminio_id = await _get_flaminio_restaurant_id()
+    if not flaminio_id:
+        raise HTTPException(status_code=404, detail="Ristorante Flaminio non trovato")
+    today = _today_rome_str()
+    valid_siglas = {b["sigla"] for b in BEVERAGES_CATALOG}
+    if data.sigla not in valid_siglas:
+        raise HTTPException(status_code=400, detail=f"Sigla non valida: {data.sigla}")
+    await db.beverage_daily_counts.update_one(
+        {"restaurant_id": flaminio_id, "date_rome": today, "sigla": data.sigla},
+        {"$set": {
+            "restaurant_id": flaminio_id,
+            "date_rome": today,
+            "sigla": data.sigla,
+            "mattina": data.mattina or "",
+            "inUsc": data.inUsc or "",
+            "scarti": data.scarti or "",
+            "sera": data.sera or "",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+@api_router.get("/beverages/daily/history")
+async def get_beverage_daily_history(
+    days: int = 60, token_data: dict = Depends(verify_token)
+):
+    """Returns the last N days of beverage daily counts grouped by date.
+    Used by the manager to review past closures."""
+    flaminio_id = await _get_flaminio_restaurant_id()
+    if not flaminio_id:
+        return {"days": []}
+    cutoff = (datetime.now(ROME_TZ) - timedelta(days=max(1, min(days, 365)))).strftime("%Y-%m-%d")
+    docs = await db.beverage_daily_counts.find(
+        {"restaurant_id": flaminio_id, "date_rome": {"$gte": cutoff}},
+        {"_id": 0},
+    ).sort("date_rome", -1).to_list(2000)
+    grouped: dict = {}
+    for d in docs:
+        grouped.setdefault(d["date_rome"], []).append(d)
+    return {
+        "days": [
+            {"date": date, "rows": rows}
+            for date, rows in sorted(grouped.items(), reverse=True)
+        ]
+    }
+
+
 @api_router.post("/beverages/carichi")
 async def create_beverage_carico(
     data: BeverageCaricoCreate, token_data: dict = Depends(verify_token)
@@ -3374,6 +3477,11 @@ async def startup_scheduler():
     await db.stock_movements.create_index([("product_id", 1), ("timestamp", -1)])
     await db.stock_movements.create_index([("timestamp", -1)])
     await db.stock_movements.create_index([("cause", 1), ("timestamp", -1)])
+    # Beverage daily counts (Magazzino Bevande page)
+    await db.beverage_daily_counts.create_index(
+        [("restaurant_id", 1), ("date_rome", -1), ("sigla", 1)], unique=True
+    )
+    await db.beverage_daily_counts.create_index([("date_rome", -1)])
     logger.info("MongoDB indexes created")
 
     # Populate the in-memory restaurant->location cache used by the

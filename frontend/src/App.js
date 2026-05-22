@@ -32,6 +32,7 @@ import InventarioPage from './pages/InventarioPage';
 import AnalisiPage from './pages/AnalisiPage';
 import CronologiaMovimentiPage from './pages/CronologiaMovimentiPage';
 import ReportBetaPage from './pages/ReportBetaPage';
+import StoricoBevandePage from './pages/StoricoBevandePage';
 import UpdateBanner from './components/UpdateBanner';
 
 // Protected Route Component
@@ -223,6 +224,11 @@ function AppRoutes() {
       <Route path="/magazzino-bevande/nuovo-carico" element={
         <ProtectedRoute>
           <NuovoCaricoBevandePage />
+        </ProtectedRoute>
+      } />
+      <Route path="/magazzino-bevande/storico" element={
+        <ProtectedRoute>
+          <StoricoBevandePage />
         </ProtectedRoute>
       } />
       <Route path="/report-bevande" element={

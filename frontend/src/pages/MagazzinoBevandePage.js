@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,91 +8,114 @@ import { ArrowLeft, Plus } from 'lucide-react';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-// Chiave localStorage per i conteggi giornalieri della pagina (mattina/scarti/sera/in-usc)
-// Si resetta giorno per giorno: chiave include la data in fuso Roma.
-const todayRomeKey = () => {
-  try {
-    const fmt = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit',
-    });
-    return fmt.format(new Date());
-  } catch {
-    return new Date().toISOString().slice(0, 10);
+// Valuta il valore di un input. Se inizia con "=" tratta come formula
+// aritmetica (solo cifre, +, -, *, /, ., parentesi, spazi).
+const evaluateValue = (v) => {
+  if (v === '' || v === null || v === undefined) return 0;
+  const s = String(v).trim().replace(',', '.');
+  if (s.startsWith('=')) {
+    const expr = s.slice(1).trim();
+    if (!expr || !/^[\d+\-*/.() \s]*$/.test(expr)) return 0;
+    try {
+      // eslint-disable-next-line no-new-func
+      const v2 = Function(`"use strict"; return (${expr})`)();
+      return Number.isFinite(v2) ? v2 : 0;
+    } catch { return 0; }
   }
+  const n = parseFloat(s);
+  return Number.isNaN(n) ? 0 : n;
 };
-
-const lsKey = (loc) => `bev_counts_${loc || 'flaminio'}_${todayRomeKey()}`;
 
 const MagazzinoBevandePage = () => {
   const { token, isAdmin, restaurant } = useAuth();
   const navigate = useNavigate();
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
-  // counts[sigla] = { mattina, inUsc, scarti, sera }   tutti string per input libero
+  // counts[sigla] = { mattina, inUsc, scarti, sera }   tutti string
   const [counts, setCounts] = useState({});
+  const [savedAt, setSavedAt] = useState(null);
+  // pending debounce timers per sigla
+  const saveTimers = useRef({});
 
   const canAccess = isAdmin || restaurant?.username === 'Flaminio';
-  const storageKey = useMemo(() => lsKey(restaurant?.username), [restaurant]);
+  const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 
+  // Carica inventario + conteggi giornata + carryover mattina dal giorno prima
   useEffect(() => {
     if (!canAccess) return;
-    axios.get(`${API}/beverages/inventory`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => setInventory(res.data || []))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [token, canAccess]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const [invRes, dailyRes] = await Promise.all([
+          axios.get(`${API}/beverages/inventory`, { headers }),
+          axios.get(`${API}/beverages/daily`, { headers }),
+        ]);
+        if (cancelled) return;
+        setInventory(invRes.data || []);
+        const { counts: todayCounts, prev_sera } = dailyRes.data || {};
+        // Merge: parto da today; per le sigle senza valori oggi, popolo `mattina`
+        // con il `sera` del giorno prima (se presente).
+        const merged = {};
+        (invRes.data || []).forEach(b => {
+          const today = todayCounts?.[b.sigla];
+          if (today) {
+            merged[b.sigla] = today;
+          } else {
+            const prev = prev_sera?.[b.sigla];
+            merged[b.sigla] = {
+              mattina: prev !== undefined && prev !== '' ? String(prev) : '',
+              inUsc: '',
+              scarti: '',
+              sera: '',
+            };
+          }
+        });
+        setCounts(merged);
+      } catch (e) {
+        console.error('beverage daily load', e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [headers, canAccess]);
 
-  // Carica conteggi dal localStorage al primo render
-  useEffect(() => {
-    if (!canAccess) return;
-    try {
-      const raw = localStorage.getItem(storageKey);
-      if (raw) setCounts(JSON.parse(raw));
-    } catch { /* noop */ }
-  }, [storageKey, canAccess]);
-
-  // Salva conteggi nel localStorage ogni volta che cambiano
-  useEffect(() => {
-    if (!canAccess) return;
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(counts));
-    } catch { /* noop */ }
-  }, [counts, storageKey, canAccess]);
-
-  const setField = (sigla, field, value) => {
-    setCounts(prev => ({
-      ...prev,
-      [sigla]: { ...(prev[sigla] || {}), [field]: value },
-    }));
+  // Debounced save di una riga al backend (800ms)
+  const scheduleSave = (sigla, nextCounts) => {
+    if (saveTimers.current[sigla]) clearTimeout(saveTimers.current[sigla]);
+    saveTimers.current[sigla] = setTimeout(async () => {
+      const row = nextCounts[sigla] || {};
+      try {
+        await axios.put(`${API}/beverages/daily`, {
+          sigla,
+          mattina: row.mattina ?? '',
+          inUsc: row.inUsc ?? '',
+          scarti: row.scarti ?? '',
+          sera: row.sera ?? '',
+        }, { headers });
+        setSavedAt(new Date());
+      } catch (e) {
+        console.error('save beverage daily', e);
+      }
+    }, 800);
   };
 
-  const toNum = (v) => {
-    if (v === '' || v === null || v === undefined) return 0;
-    const s = String(v).trim().replace(',', '.');
-    // Formula mode: se inizia con "=" valuta un'espressione aritmetica.
-    // Sicuro: accettiamo solo cifre, +, -, *, /, ., (, ), spazi.
-    if (s.startsWith('=')) {
-      const expr = s.slice(1).trim();
-      if (!expr) return 0;
-      if (!/^[\d+\-*/.() \s]*$/.test(expr)) return 0;
-      try {
-        // eslint-disable-next-line no-new-func
-        const v2 = Function(`"use strict"; return (${expr})`)();
-        return Number.isFinite(v2) ? v2 : 0;
-      } catch { return 0; }
-    }
-    const n = parseFloat(s);
-    return Number.isNaN(n) ? 0 : n;
+  const setField = (sigla, field, value) => {
+    setCounts(prev => {
+      const next = { ...prev, [sigla]: { ...(prev[sigla] || {}), [field]: value } };
+      scheduleSave(sigla, next);
+      return next;
+    });
   };
 
   // Calcoli aggregati
   const rows = useMemo(() => inventory.map(b => {
     const c = counts[b.sigla] || {};
-    const mattina = toNum(c.mattina);
-    const inUsc = toNum(c.inUsc);
-    const scarti = toNum(c.scarti);
-    const sera = toNum(c.sera);
-    // Se MAGAZZINO SERA è 0 (non ancora contato) la quantità venduta non è calcolabile -> 0
+    const mattina = evaluateValue(c.mattina);
+    const inUsc = evaluateValue(c.inUsc);
+    const scarti = evaluateValue(c.scarti);
+    const sera = evaluateValue(c.sera);
+    // Se MAGAZZINO SERA è 0 (non ancora contato) -> quantità venduta = 0
     const quantita = sera === 0 ? 0 : (mattina + inUsc - scarti - sera);
     const incasso = Math.max(0, quantita) * (b.price || 0);
     return { ...b, mattina, inUsc, scarti, sera, quantita, incasso };
@@ -120,20 +143,34 @@ const MagazzinoBevandePage = () => {
     <div className="min-h-screen bg-[#F5F5F5]">
       <Header />
       <main className="max-w-6xl mx-auto p-3 sm:p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <button
             onClick={() => navigate('/')}
             className="flex items-center gap-2 text-gray-700 hover:text-gray-900 text-sm"
           >
             <ArrowLeft size={16} /> Indietro
           </button>
-          <button
-            data-testid="btn-new-beverage-carico"
-            onClick={() => navigate('/magazzino-bevande/nuovo-carico')}
-            className="flex items-center gap-2 bg-[#F5C518] hover:bg-[#E5A500] text-gray-900 font-bold px-4 py-2 rounded-lg shadow text-sm"
-          >
-            <Plus size={16} /> INGRESSI/USCITE
-          </button>
+          <div className="flex items-center gap-3">
+            {savedAt && (
+              <span className="text-[11px] text-emerald-700">
+                ● Salvato {savedAt.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            )}
+            <button
+              data-testid="btn-bev-history"
+              onClick={() => navigate('/magazzino-bevande/storico')}
+              className="flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-800 border border-gray-300 font-bold px-3 py-2 rounded-lg text-sm"
+            >
+              Storico
+            </button>
+            <button
+              data-testid="btn-new-beverage-carico"
+              onClick={() => navigate('/magazzino-bevande/nuovo-carico')}
+              className="flex items-center gap-2 bg-[#F5C518] hover:bg-[#E5A500] text-gray-900 font-bold px-4 py-2 rounded-lg shadow text-sm"
+            >
+              <Plus size={16} /> INGRESSI/USCITE
+            </button>
+          </div>
         </div>
 
         <h1 className="font-heading text-xl sm:text-2xl font-bold text-gray-900 uppercase mb-4">
@@ -170,7 +207,7 @@ const MagazzinoBevandePage = () => {
                     {['mattina', 'inUsc', 'scarti', 'sera'].map(field => {
                       const raw = (counts[r.sigla] || {})[field] ?? '';
                       const isFormula = String(raw).trim().startsWith('=');
-                      const evaluated = isFormula ? toNum(raw) : null;
+                      const evaluated = isFormula ? evaluateValue(raw) : null;
                       return (
                         <td key={field} className="px-1 py-1 border-r border-gray-200">
                           <input
@@ -227,8 +264,8 @@ const MagazzinoBevandePage = () => {
         <p className="mt-3 text-[11px] text-gray-500">
           • Quantità venduta = Magazzino Mattina + Ingressi/Uscite − Scarti − Magazzino Sera.<br/>
           • Se "Magazzino Sera" è 0 (non ancora contato) la quantità resta a 0.<br/>
-          • Nelle caselle "Ingressi/Uscite" e "Magazzino Sera" puoi usare le formule: es. <code className="bg-blue-50 px-1 rounded">=12-2</code> per inserire 10, oppure <code className="bg-blue-50 px-1 rounded">=5+3+1</code> per 9.<br/>
-          • I valori si salvano automaticamente in locale e si resettano ad ogni cambio giornata.
+          • Nelle caselle puoi usare le formule: es. <code className="bg-blue-50 px-1 rounded">=12-2</code> per inserire 10.<br/>
+          • <b>I valori si salvano in tempo reale sul server</b>: alla mattina successiva la colonna "Magazzino Mattina" si auto-popola con il valore di "Magazzino Sera" di ieri.
         </p>
       </main>
     </div>

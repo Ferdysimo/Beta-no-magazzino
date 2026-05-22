@@ -1,6 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
 
 // Listino paste (prezzi modificabili in un solo punto)
 const PASTA_PRICES = [
@@ -35,12 +40,67 @@ const findPasta = (line) => {
   return null;
 };
 
+// Valuta una formula "=…" (stessa logica della pagina Magazzino Bevande)
+const evaluateValue = (v) => {
+  if (v === '' || v === null || v === undefined) return 0;
+  const s = String(v).trim().replace(',', '.');
+  if (s.startsWith('=')) {
+    const expr = s.slice(1).trim();
+    if (!expr || !/^[\d+\-*/.() \s]*$/.test(expr)) return 0;
+    try {
+      // eslint-disable-next-line no-new-func
+      const v2 = Function(`"use strict"; return (${expr})`)();
+      return Number.isFinite(v2) ? v2 : 0;
+    } catch { return 0; }
+  }
+  const n = parseFloat(s);
+  return Number.isNaN(n) ? 0 : n;
+};
+
 const ReportBetaPage = () => {
   const navigate = useNavigate();
+  const { token } = useAuth();
   const [pasteText, setPasteText] = useState('');
   const [cash, setCash] = useState({});
-  // prezzo manuale assegnato a ogni riga non riconosciuta (chiave: indice riga originale)
   const [manualPrices, setManualPrices] = useState({});
+  // Vendite bevande: lette dal backend, refresh periodico
+  const [beverages, setBeverages] = useState([]);   // {sigla, name, price}
+  const [bevCounts, setBevCounts] = useState({});   // {sigla: {mattina, inUsc, scarti, sera}}
+
+  // Carica catalogo bevande + conteggi giornata. Refresh ogni 15s così se il
+  // cassiere aggiorna la pagina magazzino in un'altra tab vede subito qui.
+  useEffect(() => {
+    if (!token) return;
+    const headers = { Authorization: `Bearer ${token}` };
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const [invRes, dailyRes] = await Promise.all([
+          axios.get(`${API}/beverages/inventory`, { headers }),
+          axios.get(`${API}/beverages/daily`, { headers }),
+        ]);
+        if (cancelled) return;
+        setBeverages(invRes.data || []);
+        const merged = {};
+        const today = dailyRes.data?.counts || {};
+        const prev = dailyRes.data?.prev_sera || {};
+        (invRes.data || []).forEach(b => {
+          if (today[b.sigla]) merged[b.sigla] = today[b.sigla];
+          else if (prev[b.sigla] !== undefined && prev[b.sigla] !== '') {
+            merged[b.sigla] = { mattina: String(prev[b.sigla]), inUsc: '', scarti: '', sera: '' };
+          } else {
+            merged[b.sigla] = { mattina: '', inUsc: '', scarti: '', sera: '' };
+          }
+        });
+        setBevCounts(merged);
+      } catch (e) {
+        // 403 se non Flaminio/Admin: ignora silenziosamente
+      }
+    };
+    load();
+    const id = setInterval(load, 15000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [token]);
 
   // Parsing paste — restituisce anche l'elenco delle non-riconosciute con indice stabile
   const pasteAnalysis = useMemo(() => {
@@ -95,6 +155,22 @@ const ReportBetaPage = () => {
     }
     return sum;
   }, [cash]);
+
+  // Aggrego le vendite bevande
+  const bevSales = useMemo(() => {
+    return beverages.map(b => {
+      const c = bevCounts[b.sigla] || {};
+      const m = evaluateValue(c.mattina);
+      const u = evaluateValue(c.inUsc);
+      const sc = evaluateValue(c.scarti);
+      const se = evaluateValue(c.sera);
+      const qty = se === 0 ? 0 : (m + u - sc - se);
+      const inc = Math.max(0, qty) * (b.price || 0);
+      return { sigla: b.sigla, name: b.name, qty, inc };
+    });
+  }, [beverages, bevCounts]);
+  const bevTotalQty = bevSales.reduce((s, r) => s + Math.max(0, r.qty), 0);
+  const bevTotalInc = bevSales.reduce((s, r) => s + r.inc, 0);
 
   const setCashValue = (key, v) => setCash(p => ({ ...p, [key]: v }));
   const setManualPrice = (idx, v) => setManualPrices(p => ({ ...p, [idx]: v }));
@@ -246,10 +322,50 @@ const ReportBetaPage = () => {
               </div>
             </div>
 
-            {/* Placeholder per le sezioni successive */}
-            <div className="flex-1 bg-white rounded border border-dashed border-gray-300 p-3 flex items-center justify-center text-xs text-gray-400 italic min-h-0">
-              Le sezioni "Vendite Bevande", "Altro / Versamenti / POS" e "Spicci aperti"
-              verranno aggiunte nei prossimi step.
+            {/* ============ VENDITE BEVANDE ============ */}
+            <div className="bg-white rounded border border-gray-200 p-2 flex-1 min-h-0 flex flex-col">
+              <div className="flex items-baseline justify-between mb-2">
+                <h2 className="text-xs font-bold text-gray-800 uppercase">Vendite Bevande</h2>
+                <span className="text-[10px] text-gray-400">in sync con Magazzino Bevande</span>
+              </div>
+              {bevSales.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center text-xs text-gray-400 italic">
+                  Nessuna bevanda configurata.
+                </div>
+              ) : (
+                <div className="flex-1 flex items-stretch gap-1 overflow-x-auto">
+                  {bevSales.map(b => (
+                    <div
+                      key={b.sigla}
+                      data-testid={`bev-sales-${b.sigla}`}
+                      className="flex-1 min-w-[60px] flex flex-col items-stretch gap-1"
+                    >
+                      <div className="text-[10px] font-bold text-center text-gray-700 truncate" title={b.name}>
+                        {b.sigla}
+                      </div>
+                      <div className="flex-1 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-lg text-gray-900">
+                        {b.qty}
+                      </div>
+                      <div className="flex-1 bg-yellow-50 border border-yellow-200 rounded flex items-center justify-center font-bold text-xs text-gray-900">
+                        €{b.inc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                  ))}
+                  {/* Totale */}
+                  <div className="flex-1 min-w-[70px] flex flex-col items-stretch gap-1 border-l-2 border-gray-300 pl-1">
+                    <div className="text-[10px] font-bold text-center text-gray-800 uppercase">Tot</div>
+                    <div data-testid="bev-sales-total-qty" className="flex-1 bg-gray-900 text-white border border-gray-900 rounded flex items-center justify-center font-black text-lg">
+                      {bevTotalQty}
+                    </div>
+                    <div data-testid="bev-sales-total-inc" className="flex-1 bg-[#F5C518] border border-yellow-600 rounded flex items-center justify-center font-black text-xs text-gray-900">
+                      €{bevTotalInc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                </div>
+              )}
+              <p className="mt-1 text-[10px] text-gray-400 text-center">
+                Riquadro superiore = Quantità · Riquadro inferiore = Incasso
+              </p>
             </div>
           </section>
         </div>
