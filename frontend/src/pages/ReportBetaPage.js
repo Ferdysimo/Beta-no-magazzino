@@ -89,6 +89,50 @@ const CASSETTO_FIELDS = [
   { key: 'cd05', label: '0,5€', spicciKey: 'sp05' },
 ];
 
+// Popover commento (right-click su un quadratino)
+const CommentPopover = ({ inputRef, value, onChange, onSave, onCancel }) => {
+  return (
+    <div
+      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 z-50"
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <div className="bg-amber-50 border-2 border-amber-400 rounded-md shadow-2xl p-2">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[10px] font-bold text-amber-800 uppercase">Commento</span>
+          <span className="text-[9px] text-amber-600">Enter salva · Esc annulla</span>
+        </div>
+        <textarea
+          ref={inputRef}
+          data-testid="comment-popover-input"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSave(); }
+            else if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+          }}
+          rows={3}
+          placeholder="Aggiungi una nota…"
+          className="w-full text-xs border border-amber-300 rounded p-1 focus:outline-none focus:border-amber-500 resize-none bg-white"
+        />
+        <div className="flex gap-1 mt-1 justify-end">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-[10px] px-2 py-0.5 rounded border border-gray-300 hover:bg-gray-100"
+          >Annulla</button>
+          <button
+            type="button"
+            onClick={onSave}
+            className="text-[10px] px-2 py-0.5 rounded bg-amber-500 text-white font-bold hover:bg-amber-600"
+          >Salva</button>
+        </div>
+      </div>
+      {/* triangolino sotto */}
+      <div className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-3 h-3 bg-amber-50 border-r-2 border-b-2 border-amber-400 rotate-45"></div>
+    </div>
+  );
+};
+
 const ReportBetaPage = () => {
   const navigate = useNavigate();
   const { token } = useAuth();
@@ -106,6 +150,10 @@ const ReportBetaPage = () => {
     CASSETTO_FIELDS.forEach(f => { init[f.key] = ''; });
     return init;
   });
+  const [cashComments, setCashComments] = useState({}); // { key: "testo commento" }
+  const [focusedField, setFocusedField] = useState(null); // key | null (zoom-on-focus)
+  const [commentPopover, setCommentPopover] = useState(null); // { key, value }
+  const commentInputRef = React.useRef(null);
   const [cashLoaded, setCashLoaded] = useState(false);
   const cashSaveTimer = React.useRef(null);
   // Cassetto spicci — edit mode (click-to-edit, conferma su Enter/blur, annulla su Esc)
@@ -167,6 +215,7 @@ const ReportBetaPage = () => {
           initial.mattina = String(prev);
         }
         setCashRow(initial);
+        setCashComments(res.data?.comments || {});
         setCashLoaded(true);
       } catch (e) {
         // 403 se non Flaminio/Admin
@@ -181,12 +230,12 @@ const ReportBetaPage = () => {
     if (!cashLoaded || !token) return;
     if (cashSaveTimer.current) clearTimeout(cashSaveTimer.current);
     cashSaveTimer.current = setTimeout(() => {
-      axios.put(`${API}/cash/daily`, cashRow, {
+      axios.put(`${API}/cash/daily`, { ...cashRow, comments: cashComments }, {
         headers: { Authorization: `Bearer ${token}` },
       }).catch(() => { /* silenzioso */ });
     }, 500);
     return () => { if (cashSaveTimer.current) clearTimeout(cashSaveTimer.current); };
-  }, [cashRow, cashLoaded, token]);
+  }, [cashRow, cashComments, cashLoaded, token]);
 
   const setCashRowValue = (key, v) => setCashRow(p => ({ ...p, [key]: v }));
 
@@ -233,7 +282,34 @@ const ReportBetaPage = () => {
     setEditingValue('');
   };
 
+  // Commenti: right-click su una cella → popover
+  const openCommentPopover = (key) => {
+    setCommentPopover({ key, value: cashComments[key] || '' });
+  };
+  const closeCommentPopover = () => setCommentPopover(null);
+  const saveCommentPopover = () => {
+    if (!commentPopover) return;
+    const { key, value } = commentPopover;
+    const trimmed = (value || '').trim();
+    setCashComments(prev => {
+      const next = { ...prev };
+      if (trimmed) next[key] = trimmed;
+      else delete next[key];
+      return next;
+    });
+    setCommentPopover(null);
+  };
+
+  // Autofocus del popover commento appena si apre
+  useEffect(() => {
+    if (commentPopover && commentInputRef.current) {
+      commentInputRef.current.focus();
+      commentInputRef.current.select();
+    }
+  }, [commentPopover]);
+
   // Calcolo CASH SERA in tempo reale
+  // Include anche: TOT box Paste (incasso paste) + TOT box Bevande (incasso bev)
   const cashSera = useMemo(() => {
     let total = 0;
     for (const f of CASH_FIELDS) {
@@ -241,8 +317,10 @@ const ReportBetaPage = () => {
       if (f.op === 'base' || f.op === 'plus') total += v;
       else if (f.op === 'minus') total -= v;
     }
+    total += pasteAnalysis.totalEuro;
+    total += bevTotalInc;
     return total;
-  }, [cashRow]);
+  }, [cashRow, pasteAnalysis.totalEuro, bevTotalInc]);
 
   // Calcolo valori SPICCI per ogni taglio + totale euro
   const spicciValues = useMemo(() => {
@@ -532,8 +610,10 @@ const ReportBetaPage = () => {
                 {CASH_FIELDS.map(f => {
                   const computed = evaluateValue(cashRow[f.key]);
                   const sign = f.op === 'minus' ? '−' : (f.op === 'plus' ? '+' : '=');
+                  const isFocused = focusedField === f.key;
+                  const hasComment = !!cashComments[f.key];
                   return (
-                    <div key={f.key} className="flex-1 min-w-[60px] flex flex-col">
+                    <div key={f.key} className="flex-1 min-w-[60px] flex flex-col relative">
                       <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={f.label}>
                         {f.label}
                       </label>
@@ -543,16 +623,36 @@ const ReportBetaPage = () => {
                         inputMode="decimal"
                         value={cashRow[f.key] || ''}
                         onChange={(e) => setCashRowValue(f.key, e.target.value)}
+                        onFocus={() => setFocusedField(f.key)}
+                        onBlur={() => setFocusedField(curr => curr === f.key ? null : curr)}
+                        onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
                         placeholder={f.op === 'base' ? '€' : (f.op === 'minus' ? '−' : '+')}
-                        className={`w-full h-11 border rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] ${
+                        className={`w-full h-11 border rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] transition-transform duration-150 origin-center ${
+                          isFocused ? 'scale-[1.7] z-50 relative shadow-2xl' : ''
+                        } ${
                           f.op === 'minus' ? 'border-rose-200 bg-rose-50' :
                           f.op === 'plus'  ? 'border-emerald-200 bg-emerald-50' :
                                              'border-gray-200'
                         }`}
                       />
+                      {hasComment && (
+                        <span
+                          title={cashComments[f.key]}
+                          className="absolute top-3 right-0 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-amber-600 z-10"
+                        />
+                      )}
                       <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
                         {computed !== 0 ? `${sign}€${computed.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
                       </span>
+                      {commentPopover?.key === f.key && (
+                        <CommentPopover
+                          inputRef={commentInputRef}
+                          value={commentPopover.value}
+                          onChange={(v) => setCommentPopover(p => ({ ...p, value: v }))}
+                          onSave={saveCommentPopover}
+                          onCancel={closeCommentPopover}
+                        />
+                      )}
                     </div>
                   );
                 })}
@@ -581,8 +681,11 @@ const ReportBetaPage = () => {
                 </span>
               </div>
               <div className="flex items-stretch gap-1.5">
-                {spicciValues.rows.map(r => (
-                  <div key={r.key} className="flex-1 min-w-[50px] flex flex-col">
+                {spicciValues.rows.map(r => {
+                  const isFocused = focusedField === r.key;
+                  const hasComment = !!cashComments[r.key];
+                  return (
+                  <div key={r.key} className="flex-1 min-w-[50px] flex flex-col relative">
                     <label className="text-[10px] font-bold text-gray-800 text-center leading-none mb-0.5">
                       {r.label}
                     </label>
@@ -592,9 +695,20 @@ const ReportBetaPage = () => {
                       inputMode="decimal"
                       value={cashRow[r.key] || ''}
                       onChange={(e) => setCashRowValue(r.key, e.target.value)}
+                      onFocus={() => setFocusedField(r.key)}
+                      onBlur={() => setFocusedField(curr => curr === r.key ? null : curr)}
+                      onContextMenu={(e) => { e.preventDefault(); openCommentPopover(r.key); }}
                       placeholder="aperti"
-                      className="w-full h-11 border border-gray-200 rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518]"
+                      className={`w-full h-11 border border-gray-200 rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] transition-transform duration-150 origin-center ${
+                        isFocused ? 'scale-[1.7] z-50 relative shadow-2xl' : ''
+                      }`}
                     />
+                    {hasComment && (
+                      <span
+                        title={cashComments[r.key]}
+                        className="absolute top-3 right-0 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-amber-600 z-10"
+                      />
+                    )}
                     <div
                       data-testid={`spicci-valore-${r.key}`}
                       className="w-full h-11 mt-1 bg-yellow-50 border border-yellow-200 rounded flex items-center justify-center font-black text-sm text-gray-900"
@@ -602,8 +716,18 @@ const ReportBetaPage = () => {
                       €{r.value.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                     </div>
                     <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">×{r.mult}</span>
+                    {commentPopover?.key === r.key && (
+                      <CommentPopover
+                        inputRef={commentInputRef}
+                        value={commentPopover.value}
+                        onChange={(v) => setCommentPopover(p => ({ ...p, value: v }))}
+                        onSave={saveCommentPopover}
+                        onCancel={closeCommentPopover}
+                      />
+                    )}
                   </div>
-                ))}
+                  );
+                })}
                 {/* Totale spicci */}
                 <div className="flex-1 min-w-[60px] flex flex-col">
                   <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">TOT</label>
@@ -631,6 +755,8 @@ const ReportBetaPage = () => {
                 <div className="flex items-stretch gap-1.5">
                   {CASSETTO_FIELDS.map(f => {
                     const isEditing = editingCassetto === f.key;
+                    const isFocused = focusedField === f.key;
+                    const hasComment = !!cashComments[f.key];
                     const raw = cashRow[f.key];
                     let displayValue = '—';
                     let isNegative = false;
@@ -644,7 +770,7 @@ const ReportBetaPage = () => {
                         : residuo.toLocaleString('it-IT', { maximumFractionDigits: 2 });
                     }
                     return (
-                      <div key={f.key} className="flex-1 min-w-[50px] flex flex-col">
+                      <div key={f.key} className="flex-1 min-w-[50px] flex flex-col relative">
                         <label className="text-[10px] font-bold text-gray-800 text-center leading-none mb-0.5">
                           {f.label}
                         </label>
@@ -656,20 +782,25 @@ const ReportBetaPage = () => {
                             inputMode="decimal"
                             value={editingValue}
                             onChange={(e) => setEditingValue(e.target.value)}
-                            onBlur={() => commitEditCassetto(f)}
+                            onFocus={() => setFocusedField(f.key)}
+                            onBlur={() => { setFocusedField(curr => curr === f.key ? null : curr); commitEditCassetto(f); }}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') { e.preventDefault(); commitEditCassetto(f); }
                               else if (e.key === 'Escape') { e.preventDefault(); cancelEditCassetto(); }
                             }}
+                            onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
                             placeholder="stock"
-                            className="w-full h-11 border-2 border-[#F5C518] rounded px-1 text-center font-bold text-sm focus:outline-none bg-yellow-50"
+                            className={`w-full h-11 border-2 border-[#F5C518] rounded px-1 text-center font-bold text-sm focus:outline-none bg-yellow-50 transition-transform duration-150 origin-center ${
+                              isFocused ? 'scale-[1.7] z-50 relative shadow-2xl' : ''
+                            }`}
                           />
                         ) : (
                           <button
                             type="button"
                             data-testid={`cassetto-display-${f.key}`}
                             onClick={() => startEditCassetto(f)}
-                            title="Clicca per modificare"
+                            onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
+                            title="Clicca per modificare · destro per commento"
                             className={`w-full h-11 border rounded px-1 text-center font-black text-sm transition-colors cursor-pointer ${
                               isNegative
                                 ? 'bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100'
@@ -678,6 +809,21 @@ const ReportBetaPage = () => {
                           >
                             {displayValue}
                           </button>
+                        )}
+                        {hasComment && (
+                          <span
+                            title={cashComments[f.key]}
+                            className="absolute top-3 right-0 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-amber-600 z-10"
+                          />
+                        )}
+                        {commentPopover?.key === f.key && (
+                          <CommentPopover
+                            inputRef={commentInputRef}
+                            value={commentPopover.value}
+                            onChange={(v) => setCommentPopover(p => ({ ...p, value: v }))}
+                            onSave={saveCommentPopover}
+                            onCancel={closeCommentPopover}
+                          />
                         )}
                       </div>
                     );

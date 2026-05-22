@@ -2875,6 +2875,7 @@ class CashDailyUpsert(BaseModel):
     cd2: Optional[str] = ""
     cd1: Optional[str] = ""
     cd05: Optional[str] = ""
+    comments: Optional[Dict[str, str]] = None
 
 
 @api_router.get("/cash/daily")
@@ -2889,6 +2890,7 @@ async def get_cash_daily(token_data: dict = Depends(verify_token)):
         {"restaurant_id": flaminio_id, "date_rome": today}, {"_id": 0}
     ) or {}
     data = {f: today_doc.get(f, "") for f in ALL_CASH_FIELDS}
+    comments = today_doc.get("comments") or {}
 
     prev_cash_sera = ""
     last_doc = await db.cash_daily_counts.find_one(
@@ -2898,7 +2900,7 @@ async def get_cash_daily(token_data: dict = Depends(verify_token)):
     )
     if last_doc:
         prev_cash_sera = round(_compute_cash_sera(last_doc), 2)
-    return {"date": today, "data": data, "prev_cash_sera": prev_cash_sera}
+    return {"date": today, "data": data, "prev_cash_sera": prev_cash_sera, "comments": comments}
 
 
 @api_router.put("/cash/daily")
@@ -2911,14 +2913,25 @@ async def upsert_cash_daily(
         raise HTTPException(status_code=404, detail="Ristorante Flaminio non trovato")
     today = _today_rome_str()
     payload = {f: (getattr(data, f) or "") for f in ALL_CASH_FIELDS}
+    set_payload = {
+        **payload,
+        "restaurant_id": flaminio_id,
+        "date_rome": today,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    # Sanitize commenti: solo str→str, max 500 char, scarto chiavi/valori vuoti
+    if data.comments is not None:
+        clean: Dict[str, str] = {}
+        for k, v in data.comments.items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                continue
+            t = v.strip()
+            if t:
+                clean[k[:50]] = t[:500]
+        set_payload["comments"] = clean
     await db.cash_daily_counts.update_one(
         {"restaurant_id": flaminio_id, "date_rome": today},
-        {"$set": {
-            **payload,
-            "restaurant_id": flaminio_id,
-            "date_rome": today,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }},
+        {"$set": set_payload},
         upsert=True,
     )
     return {"ok": True}
