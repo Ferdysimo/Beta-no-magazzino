@@ -453,7 +453,7 @@ const ReportBetaPage = () => {
   const bevTotalInc = bevSales.reduce((s, r) => s + r.inc, 0);
 
   // Calcolo CASH SERA in tempo reale
-  // Include anche: TOT box Paste (incasso paste) + TOT box Bevande (incasso bev)
+  // Include anche: TOT box Paste + TOT box Bevande + TOT SPICCI
   const cashSera = useMemo(() => {
     let total = 0;
     for (const f of CASH_FIELDS) {
@@ -463,8 +463,9 @@ const ReportBetaPage = () => {
     }
     total += pasteAnalysis.totalEuro;
     total += bevTotalInc;
+    total += spicciValues.total;
     return total;
-  }, [cashRow, pasteAnalysis.totalEuro, bevTotalInc]);
+  }, [cashRow, pasteAnalysis.totalEuro, bevTotalInc, spicciValues.total]);
 
   const setCashValue = (key, v) => setCash(p => ({ ...p, [key]: v }));
   const setManualPrice = (idx, v) => setManualPrices(p => ({ ...p, [idx]: v }));
