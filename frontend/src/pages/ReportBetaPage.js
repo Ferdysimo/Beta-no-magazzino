@@ -110,7 +110,7 @@ const ReportBetaPage = () => {
   const cashSaveTimer = React.useRef(null);
   // Cassetto spicci — edit mode (click-to-edit, conferma su Enter/blur, annulla su Esc)
   const [editingCassetto, setEditingCassetto] = useState(null); // key | null
-  const editingOrigRef = React.useRef('');
+  const [editingValue, setEditingValue] = useState('');         // valore digitato durante edit
   const editingInputRef = React.useRef(null);
 
   // Carica catalogo bevande + conteggi giornata. Refresh ogni 15s così se il
@@ -198,18 +198,39 @@ const ReportBetaPage = () => {
     }
   }, [editingCassetto]);
 
-  const startEditCassetto = (key) => {
-    editingOrigRef.current = cashRow[key] || '';
-    setEditingCassetto(key);
+  const startEditCassetto = (f) => {
+    // Mostra nell'input il valore residuo corrente (stock_base - aperti)
+    const raw = cashRow[f.key];
+    if (raw === '' || raw === undefined || raw === null) {
+      setEditingValue('');
+    } else {
+      const base = evaluateValue(raw);
+      const aperti = evaluateValue(cashRow[f.spicciKey]);
+      const residuo = base - aperti;
+      // Mostro intero se non ha decimali, altrimenti con max 2 decimali
+      setEditingValue(Number.isInteger(residuo) ? String(residuo) : String(+residuo.toFixed(2)));
+    }
+    setEditingCassetto(f.key);
   };
-  const commitEditCassetto = () => {
-    setEditingCassetto(null);
-  };
-  const cancelEditCassetto = () => {
-    if (editingCassetto) {
-      setCashRow(p => ({ ...p, [editingCassetto]: editingOrigRef.current }));
+  const commitEditCassetto = (f) => {
+    if (editingValue.trim() === '') {
+      // Campo svuotato → resetto stock a stringa vuota
+      setCashRow(p => ({ ...p, [f.key]: '' }));
+    } else {
+      const typed = evaluateValue(editingValue);
+      const aperti = evaluateValue(cashRow[f.spicciKey]);
+      const newBase = typed + aperti;
+      // Salvo come stringa "pulita" (no decimali se intero)
+      const baseStr = Number.isInteger(newBase) ? String(newBase) : String(+newBase.toFixed(2));
+      setCashRow(p => ({ ...p, [f.key]: baseStr }));
     }
     setEditingCassetto(null);
+    setEditingValue('');
+  };
+  const cancelEditCassetto = () => {
+    // Nessuna modifica a cashRow durante l'edit, basta uscire
+    setEditingCassetto(null);
+    setEditingValue('');
   };
 
   // Calcolo CASH SERA in tempo reale
@@ -610,8 +631,18 @@ const ReportBetaPage = () => {
                 <div className="flex items-stretch gap-1.5">
                   {CASSETTO_FIELDS.map(f => {
                     const isEditing = editingCassetto === f.key;
-                    const raw = cashRow[f.key] || '';
-                    const displayValue = raw === '' ? '—' : raw;
+                    const raw = cashRow[f.key];
+                    let displayValue = '—';
+                    let isNegative = false;
+                    if (raw !== '' && raw !== undefined && raw !== null) {
+                      const base = evaluateValue(raw);
+                      const aperti = evaluateValue(cashRow[f.spicciKey]);
+                      const residuo = base - aperti;
+                      isNegative = residuo < 0;
+                      displayValue = Number.isInteger(residuo)
+                        ? String(residuo)
+                        : residuo.toLocaleString('it-IT', { maximumFractionDigits: 2 });
+                    }
                     return (
                       <div key={f.key} className="flex-1 min-w-[50px] flex flex-col">
                         <label className="text-[10px] font-bold text-gray-800 text-center leading-none mb-0.5">
@@ -623,11 +654,11 @@ const ReportBetaPage = () => {
                             data-testid={`cassetto-input-${f.key}`}
                             type="text"
                             inputMode="decimal"
-                            value={cashRow[f.key] || ''}
-                            onChange={(e) => setCashRowValue(f.key, e.target.value)}
-                            onBlur={commitEditCassetto}
+                            value={editingValue}
+                            onChange={(e) => setEditingValue(e.target.value)}
+                            onBlur={() => commitEditCassetto(f)}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter') { e.preventDefault(); commitEditCassetto(); }
+                              if (e.key === 'Enter') { e.preventDefault(); commitEditCassetto(f); }
                               else if (e.key === 'Escape') { e.preventDefault(); cancelEditCassetto(); }
                             }}
                             placeholder="stock"
@@ -637,9 +668,13 @@ const ReportBetaPage = () => {
                           <button
                             type="button"
                             data-testid={`cassetto-display-${f.key}`}
-                            onClick={() => startEditCassetto(f.key)}
+                            onClick={() => startEditCassetto(f)}
                             title="Clicca per modificare"
-                            className="w-full h-11 border border-gray-200 rounded px-1 text-center font-black text-sm bg-gray-50 hover:bg-yellow-50 hover:border-yellow-300 transition-colors cursor-pointer"
+                            className={`w-full h-11 border rounded px-1 text-center font-black text-sm transition-colors cursor-pointer ${
+                              isNegative
+                                ? 'bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100'
+                                : 'bg-gray-50 border-gray-200 text-gray-900 hover:bg-yellow-50 hover:border-yellow-300'
+                            }`}
                           >
                             {displayValue}
                           </button>
