@@ -2851,7 +2851,8 @@ def _compute_cash_sera(row: dict) -> float:
 
 CASH_FIELDS = ["mattina", "altro", "glo", "just", "delv", "bp", "sat", "ft", "pos", "vers", "arr"]
 SPICCI_FIELDS = ["sp5", "sp2", "sp1", "sp05"]
-ALL_CASH_FIELDS = CASH_FIELDS + SPICCI_FIELDS
+CASSETTO_FIELDS = ["cd5", "cd2", "cd1", "cd05"]
+ALL_CASH_FIELDS = CASH_FIELDS + SPICCI_FIELDS + CASSETTO_FIELDS
 
 
 class CashDailyUpsert(BaseModel):
@@ -2870,6 +2871,10 @@ class CashDailyUpsert(BaseModel):
     sp2: Optional[str] = ""
     sp1: Optional[str] = ""
     sp05: Optional[str] = ""
+    cd5: Optional[str] = ""
+    cd2: Optional[str] = ""
+    cd1: Optional[str] = ""
+    cd05: Optional[str] = ""
 
 
 @api_router.get("/cash/daily")

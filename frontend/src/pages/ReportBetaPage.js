@@ -80,6 +80,15 @@ const SPICCI_FIELDS = [
   { key: 'sp05', label: '0,5', mult: 20 },
 ];
 
+// Cassetto spicci — stock totale disponibile per ciascun taglio.
+// Il residuo mostrato = cassetto - "aperti" del taglio corrispondente.
+const CASSETTO_FIELDS = [
+  { key: 'cd5',  label: '5€',   spicciKey: 'sp5'  },
+  { key: 'cd2',  label: '2€',   spicciKey: 'sp2'  },
+  { key: 'cd1',  label: '1€',   spicciKey: 'sp1'  },
+  { key: 'cd05', label: '0,5€', spicciKey: 'sp05' },
+];
+
 const ReportBetaPage = () => {
   const navigate = useNavigate();
   const { token } = useAuth();
@@ -89,11 +98,12 @@ const ReportBetaPage = () => {
   // Vendite bevande: lette dal backend, refresh periodico
   const [beverages, setBeverages] = useState([]);   // {sigla, name, price}
   const [bevCounts, setBevCounts] = useState({});   // {sigla: {mattina, inUsc, scarti, sera}}
-  // Riepilogo cassa Flaminio (persistente su DB) + SPICCI
+  // Riepilogo cassa Flaminio (persistente su DB) + SPICCI + CASSETTO
   const [cashRow, setCashRow] = useState(() => {
     const init = {};
     CASH_FIELDS.forEach(f => { init[f.key] = ''; });
     SPICCI_FIELDS.forEach(f => { init[f.key] = ''; });
+    CASSETTO_FIELDS.forEach(f => { init[f.key] = ''; });
     return init;
   });
   const [cashLoaded, setCashLoaded] = useState(false);
@@ -148,6 +158,7 @@ const ReportBetaPage = () => {
         const initial = {};
         CASH_FIELDS.forEach(f => { initial[f.key] = data[f.key] || ''; });
         SPICCI_FIELDS.forEach(f => { initial[f.key] = data[f.key] || ''; });
+        CASSETTO_FIELDS.forEach(f => { initial[f.key] = data[f.key] || ''; });
         if (!initial.mattina && prev !== '' && prev !== null && prev !== undefined) {
           initial.mattina = String(prev);
         }
@@ -512,8 +523,10 @@ const ReportBetaPage = () => {
               </div>
             </div>
 
-            {/* ============ SPICCI ============ */}
-            <div className="bg-white rounded border border-gray-200 p-2">
+            {/* ============ SPICCI + CASSETTO SPICCI (stessa riga) ============ */}
+            <div className="flex items-stretch gap-2">
+              {/* --- SPICCI (rotolini aperti) --- */}
+              <div className="bg-white rounded border border-gray-200 p-2 flex-[5] min-w-0">
               <div className="flex items-baseline justify-between mb-2">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Spicci</h2>
                 <span className="text-[10px] text-gray-400">
@@ -522,7 +535,7 @@ const ReportBetaPage = () => {
               </div>
               <div className="flex items-stretch gap-1.5">
                 {spicciValues.rows.map(r => (
-                  <div key={r.key} className="flex-1 min-w-[60px] flex flex-col">
+                  <div key={r.key} className="flex-1 min-w-[50px] flex flex-col">
                     <label className="text-[10px] font-bold text-gray-800 text-center leading-none mb-0.5">
                       {r.label}
                     </label>
@@ -545,7 +558,7 @@ const ReportBetaPage = () => {
                   </div>
                 ))}
                 {/* Totale spicci */}
-                <div className="flex-1 min-w-[70px] flex flex-col">
+                <div className="flex-1 min-w-[60px] flex flex-col">
                   <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">TOT</label>
                   <div className="w-full h-11 border border-transparent rounded flex items-center justify-center text-[10px] text-gray-400 italic">
                     {/* nessun input sul totale */}
@@ -558,6 +571,50 @@ const ReportBetaPage = () => {
                     €{spicciValues.total.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                   </div>
                   <span className="text-[9px] text-gray-700 mt-0.5 text-center leading-none font-bold">totale</span>
+                </div>
+              </div>
+              </div>
+
+              {/* --- CASSETTO SPICCI (stock - aperti) --- */}
+              <div className="bg-white rounded border border-gray-200 p-2 flex-[4] min-w-0">
+                <div className="flex items-baseline justify-between mb-2">
+                  <h2 className="text-xs font-bold text-gray-800 uppercase">Cassetto Spicci</h2>
+                  <span className="text-[10px] text-gray-400">disponibili − aperti</span>
+                </div>
+                <div className="flex items-stretch gap-1.5">
+                  {CASSETTO_FIELDS.map(f => {
+                    const stock = evaluateValue(cashRow[f.key]);
+                    const aperti = evaluateValue(cashRow[f.spicciKey]);
+                    const residuo = stock - aperti;
+                    return (
+                      <div key={f.key} className="flex-1 min-w-[50px] flex flex-col">
+                        <label className="text-[10px] font-bold text-gray-800 text-center leading-none mb-0.5">
+                          {f.label}
+                        </label>
+                        <input
+                          data-testid={`cassetto-stock-${f.key}`}
+                          type="text"
+                          inputMode="decimal"
+                          value={cashRow[f.key] || ''}
+                          onChange={(e) => setCashRowValue(f.key, e.target.value)}
+                          placeholder="stock"
+                          className="w-full h-11 border border-gray-200 rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518]"
+                        />
+                        <div
+                          data-testid={`cassetto-residuo-${f.key}`}
+                          className={`w-full h-11 mt-1 border rounded flex items-center justify-center font-black text-sm ${
+                            residuo < 0 ? 'bg-rose-50 border-rose-300 text-rose-700' :
+                                          'bg-gray-50 border-gray-200 text-gray-900'
+                          }`}
+                        >
+                          {residuo.toLocaleString('it-IT', { maximumFractionDigits: 2 })}
+                        </div>
+                        <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
+                          residuo
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
