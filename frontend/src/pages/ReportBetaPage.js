@@ -108,6 +108,10 @@ const ReportBetaPage = () => {
   });
   const [cashLoaded, setCashLoaded] = useState(false);
   const cashSaveTimer = React.useRef(null);
+  // Cassetto spicci — edit mode (click-to-edit, conferma su Enter/blur, annulla su Esc)
+  const [editingCassetto, setEditingCassetto] = useState(null); // key | null
+  const editingOrigRef = React.useRef('');
+  const editingInputRef = React.useRef(null);
 
   // Carica catalogo bevande + conteggi giornata. Refresh ogni 15s così se il
   // cassiere aggiorna la pagina magazzino in un'altra tab vede subito qui.
@@ -185,6 +189,28 @@ const ReportBetaPage = () => {
   }, [cashRow, cashLoaded, token]);
 
   const setCashRowValue = (key, v) => setCashRow(p => ({ ...p, [key]: v }));
+
+  // Autofocus quando si entra in edit mode su un quadratino del cassetto
+  useEffect(() => {
+    if (editingCassetto && editingInputRef.current) {
+      editingInputRef.current.focus();
+      editingInputRef.current.select();
+    }
+  }, [editingCassetto]);
+
+  const startEditCassetto = (key) => {
+    editingOrigRef.current = cashRow[key] || '';
+    setEditingCassetto(key);
+  };
+  const commitEditCassetto = () => {
+    setEditingCassetto(null);
+  };
+  const cancelEditCassetto = () => {
+    if (editingCassetto) {
+      setCashRow(p => ({ ...p, [editingCassetto]: editingOrigRef.current }));
+    }
+    setEditingCassetto(null);
+  };
 
   // Calcolo CASH SERA in tempo reale
   const cashSera = useMemo(() => {
@@ -575,43 +601,49 @@ const ReportBetaPage = () => {
               </div>
               </div>
 
-              {/* --- CASSETTO SPICCI (stock - aperti) --- */}
+              {/* --- CASSETTO SPICCI (stock totale, click-to-edit) --- */}
               <div className="bg-white rounded border border-gray-200 p-2 flex-[4] min-w-0">
                 <div className="flex items-baseline justify-between mb-2">
                   <h2 className="text-xs font-bold text-gray-800 uppercase">Cassetto Spicci</h2>
-                  <span className="text-[10px] text-gray-400">disponibili − aperti</span>
+                  <span className="text-[10px] text-gray-400">click per modificare</span>
                 </div>
                 <div className="flex items-stretch gap-1.5">
                   {CASSETTO_FIELDS.map(f => {
-                    const stock = evaluateValue(cashRow[f.key]);
-                    const aperti = evaluateValue(cashRow[f.spicciKey]);
-                    const residuo = stock - aperti;
+                    const isEditing = editingCassetto === f.key;
+                    const raw = cashRow[f.key] || '';
+                    const displayValue = raw === '' ? '—' : raw;
                     return (
                       <div key={f.key} className="flex-1 min-w-[50px] flex flex-col">
                         <label className="text-[10px] font-bold text-gray-800 text-center leading-none mb-0.5">
                           {f.label}
                         </label>
-                        <input
-                          data-testid={`cassetto-stock-${f.key}`}
-                          type="text"
-                          inputMode="decimal"
-                          value={cashRow[f.key] || ''}
-                          onChange={(e) => setCashRowValue(f.key, e.target.value)}
-                          placeholder="stock"
-                          className="w-full h-11 border border-gray-200 rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518]"
-                        />
-                        <div
-                          data-testid={`cassetto-residuo-${f.key}`}
-                          className={`w-full h-11 mt-1 border rounded flex items-center justify-center font-black text-sm ${
-                            residuo < 0 ? 'bg-rose-50 border-rose-300 text-rose-700' :
-                                          'bg-gray-50 border-gray-200 text-gray-900'
-                          }`}
-                        >
-                          {residuo.toLocaleString('it-IT', { maximumFractionDigits: 2 })}
-                        </div>
-                        <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
-                          residuo
-                        </span>
+                        {isEditing ? (
+                          <input
+                            ref={editingInputRef}
+                            data-testid={`cassetto-input-${f.key}`}
+                            type="text"
+                            inputMode="decimal"
+                            value={cashRow[f.key] || ''}
+                            onChange={(e) => setCashRowValue(f.key, e.target.value)}
+                            onBlur={commitEditCassetto}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') { e.preventDefault(); commitEditCassetto(); }
+                              else if (e.key === 'Escape') { e.preventDefault(); cancelEditCassetto(); }
+                            }}
+                            placeholder="stock"
+                            className="w-full h-11 border-2 border-[#F5C518] rounded px-1 text-center font-bold text-sm focus:outline-none bg-yellow-50"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            data-testid={`cassetto-display-${f.key}`}
+                            onClick={() => startEditCassetto(f.key)}
+                            title="Clicca per modificare"
+                            className="w-full h-11 border border-gray-200 rounded px-1 text-center font-black text-sm bg-gray-50 hover:bg-yellow-50 hover:border-yellow-300 transition-colors cursor-pointer"
+                          >
+                            {displayValue}
+                          </button>
+                        )}
                       </div>
                     );
                   })}
