@@ -323,49 +323,49 @@ const ReportBetaPage = () => {
             </div>
 
             {/* ============ VENDITE BEVANDE ============ */}
-            <div className="bg-white rounded border border-gray-200 p-2 flex-1 min-h-0 flex flex-col">
+            <div className="bg-white rounded border border-gray-200 p-2">
               <div className="flex items-baseline justify-between mb-2">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Vendite Bevande</h2>
-                <span className="text-[10px] text-gray-400">in sync con Magazzino Bevande</span>
+                <span className="text-[10px] text-gray-400">Q.tà · Incasso — in sync con Magazzino Bevande</span>
               </div>
               {bevSales.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center text-xs text-gray-400 italic">
+                <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
                   Nessuna bevanda configurata.
                 </div>
               ) : (
-                <div className="flex-1 flex items-stretch gap-1 overflow-x-auto">
+                <div className="flex items-stretch gap-1.5">
                   {bevSales.map(b => (
                     <div
                       key={b.sigla}
                       data-testid={`bev-sales-${b.sigla}`}
-                      className="flex-1 min-w-[60px] flex flex-col items-stretch gap-1"
+                      className="flex-1 min-w-[60px] flex flex-col"
                     >
-                      <div className="text-[10px] font-bold text-center text-gray-700 truncate" title={b.name}>
+                      <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
                         {b.sigla}
-                      </div>
-                      <div className="flex-1 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-lg text-gray-900">
+                      </label>
+                      <div className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-base text-gray-900">
                         {b.qty}
                       </div>
-                      <div className="flex-1 bg-yellow-50 border border-yellow-200 rounded flex items-center justify-center font-bold text-xs text-gray-900">
+                      <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
                         €{b.inc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </div>
+                      </span>
                     </div>
                   ))}
                   {/* Totale */}
-                  <div className="flex-1 min-w-[70px] flex flex-col items-stretch gap-1 border-l-2 border-gray-300 pl-1">
-                    <div className="text-[10px] font-bold text-center text-gray-800 uppercase">Tot</div>
-                    <div data-testid="bev-sales-total-qty" className="flex-1 bg-gray-900 text-white border border-gray-900 rounded flex items-center justify-center font-black text-lg">
+                  <div className="flex-1 min-w-[70px] flex flex-col">
+                    <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">Tot</label>
+                    <div
+                      data-testid="bev-sales-total-qty"
+                      className="w-full h-11 bg-gray-900 text-[#F5C518] rounded flex items-center justify-center font-black text-base"
+                    >
                       {bevTotalQty}
                     </div>
-                    <div data-testid="bev-sales-total-inc" className="flex-1 bg-[#F5C518] border border-yellow-600 rounded flex items-center justify-center font-black text-xs text-gray-900">
+                    <span data-testid="bev-sales-total-inc" className="text-[9px] text-gray-700 mt-0.5 text-center leading-none font-bold">
                       €{bevTotalInc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
+                    </span>
                   </div>
                 </div>
               )}
-              <p className="mt-1 text-[10px] text-gray-400 text-center">
-                Riquadro superiore = Quantità · Riquadro inferiore = Incasso
-              </p>
             </div>
           </section>
         </div>
