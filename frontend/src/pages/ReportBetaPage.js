@@ -89,6 +89,22 @@ const CASSETTO_FIELDS = [
   { key: 'cd05', label: '0,5€', spicciKey: 'sp05' },
 ];
 
+// Palette colore per il testo del campo VERS quando NON è una formula
+const COLOR_MAP = {
+  black:  '#111827',
+  red:    '#dc2626',
+  green:  '#15803d',
+  blue:   '#1d4ed8',
+  orange: '#ea580c',
+};
+const COLOR_PALETTE = [
+  { key: 'black',  label: 'Nero',     css: COLOR_MAP.black  },
+  { key: 'red',    label: 'Rosso',    css: COLOR_MAP.red    },
+  { key: 'green',  label: 'Verde',    css: COLOR_MAP.green  },
+  { key: 'blue',   label: 'Blu',      css: COLOR_MAP.blue   },
+  { key: 'orange', label: 'Arancio',  css: COLOR_MAP.orange },
+];
+
 // Popover commento (right-click su un quadratino)
 const CommentPopover = ({ inputRef, value, onChange, onSave, onCancel }) => {
   return (
@@ -151,7 +167,8 @@ const ReportBetaPage = () => {
     return init;
   });
   const [cashComments, setCashComments] = useState({}); // { key: "testo commento" }
-  const [focusedField, setFocusedField] = useState(null); // key | null (zoom-on-focus)
+  const [versColor, setVersColor] = useState('');         // '' | 'black' | 'red' | 'green' | 'blue' | 'orange'
+  const [focusedField, setFocusedField] = useState(null); // key | null (preview bar)
   const [commentPopover, setCommentPopover] = useState(null); // { key, value }
   const commentInputRef = React.useRef(null);
   const [cashLoaded, setCashLoaded] = useState(false);
@@ -216,6 +233,7 @@ const ReportBetaPage = () => {
         }
         setCashRow(initial);
         setCashComments(res.data?.comments || {});
+        setVersColor(res.data?.vers_color || '');
         setCashLoaded(true);
       } catch (e) {
         // 403 se non Flaminio/Admin
@@ -230,12 +248,55 @@ const ReportBetaPage = () => {
     if (!cashLoaded || !token) return;
     if (cashSaveTimer.current) clearTimeout(cashSaveTimer.current);
     cashSaveTimer.current = setTimeout(() => {
-      axios.put(`${API}/cash/daily`, { ...cashRow, comments: cashComments }, {
+      axios.put(`${API}/cash/daily`, { ...cashRow, comments: cashComments, vers_color: versColor }, {
         headers: { Authorization: `Bearer ${token}` },
       }).catch(() => { /* silenzioso */ });
     }, 500);
     return () => { if (cashSaveTimer.current) clearTimeout(cashSaveTimer.current); };
-  }, [cashRow, cashComments, cashLoaded, token]);
+  }, [cashRow, cashComments, versColor, cashLoaded, token]);
+
+  // Info del quadratino attualmente selezionato (per la barra preview in basso)
+  const previewInfo = useMemo(() => {
+    if (!focusedField) return null;
+    // Cerca tra CASH_FIELDS
+    const cf = CASH_FIELDS.find(x => x.key === focusedField);
+    if (cf) {
+      const raw = cashRow[cf.key] || '';
+      const computed = evaluateValue(raw);
+      const sign = cf.op === 'minus' ? '−' : (cf.op === 'plus' ? '+' : '');
+      return {
+        label: cf.label,
+        raw,
+        formatted: `${sign}€${computed.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        comment: cashComments[cf.key] || '',
+      };
+    }
+    const sf = SPICCI_FIELDS.find(x => x.key === focusedField);
+    if (sf) {
+      const raw = cashRow[sf.key] || '';
+      const aperti = evaluateValue(raw);
+      return {
+        label: `Spicci ${sf.label} — aperti`,
+        raw,
+        formatted: `${aperti} × ${sf.mult} = €${(aperti * sf.mult).toLocaleString('it-IT', { maximumFractionDigits: 2 })}`,
+        comment: cashComments[sf.key] || '',
+      };
+    }
+    const cdf = CASSETTO_FIELDS.find(x => x.key === focusedField);
+    if (cdf) {
+      const raw = cashRow[cdf.key] || '';
+      const base = evaluateValue(raw);
+      const aperti = evaluateValue(cashRow[cdf.spicciKey]);
+      const residuo = base - aperti;
+      return {
+        label: `Cassetto ${cdf.label}`,
+        raw,
+        formatted: `stock ${base} − aperti ${aperti} = ${residuo}`,
+        comment: cashComments[cdf.key] || '',
+      };
+    }
+    return null;
+  }, [focusedField, cashRow, cashComments]);
 
   const setCashRowValue = (key, v) => setCashRow(p => ({ ...p, [key]: v }));
 
@@ -300,13 +361,16 @@ const ReportBetaPage = () => {
     setCommentPopover(null);
   };
 
-  // Autofocus del popover commento appena si apre
+  // Autofocus del popover commento appena si apre (NON ad ogni keystroke,
+  // altrimenti select() cancellerebbe il testo digitato)
   useEffect(() => {
     if (commentPopover && commentInputRef.current) {
       commentInputRef.current.focus();
-      commentInputRef.current.select();
+      // posiziono il cursore alla fine senza selezionare il testo
+      const len = (commentPopover.value || '').length;
+      try { commentInputRef.current.setSelectionRange(len, len); } catch (e) {}
     }
-  }, [commentPopover]);
+  }, [commentPopover?.key]);
 
   // Calcolo valori SPICCI per ogni taglio + totale euro
   const spicciValues = useMemo(() => {
@@ -610,8 +674,12 @@ const ReportBetaPage = () => {
                 {CASH_FIELDS.map(f => {
                   const computed = evaluateValue(cashRow[f.key]);
                   const sign = f.op === 'minus' ? '−' : (f.op === 'plus' ? '+' : '=');
-                  const isFocused = focusedField === f.key;
                   const hasComment = !!cashComments[f.key];
+                  // VERS special: rosso quando è una formula "=", oppure colore personalizzato sul numero
+                  const isVers = f.key === 'vers';
+                  const rawVal = cashRow[f.key] || '';
+                  const isFormula = isVers && rawVal.trim().startsWith('=');
+                  const versTextColor = isVers && !isFormula && versColor ? COLOR_MAP[versColor] : null;
                   return (
                     <div key={f.key} className="flex-1 min-w-[60px] flex flex-col relative">
                       <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={f.label}>
@@ -627,12 +695,9 @@ const ReportBetaPage = () => {
                         onBlur={() => setFocusedField(curr => curr === f.key ? null : curr)}
                         onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
                         placeholder={f.op === 'base' ? '€' : (f.op === 'minus' ? '−' : '+')}
-                        className={`w-full h-11 border rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] transition-transform duration-150 origin-center ${
-                          isFocused ? 'scale-[1.7] z-50 relative shadow-2xl' : ''
-                        } ${
-                          f.op === 'minus' ? 'border-rose-200 bg-rose-50' :
-                          f.op === 'plus'  ? 'border-emerald-200 bg-emerald-50' :
-                                             'border-gray-200'
+                        style={versTextColor ? { color: versTextColor } : undefined}
+                        className={`w-full h-11 border rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] border-gray-200 ${
+                          isFormula ? 'bg-rose-100 text-rose-800 border-rose-300' : 'bg-white'
                         }`}
                       />
                       {hasComment && (
@@ -644,6 +709,22 @@ const ReportBetaPage = () => {
                       <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
                         {computed !== 0 ? `${sign}€${computed.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
                       </span>
+                      {/* Palette colori — solo VERS, solo se NON formula e non vuoto */}
+                      {isVers && !isFormula && rawVal.trim() !== '' && (
+                        <div className="flex items-center justify-center gap-0.5 mt-0.5">
+                          {COLOR_PALETTE.map(c => (
+                            <button
+                              key={c.key}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => setVersColor(c.key === versColor ? '' : c.key)}
+                              title={c.label}
+                              className={`w-3 h-3 rounded-full border ${versColor === c.key ? 'ring-2 ring-offset-1 ring-gray-700' : ''}`}
+                              style={{ backgroundColor: c.css, borderColor: c.css === '#FFFFFF' ? '#9ca3af' : c.css }}
+                            />
+                          ))}
+                        </div>
+                      )}
                       {commentPopover?.key === f.key && (
                         <CommentPopover
                           inputRef={commentInputRef}
@@ -682,7 +763,6 @@ const ReportBetaPage = () => {
               </div>
               <div className="flex items-stretch gap-1.5">
                 {spicciValues.rows.map(r => {
-                  const isFocused = focusedField === r.key;
                   const hasComment = !!cashComments[r.key];
                   return (
                   <div key={r.key} className="flex-1 min-w-[50px] flex flex-col relative">
@@ -699,9 +779,7 @@ const ReportBetaPage = () => {
                       onBlur={() => setFocusedField(curr => curr === r.key ? null : curr)}
                       onContextMenu={(e) => { e.preventDefault(); openCommentPopover(r.key); }}
                       placeholder="aperti"
-                      className={`w-full h-11 border border-gray-200 rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] transition-transform duration-150 origin-center ${
-                        isFocused ? 'scale-[1.7] z-50 relative shadow-2xl' : ''
-                      }`}
+                      className="w-full h-11 border border-gray-200 rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518]"
                     />
                     {hasComment && (
                       <span
@@ -755,7 +833,6 @@ const ReportBetaPage = () => {
                 <div className="flex items-stretch gap-1.5">
                   {CASSETTO_FIELDS.map(f => {
                     const isEditing = editingCassetto === f.key;
-                    const isFocused = focusedField === f.key;
                     const hasComment = !!cashComments[f.key];
                     const raw = cashRow[f.key];
                     let displayValue = '—';
@@ -790,9 +867,7 @@ const ReportBetaPage = () => {
                             }}
                             onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
                             placeholder="stock"
-                            className={`w-full h-11 border-2 border-[#F5C518] rounded px-1 text-center font-bold text-sm focus:outline-none bg-yellow-50 transition-transform duration-150 origin-center ${
-                              isFocused ? 'scale-[1.7] z-50 relative shadow-2xl' : ''
-                            }`}
+                            className="w-full h-11 border-2 border-[#F5C518] rounded px-1 text-center font-bold text-sm focus:outline-none bg-yellow-50"
                           />
                         ) : (
                           <button
@@ -834,6 +909,42 @@ const ReportBetaPage = () => {
           </section>
         </div>
       </main>
+
+      {/* ============ BARRA PREVIEW (in basso, fixed) ============ */}
+      <div
+        data-testid="preview-bar"
+        className={`fixed bottom-0 left-0 right-0 z-40 transition-transform duration-200 ${
+          previewInfo ? 'translate-y-0' : 'translate-y-full'
+        }`}
+      >
+        {previewInfo && (
+          <div className="bg-gray-900 text-white border-t-4 border-[#F5C518] shadow-2xl px-4 py-3">
+            <div className="max-w-[1600px] mx-auto flex items-center gap-4">
+              <div className="flex-shrink-0">
+                <div className="text-[10px] uppercase tracking-widest text-gray-400">Selezionato</div>
+                <div className="text-base font-bold text-[#F5C518] truncate" style={{ maxWidth: 200 }}>
+                  {previewInfo.label}
+                </div>
+              </div>
+              <div className="flex-1 min-w-0 flex items-center justify-center bg-gray-800 rounded px-4 py-2 border border-gray-700">
+                <span className="text-3xl font-black font-mono text-white tracking-wide truncate">
+                  {previewInfo.raw || <em className="text-gray-500 italic text-xl">vuoto</em>}
+                </span>
+              </div>
+              <div className="flex-shrink-0 text-right">
+                <div className="text-[10px] uppercase tracking-widest text-gray-400">Risultato</div>
+                <div className="text-xl font-black text-emerald-400">{previewInfo.formatted}</div>
+              </div>
+              {previewInfo.comment && (
+                <div className="flex-shrink-0 bg-amber-100 text-amber-900 border border-amber-400 rounded px-2 py-1 max-w-xs">
+                  <div className="text-[9px] uppercase font-bold text-amber-700">Commento</div>
+                  <div className="text-xs">{previewInfo.comment}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

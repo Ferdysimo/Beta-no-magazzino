@@ -2715,6 +2715,7 @@ class BeverageDailyUpsert(BaseModel):
     inUsc: Optional[str] = ""
     scarti: Optional[str] = ""
     sera: Optional[str] = ""
+    comments: Optional[Dict[str, str]] = None  # { 'inUsc': '...', 'scarti': '...' }
 
 
 @api_router.get("/beverages/daily")
@@ -2733,6 +2734,7 @@ async def get_beverage_daily_counts(token_data: dict = Depends(verify_token)):
         "inUsc": d.get("inUsc", ""),
         "scarti": d.get("scarti", ""),
         "sera": d.get("sera", ""),
+        "comments": d.get("comments") or {},
     } for d in today_docs}
 
     prev_sera = {}
@@ -2764,18 +2766,27 @@ async def upsert_beverage_daily(
     valid_siglas = {b["sigla"] for b in BEVERAGES_CATALOG}
     if data.sigla not in valid_siglas:
         raise HTTPException(status_code=400, detail=f"Sigla non valida: {data.sigla}")
+    set_body = {
+        "restaurant_id": flaminio_id,
+        "date_rome": today,
+        "sigla": data.sigla,
+        "mattina": data.mattina or "",
+        "inUsc": data.inUsc or "",
+        "scarti": data.scarti or "",
+        "sera": data.sera or "",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    # Sanitize commenti (max 500 char per chiave, scarto chiavi non-valide)
+    if data.comments is not None:
+        clean: Dict[str, str] = {}
+        for k in ("inUsc", "scarti"):
+            v = data.comments.get(k)
+            if isinstance(v, str) and v.strip():
+                clean[k] = v.strip()[:500]
+        set_body["comments"] = clean
     await db.beverage_daily_counts.update_one(
         {"restaurant_id": flaminio_id, "date_rome": today, "sigla": data.sigla},
-        {"$set": {
-            "restaurant_id": flaminio_id,
-            "date_rome": today,
-            "sigla": data.sigla,
-            "mattina": data.mattina or "",
-            "inUsc": data.inUsc or "",
-            "scarti": data.scarti or "",
-            "sera": data.sera or "",
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }},
+        {"$set": set_body},
         upsert=True,
     )
     return {"ok": True}
@@ -2875,6 +2886,7 @@ class CashDailyUpsert(BaseModel):
     cd2: Optional[str] = ""
     cd1: Optional[str] = ""
     cd05: Optional[str] = ""
+    vers_color: Optional[str] = ""
     comments: Optional[Dict[str, str]] = None
 
 
@@ -2890,6 +2902,7 @@ async def get_cash_daily(token_data: dict = Depends(verify_token)):
         {"restaurant_id": flaminio_id, "date_rome": today}, {"_id": 0}
     ) or {}
     data = {f: today_doc.get(f, "") for f in ALL_CASH_FIELDS}
+    vers_color = today_doc.get("vers_color", "") or ""
     comments = today_doc.get("comments") or {}
 
     prev_cash_sera = ""
@@ -2900,7 +2913,7 @@ async def get_cash_daily(token_data: dict = Depends(verify_token)):
     )
     if last_doc:
         prev_cash_sera = round(_compute_cash_sera(last_doc), 2)
-    return {"date": today, "data": data, "prev_cash_sera": prev_cash_sera, "comments": comments}
+    return {"date": today, "data": data, "prev_cash_sera": prev_cash_sera, "comments": comments, "vers_color": vers_color}
 
 
 @api_router.put("/cash/daily")
@@ -2919,6 +2932,10 @@ async def upsert_cash_daily(
         "date_rome": today,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
+    # vers_color: solo valori validi
+    allowed_colors = {"", "black", "red", "green", "blue", "orange"}
+    if data.vers_color is not None and data.vers_color in allowed_colors:
+        set_payload["vers_color"] = data.vers_color
     # Sanitize commenti: solo str→str, max 500 char, scarto chiavi/valori vuoti
     if data.comments is not None:
         clean: Dict[str, str] = {}

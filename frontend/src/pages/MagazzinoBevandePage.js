@@ -26,16 +26,52 @@ const evaluateValue = (v) => {
   return Number.isNaN(n) ? 0 : n;
 };
 
+// Popover inline per i commenti su SCARTI / INGRESSI-USCITE
+const BevCommentPopover = ({ inputRef, value, onChange, onSave, onCancel }) => (
+  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 z-50"
+       onMouseDown={(e) => e.stopPropagation()}>
+    <div className="bg-amber-50 border-2 border-amber-400 rounded-md shadow-2xl p-2">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-bold text-amber-800 uppercase">Commento</span>
+        <span className="text-[9px] text-amber-600">Enter · Esc</span>
+      </div>
+      <textarea
+        ref={inputRef}
+        data-testid="bev-comment-input"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSave(); }
+          else if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+        }}
+        rows={3}
+        placeholder="Aggiungi una nota…"
+        className="w-full text-xs border border-amber-300 rounded p-1 focus:outline-none focus:border-amber-500 resize-none bg-white"
+      />
+      <div className="flex gap-1 mt-1 justify-end">
+        <button type="button" onClick={onCancel}
+                className="text-[10px] px-2 py-0.5 rounded border border-gray-300 hover:bg-gray-100">Annulla</button>
+        <button type="button" onClick={onSave}
+                className="text-[10px] px-2 py-0.5 rounded bg-amber-500 text-white font-bold hover:bg-amber-600">Salva</button>
+      </div>
+    </div>
+    <div className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-3 h-3 bg-amber-50 border-r-2 border-b-2 border-amber-400 rotate-45"></div>
+  </div>
+);
+
 const MagazzinoBevandePage = () => {
   const { token, isAdmin, restaurant } = useAuth();
   const navigate = useNavigate();
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
-  // counts[sigla] = { mattina, inUsc, scarti, sera }   tutti string
+  // counts[sigla] = { mattina, inUsc, scarti, sera, comments?: { inUsc?, scarti? } } tutti string
   const [counts, setCounts] = useState({});
   const [savedAt, setSavedAt] = useState(null);
   // pending debounce timers per sigla
   const saveTimers = useRef({});
+  // Popover commento: { sigla, field, value } | null
+  const [commentPopover, setCommentPopover] = useState(null);
+  const commentInputRef = useRef(null);
 
   const canAccess = isAdmin || restaurant?.username === 'Flaminio';
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
@@ -59,7 +95,13 @@ const MagazzinoBevandePage = () => {
         (invRes.data || []).forEach(b => {
           const today = todayCounts?.[b.sigla];
           if (today) {
-            merged[b.sigla] = today;
+            merged[b.sigla] = {
+              mattina: today.mattina || '',
+              inUsc: today.inUsc || '',
+              scarti: today.scarti || '',
+              sera: today.sera || '',
+              comments: today.comments || {},
+            };
           } else {
             const prev = prev_sera?.[b.sigla];
             merged[b.sigla] = {
@@ -67,6 +109,7 @@ const MagazzinoBevandePage = () => {
               inUsc: '',
               scarti: '',
               sera: '',
+              comments: {},
             };
           }
         });
@@ -92,6 +135,7 @@ const MagazzinoBevandePage = () => {
           inUsc: row.inUsc ?? '',
           scarti: row.scarti ?? '',
           sera: row.sera ?? '',
+          comments: row.comments || {},
         }, { headers });
         setSavedAt(new Date());
       } catch (e) {
@@ -107,6 +151,37 @@ const MagazzinoBevandePage = () => {
       return next;
     });
   };
+
+  // ---- Commenti per le colonne SCARTI e INGRESSI/USCITE ----
+  const openCommentPopover = (sigla, field) => {
+    const current = ((counts[sigla] || {}).comments || {})[field] || '';
+    setCommentPopover({ sigla, field, value: current });
+  };
+  const closeCommentPopover = () => setCommentPopover(null);
+  const saveCommentPopover = () => {
+    if (!commentPopover) return;
+    const { sigla, field, value } = commentPopover;
+    const trimmed = (value || '').trim();
+    setCounts(prev => {
+      const row = { ...(prev[sigla] || {}) };
+      const newComments = { ...(row.comments || {}) };
+      if (trimmed) newComments[field] = trimmed;
+      else delete newComments[field];
+      row.comments = newComments;
+      const next = { ...prev, [sigla]: row };
+      scheduleSave(sigla, next);
+      return next;
+    });
+    setCommentPopover(null);
+  };
+  // Autofocus solo all'apertura (NON ad ogni keystroke per non rompere il typing)
+  useEffect(() => {
+    if (commentPopover && commentInputRef.current) {
+      commentInputRef.current.focus();
+      const len = (commentPopover.value || '').length;
+      try { commentInputRef.current.setSelectionRange(len, len); } catch (e) {}
+    }
+  }, [commentPopover?.sigla, commentPopover?.field]);
 
   // Calcoli aggregati
   const rows = useMemo(() => inventory.map(b => {
@@ -208,22 +283,42 @@ const MagazzinoBevandePage = () => {
                       const raw = (counts[r.sigla] || {})[field] ?? '';
                       const isFormula = String(raw).trim().startsWith('=');
                       const evaluated = isFormula ? evaluateValue(raw) : null;
+                      const canComment = field === 'inUsc' || field === 'scarti';
+                      const comment = canComment ? ((counts[r.sigla] || {}).comments || {})[field] : null;
+                      const showPopover = commentPopover && commentPopover.sigla === r.sigla && commentPopover.field === field;
                       return (
-                        <td key={field} className="px-1 py-1 border-r border-gray-200">
+                        <td key={field} className="px-1 py-1 border-r border-gray-200 relative">
                           <input
                             data-testid={`bev-${r.sigla}-${field}`}
                             type="text"
                             inputMode="text"
                             value={raw}
                             onChange={(e) => setField(r.sigla, field, e.target.value)}
-                            title={(field === 'inUsc' || field === 'sera') ? 'Puoi usare formule: es. =12-2 oppure =5+3' : ''}
+                            onContextMenu={canComment ? (e) => { e.preventDefault(); openCommentPopover(r.sigla, field); } : undefined}
+                            title={canComment ? 'Tasto destro per aggiungere/modificare il commento' : ((field === 'inUsc' || field === 'sera') ? 'Puoi usare formule: es. =12-2 oppure =5+3' : '')}
                             className={`w-16 h-9 border rounded text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] ${isFormula ? 'bg-blue-50 border-blue-300 text-blue-900' : 'border-gray-200'}`}
                             placeholder={(field === 'inUsc' || field === 'sera') ? '0 o =…' : '0'}
                           />
+                          {comment && (
+                            <span
+                              title={comment}
+                              data-testid={`bev-${r.sigla}-${field}-comment-dot`}
+                              className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-amber-600 z-10 pointer-events-auto"
+                            />
+                          )}
                           {isFormula && (
                             <div className="text-[9px] text-blue-700 font-bold text-center mt-0.5 leading-none">
                               = {evaluated}
                             </div>
+                          )}
+                          {showPopover && (
+                            <BevCommentPopover
+                              inputRef={commentInputRef}
+                              value={commentPopover.value}
+                              onChange={(v) => setCommentPopover(p => ({ ...p, value: v }))}
+                              onSave={saveCommentPopover}
+                              onCancel={closeCommentPopover}
+                            />
                           )}
                         </td>
                       );
