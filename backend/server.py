@@ -2860,6 +2860,56 @@ def _compute_cash_sera(row: dict) -> float:
     return plus - minus
 
 
+# Moltiplicatori spicci (mazzette/rotolini aperti) — devono restare allineati al frontend
+SPICCI_MULTIPLIERS = {"sp5": 50, "sp2": 50, "sp1": 25, "sp05": 20}
+
+# Listino paste (deve restare allineato a PASTA_PRICES nel frontend ReportBetaPage.js)
+PASTA_PRICES_MAP = {
+    "CARB": 8, "AMAT": 8, "CACIO": 8, "PESTO": 8,
+    "TART": 8, "RAGU": 8, "POM": 7, "CARZUC": 8,
+}
+
+
+def _compute_spicci_total(row: dict) -> float:
+    return sum(_eval_cash_value(row.get(k, "")) * v for k, v in SPICCI_MULTIPLIERS.items())
+
+
+def _compute_paste_total_eur(paste_text: str) -> float:
+    """Conta le paste riconosciute nel testo (1 per riga) e somma il prezzo."""
+    if not paste_text:
+        return 0.0
+    total = 0.0
+    siglas_sorted = sorted(PASTA_PRICES_MAP.keys(), key=len, reverse=True)
+    for line in paste_text.split("\n"):
+        upper = line.upper()
+        for sigla in siglas_sorted:
+            if re.search(rf"\b{sigla}\b", upper):
+                total += PASTA_PRICES_MAP[sigla]
+                break
+    return total
+
+
+def _compute_bev_total_eur(bev_docs: list) -> float:
+    """Somma incassi bevande (qty>0 only). Skip se sera==0 (giorno non chiuso)."""
+    prices = {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
+    total = 0.0
+    for r in bev_docs:
+        m = _eval_cash_value(r.get("mattina")); u = _eval_cash_value(r.get("inUsc"))
+        s = _eval_cash_value(r.get("scarti"));  e = _eval_cash_value(r.get("sera"))
+        qty = 0 if e == 0 else (m + u - s - e)
+        if qty > 0:
+            total += qty * prices.get(r["sigla"], 0)
+    return total
+
+
+def _compute_cash_sera_full(cash_row: dict, bev_docs: list) -> float:
+    """Cash sera completo: include paste, bevande e spicci (come nel frontend)."""
+    base = _compute_cash_sera(cash_row)
+    return base + _compute_spicci_total(cash_row) \
+                + _compute_paste_total_eur(cash_row.get("paste_text", "") or "") \
+                + _compute_bev_total_eur(bev_docs)
+
+
 CASH_FIELDS = ["mattina", "altro", "glo", "just", "delv", "bp", "sat", "ft", "pos", "vers", "arr"]
 SPICCI_FIELDS = ["sp5", "sp2", "sp1", "sp05"]
 CASSETTO_FIELDS = ["cd5", "cd2", "cd1", "cd05"]
@@ -3025,7 +3075,7 @@ async def list_closures(days: int = 60, token_data: dict = Depends(verify_token)
         bev_docs = await db.beverage_daily_counts.find(
             {"date_rome": date_str}, {"_id": 0}
         ).to_list(50)
-        cash_sera = round(_compute_cash_sera(cash_doc), 2) if cash_doc else 0.0
+        cash_sera = round(_compute_cash_sera_full(cash_doc, bev_docs), 2) if cash_doc else 0.0
         bev_total_qty = 0
         bev_total_inc = 0.0
         for r in bev_docs:
@@ -3059,7 +3109,7 @@ async def closure_detail(date_str: str, token_data: dict = Depends(verify_token)
     bev_docs = await db.beverage_daily_counts.find(
         {"date_rome": date_str}, {"_id": 0}
     ).to_list(50)
-    cash_sera = round(_compute_cash_sera(cash_doc), 2) if cash_doc else 0.0
+    cash_sera = round(_compute_cash_sera_full(cash_doc, bev_docs), 2) if cash_doc else 0.0
     bev_prices = {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
     bev_names = {b["sigla"]: b["name"] for b in BEVERAGES_CATALOG}
     bev_rows = []
@@ -3429,18 +3479,10 @@ async def analisi_magazzino(
 
     # Union of product_ids with activity
     active_ids = set(incoming_map.keys()) | set(outgoing_map.keys())
-    if not active_ids:
-        return {
-            "date_from": date_from,
-            "date_to": date_to,
-            "locations": locations,
-            "products": [],
-        }
 
-    # Fetch product metadata for those ids
-    products = await db.products.find(
-        {"id": {"$in": list(active_ids)}}, {"_id": 0}
-    ).sort("name", 1).to_list(5000)
+    # Fetch ALL products (with or without activity in this range).
+    # NB: il frontend mostra tutto, righe senza movimenti = totali a zero.
+    products = await db.products.find({}, {"_id": 0}).sort("name", 1).to_list(5000)
 
     result_products = []
     for p in products:
@@ -3461,6 +3503,7 @@ async def analisi_magazzino(
             "incoming": incoming_map.get(pid, 0),
             "outgoing": {loc: out.get(loc, 0) for loc in locations},
             "outgoing_total": sum(out.values()),
+            "has_activity": pid in active_ids,
         })
 
     return {

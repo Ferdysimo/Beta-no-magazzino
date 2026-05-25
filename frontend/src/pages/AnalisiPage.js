@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import { compareProductsByCanonicalOrder } from '../utils/productOrder';
+import ZoomableImage from '../components/ZoomableImage';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -174,7 +175,7 @@ const AnalisiPage = () => {
                         <div className="flex items-center gap-3">
                           <div className="w-16 h-16 rounded bg-gray-50 overflow-hidden border border-gray-100 flex-shrink-0">
                             {p.image_url ? (
-                              <img src={resolveImage(p.image_url)} alt={p.name} className="w-full h-full object-contain" />
+                              <ZoomableImage src={resolveImage(p.image_url)} alt={p.name} className="w-full h-full object-contain" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-gray-300 text-[10px]">No foto</div>
                             )}

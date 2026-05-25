@@ -4,7 +4,8 @@ import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import { Search, Minus, Plus, X } from 'lucide-react';
-import { productOrderRank } from '../utils/productOrder';
+import { rankForProduct } from '../utils/productOrder';
+import ZoomableImage from '../components/ZoomableImage';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -92,10 +93,9 @@ const NuovaRichiestaPage = () => {
       return true;
     });
     return list.sort((a, b) => {
-      const ra = productOrderRank(a.name);
-      const rb = productOrderRank(b.name);
+      const ra = rankForProduct(a);
+      const rb = rankForProduct(b);
       if (ra !== rb) return ra - rb;
-      // Both unranked (or both same rank) → alphabetical fallback
       return (a.name || '').localeCompare(b.name || '', 'it');
     });
   }, [products, search, supplierFilter]);
@@ -215,7 +215,7 @@ const NuovaRichiestaPage = () => {
                 >
                   <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-lg bg-gray-50 overflow-hidden flex-shrink-0 border border-gray-100">
                     {p.image_url ? (
-                      <img src={resolveImageSrc(p.image_url)} alt={p.name} className="w-full h-full object-contain" />
+                      <ZoomableImage src={resolveImageSrc(p.image_url)} alt={p.name} className="w-full h-full object-contain" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-gray-300 text-xs">No foto</div>
                     )}
@@ -329,12 +329,12 @@ const NuovaRichiestaPage = () => {
             </div>
             <input
               data-testid="keypad-input"
-              type="number"
-              inputMode="numeric"
-              autoFocus
+              type="text"
+              inputMode="none"
+              readOnly
               value={keypadValue}
               onChange={e => setKeypadValue(e.target.value)}
-              className="w-full text-3xl text-center font-bold border-2 border-[#F5C518] rounded-lg py-3 mb-3"
+              className="w-full text-3xl text-center font-bold border-2 border-[#F5C518] rounded-lg py-3 mb-3 bg-white"
             />
             <div className="grid grid-cols-3 gap-2">
               {['1','2','3','4','5','6','7','8','9'].map(k => (

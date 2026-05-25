@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
+import ZoomableImage from '../components/ZoomableImage';
 import axios from 'axios';
 import { X, FileText, Trash2, Eye, Search, Upload, Receipt } from 'lucide-react';
 import { compressImage, friendlyUploadError } from '../utils/compressImage';
@@ -450,7 +451,7 @@ const ChiusurePage = () => {
                   title={`Foto ${chiusura.tipologia}`}
                 >
                   {chiusura.image_data ? (
-                    <img src={resolveImageSrc(chiusura.image_data)} alt={chiusura.tipologia} className="w-full h-full object-cover" />
+                    <ZoomableImage src={resolveImageSrc(chiusura.image_data)} alt={chiusura.tipologia} className="w-full h-full object-cover" />
                   ) : (
                     <FileText className="text-gray-400" size={24} />
                   )}
@@ -468,7 +469,7 @@ const ChiusurePage = () => {
                       title={`Foto ${otherTipologia(chiusura.tipologia)}`}
                       data-testid={`piatti-view-${chiusura.id}`}
                     >
-                      <img src={resolveImageSrc(chiusura.piatti_url)} alt={otherTipologia(chiusura.tipologia)} className="w-full h-full object-cover" />
+                      <ZoomableImage src={resolveImageSrc(chiusura.piatti_url)} alt={otherTipologia(chiusura.tipologia)} className="w-full h-full object-cover" />
                       <span className="absolute bottom-0 left-0 right-0 bg-emerald-700/80 text-white text-[9px] py-0.5 text-center flex items-center justify-center gap-0.5 uppercase">
                         <Receipt size={9} /> {otherTipologia(chiusura.tipologia)}
                       </span>

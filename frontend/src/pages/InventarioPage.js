@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import { Search, Check, X, Pencil, History } from 'lucide-react';
 import { compareProductsByCanonicalOrder } from '../utils/productOrder';
+import ZoomableImage from '../components/ZoomableImage';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -172,7 +173,7 @@ const InventarioPage = () => {
                 >
                   <div className="w-16 h-16 sm:w-12 sm:h-12 rounded-md bg-gray-50 overflow-hidden border border-gray-100 flex-shrink-0">
                     {p.image_url ? (
-                      <img src={resolveImage(p.image_url)} alt={p.name} className="w-full h-full object-contain" />
+                      <ZoomableImage src={resolveImage(p.image_url)} alt={p.name} className="w-full h-full object-contain" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-gray-300 text-[10px]">No foto</div>
                     )}

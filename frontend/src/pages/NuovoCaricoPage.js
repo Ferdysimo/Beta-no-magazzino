@@ -6,6 +6,7 @@ import Header from '../components/Header';
 import { Camera, Minus, Plus, X } from 'lucide-react';
 import { compressImage, friendlyUploadError } from '../utils/compressImage';
 import { compareProductsByCanonicalOrder } from '../utils/productOrder';
+import ZoomableImage from '../components/ZoomableImage';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -279,7 +280,7 @@ const NuovoCaricoPage = () => {
                   >
                     <div className="w-24 h-24 rounded-lg bg-gray-50 overflow-hidden flex-shrink-0 border border-gray-100">
                       {p.image_url ? (
-                        <img src={resolveImage(p.image_url)} alt={p.name} className="w-full h-full object-contain" />
+                        <ZoomableImage src={resolveImage(p.image_url)} alt={p.name} className="w-full h-full object-contain" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-gray-300 text-xs">No foto</div>
                       )}
