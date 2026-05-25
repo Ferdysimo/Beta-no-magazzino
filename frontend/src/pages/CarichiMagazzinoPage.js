@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
-import ZoomableImage from '../components/ZoomableImage';
 import { formatItalianDateTime } from '../utils/formatDate';
 import { Plus, Search, X, Edit2, Trash2, Receipt, Upload } from 'lucide-react';
 import { compressImage, friendlyUploadError } from '../utils/compressImage';
@@ -254,7 +253,7 @@ const CarichiMagazzinoPage = () => {
                   className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-200 hover:ring-2 hover:ring-[#F5C518] transition-all relative group"
                   title="Foto DDT"
                 >
-                  <ZoomableImage src={resolveImage(c.photo_url)} alt="DDT" className="w-full h-full object-cover" />
+                  <img src={resolveImage(c.photo_url)} alt="DDT" className="w-full h-full object-cover" />
                   <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] py-0.5 text-center">DDT</span>
                 </button>
               ) : (
@@ -272,7 +271,7 @@ const CarichiMagazzinoPage = () => {
                     data-testid={`fattura-view-${c.id}`}
                     title="Foto fattura"
                   >
-                    <ZoomableImage src={resolveImage(c.fattura_url)} alt="Fattura" className="w-full h-full object-cover" />
+                    <img src={resolveImage(c.fattura_url)} alt="Fattura" className="w-full h-full object-cover" />
                     <span className="absolute bottom-0 left-0 right-0 bg-emerald-700/80 text-white text-[10px] py-0.5 text-center flex items-center justify-center gap-1">
                       <Receipt size={10} /> Fattura
                     </span>

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
-import ZoomableImage from '../components/ZoomableImage';
 import axios from 'axios';
 import { X, FileText, Trash2, Eye, Search } from 'lucide-react';
 import { compressImage, friendlyUploadError } from '../utils/compressImage';
@@ -346,7 +345,7 @@ const VersamentiPage = () => {
                   onClick={() => openLightboxFor(versamento.image_data)}
                 >
                   {versamento.image_data ? (
-                    <ZoomableImage src={resolveImageSrc(versamento.image_data)} alt="Versamento" className="w-full h-full object-cover" />
+                    <img src={resolveImageSrc(versamento.image_data)} alt="Versamento" className="w-full h-full object-cover" />
                   ) : (
                     <FileText className="text-gray-400" size={24} />
                   )}

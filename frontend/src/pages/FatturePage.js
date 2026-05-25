@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
-import ZoomableImage from '../components/ZoomableImage';
 import axios from 'axios';
 import { Upload, Check, Trash2, Eye, X, FileText, Edit2, Plus, Settings } from 'lucide-react';
 import PhotoLightbox from '../components/PhotoLightbox';
@@ -491,7 +490,7 @@ const FatturePage = () => {
                   onClick={() => openLightboxFor(invoice.image_data)}
                 >
                   {invoice.image_data ? (
-                    <ZoomableImage src={resolveImageSrc(invoice.image_data)} alt="Fattura" className="w-full h-full object-cover" />
+                    <img src={resolveImageSrc(invoice.image_data)} alt="Fattura" className="w-full h-full object-cover" />
                   ) : (
                     <FileText className="text-gray-400" size={24} />
                   )}

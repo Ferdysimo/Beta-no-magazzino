@@ -38,7 +38,8 @@ const PhotoLightbox = ({ photos, index, onChangeIndex, onClose, resolve }) => {
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/95 flex items-center justify-center p-4"
+      style={{ zIndex: 9999 }}
       onClick={onClose}
       data-testid="photo-lightbox"
     >
