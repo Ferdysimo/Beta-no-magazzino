@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
+import PasswordGate from '../components/PasswordGate';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -149,7 +150,7 @@ const CommentPopover = ({ inputRef, value, onChange, onSave, onCancel }) => {
   );
 };
 
-const ReportBetaPage = () => {
+const ReportBetaPageInner = () => {
   const navigate = useNavigate();
   const { token } = useAuth();
   const [pasteText, setPasteText] = useState('');
@@ -965,5 +966,17 @@ const ReportBetaPage = () => {
     </div>
   );
 };
+
+// Wrapper con password gate "0123" (sblocco condiviso con Magazzino Bevande nella stessa sessione)
+const ReportBetaPage = () => (
+  <PasswordGate
+    password="0123"
+    storageKey="flaminio-section-unlocked"
+    title="Report Cassa"
+    subtitle="Inserisci la password per accedere"
+  >
+    <ReportBetaPageInner />
+  </PasswordGate>
+);
 
 export default ReportBetaPage;

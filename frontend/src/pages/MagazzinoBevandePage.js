@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
+import PasswordGate from '../components/PasswordGate';
 import { ArrowLeft } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -59,7 +60,7 @@ const BevCommentPopover = ({ inputRef, value, onChange, onSave, onCancel }) => (
   </div>
 );
 
-const MagazzinoBevandePage = () => {
+const MagazzinoBevandePageInner = () => {
   const { token, isAdmin, restaurant } = useAuth();
   const navigate = useNavigate();
   const [inventory, setInventory] = useState([]);
@@ -360,5 +361,17 @@ const MagazzinoBevandePage = () => {
     </div>
   );
 };
+
+// Wrapper con password gate "0123" (sblocco condiviso con Report nella stessa sessione)
+const MagazzinoBevandePage = () => (
+  <PasswordGate
+    password="0123"
+    storageKey="flaminio-section-unlocked"
+    title="Magazzino Bevande"
+    subtitle="Inserisci la password per accedere"
+  >
+    <MagazzinoBevandePageInner />
+  </PasswordGate>
+);
 
 export default MagazzinoBevandePage;

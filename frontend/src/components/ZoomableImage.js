@@ -1,18 +1,10 @@
 import React, { useState, useEffect } from 'react';
 
 /**
- * Wrapper d'immagine che apre un lightbox a tutto schermo al click.
- * Drop-in replacement per <img>: stesse props (src/alt/className).
- *
- * Implementazione robusta:
- *  - Il click handler vive su un <span> wrapper, non sull'<img>, così funziona
- *    anche su mobile e quando il parent ha event handlers.
- *  - stopPropagation + preventDefault per evitare che pagine con onClick sul
- *    contenitore (card prodotto, ecc.) interferiscano.
- *  - Lightbox in portale logico con z-index 9999, bloccando scroll body.
- *  - ESC, click sull'overlay o sul pulsante chiude.
+ * Click su un'immagine → lightbox a tutto schermo.
+ * Implementazione minima: click handler direttamente sull'img.
  */
-const ZoomableImage = ({ src, alt = '', className = '', style, ...rest }) => {
+const ZoomableImage = ({ src, alt = '', className = '', ...rest }) => {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -29,48 +21,21 @@ const ZoomableImage = ({ src, alt = '', className = '', style, ...rest }) => {
 
   if (!src) return null;
 
-  const handleOpen = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setOpen(true);
-  };
-  const handleClose = (e) => {
-    e?.preventDefault?.();
-    e?.stopPropagation?.();
-    setOpen(false);
-  };
-
   return (
     <>
-      <span
-        role="button"
-        tabIndex={0}
-        aria-label={alt ? `Ingrandisci ${alt}` : 'Ingrandisci foto'}
-        onClick={handleOpen}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); }
-        }}
-        data-testid="zoomable-trigger"
-        className="block w-full h-full cursor-zoom-in"
-        style={{ touchAction: 'manipulation' }}
-      >
-        <img
-          src={src}
-          alt={alt}
-          loading="lazy"
-          draggable={false}
-          className={`pointer-events-none select-none ${className}`}
-          style={style}
-          {...rest}
-        />
-      </span>
-
+      <img
+        src={src}
+        alt={alt}
+        loading="lazy"
+        draggable={false}
+        onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+        className={`cursor-zoom-in ${className}`}
+        {...rest}
+      />
       {open && (
         <div
           data-testid="image-lightbox"
-          role="dialog"
-          aria-modal="true"
-          onClick={handleClose}
+          onClick={() => setOpen(false)}
           className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 cursor-zoom-out"
           style={{ zIndex: 9999 }}
         >
@@ -84,9 +49,8 @@ const ZoomableImage = ({ src, alt = '', className = '', style, ...rest }) => {
           />
           <button
             type="button"
-            data-testid="image-lightbox-close"
-            onClick={handleClose}
-            className="absolute top-4 right-4 bg-white/15 hover:bg-white/30 text-white text-2xl font-light w-12 h-12 rounded-full flex items-center justify-center transition-colors backdrop-blur"
+            onClick={(e) => { e.stopPropagation(); setOpen(false); }}
+            className="absolute top-4 right-4 bg-white/15 hover:bg-white/30 text-white text-2xl w-12 h-12 rounded-full flex items-center justify-center backdrop-blur"
             aria-label="Chiudi"
           >
             ×
