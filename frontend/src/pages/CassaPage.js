@@ -518,30 +518,7 @@ const CassaPage = () => {
             <div
               key={order.id}
               data-testid={`order-row-${order.order_number}`}
-              className={`flex items-center px-4 py-1.5 border-b border-gray-100 transition-colors cursor-pointer select-none ${
-                selectedForPrint.has(order.id)
-                  ? 'bg-blue-100 border-l-4 border-l-blue-600'
-                  : 'hover:bg-gray-50'
-              }`}
-              onPointerDown={(e) => {
-                if (editingId === order.id || e.target.closest('button') || e.target.closest('input')) return;
-                setIsDragging(true);
-                setSelectedForPrint(prev => {
-                  const next = new Set(prev);
-                  if (next.has(order.id)) next.delete(order.id);
-                  else next.add(order.id);
-                  return next;
-                });
-              }}
-              onPointerEnter={() => {
-                if (isDragging && editingId !== order.id) {
-                  setSelectedForPrint(prev => {
-                    const next = new Set(prev);
-                    next.add(order.id);
-                    return next;
-                  });
-                }
-              }}
+              className="flex items-center px-4 py-1.5 border-b border-gray-100 hover:bg-gray-50 transition-colors"
             >
               <span className="w-16 font-bold text-gray-800 text-lg">{order.order_number}</span>
               
@@ -649,30 +626,6 @@ const CassaPage = () => {
           )}
         </div>
       </main>
-
-      {/* Fixed bottom print bar */}
-      {selectedForPrint.size > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-blue-600 text-white px-6 py-3 flex items-center justify-between shadow-lg z-50">
-          <span className="font-medium">{selectedForPrint.size} {selectedForPrint.size === 1 ? 'pasta selezionata' : 'paste selezionate'}</span>
-          <div className="flex gap-3">
-            <button
-              data-testid="clear-selection-btn"
-              onClick={() => setSelectedForPrint(new Set())}
-              className="px-4 py-2 bg-blue-500 hover:bg-blue-400 rounded transition-colors"
-            >
-              Annulla
-            </button>
-            <button
-              data-testid="print-selected-btn"
-              onClick={handlePrintSelected}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-blue-600 font-bold rounded hover:bg-blue-50 transition-colors"
-            >
-              <Printer size={18} />
-              Stampa
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
