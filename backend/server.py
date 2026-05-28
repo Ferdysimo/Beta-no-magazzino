@@ -3400,6 +3400,67 @@ async def list_closures(
     return {"items": items}
 
 
+@api_router.get("/admin/audit-log/groups")
+async def admin_audit_log_groups(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    restaurant_id: Optional[str] = None,
+    token_data: dict = Depends(verify_token),
+):
+    """Raggruppa l'audit-log per (locale, data report). Una entry = una chiusura/report."""
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    match: Dict[str, object] = {}
+    if date_from or date_to:
+        rng: Dict[str, str] = {}
+        if date_from:
+            rng["$gte"] = date_from
+        if date_to:
+            rng["$lte"] = date_to
+        match["date_rome"] = rng
+    if restaurant_id:
+        match["restaurant_id"] = restaurant_id
+    pipeline = [
+        {"$match": match} if match else {"$match": {}},
+        {"$group": {
+            "_id": {"rid": "$restaurant_id", "date": "$date_rome"},
+            "count": {"$sum": 1},
+            "total_changes": {"$sum": "$changes_count"},
+            "cash_count": {"$sum": {"$cond": [{"$eq": ["$category", "cash"]}, 1, 0]}},
+            "bev_count": {"$sum": {"$cond": [{"$eq": ["$category", "beverage"]}, 1, 0]}},
+            "admin_count": {"$sum": {"$cond": ["$is_impersonating", 1, 0]}},
+            "first_at": {"$min": "$first_at"},
+            "last_at": {"$max": "$last_at"},
+            "users": {"$addToSet": "$by_user"},
+        }},
+        {"$sort": {"_id.date": -1, "last_at": -1}},
+        {"$limit": 500},
+    ]
+    rows = await db.cash_audit_log.aggregate(pipeline).to_list(500)
+    rids = list({r["_id"]["rid"] for r in rows if r["_id"].get("rid")})
+    rest_map: Dict[str, str] = {}
+    if rids:
+        async for r in db.restaurants.find({"id": {"$in": rids}}, {"_id": 0, "id": 1, "username": 1, "location": 1}):
+            rest_map[r["id"]] = r.get("location") or r.get("username") or r["id"][:8]
+    items = []
+    for r in rows:
+        rid = r["_id"]["rid"]
+        items.append({
+            "restaurant_id": rid,
+            "restaurant_label": rest_map.get(rid, "?"),
+            "date_rome": r["_id"]["date"],
+            "count": r["count"],
+            "total_changes": r["total_changes"],
+            "cash_count": r["cash_count"],
+            "bev_count": r["bev_count"],
+            "admin_count": r["admin_count"],
+            "first_at": r["first_at"],
+            "last_at": r["last_at"],
+            "users": r.get("users") or [],
+        })
+    return {"items": items, "count": len(items)}
+
+
 @api_router.get("/admin/audit-log")
 async def admin_audit_log(
     date_from: Optional[str] = None,
