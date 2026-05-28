@@ -58,7 +58,7 @@ const MonitorClientiPage = () => {
   const MAX_BOX = Math.min(228, 158 + Math.max(0, monitorOrders.length - 1) * 10);
   const boxSide = Math.max(80, Math.min(MAX_BOX, Math.floor(side * 0.58)));
   const numberFontPx = Math.floor(boxSide * 0.66);
-  const messageFontPx = Math.max(28, Math.min(80, Math.round(messagePx * 0.55)));
+  const messageFontPx = Math.max(24, Math.min(60, Math.round(messagePx * 0.45)));
   // Rounded corners proportional to box size, then capped.
   const radius = Math.min(36, Math.round(boxSide * 0.12));
 
