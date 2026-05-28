@@ -3255,17 +3255,8 @@ async def list_closures(
     return {"items": items}
 
 
-@api_router.get("/admin/closures/{date_str}")
-async def closure_detail(
-    date_str: str,
-    restaurant_id: Optional[str] = None,
-    token_data: dict = Depends(verify_token),
-):
-    """Dettaglio completo di una chiusura (data Rome YYYY-MM-DD). Filtro per locale opzionale."""
-    if token_data.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-    if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
-        raise HTTPException(status_code=400, detail="Data non valida")
+async def _build_closure_detail(date_str: str, restaurant_id: Optional[str]) -> Dict:
+    """Build the full closure detail payload (used by Admin storico + report-ieri)."""
     cash_q = {"date_rome": date_str}
     bev_q = {"date_rome": date_str}
     if restaurant_id:
@@ -3299,7 +3290,6 @@ async def closure_detail(
             bev_total_qty += int(qty)
             bev_total_inc += inc
     orders_info = await _orders_aggregate_for_date(date_str, restaurant_id=restaurant_id)
-    # Ordino le righe bevande secondo il catalogo (sort_order) così AL > AG > C > CZ > ...
     bev_sort_idx = {b["sigla"]: b.get("sort_order", 999) for b in BEVERAGES_CATALOG}
     bev_rows.sort(key=lambda r: bev_sort_idx.get(r["sigla"], 999))
     paste_count = _compute_paste_count(cash_doc.get("paste_text", "") if cash_doc else "")
@@ -3318,6 +3308,32 @@ async def closure_detail(
         "paste_count": paste_count,
         "paste_unrecognized": paste_unrecognized,
     }
+
+
+@api_router.get("/admin/closures/{date_str}")
+async def closure_detail_admin(
+    date_str: str,
+    restaurant_id: Optional[str] = None,
+    token_data: dict = Depends(verify_token),
+):
+    """Dettaglio completo di una chiusura (data Rome YYYY-MM-DD). Admin only."""
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
+        raise HTTPException(status_code=400, detail="Data non valida")
+    return await _build_closure_detail(date_str, restaurant_id)
+
+
+@api_router.get("/closures/yesterday")
+async def closure_yesterday(request: Request, token_data: dict = Depends(verify_token)):
+    """Dettaglio della chiusura di IERI (limitata al locale corrente).
+    Disponibile anche ai ristoranti (non solo Admin) — usa `_effective_restaurant_id`
+    quindi Admin può comunque impersonare via X-Restaurant-Id."""
+    rid = await _effective_restaurant_id(request, token_data)
+    yesterday = (datetime.now(ROME_TZ) - timedelta(days=1)).strftime("%Y-%m-%d")
+    return await _build_closure_detail(yesterday, rid)
+
+
 
 @api_router.post("/beverages/carichi")
 async def create_beverage_carico(

@@ -31,6 +31,7 @@ import InventarioPage from './pages/InventarioPage';
 import AnalisiPage from './pages/AnalisiPage';
 import CronologiaMovimentiPage from './pages/CronologiaMovimentiPage';
 import ReportBetaPage from './pages/ReportBetaPage';
+import ReportIeriPage from './pages/ReportIeriPage';
 import StoricoBevandePage from './pages/StoricoBevandePage';
 import StoricoChiusurePage from './pages/StoricoChiusurePage';
 import UpdateBanner from './components/UpdateBanner';
@@ -114,6 +115,11 @@ function AppRoutes() {
       <Route path="/report-beta" element={
         <ProtectedRoute>
           <ReportBetaPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/report-ieri" element={
+        <ProtectedRoute>
+          <ReportIeriPage />
         </ProtectedRoute>
       } />
       <Route path="/fatture" element={
