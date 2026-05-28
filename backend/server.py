@@ -445,6 +445,22 @@ async def _get_flaminio_restaurant_id() -> Optional[str]:
     return r["id"] if r else None
 
 
+async def _effective_restaurant_id(request: Request, token_data: dict) -> str:
+    """Restituisce il restaurant_id "effettivo" della chiamata.
+    - Per Admin: usa l'header X-Restaurant-Id se presente (impersonificazione).
+    - Per non-Admin: usa sempre il restaurant_id del token.
+    """
+    is_admin = token_data.get("role") == "admin"
+    if is_admin:
+        rid = request.headers.get("X-Restaurant-Id") or request.headers.get("x-restaurant-id")
+        if rid:
+            return rid
+    rid = token_data.get("restaurant_id")
+    if not rid:
+        raise HTTPException(status_code=400, detail="restaurant_id non disponibile")
+    return rid
+
+
 async def _ensure_beverages_seeded():
     """Insert the beverage catalog the first time the backend starts."""
     existing = await db.beverages.count_documents({})
@@ -2689,15 +2705,12 @@ async def list_beverages(token_data: dict = Depends(verify_token)):
 
 
 @api_router.get("/beverages/inventory")
-async def get_beverage_inventory(token_data: dict = Depends(verify_token)):
-    """Current on-hand inventory at Flaminio for each beverage.
-    Returns a list of {sigla, name, price, quantity}."""
-    flaminio_id = await _get_flaminio_restaurant_id()
-    if not flaminio_id:
-        return []
+async def get_beverage_inventory(request: Request, token_data: dict = Depends(verify_token)):
+    """On-hand inventory of beverages for the current restaurant."""
+    rid = await _effective_restaurant_id(request, token_data)
     beverages = await db.beverages.find({}, {"_id": 0}).sort("sort_order", 1).to_list(20)
     inv_docs = await db.beverage_inventory.find(
-        {"restaurant_id": flaminio_id}, {"_id": 0}
+        {"restaurant_id": rid}, {"_id": 0}
     ).to_list(20)
     inv_map = {d["sigla"]: d.get("quantity", 0) for d in inv_docs}
     return [{**b, "quantity": inv_map.get(b["sigla"], 0)} for b in beverages]
@@ -2719,15 +2732,12 @@ class BeverageDailyUpsert(BaseModel):
 
 
 @api_router.get("/beverages/daily")
-async def get_beverage_daily_counts(token_data: dict = Depends(verify_token)):
-    """Returns today's counts for Flaminio + previous-day sera values
-    so the frontend can auto-fill MAGAZZINO MATTINA when starting a new day."""
-    flaminio_id = await _get_flaminio_restaurant_id()
-    if not flaminio_id:
-        return {"date": _today_rome_str(), "counts": {}, "prev_sera": {}}
+async def get_beverage_daily_counts(request: Request, token_data: dict = Depends(verify_token)):
+    """Returns today's counts for the current restaurant + previous-day sera values."""
+    rid = await _effective_restaurant_id(request, token_data)
     today = _today_rome_str()
     today_docs = await db.beverage_daily_counts.find(
-        {"restaurant_id": flaminio_id, "date_rome": today}, {"_id": 0}
+        {"restaurant_id": rid, "date_rome": today}, {"_id": 0}
     ).to_list(50)
     counts = {d["sigla"]: {
         "mattina": d.get("mattina", ""),
@@ -2739,14 +2749,14 @@ async def get_beverage_daily_counts(token_data: dict = Depends(verify_token)):
 
     prev_sera = {}
     last_day_doc = await db.beverage_daily_counts.find_one(
-        {"restaurant_id": flaminio_id, "date_rome": {"$lt": today}},
+        {"restaurant_id": rid, "date_rome": {"$lt": today}},
         sort=[("date_rome", -1)],
         projection={"_id": 0, "date_rome": 1},
     )
     if last_day_doc:
         prev_date = last_day_doc["date_rome"]
         prev_docs = await db.beverage_daily_counts.find(
-            {"restaurant_id": flaminio_id, "date_rome": prev_date},
+            {"restaurant_id": rid, "date_rome": prev_date},
             {"_id": 0, "sigla": 1, "sera": 1},
         ).to_list(50)
         prev_sera = {d["sigla"]: d.get("sera", "") for d in prev_docs}
@@ -2756,18 +2766,16 @@ async def get_beverage_daily_counts(token_data: dict = Depends(verify_token)):
 
 @api_router.put("/beverages/daily")
 async def upsert_beverage_daily(
-    data: BeverageDailyUpsert, token_data: dict = Depends(verify_token)
+    data: BeverageDailyUpsert, request: Request, token_data: dict = Depends(verify_token)
 ):
     """Upsert a single beverage row for today's counts (auto-save from frontend)."""
-    flaminio_id = await _get_flaminio_restaurant_id()
-    if not flaminio_id:
-        raise HTTPException(status_code=404, detail="Ristorante Flaminio non trovato")
+    rid = await _effective_restaurant_id(request, token_data)
     today = _today_rome_str()
     valid_siglas = {b["sigla"] for b in BEVERAGES_CATALOG}
     if data.sigla not in valid_siglas:
         raise HTTPException(status_code=400, detail=f"Sigla non valida: {data.sigla}")
     set_body = {
-        "restaurant_id": flaminio_id,
+        "restaurant_id": rid,
         "date_rome": today,
         "sigla": data.sigla,
         "mattina": data.mattina or "",
@@ -2785,7 +2793,7 @@ async def upsert_beverage_daily(
                 clean[k] = v.strip()[:500]
         set_body["comments"] = clean
     await db.beverage_daily_counts.update_one(
-        {"restaurant_id": flaminio_id, "date_rome": today, "sigla": data.sigla},
+        {"restaurant_id": rid, "date_rome": today, "sigla": data.sigla},
         {"$set": set_body},
         upsert=True,
     )
@@ -2794,16 +2802,13 @@ async def upsert_beverage_daily(
 
 @api_router.get("/beverages/daily/history")
 async def get_beverage_daily_history(
-    days: int = 60, token_data: dict = Depends(verify_token)
+    request: Request, days: int = 60, token_data: dict = Depends(verify_token)
 ):
-    """Returns the last N days of beverage daily counts grouped by date.
-    Used by the manager to review past closures."""
-    flaminio_id = await _get_flaminio_restaurant_id()
-    if not flaminio_id:
-        return {"days": []}
+    """Returns the last N days of beverage daily counts grouped by date."""
+    rid = await _effective_restaurant_id(request, token_data)
     cutoff = (datetime.now(ROME_TZ) - timedelta(days=max(1, min(days, 365)))).strftime("%Y-%m-%d")
     docs = await db.beverage_daily_counts.find(
-        {"restaurant_id": flaminio_id, "date_rome": {"$gte": cutoff}},
+        {"restaurant_id": rid, "date_rome": {"$gte": cutoff}},
         {"_id": 0},
     ).sort("date_rome", -1).to_list(2000)
     grouped: dict = {}
@@ -2945,15 +2950,13 @@ class CashDailyUpsert(BaseModel):
 
 
 @api_router.get("/cash/daily")
-async def get_cash_daily(token_data: dict = Depends(verify_token)):
-    """Returns today's cash row for Flaminio + previous-day computed cash_sera
+async def get_cash_daily(request: Request, token_data: dict = Depends(verify_token)):
+    """Returns today's cash row for the current restaurant + previous-day computed cash_sera
     so the frontend can auto-fill CASH MATTINA when starting a new day."""
-    flaminio_id = await _get_flaminio_restaurant_id()
+    rid = await _effective_restaurant_id(request, token_data)
     today = _today_rome_str()
-    if not flaminio_id:
-        return {"date": today, "data": {}, "prev_cash_sera": ""}
     today_doc = await db.cash_daily_counts.find_one(
-        {"restaurant_id": flaminio_id, "date_rome": today}, {"_id": 0}
+        {"restaurant_id": rid, "date_rome": today}, {"_id": 0}
     ) or {}
     data = {f: today_doc.get(f, "") for f in ALL_CASH_FIELDS}
     vers_color = today_doc.get("vers_color", "") or ""
@@ -2964,7 +2967,7 @@ async def get_cash_daily(token_data: dict = Depends(verify_token)):
 
     prev_cash_sera = ""
     last_doc = await db.cash_daily_counts.find_one(
-        {"restaurant_id": flaminio_id, "date_rome": {"$lt": today}},
+        {"restaurant_id": rid, "date_rome": {"$lt": today}},
         sort=[("date_rome", -1)],
         projection={"_id": 0},
     )
@@ -2984,17 +2987,15 @@ async def get_cash_daily(token_data: dict = Depends(verify_token)):
 
 @api_router.put("/cash/daily")
 async def upsert_cash_daily(
-    data: CashDailyUpsert, token_data: dict = Depends(verify_token)
+    data: CashDailyUpsert, request: Request, token_data: dict = Depends(verify_token)
 ):
-    """Upsert today's cash row (auto-save from frontend)."""
-    flaminio_id = await _get_flaminio_restaurant_id()
-    if not flaminio_id:
-        raise HTTPException(status_code=404, detail="Ristorante Flaminio non trovato")
+    """Upsert today's cash row (auto-save dal frontend) per il ristorante effettivo."""
+    rid = await _effective_restaurant_id(request, token_data)
     today = _today_rome_str()
     payload = {f: (getattr(data, f) or "") for f in ALL_CASH_FIELDS}
     set_payload = {
         **payload,
-        "restaurant_id": flaminio_id,
+        "restaurant_id": rid,
         "date_rome": today,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -3033,7 +3034,7 @@ async def upsert_cash_daily(
 
 # ---------- Storico Chiusure (Admin only) ----------
 
-async def _orders_aggregate_for_date(date_rome_str: str) -> Dict:
+async def _orders_aggregate_for_date(date_rome_str: str, restaurant_id: Optional[str] = None) -> Dict:
     """Aggrega le paste della data indicata (Rome) leggendo da `archived_orders`
     e da `orders` (per il giorno corrente, ancora non archiviato)."""
     try:
@@ -3042,6 +3043,8 @@ async def _orders_aggregate_for_date(date_rome_str: str) -> Dict:
         return {"total_orders": 0, "by_restaurant": {}}
     d1 = d0 + timedelta(days=1)
     q = {"created_at": {"$gte": d0.isoformat(), "$lt": d1.isoformat()}}
+    if restaurant_id:
+        q["restaurant_id"] = restaurant_id
     results = {"total_orders": 0, "by_restaurant": {}}
     for coll in ("archived_orders", "orders"):
         async for o in db[coll].find(q, {"_id": 0}):
@@ -3055,26 +3058,36 @@ async def _orders_aggregate_for_date(date_rome_str: str) -> Dict:
 
 
 @api_router.get("/admin/closures")
-async def list_closures(days: int = 60, token_data: dict = Depends(verify_token)):
-    """Lista delle chiusure (date) con riepilogo: incasso, # paste, # bevande, ecc."""
+async def list_closures(
+    days: int = 60,
+    restaurant_id: Optional[str] = None,
+    token_data: dict = Depends(verify_token),
+):
+    """Lista delle chiusure (date) con riepilogo: incasso, # paste, # bevande, ecc.
+    Filtra per `restaurant_id` se fornito (richiesto per la vista per-locale).
+    """
     if token_data.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     cutoff = (datetime.now(ROME_TZ) - timedelta(days=max(1, min(days, 365)))).strftime("%Y-%m-%d")
     today = _today_rome_str()
+    base_q = {"date_rome": {"$gte": cutoff, "$lt": today}}
+    if restaurant_id:
+        base_q["restaurant_id"] = restaurant_id
     dates: set = set()
-    async for d in db.cash_daily_counts.find({"date_rome": {"$gte": cutoff, "$lt": today}}, {"date_rome": 1, "_id": 0}):
+    async for d in db.cash_daily_counts.find(base_q, {"date_rome": 1, "_id": 0}):
         dates.add(d["date_rome"])
-    async for d in db.beverage_daily_counts.find({"date_rome": {"$gte": cutoff, "$lt": today}}, {"date_rome": 1, "_id": 0}):
+    async for d in db.beverage_daily_counts.find(base_q, {"date_rome": 1, "_id": 0}):
         dates.add(d["date_rome"])
     items = []
     bev_prices = {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
     for date_str in sorted(dates, reverse=True):
-        cash_doc = await db.cash_daily_counts.find_one(
-            {"date_rome": date_str}, {"_id": 0}
-        ) or {}
-        bev_docs = await db.beverage_daily_counts.find(
-            {"date_rome": date_str}, {"_id": 0}
-        ).to_list(50)
+        cash_q = {"date_rome": date_str}
+        bev_q = {"date_rome": date_str}
+        if restaurant_id:
+            cash_q["restaurant_id"] = restaurant_id
+            bev_q["restaurant_id"] = restaurant_id
+        cash_doc = await db.cash_daily_counts.find_one(cash_q, {"_id": 0}) or {}
+        bev_docs = await db.beverage_daily_counts.find(bev_q, {"_id": 0}).to_list(50)
         cash_sera = round(_compute_cash_sera_full(cash_doc, bev_docs), 2) if cash_doc else 0.0
         bev_total_qty = 0
         bev_total_inc = 0.0
@@ -3085,7 +3098,7 @@ async def list_closures(days: int = 60, token_data: dict = Depends(verify_token)
             if qty > 0:
                 bev_total_qty += int(qty)
                 bev_total_inc += qty * bev_prices.get(r["sigla"], 0)
-        orders_info = await _orders_aggregate_for_date(date_str)
+        orders_info = await _orders_aggregate_for_date(date_str, restaurant_id=restaurant_id)
         items.append({
             "date": date_str,
             "cash_sera": cash_sera,
@@ -3097,18 +3110,23 @@ async def list_closures(days: int = 60, token_data: dict = Depends(verify_token)
 
 
 @api_router.get("/admin/closures/{date_str}")
-async def closure_detail(date_str: str, token_data: dict = Depends(verify_token)):
-    """Dettaglio completo di una chiusura (data Rome YYYY-MM-DD)."""
+async def closure_detail(
+    date_str: str,
+    restaurant_id: Optional[str] = None,
+    token_data: dict = Depends(verify_token),
+):
+    """Dettaglio completo di una chiusura (data Rome YYYY-MM-DD). Filtro per locale opzionale."""
     if token_data.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
         raise HTTPException(status_code=400, detail="Data non valida")
-    cash_doc = await db.cash_daily_counts.find_one(
-        {"date_rome": date_str}, {"_id": 0}
-    ) or {}
-    bev_docs = await db.beverage_daily_counts.find(
-        {"date_rome": date_str}, {"_id": 0}
-    ).to_list(50)
+    cash_q = {"date_rome": date_str}
+    bev_q = {"date_rome": date_str}
+    if restaurant_id:
+        cash_q["restaurant_id"] = restaurant_id
+        bev_q["restaurant_id"] = restaurant_id
+    cash_doc = await db.cash_daily_counts.find_one(cash_q, {"_id": 0}) or {}
+    bev_docs = await db.beverage_daily_counts.find(bev_q, {"_id": 0}).to_list(50)
     cash_sera = round(_compute_cash_sera_full(cash_doc, bev_docs), 2) if cash_doc else 0.0
     bev_prices = {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
     bev_names = {b["sigla"]: b["name"] for b in BEVERAGES_CATALOG}
@@ -3134,7 +3152,7 @@ async def closure_detail(date_str: str, token_data: dict = Depends(verify_token)
         if qty > 0:
             bev_total_qty += int(qty)
             bev_total_inc += inc
-    orders_info = await _orders_aggregate_for_date(date_str)
+    orders_info = await _orders_aggregate_for_date(date_str, restaurant_id=restaurant_id)
     return {
         "date": date_str,
         "cash": cash_doc,

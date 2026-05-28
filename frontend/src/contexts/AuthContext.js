@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 
 const AuthContext = createContext(null);
@@ -28,6 +28,26 @@ export const AuthProvider = ({ children }) => {
     setAdminSelectedRestaurant(null);
     localStorage.removeItem('admin_selected_restaurant');
   };
+
+  // ===== Axios interceptor: per Admin invia X-Restaurant-Id del locale impersonato =====
+  // Usiamo un ref così l'interceptor è registrato una volta sola ma legge sempre
+  // il valore aggiornato di adminSelectedRestaurant.
+  const adminRestRef = useRef(adminSelectedRestaurant);
+  const isAdminRef = useRef(false);
+  useEffect(() => { adminRestRef.current = adminSelectedRestaurant; }, [adminSelectedRestaurant]);
+  useEffect(() => { isAdminRef.current = restaurant?.role === 'admin'; }, [restaurant]);
+  useEffect(() => {
+    const id = axios.interceptors.request.use((config) => {
+      try {
+        if (isAdminRef.current && adminRestRef.current?.id) {
+          config.headers = config.headers || {};
+          config.headers['X-Restaurant-Id'] = adminRestRef.current.id;
+        }
+      } catch (e) { /* no-op */ }
+      return config;
+    });
+    return () => { axios.interceptors.request.eject(id); };
+  }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem('token');

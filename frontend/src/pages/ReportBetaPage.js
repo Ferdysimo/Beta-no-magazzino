@@ -22,10 +22,13 @@ const PASTA_PRICES = [
 
 // Banconote / monete
 const CASH_DENOMINATIONS = [
-  { key: 'big',    label: '100 e 50',  mode: 'eur',     placeholder: '€'  },
+  { key: 'big100', label: '100',       mode: 'count',   value: 100        },
+  { key: 'big',    label: '50',        mode: 'count',   value: 50         },
   { key: 'd20',    label: '20',        mode: 'count',   value: 20         },
   { key: 'd10',    label: '10',        mode: 'count',   value: 10         },
   { key: 'd5',     label: '5',         mode: 'count',   value: 5          },
+  { key: 'c2',     label: '2',         mode: 'count',   value: 2          },
+  { key: 'c1',     label: '1',         mode: 'count',   value: 1          },
   { key: 'c50',    label: '0,50',      mode: 'count',   value: 0.5        },
   { key: 'c20',    label: '0,20',      mode: 'count',   value: 0.2        },
   { key: 'c10',    label: '0,10',      mode: 'count',   value: 0.1        },
@@ -33,6 +36,8 @@ const CASH_DENOMINATIONS = [
 
 const findPasta = (line) => {
   const upper = (line || '').toUpperCase();
+  // Se la riga contiene "XL" come parola intera → NON riconoscere (va nei manuali)
+  if (/\bXL\b/i.test(upper)) return null;
   const ordered = [...PASTA_PRICES].sort((a, b) => b.sigla.length - a.sigla.length);
   for (const p of ordered) {
     const re = new RegExp(`\\b${p.sigla}\\b`, 'i');
@@ -152,7 +157,7 @@ const CommentPopover = ({ inputRef, value, onChange, onSave, onCancel }) => {
 
 const ReportBetaPageInner = () => {
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token, isAdmin } = useAuth();
   const [pasteText, setPasteText] = useState('');
   const [cash, setCash] = useState({});
   const [manualPrices, setManualPrices] = useState({});
@@ -448,7 +453,7 @@ const ReportBetaPageInner = () => {
       if (!raw) continue;
       const n = parseFloat(raw);
       if (Number.isNaN(n) || n < 0) continue;
-      sum += d.mode === 'eur' ? n : n * d.value;
+      sum += n * d.value;
     }
     return sum;
   }, [cash]);
@@ -593,14 +598,13 @@ const ReportBetaPageInner = () => {
             <div className="bg-white rounded border border-gray-200 p-2">
               <div className="flex items-baseline justify-between mb-2">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Cassa</h2>
-                <span className="text-[10px] text-gray-400">pezzi (eccetto "100 e 50" che è €)</span>
+                <span className="text-[10px] text-gray-400">pezzi</span>
               </div>
-              <div className="grid grid-cols-8 gap-1.5">
+              <div className="grid grid-cols-11 gap-1.5">
                 {CASH_DENOMINATIONS.map(d => {
                   const raw = (cash[d.key] || '').replace(',', '.');
                   const n = parseFloat(raw);
-                  const subTot = (!raw || Number.isNaN(n) || n < 0) ? 0
-                    : d.mode === 'eur' ? n : n * d.value;
+                  const subTot = (!raw || Number.isNaN(n) || n < 0) ? 0 : n * d.value;
                   return (
                     <div key={d.key} className="flex flex-col">
                       <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5">
@@ -612,7 +616,7 @@ const ReportBetaPageInner = () => {
                         inputMode="decimal"
                         value={cash[d.key] || ''}
                         onChange={(e) => setCashValue(d.key, e.target.value)}
-                        placeholder={d.mode === 'eur' ? '€' : '0'}
+                        placeholder="0"
                         className="w-full h-11 border border-gray-200 rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518]"
                       />
                       <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">

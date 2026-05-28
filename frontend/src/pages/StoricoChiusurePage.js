@@ -25,15 +25,39 @@ const StoricoChiusurePage = () => {
   const [selectedDate, setSelectedDate] = useState(null);
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  // Selettore locale
+  const [restaurants, setRestaurants] = useState([]);
+  const [selectedRestId, setSelectedRestId] = useState(() => localStorage.getItem('closures_rest_id') || '');
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 
+  // Carica elenco ristoranti
   useEffect(() => {
     if (!isAdmin || !token) return;
-    let cancelled = false;
     (async () => {
       try {
-        const res = await axios.get(`${API}/admin/closures?days=120`, { headers });
+        const res = await axios.get(`${API}/admin/restaurants`, { headers });
+        const list = (res.data || []).filter(r => r.role !== 'admin');
+        setRestaurants(list);
+        if (!selectedRestId && list.length > 0) {
+          setSelectedRestId(list[0].id);
+          localStorage.setItem('closures_rest_id', list[0].id);
+        }
+      } catch (e) { console.error('list restaurants', e); }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, token]);
+
+  useEffect(() => {
+    if (!isAdmin || !token || !selectedRestId) { setItems([]); setLoading(false); return; }
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const res = await axios.get(
+          `${API}/admin/closures?days=120&restaurant_id=${selectedRestId}`,
+          { headers },
+        );
         if (cancelled) return;
         setItems(res.data?.items || []);
       } catch (e) {
@@ -43,15 +67,18 @@ const StoricoChiusurePage = () => {
       }
     })();
     return () => { cancelled = true; };
-  }, [isAdmin, token, headers]);
+  }, [isAdmin, token, headers, selectedRestId]);
 
   useEffect(() => {
-    if (!selectedDate) { setDetail(null); return; }
+    if (!selectedDate || !selectedRestId) { setDetail(null); return; }
     let cancelled = false;
     setDetailLoading(true);
     (async () => {
       try {
-        const res = await axios.get(`${API}/admin/closures/${selectedDate}`, { headers });
+        const res = await axios.get(
+          `${API}/admin/closures/${selectedDate}?restaurant_id=${selectedRestId}`,
+          { headers },
+        );
         if (cancelled) return;
         setDetail(res.data);
       } catch (e) {
@@ -62,7 +89,14 @@ const StoricoChiusurePage = () => {
       }
     })();
     return () => { cancelled = true; };
-  }, [selectedDate, headers]);
+  }, [selectedDate, selectedRestId, headers]);
+
+  const changeRestaurant = (id) => {
+    setSelectedRestId(id);
+    localStorage.setItem('closures_rest_id', id);
+    setSelectedDate(null);
+    setDetail(null);
+  };
 
   if (!isAdmin) {
     return (
@@ -95,6 +129,25 @@ const StoricoChiusurePage = () => {
         <h1 className="font-heading text-xl sm:text-2xl font-bold text-gray-900 uppercase mb-4">
           Storico Chiusure
         </h1>
+
+        {/* Selettore locale */}
+        <div className="mb-4 bg-white border border-gray-200 rounded-lg p-3 flex items-center gap-3 flex-wrap">
+          <label className="text-sm font-bold text-gray-700">Locale:</label>
+          <select
+            data-testid="closures-restaurant-select"
+            value={selectedRestId}
+            onChange={(e) => changeRestaurant(e.target.value)}
+            className="flex-1 min-w-[200px] max-w-sm border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-[#F5C518] bg-white"
+          >
+            {restaurants.length === 0 && <option value="">Caricamento…</option>}
+            {restaurants.map(r => (
+              <option key={r.id} value={r.id}>{r.location || r.name || r.username}</option>
+            ))}
+          </select>
+          <span className="text-[11px] text-gray-500">
+            {items.length} {items.length === 1 ? 'chiusura archiviata' : 'chiusure archiviate'}
+          </span>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4">
           {/* Lista date */}
