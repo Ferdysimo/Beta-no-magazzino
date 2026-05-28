@@ -96,6 +96,14 @@ const HomePage = () => {
                 <span className="font-bold text-lg text-gray-800">Storico Chiusure</span>
                 <span className="block text-xs text-gray-500 mt-0.5">Archivio giornaliero di cassa, paste e bevande</span>
               </button>
+              <button
+                data-testid="admin-audit-cassa"
+                onClick={() => navigate('/audit-cassa')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Controllo Report</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Audit log: ogni movimento/operazione su Cassa e Bevande</span>
+              </button>
             </div>
           </div>
         </main>
@@ -242,12 +250,6 @@ const HomePage = () => {
               <button data-testid="btn-media-locali" onClick={() => navigate('/media-locali')}
                 className="border border-gray-400 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-md font-medium text-sm transition-colors">
                 Numeri
-              </button>
-            )}
-            {isAdmin && (
-              <button data-testid="btn-audit-cassa" onClick={() => navigate('/audit-cassa')}
-                className="border border-violet-400 bg-violet-50 hover:bg-violet-100 text-violet-900 px-4 py-2 rounded-md font-medium text-sm transition-colors">
-                Controllo Report (audit)
               </button>
             )}
           </div>
