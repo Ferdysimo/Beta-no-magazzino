@@ -54,8 +54,8 @@ const MonitorClientiPage = () => {
   const { cols, side } = fitGrid(monitorOrders.length, usableW, usableH, GAP);
   // Limite massimo del box: cresce in modo dolce col numero di ordini,
   // così con pochi clienti i numeri restano leggibili senza essere troppo grandi.
-  // 1 ordine ≈ 170px · 2 ≈ 182 · 4 ≈ 206 · 8+ ≈ 254 (cap)
-  const MAX_BOX = Math.min(254, 170 + Math.max(0, monitorOrders.length - 1) * 12);
+  // 1 ordine ≈ 158px · 2 ≈ 168 · 4 ≈ 188 · 8+ ≈ 228 (cap)
+  const MAX_BOX = Math.min(228, 158 + Math.max(0, monitorOrders.length - 1) * 10);
   const boxSide = Math.max(80, Math.min(MAX_BOX, Math.floor(side * 0.58)));
   const numberFontPx = Math.floor(boxSide * 0.66);
   const messageFontPx = Math.max(28, Math.min(80, Math.round(messagePx * 0.55)));
