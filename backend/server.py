@@ -2981,6 +2981,8 @@ async def get_cash_daily(request: Request, token_data: dict = Depends(verify_tok
     manual_prices = today_doc.get("manual_prices") or {}
 
     prev_cash_sera = ""
+    prev_row = None
+    prev_date = ""
     last_doc = await db.cash_daily_counts.find_one(
         {"restaurant_id": rid, "date_rome": {"$lt": today}},
         sort=[("date_rome", -1)],
@@ -2996,10 +2998,16 @@ async def get_cash_daily(request: Request, token_data: dict = Depends(verify_tok
             {"_id": 0},
         ).to_list(100)
         prev_cash_sera = round(_compute_cash_sera_full(last_doc, prev_bev_docs), 2)
+        # Riga di ieri completa (per la vista read-only nel Report)
+        prev_date = last_doc.get("date_rome", "")
+        prev_row = {f: last_doc.get(f, "") for f in ALL_CASH_FIELDS}
+        prev_row["paste_text"] = last_doc.get("paste_text", "") or ""
     return {
         "date": today,
         "data": data,
         "prev_cash_sera": prev_cash_sera,
+        "prev_date": prev_date,
+        "prev_row": prev_row,
         "comments": comments,
         "vers_color": vers_color,
         "paste_text": paste_text,
