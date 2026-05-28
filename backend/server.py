@@ -3444,6 +3444,7 @@ async def admin_audit_log(
 
 
 
+async def _build_closure_detail(date_str: str, restaurant_id: Optional[str]) -> Dict:
     """Build the full closure detail payload (used by Admin storico + report-ieri)."""
     cash_q = {"date_rome": date_str}
     bev_q = {"date_rome": date_str}
