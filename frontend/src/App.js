@@ -32,6 +32,7 @@ import AnalisiPage from './pages/AnalisiPage';
 import CronologiaMovimentiPage from './pages/CronologiaMovimentiPage';
 import ReportBetaPage from './pages/ReportBetaPage';
 import ReportIeriPage from './pages/ReportIeriPage';
+import AuditCassaPage from './pages/AuditCassaPage';
 import StoricoBevandePage from './pages/StoricoBevandePage';
 import StoricoChiusurePage from './pages/StoricoChiusurePage';
 import UpdateBanner from './components/UpdateBanner';
@@ -120,6 +121,11 @@ function AppRoutes() {
       <Route path="/report-ieri" element={
         <ProtectedRoute>
           <ReportIeriPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/audit-cassa" element={
+        <ProtectedRoute>
+          <AuditCassaPage />
         </ProtectedRoute>
       } />
       <Route path="/fatture" element={

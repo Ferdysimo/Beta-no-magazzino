@@ -244,6 +244,12 @@ const HomePage = () => {
                 Numeri
               </button>
             )}
+            {isAdmin && (
+              <button data-testid="btn-audit-cassa" onClick={() => navigate('/audit-cassa')}
+                className="border border-violet-400 bg-violet-50 hover:bg-violet-100 text-violet-900 px-4 py-2 rounded-md font-medium text-sm transition-colors">
+                Controllo Report (audit)
+              </button>
+            )}
           </div>
         </div>
       </main>

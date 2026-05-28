@@ -2792,6 +2792,31 @@ async def upsert_beverage_daily(
             if isinstance(v, str) and v.strip():
                 clean[k] = v.strip()[:500]
         set_body["comments"] = clean
+    # Audit-log: registro diff per ogni colonna della riga bevanda
+    try:
+        old_doc = await db.beverage_daily_counts.find_one(
+            {"restaurant_id": rid, "date_rome": today, "sigla": data.sigla}, {"_id": 0}
+        ) or {}
+        ui = _audit_user_info(request, token_data)
+        for col in ("mattina", "inUsc", "scarti", "sera"):
+            await _audit_log_change(
+                category="beverage", rid=rid, date_rome=today,
+                field=f"{data.sigla}.{col}",
+                old_value=old_doc.get(col, ""), new_value=set_body.get(col, ""),
+                user_info=ui,
+            )
+        if "comments" in set_body:
+            old_c = old_doc.get("comments") or {}
+            new_c = set_body.get("comments") or {}
+            for k in set(old_c.keys()) | set(new_c.keys()):
+                await _audit_log_change(
+                    category="beverage", rid=rid, date_rome=today,
+                    field=f"{data.sigla}.comment.{k}",
+                    old_value=old_c.get(k, ""), new_value=new_c.get(k, ""),
+                    user_info=ui,
+                )
+    except Exception as e:
+        logger.warning(f"[AUDIT] beverage diff failed (non-blocking): {e}")
     await db.beverage_daily_counts.update_one(
         {"restaurant_id": rid, "date_rome": today, "sigla": data.sigla},
         {"$set": set_body},
@@ -2981,6 +3006,115 @@ CASSETTO_FIELDS = ["cd5", "cd2", "cd1", "cd05"]
 ALL_CASH_FIELDS = CASH_FIELDS + SPICCI_FIELDS + CASSETTO_FIELDS
 
 
+def _audit_user_info(request: Request, token_data: dict) -> dict:
+    """Restituisce metadati utente per audit-log."""
+    role = token_data.get("role")
+    is_admin = role == "admin"
+    impersonated = bool(request.headers.get("X-Restaurant-Id") or request.headers.get("x-restaurant-id")) if is_admin else False
+    return {
+        "by_role": role or "unknown",
+        "by_user": token_data.get("restaurant_name") or "unknown",
+        "by_user_id": token_data.get("restaurant_id") or "",
+        "is_impersonating": impersonated,
+    }
+
+
+async def _audit_log_change(
+    *, category: str, rid: str, date_rome: str, field: str,
+    old_value, new_value, user_info: dict,
+) -> None:
+    """Inserisce o coalesce una entry di audit-log.
+    Coalescing: se esiste già una entry per (rid, date_rome, field, by_user) modificata
+    negli ultimi 30s, aggiorno new_value e last_at; altrimenti inserisco una nuova.
+    Convertendo i valori in stringa troncata a 240 char per leggibilità.
+    Nota: i valori uguali non vengono loggati.
+    """
+    def _stringify(v) -> str:
+        if v is None:
+            return ""
+        if isinstance(v, (dict, list)):
+            try:
+                import json as _j
+                return _j.dumps(v, ensure_ascii=False)[:240]
+            except Exception:
+                return str(v)[:240]
+        return str(v)[:240]
+    old_s = _stringify(old_value)
+    new_s = _stringify(new_value)
+    if old_s == new_s:
+        return
+    now = datetime.now(timezone.utc)
+    coalesce_q = {
+        "restaurant_id": rid,
+        "date_rome": date_rome,
+        "field": field,
+        "category": category,
+        "by_user_id": user_info["by_user_id"],
+        "last_at": {"$gte": (now - timedelta(seconds=30)).isoformat()},
+    }
+    existing = await db.cash_audit_log.find_one(coalesce_q, sort=[("last_at", -1)])
+    if existing:
+        await db.cash_audit_log.update_one(
+            {"id": existing["id"]},
+            {
+                "$set": {
+                    "new_value": new_s,
+                    "last_at": now.isoformat(),
+                },
+                "$inc": {"changes_count": 1},
+            },
+        )
+        return
+    entry = {
+        "id": str(uuid.uuid4()),
+        "restaurant_id": rid,
+        "date_rome": date_rome,
+        "category": category,
+        "field": field,
+        "old_value": old_s,
+        "new_value": new_s,
+        "by_role": user_info["by_role"],
+        "by_user": user_info["by_user"],
+        "by_user_id": user_info["by_user_id"],
+        "is_impersonating": user_info["is_impersonating"],
+        "first_at": now.isoformat(),
+        "last_at": now.isoformat(),
+        "changes_count": 1,
+    }
+    await db.cash_audit_log.insert_one(entry)
+
+
+async def _audit_diff_cash(
+    *, rid: str, date_rome: str, old_doc: dict, set_payload: dict, user_info: dict,
+) -> None:
+    """Diff field-by-field tra il vecchio doc cash e il nuovo set_payload, e logga ogni delta."""
+    old_doc = old_doc or {}
+    # Campi scalari
+    scalar_fields = list(ALL_CASH_FIELDS) + ["vers_color", "paste_text"]
+    for k in scalar_fields:
+        if k not in set_payload:
+            continue
+        await _audit_log_change(
+            category="cash", rid=rid, date_rome=date_rome, field=k,
+            old_value=old_doc.get(k, ""), new_value=set_payload.get(k, ""),
+            user_info=user_info,
+        )
+    # Dict fields: cash_banconote.<k>, manual_prices.<k>, comments.<k>
+    for parent in ("cash_banconote", "manual_prices", "comments"):
+        if parent not in set_payload:
+            continue
+        old_d = (old_doc.get(parent) or {})
+        new_d = (set_payload.get(parent) or {})
+        keys = set(old_d.keys()) | set(new_d.keys())
+        for k in keys:
+            await _audit_log_change(
+                category="cash", rid=rid, date_rome=date_rome,
+                field=f"{parent}.{k}",
+                old_value=old_d.get(k, ""), new_value=new_d.get(k, ""),
+                user_info=user_info,
+            )
+
+
 class CashDailyUpsert(BaseModel):
     mattina: Optional[str] = ""
     altro: Optional[str] = ""
@@ -3100,6 +3234,17 @@ async def upsert_cash_daily(
             if t:
                 clean[k[:50]] = t[:500]
         set_payload["comments"] = clean
+    # Audit-log: registro ogni delta rispetto al doc esistente
+    old_doc = await db.cash_daily_counts.find_one(
+        {"restaurant_id": rid, "date_rome": today}, {"_id": 0}
+    ) or {}
+    try:
+        await _audit_diff_cash(
+            rid=rid, date_rome=today, old_doc=old_doc, set_payload=set_payload,
+            user_info=_audit_user_info(request, token_data),
+        )
+    except Exception as e:
+        logger.warning(f"[AUDIT] cash diff failed (non-blocking): {e}")
     await db.cash_daily_counts.update_one(
         {"restaurant_id": rid, "date_rome": today},
         {"$set": set_payload},
@@ -3255,7 +3400,50 @@ async def list_closures(
     return {"items": items}
 
 
-async def _build_closure_detail(date_str: str, restaurant_id: Optional[str]) -> Dict:
+@api_router.get("/admin/audit-log")
+async def admin_audit_log(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    restaurant_id: Optional[str] = None,
+    category: Optional[str] = None,         # 'cash' | 'beverage'
+    field_q: Optional[str] = None,          # full-text regex su 'field'
+    user_q: Optional[str] = None,           # full-text regex su 'by_user'
+    limit: int = 500,
+    token_data: dict = Depends(verify_token),
+):
+    """Audit-log dei salvataggi su Report (Cassa + Bevande). Admin only."""
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    q: Dict[str, object] = {}
+    if date_from or date_to:
+        rng: Dict[str, str] = {}
+        if date_from:
+            rng["$gte"] = date_from
+        if date_to:
+            rng["$lte"] = date_to
+        q["date_rome"] = rng
+    if restaurant_id:
+        q["restaurant_id"] = restaurant_id
+    if category in ("cash", "beverage"):
+        q["category"] = category
+    if field_q:
+        q["field"] = {"$regex": re.escape(field_q), "$options": "i"}
+    if user_q:
+        q["by_user"] = {"$regex": re.escape(user_q), "$options": "i"}
+    limit = max(1, min(int(limit or 500), 2000))
+    docs = await db.cash_audit_log.find(q, {"_id": 0}).sort("last_at", -1).to_list(limit)
+    # Arricchisco con nome locale (cache map già presente _locations_cache: skip — uso restaurants live)
+    rest_map = {}
+    rids = list({d.get("restaurant_id") for d in docs if d.get("restaurant_id")})
+    if rids:
+        async for r in db.restaurants.find({"id": {"$in": rids}}, {"_id": 0, "id": 1, "username": 1, "location": 1}):
+            rest_map[r["id"]] = r.get("location") or r.get("username") or r["id"][:8]
+    for d in docs:
+        d["restaurant_label"] = rest_map.get(d.get("restaurant_id"), "?")
+    return {"items": docs, "count": len(docs)}
+
+
+
     """Build the full closure detail payload (used by Admin storico + report-ieri)."""
     cash_q = {"date_rome": date_str}
     bev_q = {"date_rome": date_str}
@@ -4015,6 +4203,10 @@ async def startup_scheduler():
         [("restaurant_id", 1), ("date_rome", -1)], unique=True
     )
     await db.cash_daily_counts.create_index([("date_rome", -1)])
+    # Audit log (Report Cassa + Bevande)
+    await db.cash_audit_log.create_index([("last_at", -1)])
+    await db.cash_audit_log.create_index([("restaurant_id", 1), ("date_rome", -1), ("last_at", -1)])
+    await db.cash_audit_log.create_index([("category", 1), ("field", 1), ("last_at", -1)])
     logger.info("MongoDB indexes created")
 
     # Populate the in-memory restaurant->location cache used by the
