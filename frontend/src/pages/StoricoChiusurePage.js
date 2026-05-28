@@ -203,19 +203,19 @@ const StoricoChiusurePage = () => {
 };
 
 // ============== Dettaglio ==============
-// Colore label dei box riepilogo cassa (allineato a Report)
-const CASH_LABEL_COLOR = {
-  mattina: '#374151',
-  altro:   '#7c3aed', // viola
-  glo:     '#ca8a04', // giallo
-  just:    '#ea580c', // arancione
-  delv:    '#15803d', // verde
-  bp:      '#8b4513', // marrone
-  sat:     '#8b4513', // marrone
-  ft:      '#0ea5e9', // azzurro
-  pos:     '#1d4ed8', // blu
-  vers:    '#111827', // nero
-  arr:     '#dc2626', // rosso
+// Sfondo dei box Riepilogo Cassa (allineato a Report). Label restano nere (bianche su VERS).
+const CASH_BOX_STYLE = {
+  mattina: { bg: '#f3f4f6', text: '#111827' },
+  altro:   { bg: '#ede9fe', text: '#111827' },
+  glo:     { bg: '#fef3c7', text: '#111827' },
+  just:    { bg: '#ffedd5', text: '#111827' },
+  delv:    { bg: '#dcfce7', text: '#111827' },
+  bp:      { bg: '#e3c9a1', text: '#111827' },
+  sat:     { bg: '#e3c9a1', text: '#111827' },
+  ft:      { bg: '#e0f2fe', text: '#111827' },
+  pos:     { bg: '#dbeafe', text: '#111827' },
+  vers:    { bg: '#111827', text: '#ffffff' },
+  arr:     { bg: '#fee2e2', text: '#111827' },
 };
 
 const ClosureDetail = ({ detail }) => {
@@ -278,21 +278,28 @@ const ClosureDetail = ({ detail }) => {
         </div>
       </div>
 
-      {/* CASH — Tabella riepilogo cassa con label colorate */}
+      {/* CASH — Tabella riepilogo cassa con box colorati */}
       <div>
         <h3 className="text-xs font-bold uppercase text-gray-700 mb-1">Riepilogo Cassa</h3>
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 text-xs">
-          {cashRows.map(([label, key, v, sign]) => (
-            <div key={key} className="bg-gray-50 border border-gray-200 rounded p-1.5">
+          {cashRows.map(([label, key, v, sign]) => {
+            const st = CASH_BOX_STYLE[key] || { bg: '#f9fafb', text: '#111827' };
+            return (
               <div
-                className="text-[10px] uppercase font-extrabold"
-                style={CASH_LABEL_COLOR[key] ? { color: CASH_LABEL_COLOR[key] } : undefined}
+                key={key}
+                className="border border-gray-200 rounded p-1.5"
+                style={{ backgroundColor: st.bg }}
               >
-                {sign} {label}
+                <div
+                  className="text-[10px] uppercase font-extrabold"
+                  style={{ color: st.text }}
+                >
+                  {sign} {label}
+                </div>
+                <div className="font-black" style={{ color: st.text }}>{v || '—'}</div>
               </div>
-              <div className="font-black text-gray-900">{v || '—'}</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         {/* Spicci: aperti + cassetto + residuo */}
         <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-1 text-xs">

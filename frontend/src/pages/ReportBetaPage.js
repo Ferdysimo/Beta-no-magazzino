@@ -78,20 +78,20 @@ const CASH_FIELDS = [
   { key: 'arr',     label: 'ARR',          op: 'plus',  readonly: false },
 ];
 
-// Colore dedicato per la LABEL di ogni quadratino del Riepilogo Cassa.
-// (Solo il testo della label, non lo sfondo del box.)
-export const CASH_LABEL_COLOR = {
-  mattina: '#374151', // neutro
-  altro:   '#7c3aed', // viola
-  glo:     '#ca8a04', // giallo (più leggibile su bianco)
-  just:    '#ea580c', // arancione
-  delv:    '#15803d', // verde
-  bp:      '#8b4513', // marrone
-  sat:     '#8b4513', // marrone
-  ft:      '#0ea5e9', // azzurro
-  pos:     '#1d4ed8', // blu
-  vers:    '#111827', // nero
-  arr:     '#dc2626', // rosso
+// Colore di SFONDO per ogni quadratino del Riepilogo Cassa (label resta nera).
+// VERS è scuro → label bianca per leggibilità.
+export const CASH_BOX_STYLE = {
+  mattina: { bg: '#f3f4f6', text: '#111827' }, // neutro
+  altro:   { bg: '#ede9fe', text: '#111827' }, // viola chiaro
+  glo:     { bg: '#fef3c7', text: '#111827' }, // giallo chiaro
+  just:    { bg: '#ffedd5', text: '#111827' }, // arancio chiaro
+  delv:    { bg: '#dcfce7', text: '#111827' }, // verde chiaro
+  bp:      { bg: '#e3c9a1', text: '#111827' }, // marrone tenue
+  sat:     { bg: '#e3c9a1', text: '#111827' }, // marrone tenue
+  ft:      { bg: '#e0f2fe', text: '#111827' }, // azzurro chiaro
+  pos:     { bg: '#dbeafe', text: '#111827' }, // blu chiaro
+  vers:    { bg: '#111827', text: '#ffffff' }, // nero
+  arr:     { bg: '#fee2e2', text: '#111827' }, // rosso chiaro
 };
 
 // Definizione del box SPICCI (rotolini / mazzette aperte)
@@ -829,13 +829,17 @@ const ReportBetaPageInner = () => {
                   const rawVal = cashRow[f.key] || '';
                   const isFormula = isVers && rawVal.trim().startsWith('=');
                   const versTextColor = isVers && !isFormula && versColor ? COLOR_MAP[versColor] : null;
-                  const labelColor = CASH_LABEL_COLOR[f.key];
+                  const boxStyle = CASH_BOX_STYLE[f.key] || { bg: '#ffffff', text: '#111827' };
                   return (
-                    <div key={f.key} className="flex-1 min-w-[60px] flex flex-col relative">
+                    <div
+                      key={f.key}
+                      className="flex-1 min-w-[60px] flex flex-col relative rounded p-1"
+                      style={{ backgroundColor: boxStyle.bg }}
+                    >
                       <label
                         className="text-[10px] font-extrabold text-center leading-none mb-0.5 truncate uppercase"
                         title={f.label}
-                        style={labelColor ? { color: labelColor } : undefined}
+                        style={{ color: boxStyle.text }}
                       >
                         {f.label}
                       </label>
