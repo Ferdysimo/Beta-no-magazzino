@@ -123,5 +123,6 @@ Sistema di gestione ordini pasta per multi-ristorante (Flaminio, Grazie, Largo d
 - **FIX CRITICO**: PUT `/api/cash/daily` salvava su una variabile non definita `flaminio_id` (cross-tenant write/NameError). Ora usa `rid` effettivo da `_effective_restaurant_id`.
 - **Guard isAdmin** su `startEditCassetto` in `ReportBetaPage.js`: utenti non-Admin non possono più modificare lo stock del Cassetto Spicci (cursor `not-allowed`, label "solo lettura").
 - **Coerenza formule**: `cashTotal` ora usa `evaluateValue` invece di `parseFloat` puro → `=10+5` funziona anche sui count delle banconote/monete.
+- **Sezione "Magazzino Sera"** aggiunta nel Report (read-only, fonte: Magazzino Bevande): card con il solo valore "sera" per ogni bevanda, evidenziato in `amber-50` quando popolato.
 - **Test pytest aggiunto**: `/app/backend/tests/test_multi_tenancy.py` (7/7 PASS) — copre isolamento `/api/cash/daily`, `/api/beverages/daily`, `prev_cash_sera` carry-over, non-admin no-impersonation.
 

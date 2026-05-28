@@ -684,6 +684,48 @@ const ReportBetaPageInner = () => {
               )}
             </div>
 
+            {/* ============ MAGAZZINO SERA (read-only, da Magazzino Bevande) ============ */}
+            <div className="bg-white rounded border border-gray-200 p-2">
+              <div className="flex items-baseline justify-between mb-2">
+                <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Sera</h2>
+                <span className="text-[10px] text-gray-400">Solo lettura — fonte: Magazzino Bevande</span>
+              </div>
+              {beverages.length === 0 ? (
+                <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
+                  Nessuna bevanda configurata.
+                </div>
+              ) : (
+                <div className="flex items-stretch gap-1.5">
+                  {beverages.map(b => {
+                    const seraRaw = bevCounts[b.sigla]?.sera;
+                    const sera = evaluateValue(seraRaw);
+                    const isEmpty = seraRaw === '' || seraRaw === undefined || seraRaw === null;
+                    return (
+                      <div
+                        key={b.sigla}
+                        data-testid={`bev-mag-sera-${b.sigla}`}
+                        className="flex-1 min-w-[60px] flex flex-col"
+                      >
+                        <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
+                          {b.sigla}
+                        </label>
+                        <div className={`w-full h-11 rounded flex items-center justify-center font-black text-base border ${
+                          isEmpty
+                            ? 'bg-gray-50 border-gray-200 text-gray-400'
+                            : 'bg-amber-50 border-amber-200 text-gray-900'
+                        }`}>
+                          {isEmpty ? '—' : (Number.isInteger(sera) ? sera : sera.toLocaleString('it-IT', { maximumFractionDigits: 2 }))}
+                        </div>
+                        <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
+                          sera
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* ============ RIEPILOGO CASSA ============ */}
             <div className="bg-white rounded border border-gray-200 p-2">
               <div className="flex items-baseline justify-between mb-2">
