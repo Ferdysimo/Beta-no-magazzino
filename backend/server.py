@@ -2972,7 +2972,15 @@ async def get_cash_daily(request: Request, token_data: dict = Depends(verify_tok
         projection={"_id": 0},
     )
     if last_doc:
-        prev_cash_sera = round(_compute_cash_sera(last_doc), 2)
+        # IMPORTANTE: il "cash sera" del giorno prima deve includere paste, bevande e
+        # spicci (stessa formula del frontend), altrimenti la mattina del giorno dopo
+        # sarebbe più bassa del cassetto reale. Recupero le bevande dello stesso
+        # giorno per il calcolo completo.
+        prev_bev_docs = await db.beverage_daily_counts.find(
+            {"restaurant_id": rid, "date_rome": last_doc["date_rome"]},
+            {"_id": 0},
+        ).to_list(100)
+        prev_cash_sera = round(_compute_cash_sera_full(last_doc, prev_bev_docs), 2)
     return {
         "date": today,
         "data": data,
