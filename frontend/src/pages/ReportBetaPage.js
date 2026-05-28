@@ -190,6 +190,9 @@ const ReportBetaPageInner = () => {
   });
   const [cashComments, setCashComments] = useState({}); // { key: "testo commento" }
   const [versColor, setVersColor] = useState('');         // '' | 'black' | 'red' | 'green' | 'blue' | 'orange'
+  // Forza modifica CASH MATTINA (normalmente è read-only perché auto-popolato
+  // dal CASH SERA di ieri). L'utente può sbloccarlo esplicitamente per correzioni.
+  const [forceMattina, setForceMattina] = useState(false);
   const [focusedField, setFocusedField] = useState(null); // key | null (preview bar)
   const [commentPopover, setCommentPopover] = useState(null); // { key, value }
   const commentInputRef = React.useRef(null);
@@ -813,11 +816,26 @@ const ReportBetaPageInner = () => {
 
             {/* ============ RIEPILOGO CASSA ============ */}
             <div className="bg-white rounded border border-gray-200 p-2">
-              <div className="flex items-baseline justify-between mb-2">
+              <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Riepilogo Cassa</h2>
-                <span className="text-[10px] text-gray-400">
-                  Mattina = Sera del giorno prima · supporta formule "=..."
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    data-testid="toggle-force-mattina"
+                    onClick={() => setForceMattina(v => !v)}
+                    title={forceMattina ? 'Modifica forzata di CASH MATTINA attiva — clicca per bloccare' : 'Sblocca CASH MATTINA per forzare un valore manuale'}
+                    className={`text-[10px] px-2 py-0.5 rounded border font-bold uppercase transition-colors ${
+                      forceMattina
+                        ? 'bg-amber-400 border-amber-500 text-amber-900 hover:bg-amber-500'
+                        : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {forceMattina ? '🔓 mattina sbloccato' : '🔒 forza mattina'}
+                  </button>
+                  <span className="text-[10px] text-gray-400">
+                    Mattina = Sera del giorno prima · formule "=..." supportate
+                  </span>
+                </div>
               </div>
               <div className="flex items-stretch gap-1.5">
                 {CASH_FIELDS.map(f => {
@@ -830,6 +848,8 @@ const ReportBetaPageInner = () => {
                   const isFormula = isVers && rawVal.trim().startsWith('=');
                   const versTextColor = isVers && !isFormula && versColor ? COLOR_MAP[versColor] : null;
                   const boxStyle = CASH_BOX_STYLE[f.key] || { bg: '#ffffff', text: '#111827' };
+                  // CASH MATTINA è read-only se non sbloccato esplicitamente
+                  const isReadOnly = f.readonly && !(f.key === 'mattina' && forceMattina);
                   return (
                     <div
                       key={f.key}
@@ -848,17 +868,19 @@ const ReportBetaPageInner = () => {
                         type="text"
                         inputMode="decimal"
                         value={cashRow[f.key] || ''}
-                        onChange={(e) => { if (!f.readonly) setCashRowValue(f.key, e.target.value); }}
+                        onChange={(e) => { if (!isReadOnly) setCashRowValue(f.key, e.target.value); }}
                         onFocus={() => setFocusedField(f.key)}
                         onBlur={() => setFocusedField(curr => curr === f.key ? null : curr)}
                         onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
                         placeholder={f.op === 'base' ? '€' : (f.op === 'minus' ? '−' : '+')}
-                        readOnly={f.readonly}
+                        readOnly={isReadOnly}
                         style={versTextColor ? { color: versTextColor } : undefined}
                         className={`w-full h-11 border rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] border-gray-200 ${
-                          isFormula ? 'bg-rose-100 text-rose-800 border-rose-300' : (f.readonly ? 'bg-gray-100 text-gray-700 cursor-not-allowed' : 'bg-white')
+                          isFormula ? 'bg-rose-100 text-rose-800 border-rose-300'
+                          : isReadOnly ? 'bg-gray-100 text-gray-700 cursor-not-allowed'
+                          : (f.key === 'mattina' && forceMattina ? 'bg-yellow-50 ring-2 ring-amber-400' : 'bg-white')
                         }`}
-                        title={f.readonly ? 'Auto-popolato da CASH SERA del giorno prima' : undefined}
+                        title={isReadOnly ? 'Auto-popolato da CASH SERA del giorno prima (clicca sul lucchetto per forzare)' : (f.key === 'mattina' && forceMattina ? 'Modifica forzata attiva' : undefined)}
                       />
                       {hasComment && (
                         <span
