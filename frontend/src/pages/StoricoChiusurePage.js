@@ -203,16 +203,60 @@ const StoricoChiusurePage = () => {
 };
 
 // ============== Dettaglio ==============
+// Colore label dei box riepilogo cassa (allineato a Report)
+const CASH_LABEL_COLOR = {
+  mattina: '#374151',
+  altro:   '#7c3aed', // viola
+  glo:     '#ca8a04', // giallo
+  just:    '#ea580c', // arancione
+  delv:    '#15803d', // verde
+  bp:      '#8b4513', // marrone
+  sat:     '#8b4513', // marrone
+  ft:      '#0ea5e9', // azzurro
+  pos:     '#1d4ed8', // blu
+  vers:    '#111827', // nero
+  arr:     '#dc2626', // rosso
+};
+
 const ClosureDetail = ({ detail }) => {
   const cash = detail.cash || {};
   const bev = detail.beverages || [];
-  const orders = detail.orders || {};
+  // cashRows: [label, key, value, sign]
   const cashRows = [
-    ['Mattina', cash.mattina, '+'], ['Altro', cash.altro, '+'], ['ARR', cash.arr, '+'],
-    ['GLO', cash.glo, '−'], ['JUST', cash.just, '−'], ['DEL', cash.delv, '−'],
-    ['BP', cash.bp, '−'], ['SAT', cash.sat, '−'], ['FT', cash.ft, '−'],
-    ['POS', cash.pos, '−'], ['VERS', cash.vers, '−'],
+    ['Mattina','mattina', cash.mattina, '+'],
+    ['Altro',  'altro',   cash.altro,   '+'],
+    ['ARR',    'arr',     cash.arr,     '+'],
+    ['GLO',    'glo',     cash.glo,     '−'],
+    ['JUST',   'just',    cash.just,    '−'],
+    ['DEL',    'delv',    cash.delv,    '−'],
+    ['BP',     'bp',      cash.bp,      '−'],
+    ['SAT',    'sat',     cash.sat,     '−'],
+    ['FT',     'ft',      cash.ft,      '−'],
+    ['POS',    'pos',     cash.pos,     '−'],
+    ['VERS',   'vers',    cash.vers,    '−'],
   ];
+  // Spicci: aperti, cassetto totale, residuo
+  const spicciRows = [
+    { lbl: '5€',   aperti: cash.sp5,  stock: cash.cd5  },
+    { lbl: '2€',   aperti: cash.sp2,  stock: cash.cd2  },
+    { lbl: '1€',   aperti: cash.sp1,  stock: cash.cd1  },
+    { lbl: '0,5€', aperti: cash.sp05, stock: cash.cd05 },
+  ];
+  const evalNum = (v) => {
+    if (v === undefined || v === null || v === '') return 0;
+    const s = String(v).trim().replace(',', '.');
+    if (s.startsWith('=')) {
+      const expr = s.slice(1).trim();
+      if (!expr || !/^[\d+\-*/.() \s]*$/.test(expr)) return 0;
+      try {
+        // eslint-disable-next-line no-new-func
+        const n = Function(`"use strict"; return (${expr})`)();
+        return Number.isFinite(n) ? n : 0;
+      } catch { return 0; }
+    }
+    const n = parseFloat(s);
+    return Number.isNaN(n) ? 0 : n;
+  };
   return (
     <div className="space-y-5">
       <div>
@@ -223,35 +267,56 @@ const ClosureDetail = ({ detail }) => {
           </div>
           <div className="bg-yellow-50 border border-yellow-300 rounded px-3 py-1.5">
             <span className="text-[10px] uppercase text-yellow-800">Paste tot</span>
-            <span className="font-bold ml-2">{orders.total_orders || 0}</span>
+            <span className="font-bold ml-2">{detail.paste_count ?? 0}</span>
           </div>
           <div className="bg-yellow-50 border border-yellow-300 rounded px-3 py-1.5">
             <span className="text-[10px] uppercase text-yellow-800">Bevande</span>
             <span className="font-bold ml-2">{detail.bev_total_qty}</span>
-            <span className="ml-2 text-[11px]">€{fmtEur(detail.bev_total_inc)}</span>
+            <span className="text-[10px] uppercase text-yellow-800 ml-3">Importo</span>
+            <span className="font-bold ml-2">€{fmtEur(detail.bev_total_inc)}</span>
           </div>
         </div>
       </div>
 
-      {/* CASH */}
+      {/* CASH — Tabella riepilogo cassa con label colorate */}
       <div>
         <h3 className="text-xs font-bold uppercase text-gray-700 mb-1">Riepilogo Cassa</h3>
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 text-xs">
-          {cashRows.map(([label, v, sign]) => (
-            <div key={label} className="bg-gray-50 border border-gray-200 rounded p-1.5">
-              <div className="text-[9px] uppercase text-gray-500 font-bold">{sign} {label}</div>
+          {cashRows.map(([label, key, v, sign]) => (
+            <div key={key} className="bg-gray-50 border border-gray-200 rounded p-1.5">
+              <div
+                className="text-[10px] uppercase font-extrabold"
+                style={CASH_LABEL_COLOR[key] ? { color: CASH_LABEL_COLOR[key] } : undefined}
+              >
+                {sign} {label}
+              </div>
               <div className="font-black text-gray-900">{v || '—'}</div>
             </div>
           ))}
         </div>
-        {/* Spicci + Cassetto */}
+        {/* Spicci: aperti + cassetto + residuo */}
         <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-1 text-xs">
-          {['sp5', 'sp2', 'sp1', 'sp05'].map((k, i) => (
-            <div key={k} className="bg-blue-50 border border-blue-200 rounded p-1.5">
-              <div className="text-[9px] uppercase text-blue-800 font-bold">Spicci {['5','2','1','0,5'][i]}</div>
-              <div className="font-black text-gray-900">{cash[k] || '0'} aperti</div>
-            </div>
-          ))}
+          {spicciRows.map(s => {
+            const aperti = evalNum(s.aperti);
+            const stock = evalNum(s.stock);
+            const residuo = stock - aperti;
+            const hasStock = s.stock !== undefined && s.stock !== null && s.stock !== '';
+            return (
+              <div key={s.lbl} className="bg-blue-50 border border-blue-200 rounded p-1.5">
+                <div className="text-[10px] uppercase text-blue-800 font-extrabold">Spicci {s.lbl}</div>
+                <div className="flex justify-between text-[11px] mt-0.5">
+                  <span className="text-gray-700">Aperti: <b className="text-gray-900">{s.aperti || '0'}</b></span>
+                  <span className="text-gray-700">Cassetto: <b className="text-gray-900">{hasStock ? s.stock : '—'}</b></span>
+                </div>
+                <div className="text-[11px] mt-0.5">
+                  <span className="text-gray-700">Residuo: </span>
+                  <b className={hasStock ? (residuo < 0 ? 'text-rose-700' : 'text-emerald-700') : 'text-gray-400'}>
+                    {hasStock ? (Number.isInteger(residuo) ? residuo : residuo.toFixed(2)) : '—'}
+                  </b>
+                </div>
+              </div>
+            );
+          })}
         </div>
         {cash.paste_text && (
           <details className="mt-2 bg-gray-50 border border-gray-200 rounded p-2">

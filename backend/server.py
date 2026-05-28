@@ -2907,6 +2907,21 @@ def _compute_bev_total_eur(bev_docs: list) -> float:
     return total
 
 
+def _compute_paste_count(paste_text: str) -> int:
+    """Conta righe paste riconosciute (mirror di _compute_paste_total_eur per il count)."""
+    if not paste_text:
+        return 0
+    n = 0
+    siglas_sorted = sorted(PASTA_PRICES_MAP.keys(), key=len, reverse=True)
+    for line in paste_text.split("\n"):
+        upper = line.upper()
+        for sigla in siglas_sorted:
+            if re.search(rf"\b{sigla}\b", upper):
+                n += 1
+                break
+    return n
+
+
 def _compute_cash_sera_full(cash_row: dict, bev_docs: list) -> float:
     """Cash sera completo: include paste, bevande e spicci (come nel frontend)."""
     base = _compute_cash_sera(cash_row)
@@ -3175,12 +3190,14 @@ async def list_closures(
                 bev_total_qty += int(qty)
                 bev_total_inc += qty * bev_prices.get(r["sigla"], 0)
         orders_info = await _orders_aggregate_for_date(date_str, restaurant_id=restaurant_id)
+        paste_count = _compute_paste_count(cash_doc.get("paste_text", "") if cash_doc else "")
         items.append({
             "date": date_str,
             "cash_sera": cash_sera,
             "bev_total_qty": bev_total_qty,
             "bev_total_inc": round(bev_total_inc, 2),
             "orders_total": orders_info["total_orders"],
+            "paste_count": paste_count,
         })
     return {"items": items}
 
@@ -3229,6 +3246,10 @@ async def closure_detail(
             bev_total_qty += int(qty)
             bev_total_inc += inc
     orders_info = await _orders_aggregate_for_date(date_str, restaurant_id=restaurant_id)
+    # Ordino le righe bevande secondo il catalogo (sort_order) così AL > AG > C > CZ > ...
+    bev_sort_idx = {b["sigla"]: b.get("sort_order", 999) for b in BEVERAGES_CATALOG}
+    bev_rows.sort(key=lambda r: bev_sort_idx.get(r["sigla"], 999))
+    paste_count = _compute_paste_count(cash_doc.get("paste_text", "") if cash_doc else "")
     return {
         "date": date_str,
         "cash": cash_doc,
@@ -3237,6 +3258,7 @@ async def closure_detail(
         "bev_total_qty": bev_total_qty,
         "bev_total_inc": round(bev_total_inc, 2),
         "orders": orders_info,
+        "paste_count": paste_count,
     }
 
 @api_router.post("/beverages/carichi")

@@ -281,6 +281,7 @@ const MagazzinoBevandePageInner = () => {
                       const canComment = field === 'inUsc' || field === 'scarti';
                       const comment = canComment ? ((counts[r.sigla] || {}).comments || {})[field] : null;
                       const showPopover = commentPopover && commentPopover.sigla === r.sigla && commentPopover.field === field;
+                      const isReadOnly = field === 'mattina';
                       return (
                         <td key={field} className="px-1 py-1 border-r border-gray-200 relative">
                           <input
@@ -288,10 +289,11 @@ const MagazzinoBevandePageInner = () => {
                             type="text"
                             inputMode="text"
                             value={raw}
-                            onChange={(e) => setField(r.sigla, field, e.target.value)}
+                            readOnly={isReadOnly}
+                            onChange={(e) => { if (!isReadOnly) setField(r.sigla, field, e.target.value); }}
                             onContextMenu={canComment ? (e) => { e.preventDefault(); openCommentPopover(r.sigla, field); } : undefined}
-                            title={canComment ? 'Tasto destro per aggiungere/modificare il commento' : ((field === 'inUsc' || field === 'sera') ? 'Puoi usare formule: es. =12-2 oppure =5+3' : '')}
-                            className={`w-16 h-9 border rounded text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] ${isFormula ? 'bg-blue-50 border-blue-300 text-blue-900' : 'border-gray-200'}`}
+                            title={isReadOnly ? 'Auto-popolato dal Magazzino Sera di ieri' : (canComment ? 'Tasto destro per aggiungere/modificare il commento' : ((field === 'inUsc' || field === 'sera') ? 'Puoi usare formule: es. =12-2 oppure =5+3' : ''))}
+                            className={`w-16 h-9 border rounded text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] ${isFormula ? 'bg-blue-50 border-blue-300 text-blue-900' : (isReadOnly ? 'bg-gray-100 text-gray-700 border-gray-200 cursor-not-allowed' : 'border-gray-200')}`}
                             placeholder={(field === 'inUsc' || field === 'sera') ? '0 o =…' : '0'}
                           />
                           {comment && (

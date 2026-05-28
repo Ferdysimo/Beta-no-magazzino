@@ -65,7 +65,7 @@ const evaluateValue = (v) => {
 
 // Definizione del riepilogo cassa Flaminio (Report)
 const CASH_FIELDS = [
-  { key: 'mattina', label: 'CASH MATTINA', op: 'base', readonly: false },
+  { key: 'mattina', label: 'CASH MATTINA', op: 'base', readonly: true  },
   { key: 'altro',   label: 'ALTRO',        op: 'plus',  readonly: false },
   { key: 'glo',     label: 'GLO',          op: 'minus', readonly: false },
   { key: 'just',    label: 'JUST',         op: 'minus', readonly: false },
@@ -77,6 +77,22 @@ const CASH_FIELDS = [
   { key: 'vers',    label: 'VERS',         op: 'minus', readonly: false },
   { key: 'arr',     label: 'ARR',          op: 'plus',  readonly: false },
 ];
+
+// Colore dedicato per la LABEL di ogni quadratino del Riepilogo Cassa.
+// (Solo il testo della label, non lo sfondo del box.)
+export const CASH_LABEL_COLOR = {
+  mattina: '#374151', // neutro
+  altro:   '#7c3aed', // viola
+  glo:     '#ca8a04', // giallo (più leggibile su bianco)
+  just:    '#ea580c', // arancione
+  delv:    '#15803d', // verde
+  bp:      '#8b4513', // marrone
+  sat:     '#8b4513', // marrone
+  ft:      '#0ea5e9', // azzurro
+  pos:     '#1d4ed8', // blu
+  vers:    '#111827', // nero
+  arr:     '#dc2626', // rosso
+};
 
 // Definizione del box SPICCI (rotolini / mazzette aperte)
 const SPICCI_FIELDS = [
@@ -731,17 +747,17 @@ const ReportBetaPageInner = () => {
                       </span>
                     </div>
                   ))}
-                  {/* Totale */}
+                  {/* Totale — solo importo € (no quantità, no sfondo nero) */}
                   <div className="flex-1 min-w-[70px] flex flex-col">
                     <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">Tot</label>
                     <div
-                      data-testid="bev-sales-total-qty"
-                      className="w-full h-11 bg-gray-900 text-[#F5C518] rounded flex items-center justify-center font-black text-base"
+                      data-testid="bev-sales-total-inc"
+                      className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-base text-gray-900"
                     >
-                      {bevTotalQty}
-                    </div>
-                    <span data-testid="bev-sales-total-inc" className="text-[9px] text-gray-700 mt-0.5 text-center leading-none font-bold">
                       €{bevTotalInc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                    <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
+                      &nbsp;
                     </span>
                   </div>
                 </div>
@@ -813,9 +829,14 @@ const ReportBetaPageInner = () => {
                   const rawVal = cashRow[f.key] || '';
                   const isFormula = isVers && rawVal.trim().startsWith('=');
                   const versTextColor = isVers && !isFormula && versColor ? COLOR_MAP[versColor] : null;
+                  const labelColor = CASH_LABEL_COLOR[f.key];
                   return (
                     <div key={f.key} className="flex-1 min-w-[60px] flex flex-col relative">
-                      <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={f.label}>
+                      <label
+                        className="text-[10px] font-extrabold text-center leading-none mb-0.5 truncate uppercase"
+                        title={f.label}
+                        style={labelColor ? { color: labelColor } : undefined}
+                      >
                         {f.label}
                       </label>
                       <input
@@ -823,15 +844,17 @@ const ReportBetaPageInner = () => {
                         type="text"
                         inputMode="decimal"
                         value={cashRow[f.key] || ''}
-                        onChange={(e) => setCashRowValue(f.key, e.target.value)}
+                        onChange={(e) => { if (!f.readonly) setCashRowValue(f.key, e.target.value); }}
                         onFocus={() => setFocusedField(f.key)}
                         onBlur={() => setFocusedField(curr => curr === f.key ? null : curr)}
                         onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
                         placeholder={f.op === 'base' ? '€' : (f.op === 'minus' ? '−' : '+')}
+                        readOnly={f.readonly}
                         style={versTextColor ? { color: versTextColor } : undefined}
                         className={`w-full h-11 border rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] border-gray-200 ${
-                          isFormula ? 'bg-rose-100 text-rose-800 border-rose-300' : 'bg-white'
+                          isFormula ? 'bg-rose-100 text-rose-800 border-rose-300' : (f.readonly ? 'bg-gray-100 text-gray-700 cursor-not-allowed' : 'bg-white')
                         }`}
+                        title={f.readonly ? 'Auto-popolato da CASH SERA del giorno prima' : undefined}
                       />
                       {hasComment && (
                         <span
@@ -948,7 +971,7 @@ const ReportBetaPageInner = () => {
                   </div>
                   <div
                     data-testid="spicci-totale"
-                    className="w-full h-11 mt-1 bg-gray-900 text-[#F5C518] rounded flex items-center justify-center font-black text-sm"
+                    className="w-full h-11 mt-1 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-sm text-gray-900"
                   >
                     €{spicciValues.total.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                   </div>
