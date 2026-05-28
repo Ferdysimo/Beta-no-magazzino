@@ -203,6 +203,20 @@ const StoricoChiusurePage = () => {
 };
 
 // ============== Dettaglio ==============
+// Banconote / monete (deve restare allineato a CASH_DENOMINATIONS in ReportBetaPage.js)
+const CASH_DENOMINATIONS = [
+  { key: 'big100', label: '100',  value: 100 },
+  { key: 'big',    label: '50',   value: 50  },
+  { key: 'd20',    label: '20',   value: 20  },
+  { key: 'd10',    label: '10',   value: 10  },
+  { key: 'd5',     label: '5',    value: 5   },
+  { key: 'c2',     label: '2',    value: 2   },
+  { key: 'c1',     label: '1',    value: 1   },
+  { key: 'c50',    label: '0,50', value: 0.5 },
+  { key: 'c20',    label: '0,20', value: 0.2 },
+  { key: 'c10',    label: '0,10', value: 0.1 },
+];
+
 // Sfondo dei box Riepilogo Cassa (allineato a Report). Label restano nere (bianche su VERS).
 const CASH_BOX_STYLE = {
   mattina: { bg: '#f3f4f6', text: '#111827' },
@@ -277,6 +291,41 @@ const ClosureDetail = ({ detail }) => {
           </div>
         </div>
       </div>
+
+      {/* CASSA — Conta banconote/monete della chiusura (replica della sezione "Cassa" del Report) */}
+      {(() => {
+        const banc = cash.cash_banconote || {};
+        const rows = CASH_DENOMINATIONS.map(d => {
+          const raw = String(banc[d.key] ?? '').trim();
+          const n = evalNum(raw);
+          const subTot = (!raw || n < 0) ? 0 : n * d.value;
+          return { ...d, raw, subTot };
+        });
+        const total = rows.reduce((s, r) => s + r.subTot, 0);
+        const anyValue = rows.some(r => r.raw !== '');
+        if (!anyValue) return null;
+        return (
+          <div>
+            <h3 className="text-xs font-bold uppercase text-gray-700 mb-1">Cassa</h3>
+            <div className="grid grid-cols-6 sm:grid-cols-11 gap-1 text-xs">
+              {rows.map(r => (
+                <div key={r.key} className="bg-gray-50 border border-gray-200 rounded p-1.5 flex flex-col items-center">
+                  <div className="text-[10px] font-bold text-gray-700">{r.label}</div>
+                  <div className="font-black text-gray-900 text-sm">{r.raw || '0'}</div>
+                  <div className="text-[9px] text-gray-500 leading-none">
+                    {r.subTot > 0 ? `€${fmtEur(r.subTot)}` : '\u00A0'}
+                  </div>
+                </div>
+              ))}
+              <div className="bg-gray-900 text-[#F5C518] rounded p-1.5 flex flex-col items-center">
+                <div className="text-[10px] font-bold uppercase">Tot</div>
+                <div className="font-black text-sm">€{fmtEur(total)}</div>
+                <div className="text-[9px] opacity-80">in €</div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* CASH — Tabella riepilogo cassa con box colorati */}
       <div>

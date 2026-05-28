@@ -190,9 +190,6 @@ const ReportBetaPageInner = () => {
   });
   const [cashComments, setCashComments] = useState({}); // { key: "testo commento" }
   const [versColor, setVersColor] = useState('');         // '' | 'black' | 'red' | 'green' | 'blue' | 'orange'
-  // Riga di IERI (read-only, mostrata in alto nel Report come "tabella CASSA scritta ieri")
-  const [prevRow, setPrevRow] = useState(null);
-  const [prevDate, setPrevDate] = useState('');
   const [focusedField, setFocusedField] = useState(null); // key | null (preview bar)
   const [commentPopover, setCommentPopover] = useState(null); // { key, value }
   const commentInputRef = React.useRef(null);
@@ -323,9 +320,6 @@ const ReportBetaPageInner = () => {
         setCashRow(initial);
         setCashComments(res.data?.comments || {});
         setVersColor(res.data?.vers_color || '');
-        // Riga di ieri (read-only, mostrata in alto nel Report)
-        setPrevRow(res.data?.prev_row || null);
-        setPrevDate(res.data?.prev_date || '');
         // Persistenza paste incollate + banconote + prezzi manuali
         if (typeof res.data?.paste_text === 'string') setPasteText(res.data.paste_text);
         if (res.data?.cash_banconote && typeof res.data.cash_banconote === 'object') {
@@ -816,46 +810,6 @@ const ReportBetaPageInner = () => {
                 </div>
               )}
             </div>
-
-            {/* ============ RIEPILOGO CASSA DI IERI (read-only) ============ */}
-            {prevRow && (
-              <div className="bg-white rounded border border-gray-200 p-2">
-                <div className="flex items-baseline justify-between mb-2">
-                  <h2 className="text-xs font-bold text-gray-800 uppercase">Riepilogo Cassa di ieri</h2>
-                  <span className="text-[10px] text-gray-400">
-                    {prevDate ? `Chiusura del ${prevDate.split('-').reverse().join('/')}` : ''} · solo lettura
-                  </span>
-                </div>
-                <div className="flex items-stretch gap-1.5">
-                  {CASH_FIELDS.map(f => {
-                    const sign = f.op === 'minus' ? '−' : (f.op === 'plus' ? '+' : '=');
-                    const boxStyle = CASH_BOX_STYLE[f.key] || { bg: '#ffffff', text: '#111827' };
-                    return (
-                      <div
-                        key={f.key}
-                        className="flex-1 min-w-[60px] flex flex-col rounded p-1"
-                        style={{ backgroundColor: boxStyle.bg }}
-                      >
-                        <label
-                          className="text-[10px] font-extrabold text-center leading-none mb-0.5 truncate uppercase"
-                          style={{ color: boxStyle.text }}
-                        >
-                          {f.label}
-                        </label>
-                        <div
-                          data-testid={`prev-cash-${f.key}`}
-                          className="w-full h-11 border border-gray-200 rounded px-1 text-center font-bold text-sm flex items-center justify-center bg-gray-50 text-gray-800 select-text"
-                          title="Valore della chiusura di ieri"
-                        >
-                          {prevRow[f.key] || '—'}
-                        </div>
-                        <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">{sign}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
 
             {/* ============ RIEPILOGO CASSA ============ */}
             <div className="bg-white rounded border border-gray-200 p-2">
