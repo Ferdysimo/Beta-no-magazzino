@@ -52,10 +52,10 @@ const MonitorClientiPage = () => {
   const usableH = Math.max(0, vp.h - messagePx - PAD * 2);
 
   const { cols, side } = fitGrid(monitorOrders.length, usableW, usableH, GAP);
-  // Hard ceiling so a single order doesn't bloat into a full-screen square.
-  // 360px is roughly the size of a large phone — readable across the room
-  // without dominating the screen.
-  const MAX_BOX = 360;
+  // Limite massimo del box: cresce con il numero di ordini, così con pochi clienti
+  // i numeri restano leggibili senza diventare giganteschi.
+  // 1 ordine ≈ 180px · 4 ordini ≈ 248px · 8+ ordini ≈ 320px (cap)
+  const MAX_BOX = Math.min(320, 160 + monitorOrders.length * 22);
   const boxSide = Math.max(80, Math.min(MAX_BOX, Math.floor(side * 0.58)));
   const numberFontPx = Math.floor(boxSide * 0.66);
   const messageFontPx = Math.max(28, Math.min(80, Math.round(messagePx * 0.55)));
