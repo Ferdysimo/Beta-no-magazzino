@@ -3025,7 +3025,7 @@ async def upsert_cash_daily(
                 clean[k[:50]] = t[:500]
         set_payload["comments"] = clean
     await db.cash_daily_counts.update_one(
-        {"restaurant_id": flaminio_id, "date_rome": today},
+        {"restaurant_id": rid, "date_rome": today},
         {"$set": set_payload},
         upsert=True,
     )

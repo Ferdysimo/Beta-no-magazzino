@@ -330,6 +330,8 @@ const ReportBetaPageInner = () => {
   }, [editingCassetto]);
 
   const startEditCassetto = (f) => {
+    // Solo Admin può modificare lo stock "Cassetto Spicci"
+    if (!isAdmin) return;
     // Mostra nell'input il valore residuo corrente (stock_base - aperti)
     const raw = cashRow[f.key];
     if (raw === '' || raw === undefined || raw === null) {
@@ -850,7 +852,7 @@ const ReportBetaPageInner = () => {
               <div className="bg-white rounded border border-gray-200 p-2 flex-[4] min-w-0">
                 <div className="flex items-baseline justify-between mb-2">
                   <h2 className="text-xs font-bold text-gray-800 uppercase">Cassetto Spicci</h2>
-                  <span className="text-[10px] text-gray-400">click per modificare</span>
+                  <span className="text-[10px] text-gray-400">{isAdmin ? 'click per modificare' : 'solo lettura'}</span>
                 </div>
                 <div className="flex items-stretch gap-1.5">
                   {CASSETTO_FIELDS.map(f => {
@@ -897,11 +899,15 @@ const ReportBetaPageInner = () => {
                             data-testid={`cassetto-display-${f.key}`}
                             onClick={() => startEditCassetto(f)}
                             onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
-                            title="Clicca per modificare · destro per commento"
-                            className={`w-full h-11 border rounded px-1 text-center font-black text-sm transition-colors cursor-pointer ${
+                            title={isAdmin ? "Clicca per modificare · destro per commento" : "Solo lettura · destro per commento"}
+                            className={`w-full h-11 border rounded px-1 text-center font-black text-sm transition-colors ${
+                              isAdmin ? 'cursor-pointer' : 'cursor-not-allowed'
+                            } ${
                               isNegative
                                 ? 'bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100'
-                                : 'bg-gray-50 border-gray-200 text-gray-900 hover:bg-yellow-50 hover:border-yellow-300'
+                                : isAdmin
+                                  ? 'bg-gray-50 border-gray-200 text-gray-900 hover:bg-yellow-50 hover:border-yellow-300'
+                                  : 'bg-gray-50 border-gray-200 text-gray-700'
                             }`}
                           >
                             {displayValue}
