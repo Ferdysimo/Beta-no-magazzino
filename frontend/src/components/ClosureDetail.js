@@ -87,11 +87,11 @@ export const ClosureDetail = ({ detail }) => {
           <div className="bg-yellow-50 border border-yellow-300 rounded px-3 py-1.5">
             <span className="text-[10px] uppercase text-yellow-800">Paste tot</span>
             <span className="font-bold ml-2">{detail.paste_count ?? 0}</span>
+            <span className="text-[10px] uppercase text-yellow-800 ml-3">Importo</span>
+            <span className="font-bold ml-2">€{fmtEur(detail.paste_total_eur ?? 0)}</span>
           </div>
           <div className="bg-yellow-50 border border-yellow-300 rounded px-3 py-1.5">
-            <span className="text-[10px] uppercase text-yellow-800">Bevande</span>
-            <span className="font-bold ml-2">{detail.bev_total_qty}</span>
-            <span className="text-[10px] uppercase text-yellow-800 ml-3">Importo</span>
+            <span className="text-[10px] uppercase text-yellow-800">Bevande Importo</span>
             <span className="font-bold ml-2">€{fmtEur(detail.bev_total_inc)}</span>
           </div>
         </div>

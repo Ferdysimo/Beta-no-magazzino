@@ -3297,6 +3297,10 @@ async def _build_closure_detail(date_str: str, restaurant_id: Optional[str]) -> 
         cash_doc.get("paste_text", "") if cash_doc else "",
         (cash_doc.get("manual_prices") if cash_doc else None) or {},
     )
+    paste_total_eur = round(_compute_paste_total_eur(
+        cash_doc.get("paste_text", "") if cash_doc else "",
+        (cash_doc.get("manual_prices") if cash_doc else None) or {},
+    ), 2)
     return {
         "date": date_str,
         "cash": cash_doc,
@@ -3306,6 +3310,7 @@ async def _build_closure_detail(date_str: str, restaurant_id: Optional[str]) -> 
         "bev_total_inc": round(bev_total_inc, 2),
         "orders": orders_info,
         "paste_count": paste_count,
+        "paste_total_eur": paste_total_eur,
         "paste_unrecognized": paste_unrecognized,
     }
 
