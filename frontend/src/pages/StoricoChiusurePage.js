@@ -171,7 +171,7 @@ const StoricoChiusurePage = () => {
                     >
                       <div className="font-bold text-sm">{fmtDate(it.date)}</div>
                       <div className="text-[11px] text-gray-600 mt-0.5 flex gap-2">
-                        <span>📦 {it.orders_total}</span>
+                        <span title="Paste totali (incluse non riconosciute)">📦 {it.paste_count ?? it.orders_total ?? 0}</span>
                         <span>🥤 {it.bev_total_qty}</span>
                         <span>💶 €{fmtEur(it.cash_sera)}</span>
                       </div>
@@ -379,6 +379,42 @@ const ClosureDetail = ({ detail }) => {
             <summary className="text-[11px] font-bold cursor-pointer text-gray-700">Paste incollate ({cash.paste_text.split('\n').filter(Boolean).length})</summary>
             <pre className="text-[11px] mt-1 whitespace-pre-wrap font-mono">{cash.paste_text}</pre>
           </details>
+        )}
+        {detail.paste_unrecognized && detail.paste_unrecognized.length > 0 && (
+          <div className="mt-2 bg-rose-50 border border-rose-200 rounded p-2">
+            <div className="text-[11px] font-extrabold text-rose-800 uppercase mb-1">
+              Paste non riconosciute ({detail.paste_unrecognized.length})
+            </div>
+            <div className="text-[10px] text-rose-700 mb-1.5">
+              Righe a cui è stato assegnato un prezzo manuale (o lasciate a 0).
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border border-rose-200 rounded bg-white">
+                <thead className="bg-rose-100">
+                  <tr>
+                    <th className="text-left p-1.5 w-10">#</th>
+                    <th className="text-left p-1.5">Riga</th>
+                    <th className="text-right p-1.5 w-24">Prezzo €</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.paste_unrecognized.map(u => (
+                    <tr key={u.idx} className="border-t border-rose-100">
+                      <td className="p-1.5 text-rose-700 font-bold">{u.idx + 1}</td>
+                      <td className="p-1.5 font-mono">{u.text}</td>
+                      <td className="p-1.5 text-right">
+                        {u.manual_price > 0 ? (
+                          <span className="font-black text-emerald-700">€{fmtEur(u.manual_price)}</span>
+                        ) : (
+                          <span className="text-rose-600 italic">non assegnato</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
       </div>
 

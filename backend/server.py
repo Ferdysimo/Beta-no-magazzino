@@ -2879,18 +2879,36 @@ def _compute_spicci_total(row: dict) -> float:
     return sum(_eval_cash_value(row.get(k, "")) * v for k, v in SPICCI_MULTIPLIERS.items())
 
 
-def _compute_paste_total_eur(paste_text: str) -> float:
-    """Conta le paste riconosciute nel testo (1 per riga) e somma il prezzo."""
+def _compute_paste_total_eur(paste_text: str, manual_prices: Optional[dict] = None) -> float:
+    """Somma € paste: riconosciute (prezzo da PASTA_PRICES_MAP) + non riconosciute con
+    prezzo manuale assegnato. Mirror del frontend `pasteAnalysis.totalEuro`."""
     if not paste_text:
         return 0.0
+    lines = [l.strip() for l in paste_text.split("\n")]
+    lines = [l for l in lines if l]
     total = 0.0
     siglas_sorted = sorted(PASTA_PRICES_MAP.keys(), key=len, reverse=True)
-    for line in paste_text.split("\n"):
+    mp = manual_prices or {}
+    for idx, line in enumerate(lines):
         upper = line.upper()
-        for sigla in siglas_sorted:
-            if re.search(rf"\b{sigla}\b", upper):
-                total += PASTA_PRICES_MAP[sigla]
-                break
+        if re.search(r"\bXL\b", upper):
+            recognized_price = None
+        else:
+            recognized_price = None
+            for sigla in siglas_sorted:
+                if re.search(rf"\b{sigla}\b", upper):
+                    recognized_price = PASTA_PRICES_MAP[sigla]
+                    break
+        if recognized_price is not None:
+            total += recognized_price
+        else:
+            raw = mp.get(str(idx), mp.get(idx, ""))
+            try:
+                n = float(str(raw).replace(",", ".").strip()) if str(raw).strip() else 0.0
+                if n > 0:
+                    total += n
+            except Exception:
+                pass
     return total
 
 
@@ -2908,25 +2926,52 @@ def _compute_bev_total_eur(bev_docs: list) -> float:
 
 
 def _compute_paste_count(paste_text: str) -> int:
-    """Conta righe paste riconosciute (mirror di _compute_paste_total_eur per il count)."""
+    """Conta TUTTE le righe non vuote del paste_text (riconosciute + non riconosciute).
+    Mirror del frontend: `totalCount = recognized + unrecognized`."""
     if not paste_text:
         return 0
-    n = 0
+    return sum(1 for line in paste_text.split("\n") if line.strip())
+
+
+def _compute_paste_unrecognized(paste_text: str, manual_prices: dict) -> List[Dict]:
+    """Estrae le righe non riconosciute (senza sigla pasta) con eventuale prezzo manuale.
+    L'indice usato per il match con manual_prices è quello della riga dopo split + trim+filter,
+    coerente col frontend ReportBetaPage `pasteAnalysis`."""
+    if not paste_text:
+        return []
+    lines = [l.strip() for l in paste_text.split("\n")]
+    lines = [l for l in lines if l]
     siglas_sorted = sorted(PASTA_PRICES_MAP.keys(), key=len, reverse=True)
-    for line in paste_text.split("\n"):
+    out: List[Dict] = []
+    mp = manual_prices or {}
+    for idx, line in enumerate(lines):
         upper = line.upper()
-        for sigla in siglas_sorted:
-            if re.search(rf"\b{sigla}\b", upper):
-                n += 1
-                break
-    return n
+        # Esclusione XL e ricerca sigla (mirror di findPasta nel frontend)
+        if re.search(r"\bXL\b", upper):
+            recognized = False
+        else:
+            recognized = any(re.search(rf"\b{s}\b", upper) for s in siglas_sorted)
+        if recognized:
+            continue
+        raw_price = mp.get(str(idx), mp.get(idx, ""))
+        try:
+            price = float(str(raw_price).replace(",", ".").strip()) if str(raw_price).strip() else 0.0
+            if price < 0:
+                price = 0.0
+        except Exception:
+            price = 0.0
+        out.append({"idx": idx, "text": line, "manual_price": price})
+    return out
 
 
 def _compute_cash_sera_full(cash_row: dict, bev_docs: list) -> float:
-    """Cash sera completo: include paste, bevande e spicci (come nel frontend)."""
+    """Cash sera completo: include paste (riconosciute + manuali), bevande e spicci."""
     base = _compute_cash_sera(cash_row)
     return base + _compute_spicci_total(cash_row) \
-                + _compute_paste_total_eur(cash_row.get("paste_text", "") or "") \
+                + _compute_paste_total_eur(
+                    cash_row.get("paste_text", "") or "",
+                    cash_row.get("manual_prices") or {},
+                ) \
                 + _compute_bev_total_eur(bev_docs)
 
 
@@ -3258,6 +3303,10 @@ async def closure_detail(
     bev_sort_idx = {b["sigla"]: b.get("sort_order", 999) for b in BEVERAGES_CATALOG}
     bev_rows.sort(key=lambda r: bev_sort_idx.get(r["sigla"], 999))
     paste_count = _compute_paste_count(cash_doc.get("paste_text", "") if cash_doc else "")
+    paste_unrecognized = _compute_paste_unrecognized(
+        cash_doc.get("paste_text", "") if cash_doc else "",
+        (cash_doc.get("manual_prices") if cash_doc else None) or {},
+    )
     return {
         "date": date_str,
         "cash": cash_doc,
@@ -3267,6 +3316,7 @@ async def closure_detail(
         "bev_total_inc": round(bev_total_inc, 2),
         "orders": orders_info,
         "paste_count": paste_count,
+        "paste_unrecognized": paste_unrecognized,
     }
 
 @api_router.post("/beverages/carichi")
