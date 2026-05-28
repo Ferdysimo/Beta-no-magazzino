@@ -183,6 +183,10 @@ const ReportBetaPageInner = () => {
   const [editingCassetto, setEditingCassetto] = useState(null); // key | null
   const [editingValue, setEditingValue] = useState('');         // valore digitato durante edit
   const editingInputRef = React.useRef(null);
+  // Magazzino Sera editabile (debounce per sigla + protezione anti-override del polling)
+  const bevSaveTimers = React.useRef({});            // { sigla: timeout }
+  const bevPendingSeraUntil = React.useRef({});      // { sigla: timestamp ms } — finché non scade, il poll non sovrascrive 'sera'
+  const [focusedSeraSigla, setFocusedSeraSigla] = useState(null);
 
   // Carica catalogo bevande + conteggi giornata. Refresh ogni 15s così se il
   // cassiere aggiorna la pagina magazzino in un'altra tab vede subito qui.
@@ -198,18 +202,45 @@ const ReportBetaPageInner = () => {
         ]);
         if (cancelled) return;
         setBeverages(invRes.data || []);
-        const merged = {};
         const today = dailyRes.data?.counts || {};
         const prev = dailyRes.data?.prev_sera || {};
-        (invRes.data || []).forEach(b => {
-          if (today[b.sigla]) merged[b.sigla] = today[b.sigla];
-          else if (prev[b.sigla] !== undefined && prev[b.sigla] !== '') {
-            merged[b.sigla] = { mattina: String(prev[b.sigla]), inUsc: '', scarti: '', sera: '' };
-          } else {
-            merged[b.sigla] = { mattina: '', inUsc: '', scarti: '', sera: '' };
-          }
+        const now = Date.now();
+        setBevCounts(prevState => {
+          const merged = {};
+          (invRes.data || []).forEach(b => {
+            const remote = today[b.sigla];
+            const local = prevState[b.sigla];
+            // Protezione: se l'utente sta editando 'sera' (focus) o ha appena
+            // salvato (<3s), mantieni il valore locale di 'sera' per evitare flicker.
+            const seraLocked = (
+              focusedSeraSigla === b.sigla
+              || (bevPendingSeraUntil.current[b.sigla] && bevPendingSeraUntil.current[b.sigla] > now)
+            );
+            if (remote) {
+              merged[b.sigla] = {
+                mattina: remote.mattina || '',
+                inUsc: remote.inUsc || '',
+                scarti: remote.scarti || '',
+                sera: seraLocked ? (local?.sera ?? '') : (remote.sera || ''),
+              };
+            } else if (prev[b.sigla] !== undefined && prev[b.sigla] !== '') {
+              merged[b.sigla] = {
+                mattina: String(prev[b.sigla]),
+                inUsc: '',
+                scarti: '',
+                sera: seraLocked ? (local?.sera ?? '') : '',
+              };
+            } else {
+              merged[b.sigla] = {
+                mattina: '',
+                inUsc: '',
+                scarti: '',
+                sera: seraLocked ? (local?.sera ?? '') : '',
+              };
+            }
+          });
+          return merged;
         });
-        setBevCounts(merged);
       } catch (e) {
         // 403 se non Flaminio/Admin: ignora silenziosamente
       }
@@ -217,7 +248,40 @@ const ReportBetaPageInner = () => {
     load();
     const id = setInterval(load, 15000);
     return () => { cancelled = true; clearInterval(id); };
+  }, [token, focusedSeraSigla]);
+
+  // Auto-save debounced di una bevanda (intera riga, come MagazzinoBevandePage)
+  const scheduleBevSave = React.useCallback((sigla, row) => {
+    if (bevSaveTimers.current[sigla]) clearTimeout(bevSaveTimers.current[sigla]);
+    bevSaveTimers.current[sigla] = setTimeout(async () => {
+      try {
+        await axios.put(`${API}/beverages/daily`, {
+          sigla,
+          mattina: row.mattina ?? '',
+          inUsc: row.inUsc ?? '',
+          scarti: row.scarti ?? '',
+          sera: row.sera ?? '',
+          comments: row.comments || {},
+        }, { headers: { Authorization: `Bearer ${token}` } });
+        // Mantieni protezione del valore locale per altri 2s dopo il save
+        bevPendingSeraUntil.current[sigla] = Date.now() + 2000;
+      } catch (e) {
+        console.error('save beverage sera (report)', e);
+      }
+    }, 600);
   }, [token]);
+
+  const handleSeraChange = (sigla, value) => {
+    // Estendi la finestra di protezione contro il poll-override
+    bevPendingSeraUntil.current[sigla] = Date.now() + 4000;
+    setBevCounts(prev => {
+      const current = prev[sigla] || { mattina: '', inUsc: '', scarti: '', sera: '' };
+      const nextRow = { ...current, sera: value };
+      const next = { ...prev, [sigla]: nextRow };
+      scheduleBevSave(sigla, nextRow);
+      return next;
+    });
+  };
 
   // Riepilogo cassa: caricamento iniziale (no polling, è la sorgente di verità qui)
   useEffect(() => {
@@ -684,11 +748,11 @@ const ReportBetaPageInner = () => {
               )}
             </div>
 
-            {/* ============ MAGAZZINO SERA (read-only, da Magazzino Bevande) ============ */}
+            {/* ============ MAGAZZINO SERA (editabile, sync live con Magazzino Bevande) ============ */}
             <div className="bg-white rounded border border-gray-200 p-2">
               <div className="flex items-baseline justify-between mb-2">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Sera</h2>
-                <span className="text-[10px] text-gray-400">Solo lettura — fonte: Magazzino Bevande</span>
+                <span className="text-[10px] text-gray-400">Editabile · sync live con Magazzino Bevande · supporta formule "=..."</span>
               </div>
               {beverages.length === 0 ? (
                 <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
@@ -697,25 +761,30 @@ const ReportBetaPageInner = () => {
               ) : (
                 <div className="flex items-stretch gap-1.5">
                   {beverages.map(b => {
-                    const seraRaw = bevCounts[b.sigla]?.sera;
-                    const sera = evaluateValue(seraRaw);
-                    const isEmpty = seraRaw === '' || seraRaw === undefined || seraRaw === null;
+                    const seraRaw = bevCounts[b.sigla]?.sera ?? '';
                     return (
                       <div
                         key={b.sigla}
-                        data-testid={`bev-mag-sera-${b.sigla}`}
                         className="flex-1 min-w-[60px] flex flex-col"
                       >
                         <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
                           {b.sigla}
                         </label>
-                        <div className={`w-full h-11 rounded flex items-center justify-center font-black text-base border ${
-                          isEmpty
-                            ? 'bg-gray-50 border-gray-200 text-gray-400'
-                            : 'bg-amber-50 border-amber-200 text-gray-900'
-                        }`}>
-                          {isEmpty ? '—' : (Number.isInteger(sera) ? sera : sera.toLocaleString('it-IT', { maximumFractionDigits: 2 }))}
-                        </div>
+                        <input
+                          data-testid={`bev-mag-sera-${b.sigla}`}
+                          type="text"
+                          inputMode="decimal"
+                          value={seraRaw}
+                          onChange={(e) => handleSeraChange(b.sigla, e.target.value)}
+                          onFocus={() => setFocusedSeraSigla(b.sigla)}
+                          onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
+                          placeholder="—"
+                          className={`w-full h-11 rounded text-center font-black text-base border focus:outline-none focus:ring-2 focus:ring-amber-400 ${
+                            seraRaw === '' || seraRaw === null || seraRaw === undefined
+                              ? 'bg-gray-50 border-gray-200 text-gray-700'
+                              : 'bg-amber-50 border-amber-200 text-gray-900'
+                          }`}
+                        />
                         <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
                           sera
                         </span>
