@@ -3059,16 +3059,69 @@ async def _orders_aggregate_for_date(date_rome_str: str, restaurant_id: Optional
 
 @api_router.post("/admin/_simulate-midnight-reset")
 async def admin_simulate_midnight_reset(token_data: dict = Depends(verify_token)):
-    """Admin-only: triggera manualmente la stessa routine che gira a mezzanotte
-    (archive orders/deletion_logs/modification_logs/beverage_sales, reset counters,
-    broadcast WS `daily_reset` a tutti i client connessi).
+    """Admin-only: simula completamente lo scatto di mezzanotte.
+    - Esegue `midnight_reset` (archive orders/logs, reset counters, broadcast WS).
+    - Inoltre **risposta le righe di oggi** di `cash_daily_counts` e `beverage_daily_counts`
+      al giorno precedente, così la chiusura corrente diventa "storico" e il Report
+      ricomincia da zero (con carry-over della sera di ieri sulla mattina di oggi).
     Utile per testing e simulazioni controllate.
     """
     if token_data.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     logger.info("[ADMIN] Manual midnight reset triggered")
     await midnight_reset()
-    return {"ok": True, "message": "Midnight reset eseguito"}
+
+    today = _today_rome_str()
+    yesterday = (datetime.now(ROME_TZ) - timedelta(days=1)).strftime("%Y-%m-%d")
+    # Sposta le righe di oggi → ieri (collisioni risolte sovrascrivendo: ieri non esisteva
+    # per definizione "ripartiamo da zero").
+    moved_cash = 0
+    moved_bev = 0
+    # cash_daily_counts: chiave logica (restaurant_id, date_rome)
+    async for d in db.cash_daily_counts.find({"date_rome": today}, {"_id": 0}):
+        rid = d.get("restaurant_id")
+        if not rid:
+            continue
+        new_doc = {**d, "date_rome": yesterday}
+        await db.cash_daily_counts.update_one(
+            {"restaurant_id": rid, "date_rome": yesterday},
+            {"$set": new_doc},
+            upsert=True,
+        )
+        await db.cash_daily_counts.delete_one({"restaurant_id": rid, "date_rome": today})
+        moved_cash += 1
+    # beverage_daily_counts: chiave logica (restaurant_id, date_rome, sigla)
+    async for d in db.beverage_daily_counts.find({"date_rome": today}, {"_id": 0}):
+        rid = d.get("restaurant_id")
+        sigla = d.get("sigla")
+        if not rid or not sigla:
+            continue
+        new_doc = {**d, "date_rome": yesterday}
+        await db.beverage_daily_counts.update_one(
+            {"restaurant_id": rid, "date_rome": yesterday, "sigla": sigla},
+            {"$set": new_doc},
+            upsert=True,
+        )
+        await db.beverage_daily_counts.delete_one(
+            {"restaurant_id": rid, "date_rome": today, "sigla": sigla}
+        )
+        moved_bev += 1
+    logger.info(
+        f"[ADMIN] Spostate {moved_cash} righe cash + {moved_bev} righe beverage "
+        f"da {today} → {yesterday} per simulare il rollover di giornata"
+    )
+    # Broadcast a tutti i client connessi così Report/Bevande si ricaricano
+    for rid in list(manager.active_connections.keys()):
+        await manager.broadcast_to_restaurant(rid, {"type": "daily_reset"})
+
+    return {
+        "ok": True,
+        "message": "Midnight reset eseguito",
+        "moved_cash_rows": moved_cash,
+        "moved_beverage_rows": moved_bev,
+        "from_date": today,
+        "to_date": yesterday,
+    }
 
 
 
