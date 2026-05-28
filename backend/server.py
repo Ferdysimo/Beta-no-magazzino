@@ -3057,6 +3057,21 @@ async def _orders_aggregate_for_date(date_rome_str: str, restaurant_id: Optional
     return results
 
 
+@api_router.post("/admin/_simulate-midnight-reset")
+async def admin_simulate_midnight_reset(token_data: dict = Depends(verify_token)):
+    """Admin-only: triggera manualmente la stessa routine che gira a mezzanotte
+    (archive orders/deletion_logs/modification_logs/beverage_sales, reset counters,
+    broadcast WS `daily_reset` a tutti i client connessi).
+    Utile per testing e simulazioni controllate.
+    """
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    logger.info("[ADMIN] Manual midnight reset triggered")
+    await midnight_reset()
+    return {"ok": True, "message": "Midnight reset eseguito"}
+
+
+
 @api_router.get("/admin/closures")
 async def list_closures(
     days: int = 60,
