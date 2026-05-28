@@ -3023,11 +3023,10 @@ async def _audit_log_change(
     *, category: str, rid: str, date_rome: str, field: str,
     old_value, new_value, user_info: dict,
 ) -> None:
-    """Inserisce o coalesce una entry di audit-log.
-    Coalescing: se esiste già una entry per (rid, date_rome, field, by_user) modificata
-    negli ultimi 30s, aggiorno new_value e last_at; altrimenti inserisco una nuova.
-    Convertendo i valori in stringa troncata a 240 char per leggibilità.
-    Nota: i valori uguali non vengono loggati.
+    """Inserisce una entry di audit-log per ogni cambio reale.
+    NO coalescing: ogni salvataggio con un valore diverso crea una riga distinta
+    (così le correzioni successive 3 → 2 → 5 sono tutte tracciate separatamente).
+    I salvataggi senza modifica (`old == new`) non vengono loggati.
     """
     def _stringify(v) -> str:
         if v is None:
@@ -3044,27 +3043,6 @@ async def _audit_log_change(
     if old_s == new_s:
         return
     now = datetime.now(timezone.utc)
-    coalesce_q = {
-        "restaurant_id": rid,
-        "date_rome": date_rome,
-        "field": field,
-        "category": category,
-        "by_user_id": user_info["by_user_id"],
-        "last_at": {"$gte": (now - timedelta(seconds=30)).isoformat()},
-    }
-    existing = await db.cash_audit_log.find_one(coalesce_q, sort=[("last_at", -1)])
-    if existing:
-        await db.cash_audit_log.update_one(
-            {"id": existing["id"]},
-            {
-                "$set": {
-                    "new_value": new_s,
-                    "last_at": now.isoformat(),
-                },
-                "$inc": {"changes_count": 1},
-            },
-        )
-        return
     entry = {
         "id": str(uuid.uuid4()),
         "restaurant_id": rid,

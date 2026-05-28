@@ -41,7 +41,7 @@ const fmtTime = (iso) => {
   } catch { return iso; }
 };
 const truncate = (s, n = 60) => {
-  if (s === '' || s === null || s === undefined) return '—';
+  if (s === '' || s === null || s === undefined) return <span className="italic text-gray-400">(vuoto)</span>;
   const str = String(s);
   return str.length > n ? str.slice(0, n) + '…' : str;
 };
@@ -244,7 +244,10 @@ const AuditCassaPage = () => {
                   <div className="px-3 py-2 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
                     <div>
                       <div className="text-xs uppercase font-bold text-gray-700">{selected.restaurant_label} · {fmtDate(selected.date_rome)}</div>
-                      <div className="text-[11px] text-gray-500">{loadingMov ? 'Caricamento…' : `${movements.length} ${movements.length === 1 ? 'movimento' : 'movimenti'}`}</div>
+                      <div className="text-[11px] text-gray-500">
+                        {loadingMov ? 'Caricamento…' : `${movements.length} ${movements.length === 1 ? 'modifica' : 'modifiche'}`}
+                        <span className="text-gray-400 ml-2">· ogni riga = una modifica distinta (correzioni successive creano righe nuove)</span>
+                      </div>
                     </div>
                     <button onClick={loadMovements} disabled={loadingMov} data-testid="btn-refresh-mov"
                       className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 px-2 py-1 rounded flex items-center gap-1 disabled:opacity-50">
@@ -276,17 +279,16 @@ const AuditCassaPage = () => {
                       <thead className="bg-gray-50 sticky top-0">
                         <tr className="text-gray-700">
                           <th className="text-left p-2">Ora</th>
-                          <th className="text-left p-2">Cat.</th>
-                          <th className="text-left p-2">Campo</th>
-                          <th className="text-left p-2">Da</th>
-                          <th className="text-left p-2">A</th>
-                          <th className="text-center p-2">#</th>
+                          <th className="text-left p-2">Sezione</th>
+                          <th className="text-left p-2">Campo modificato</th>
+                          <th className="text-left p-2">Valore prima</th>
+                          <th className="text-left p-2">Valore dopo</th>
                           <th className="text-left p-2">Utente</th>
                         </tr>
                       </thead>
                       <tbody>
                         {!loadingMov && movements.length === 0 && (
-                          <tr><td colSpan={7} className="p-8 text-center text-gray-400">Nessun movimento corrispondente ai filtri.</td></tr>
+                          <tr><td colSpan={6} className="p-8 text-center text-gray-400">Nessun movimento corrispondente ai filtri.</td></tr>
                         )}
                         {movements.map(it => (
                           <tr key={it.id} data-testid={`audit-row-${it.id}`} className="border-t border-gray-100 hover:bg-yellow-50">
@@ -299,13 +301,6 @@ const AuditCassaPage = () => {
                             <td className="p-2 font-medium">{prettyField(it.field)}</td>
                             <td className="p-2 text-rose-700 font-mono" title={it.old_value}>{truncate(it.old_value)}</td>
                             <td className="p-2 text-emerald-700 font-mono font-bold" title={it.new_value}>{truncate(it.new_value)}</td>
-                            <td className="p-2 text-center">
-                              {it.changes_count > 1 ? (
-                                <span className="bg-gray-900 text-[#F5C518] px-1.5 py-0.5 rounded font-bold text-[10px]">×{it.changes_count}</span>
-                              ) : (
-                                <span className="text-gray-400">1</span>
-                              )}
-                            </td>
                             <td className="p-2">
                               <span className="font-medium">{it.by_user}</span>
                               {it.is_impersonating && (
