@@ -118,3 +118,10 @@ Sistema di gestione ordini pasta per multi-ristorante (Flaminio, Grazie, Largo d
 - Stampante termica via LAN (Star TSP100)
 - Integrazione Google Sheets automatica a fine giornata (oltre che per singolo ordine)
 - Autocompletamento/validazione dizionario paste
+
+## Sessione fork — 28/05/2026
+- **FIX CRITICO**: PUT `/api/cash/daily` salvava su una variabile non definita `flaminio_id` (cross-tenant write/NameError). Ora usa `rid` effettivo da `_effective_restaurant_id`.
+- **Guard isAdmin** su `startEditCassetto` in `ReportBetaPage.js`: utenti non-Admin non possono più modificare lo stock del Cassetto Spicci (cursor `not-allowed`, label "solo lettura").
+- **Coerenza formule**: `cashTotal` ora usa `evaluateValue` invece di `parseFloat` puro → `=10+5` funziona anche sui count delle banconote/monete.
+- **Test pytest aggiunto**: `/app/backend/tests/test_multi_tenancy.py` (7/7 PASS) — copre isolamento `/api/cash/daily`, `/api/beverages/daily`, `prev_cash_sera` carry-over, non-admin no-impersonation.
+

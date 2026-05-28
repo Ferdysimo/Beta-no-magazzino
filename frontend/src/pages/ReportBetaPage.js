@@ -451,10 +451,8 @@ const ReportBetaPageInner = () => {
   const cashTotal = useMemo(() => {
     let sum = 0;
     for (const d of CASH_DENOMINATIONS) {
-      const raw = (cash[d.key] || '').replace(',', '.').trim();
-      if (!raw) continue;
-      const n = parseFloat(raw);
-      if (Number.isNaN(n) || n < 0) continue;
+      const n = evaluateValue(cash[d.key]);
+      if (!Number.isFinite(n) || n < 0) continue;
       sum += n * d.value;
     }
     return sum;
