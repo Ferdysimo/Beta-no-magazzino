@@ -847,6 +847,17 @@ const ReportBetaPageInner = () => {
                 <div className="flex items-stretch gap-1.5">
                   {beverages.map(b => {
                     const seraRaw = bevCounts[b.sigla]?.sera ?? '';
+                    const isFocusedSera = focusedSeraSigla === b.sigla;
+                    const isFormulaSera = typeof seraRaw === 'string' && seraRaw.trim().startsWith('=');
+                    const computedSera = evaluateValue(seraRaw);
+                    const displayValue = (() => {
+                      if (isFocusedSera) return seraRaw;
+                      if (seraRaw === '' || seraRaw === null || seraRaw === undefined) return '';
+                      const abs = Math.abs(computedSera);
+                      return Number.isInteger(abs)
+                        ? String(abs)
+                        : abs.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    })();
                     return (
                       <div
                         key={b.sigla}
@@ -859,15 +870,18 @@ const ReportBetaPageInner = () => {
                           data-testid={`bev-mag-sera-${b.sigla}`}
                           type="text"
                           inputMode="decimal"
-                          value={seraRaw}
+                          value={displayValue}
                           onChange={(e) => handleSeraChange(b.sigla, e.target.value)}
                           onFocus={() => setFocusedSeraSigla(b.sigla)}
                           onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
                           placeholder="—"
+                          title={isFormulaSera ? `Formula: ${seraRaw} = ${computedSera.toLocaleString('it-IT', { maximumFractionDigits: 2 })}` : undefined}
                           className={`w-full h-11 rounded text-center font-black text-base border focus:outline-none focus:ring-2 focus:ring-amber-400 ${
-                            seraRaw === '' || seraRaw === null || seraRaw === undefined
-                              ? 'bg-gray-50 border-gray-200 text-gray-700'
-                              : 'bg-amber-50 border-amber-200 text-gray-900'
+                            isFormulaSera && isFocusedSera
+                              ? 'bg-rose-100 border-rose-300 text-rose-800'
+                              : seraRaw === '' || seraRaw === null || seraRaw === undefined
+                                ? 'bg-gray-50 border-gray-200 text-gray-700'
+                                : 'bg-amber-50 border-amber-200 text-gray-900'
                           }`}
                         />
                         <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
