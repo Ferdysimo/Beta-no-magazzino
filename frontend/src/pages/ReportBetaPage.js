@@ -1228,7 +1228,61 @@ const ReportBetaPageInner = () => {
 
               {/* Cassa banconote (separato dal calcolo CASH SERA — è una conta fisica) */}
               <div className="mt-2 p-2 bg-gray-900 rounded border border-gray-700 text-[11px]">
-                <div className="text-gray-400 mb-1">Nota: la sezione "Cassa" (conta banconote/monete) è un controllo fisico SEPARATO e NON entra nel calcolo CASH SERA. Totale conta cassa: <b className="text-[#F5C518]">€{cashSeraTrace.fmt(cashTotal)}</b></div>
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div>
+                    <div className="text-gray-400 text-[10px] uppercase tracking-wider mb-0.5">Tot Cassa fisica</div>
+                    <div className="text-emerald-300 font-black text-base">€{cashSeraTrace.fmt(cashTotal)}</div>
+                    <div className="text-gray-500 text-[10px]">(conta banconote/monete)</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-400 text-[10px] uppercase tracking-wider mb-0.5">CASH SERA calcolato</div>
+                    <div className="text-[#F5C518] font-black text-base">€{cashSeraTrace.fmt(cashSeraTrace.final)}</div>
+                    <div className="text-gray-500 text-[10px]">(formula)</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-400 text-[10px] uppercase tracking-wider mb-0.5">Differenza</div>
+                    {(() => {
+                      const diff = cashTotal - cashSeraTrace.final;
+                      const absDiff = Math.abs(diff);
+                      const ok = absDiff < 0.01;
+                      const color = ok ? 'text-emerald-400' : (Math.abs(diff) >= 1 ? 'text-rose-400' : 'text-amber-400');
+                      const arrow = ok ? '=' : (diff > 0 ? '↑ cassa eccede' : '↓ cassa manca');
+                      return (
+                        <>
+                          <div className={`font-black text-base ${color}`}>
+                            {diff >= 0 ? '+' : ''}€{cashSeraTrace.fmt(diff)}
+                          </div>
+                          <div className={`text-[10px] font-bold ${color}`}>{arrow}</div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+                {(() => {
+                  const diff = cashTotal - cashSeraTrace.final;
+                  if (Math.abs(diff) < 0.01) {
+                    return (
+                      <div className="mt-2 text-emerald-300 text-[11px] text-center font-bold">
+                        ✓ Conti tornano. Il cash sera calcolato corrisponde alla cassa fisica.
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="mt-2 text-gray-300 text-[10px] leading-relaxed">
+                      <div className="text-amber-300 font-bold mb-1">Possibili cause della differenza:</div>
+                      <ul className="list-disc list-inside space-y-0.5 text-gray-400">
+                        {diff > 0 && <li>Cassa fisica <b className="text-rose-300">eccede</b> il calcolato: forse manca un'uscita non registrata (un pagamento contante non incollato, ALTRO in eccesso, VERS in difetto, oppure un campo elettronico (POS/GLO/JUST/DEL/BP/SAT/FT) inserito troppo alto)</li>}
+                        {diff < 0 && <li>Cassa fisica <b className="text-rose-300">manca</b> rispetto al calcolato: forse un'entrata di paste/bevande è stata conteggiata ma non è arrivata nel cassetto, oppure una banconota non è stata contata, oppure un campo elettronico (POS/GLO/JUST/DEL/BP/SAT/FT) è stato inserito troppo basso</li>}
+                        <li>Una paste/bevanda incollata pagata <b>NON in contanti</b> ma il pagamento elettronico corrispondente non è stato registrato correttamente</li>
+                        <li>VERS (versamenti) salvato con segno o importo errato</li>
+                        <li>Spicci aperti contati in modo non coerente con quanto realmente passato dal cassetto al till</li>
+                      </ul>
+                      <div className="mt-1 text-gray-500 italic">
+                        Per quadrare: <b className="text-[#F5C518]">€{cashSeraTrace.fmt(diff)}</b> {diff > 0 ? 'extra' : 'in meno'} rispetto al calcolato.
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}
