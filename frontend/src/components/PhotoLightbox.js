@@ -85,7 +85,12 @@ const PhotoLightbox = ({ photos, index, onChangeIndex, onClose, resolve }) => {
       )}
 
       {/* Image (pan + zoom: wheel desktop, pinch su mobile, doppio click reset) */}
-      <PanZoomImage src={src} alt={current.label || 'photo'} />
+      <PanZoomImage
+        src={src}
+        alt={current.label || 'photo'}
+        onSwipeLeft={total > 1 ? next : undefined}
+        onSwipeRight={total > 1 ? prev : undefined}
+      />
     </div>
   );
 };

@@ -16,7 +16,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 const MIN_SCALE = 1;
 const MAX_SCALE = 6;
 
-const PanZoomImage = ({ src, alt = '', onSingleClick }) => {
+const PanZoomImage = ({ src, alt = '', onSingleClick, onSwipeLeft, onSwipeRight }) => {
   const wrapRef = useRef(null);
   const imgRef = useRef(null);
   const [scale, setScale] = useState(1);
@@ -26,6 +26,7 @@ const PanZoomImage = ({ src, alt = '', onSingleClick }) => {
   const stateRef = useRef({ scale: 1, tx: 0, ty: 0 });
   const dragRef = useRef(null);   // { startX, startY, baseTx, baseTy }
   const pinchRef = useRef(null);  // { dist, midX, midY, baseScale, baseTx, baseTy }
+  const swipeRef = useRef(null);  // { startX, startY } — solo a scale=1
   const lastTapRef = useRef(0);
   const movedRef = useRef(false);
 
@@ -123,6 +124,10 @@ const PanZoomImage = ({ src, alt = '', onSingleClick }) => {
           startX: t.clientX, startY: t.clientY,
           baseTx: stateRef.current.tx, baseTy: stateRef.current.ty,
         };
+      } else if (onSwipeLeft || onSwipeRight) {
+        // A scale=1, traccio un possibile swipe orizzontale per la navigazione.
+        const t = e.touches[0];
+        swipeRef.current = { startX: t.clientX, startY: t.clientY };
       }
       movedRef.current = false;
     }
@@ -144,12 +149,34 @@ const PanZoomImage = ({ src, alt = '', onSingleClick }) => {
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) movedRef.current = true;
       setTx(d.baseTx + dx); setTy(d.baseTy + dy);
       e.preventDefault();
+    } else if (swipeRef.current && e.touches.length === 1) {
+      const t = e.touches[0];
+      const dx = t.clientX - swipeRef.current.startX;
+      const dy = t.clientY - swipeRef.current.startY;
+      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) movedRef.current = true;
     }
   };
 
   const onTouchEnd = (e) => {
+    // Swipe orizzontale a scale=1 (prima di chiudere lo swipeRef)
+    if (
+      swipeRef.current &&
+      e.touches.length === 0 &&
+      e.changedTouches && e.changedTouches.length === 1 &&
+      stateRef.current.scale <= 1
+    ) {
+      const t = e.changedTouches[0];
+      const dx = t.clientX - swipeRef.current.startX;
+      const dy = t.clientY - swipeRef.current.startY;
+      // Soglia: 50px orizzontali, orizzontale almeno 2× verticale
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 2) {
+        if (dx < 0 && onSwipeLeft) onSwipeLeft();
+        else if (dx > 0 && onSwipeRight) onSwipeRight();
+        movedRef.current = true;
+      }
+    }
     if (e.touches.length < 2) pinchRef.current = null;
-    if (e.touches.length === 0) dragRef.current = null;
+    if (e.touches.length === 0) { dragRef.current = null; swipeRef.current = null; }
     // double-tap reset
     const now = Date.now();
     if (e.changedTouches && e.changedTouches.length === 1 && !movedRef.current) {
