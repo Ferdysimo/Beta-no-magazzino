@@ -3159,6 +3159,12 @@ async def get_cash_daily(request: Request, token_data: dict = Depends(verify_tok
         prev_date = last_doc.get("date_rome", "")
         prev_row = {f: last_doc.get(f, "") for f in ALL_CASH_FIELDS}
         prev_row["paste_text"] = last_doc.get("paste_text", "") or ""
+        # CARRY-OVER STOCK CASSETTO: lo stock spicci nel cassetto è un magazzino
+        # fisico che persiste tra i giorni. Se oggi non c'è ancora valore per cd*,
+        # eredito quello di ieri così la quantità non sparisce dopo l'archiviazione.
+        for cf in CASSETTO_FIELDS:
+            if not data.get(cf):
+                data[cf] = last_doc.get(cf, "") or ""
     return {
         "date": today,
         "data": data,
