@@ -211,21 +211,32 @@ async def cleanup_old_uploads(retention_days: int = UPLOADS_RETENTION_DAYS) -> D
     """Delete fatture / versamenti / chiusure older than `retention_days` together
     with their associated image files on disk.
 
+    For warehouse carichi (`carichi_magazzino`, `beverage_carichi`) we only strip
+    the DDT/fattura image files from disk and null out the filename fields —
+    the documents themselves are kept so `/analisi/magazzino` keeps working on
+    historical ranges.
+
     Cutoff is based on `created_at` (ISO 8601 UTC string, lexicographically
-    comparable). Returns a dict {collection: deleted_count}.
+    comparable). Returns a dict {collection: deleted_or_stripped_count}.
     """
     cutoff = (datetime.now(timezone.utc) - timedelta(days=retention_days)).isoformat()
-    # Each entry: (collection_name, list_of_image_file_fields)
-    targets = [
-        ("invoices",  ["image_file"]),
+    # Full-delete collections: doc + image files are all removed.
+    delete_targets = [
+        ("invoices",   ["image_file"]),
         ("versamenti", ["image_file"]),
-        ("chiusure",  ["image_file", "piatti_file"]),
+        ("chiusure",   ["image_file", "piatti_file"]),
+    ]
+    # Strip-only collections: keep the doc (needed for analytics), drop the
+    # associated images from disk and clear the filename fields.
+    strip_targets = [
+        ("carichi_magazzino", ["photo_file", "fattura_file"]),
+        ("beverage_carichi",  ["invoice_file"]),
     ]
     summary: Dict[str, int] = {}
-    for coll_name, file_fields in targets:
+
+    for coll_name, file_fields in delete_targets:
         try:
             coll = db[coll_name]
-            # Fetch only what's needed to unlink files, then bulk-delete.
             projection = {"_id": 0, "id": 1}
             for f in file_fields:
                 projection[f] = 1
@@ -235,7 +246,6 @@ async def cleanup_old_uploads(retention_days: int = UPLOADS_RETENTION_DAYS) -> D
             if not old_docs:
                 summary[coll_name] = 0
                 continue
-            # Best-effort file cleanup before DB delete.
             files_removed = 0
             for d in old_docs:
                 for f in file_fields:
@@ -259,6 +269,59 @@ async def cleanup_old_uploads(retention_days: int = UPLOADS_RETENTION_DAYS) -> D
         except Exception as e:
             logger.error(f"[CLEANUP] Failed for {coll_name}: {e}", exc_info=True)
             summary[coll_name] = -1
+
+    for coll_name, file_fields in strip_targets:
+        try:
+            coll = db[coll_name]
+            projection = {"_id": 0, "id": 1}
+            for f in file_fields:
+                projection[f] = 1
+            # Only docs that still hold at least one image filename.
+            file_filter = {"$or": [{f: {"$nin": ["", None]}} for f in file_fields]}
+            old_docs = await coll.find(
+                {"created_at": {"$lt": cutoff}, **file_filter}, projection
+            ).to_list(100000)
+            if not old_docs:
+                summary[coll_name] = 0
+                continue
+            files_removed = 0
+            stripped_ids: List[str] = []
+            for d in old_docs:
+                touched = False
+                for f in file_fields:
+                    fn = d.get(f)
+                    if not fn:
+                        continue
+                    try:
+                        p = UPLOADS_DIR / fn
+                        if p.exists():
+                            p.unlink()
+                            files_removed += 1
+                    except Exception as e:
+                        logger.warning(f"[CLEANUP] Could not delete file {fn} for {coll_name}: {e}")
+                    touched = True
+                if touched and d.get("id"):
+                    stripped_ids.append(d["id"])
+            if stripped_ids:
+                # Null-out filename fields + invoice_url (computed at create time
+                # for beverage_carichi). We touch them all unconditionally:
+                # already-empty fields stay empty, no other data is affected.
+                unset_fields = {f: "" for f in file_fields}
+                if coll_name == "beverage_carichi":
+                    unset_fields["invoice_url"] = ""
+                await coll.update_many(
+                    {"id": {"$in": stripped_ids}},
+                    {"$set": unset_fields},
+                )
+            summary[coll_name] = len(stripped_ids)
+            logger.info(
+                f"[CLEANUP] {coll_name}: stripped DDT from {len(stripped_ids)} docs older "
+                f"than {retention_days}d, removed {files_removed} image files (docs kept for analytics)"
+            )
+        except Exception as e:
+            logger.error(f"[CLEANUP] Failed for {coll_name}: {e}", exc_info=True)
+            summary[coll_name] = -1
+
     return summary
 
 
