@@ -1,5 +1,6 @@
 import React, { useEffect, useCallback } from 'react';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import PanZoomImage from './PanZoomImage';
 
 // Reusable photo lightbox with prev/next navigation (arrow keys + buttons).
 // Props:
@@ -83,13 +84,13 @@ const PhotoLightbox = ({ photos, index, onChangeIndex, onClose, resolve }) => {
         </button>
       )}
 
-      {/* Image */}
-      <img
-        src={src}
-        alt={current.label || 'photo'}
-        className="max-w-full max-h-full object-contain select-none"
-        onClick={(e) => e.stopPropagation()}
-      />
+      {/* Image (pan + zoom: wheel desktop, pinch su mobile, doppio click reset) */}
+      <PanZoomImage src={src} alt={current.label || 'photo'} />
+
+      {/* Hint zoom (sparisce dopo 3s) */}
+      <span className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70 text-xs select-none pointer-events-none bg-black/30 backdrop-blur px-3 py-1 rounded-full">
+        Pinch / rotellina per zoom · doppio click per reset
+      </span>
     </div>
   );
 };
