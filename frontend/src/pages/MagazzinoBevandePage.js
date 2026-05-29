@@ -73,6 +73,10 @@ const MagazzinoBevandePageInner = () => {
   // Popover commento: { sigla, field, value } | null
   const [commentPopover, setCommentPopover] = useState(null);
   const commentInputRef = useRef(null);
+  // Forza modifica della colonna MATTINA (normalmente read-only perché
+  // auto-popolata dal Sera del giorno prima). L'utente può sbloccarla
+  // esplicitamente per correzioni manuali (toggle non persistente).
+  const [forceMattina, setForceMattina] = useState(false);
 
   const canAccess = isAdmin || restaurant?.username === 'Flaminio';
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
@@ -233,6 +237,18 @@ const MagazzinoBevandePageInner = () => {
                 ● Salvato {savedAt.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
               </span>
             )}
+            <button
+              data-testid="toggle-bev-force-mattina"
+              onClick={() => setForceMattina(v => !v)}
+              title={forceMattina ? 'Modifica forzata della colonna MATTINA attiva — clicca per ribloccare' : 'Sblocca la colonna MATTINA per forzare valori manuali'}
+              className={`flex items-center gap-2 font-bold px-3 py-2 rounded-lg text-sm transition-colors border ${
+                forceMattina
+                  ? 'bg-amber-400 hover:bg-amber-500 text-amber-900 border-amber-500'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-300'
+              }`}
+            >
+              {forceMattina ? '🔓 mattina sbloccato' : '🔒 forza mattina'}
+            </button>
             {isAdmin && effectiveRestaurant?.id && (
               <button
                 data-testid="btn-bev-reset"
@@ -305,7 +321,7 @@ const MagazzinoBevandePageInner = () => {
                       const canComment = field === 'inUsc' || field === 'scarti';
                       const comment = canComment ? ((counts[r.sigla] || {}).comments || {})[field] : null;
                       const showPopover = commentPopover && commentPopover.sigla === r.sigla && commentPopover.field === field;
-                      const isReadOnly = field === 'mattina';
+                      const isReadOnly = field === 'mattina' && !forceMattina;
                       return (
                         <td key={field} className="px-1 py-1 border-r border-gray-200 relative">
                           <input
@@ -316,8 +332,8 @@ const MagazzinoBevandePageInner = () => {
                             readOnly={isReadOnly}
                             onChange={(e) => { if (!isReadOnly) setField(r.sigla, field, e.target.value); }}
                             onContextMenu={canComment ? (e) => { e.preventDefault(); openCommentPopover(r.sigla, field); } : undefined}
-                            title={isReadOnly ? 'Auto-popolato dal Magazzino Sera di ieri' : (canComment ? 'Tasto destro per aggiungere/modificare il commento' : ((field === 'inUsc' || field === 'sera') ? 'Puoi usare formule: es. =12-2 oppure =5+3' : ''))}
-                            className={`w-16 h-9 border rounded text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] ${isFormula ? 'bg-blue-50 border-blue-300 text-blue-900' : (isReadOnly ? 'bg-gray-100 text-gray-700 border-gray-200 cursor-not-allowed' : 'border-gray-200')}`}
+                            title={isReadOnly ? 'Auto-popolato dal Magazzino Sera di ieri (usa il pulsante "Forza mattina" per modificare)' : (canComment ? 'Tasto destro per aggiungere/modificare il commento' : ((field === 'inUsc' || field === 'sera') ? 'Puoi usare formule: es. =12-2 oppure =5+3' : (field === 'mattina' ? 'Modifica forzata attiva' : '')))}
+                            className={`w-16 h-9 border rounded text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] ${isFormula ? 'bg-blue-50 border-blue-300 text-blue-900' : (isReadOnly ? 'bg-gray-100 text-gray-700 border-gray-200 cursor-not-allowed' : (field === 'mattina' && forceMattina ? 'bg-yellow-50 border-amber-400 ring-1 ring-amber-300' : 'border-gray-200'))}`}
                             placeholder={(field === 'inUsc' || field === 'sera') ? '0 o =…' : '0'}
                           />
                           {comment && (
