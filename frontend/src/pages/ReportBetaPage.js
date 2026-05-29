@@ -933,7 +933,18 @@ const ReportBetaPageInner = () => {
                         data-testid={`cash-row-${f.key}`}
                         type="text"
                         inputMode="decimal"
-                        value={cashRow[f.key] || ''}
+                        value={(() => {
+                          const isFocused = focusedField === f.key;
+                          // Quando focused → mostro la formula/valore raw così l'utente edita
+                          // Quando NON focused → mostro il risultato calcolato (valore assoluto, senza segno)
+                          if (isFocused) return rawVal;
+                          if (!rawVal) return '';
+                          const abs = Math.abs(computed);
+                          // Se intero, niente decimali. Altrimenti max 2 decimali stile italiano.
+                          return Number.isInteger(abs)
+                            ? String(abs)
+                            : abs.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        })()}
                         onChange={(e) => { if (!isReadOnly) setCashRowValue(f.key, e.target.value); }}
                         onFocus={() => setFocusedField(f.key)}
                         onBlur={() => setFocusedField(curr => curr === f.key ? null : curr)}
@@ -942,11 +953,17 @@ const ReportBetaPageInner = () => {
                         readOnly={isReadOnly}
                         style={versTextColor ? { color: versTextColor } : undefined}
                         className={`w-full h-11 border rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] border-gray-200 ${
-                          isFormula ? 'bg-rose-100 text-rose-800 border-rose-300'
+                          isFormula && focusedField === f.key ? 'bg-rose-100 text-rose-800 border-rose-300'
                           : isReadOnly ? 'bg-gray-100 text-gray-700 cursor-not-allowed'
                           : (f.key === 'mattina' && forceMattina ? 'bg-yellow-50 ring-2 ring-amber-400' : 'bg-white')
                         }`}
-                        title={isReadOnly ? 'Auto-popolato da CASH SERA del giorno prima (clicca sul lucchetto per forzare)' : (f.key === 'mattina' && forceMattina ? 'Modifica forzata attiva' : undefined)}
+                        title={
+                          isReadOnly
+                            ? 'Auto-popolato da CASH SERA del giorno prima (clicca sul lucchetto per forzare)'
+                            : isFormula
+                              ? `Formula: ${rawVal} = ${computed.toLocaleString('it-IT', { maximumFractionDigits: 2 })}`
+                              : (f.key === 'mattina' && forceMattina ? 'Modifica forzata attiva' : 'Clicca per modificare')
+                        }
                       />
                       {hasComment && (
                         <span
@@ -955,7 +972,7 @@ const ReportBetaPageInner = () => {
                         />
                       )}
                       <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
-                        {computed !== 0 ? `${sign}€${computed.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
+                        {computed !== 0 ? `${sign}€${Math.abs(computed).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
                       </span>
                       {/* Palette colori — solo VERS, solo se NON formula e non vuoto */}
                       {isVers && !isFormula && rawVal.trim() !== '' && (
