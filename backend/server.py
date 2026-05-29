@@ -191,8 +191,75 @@ async def midnight_reset():
             await manager.broadcast_to_restaurant(rid, {
                 "type": "daily_reset"
             })
+
+        # Retention: delete fatture/versamenti/chiusure older than 3 months
+        # (and their image files). Best-effort, doesn't block the reset.
+        try:
+            await cleanup_old_uploads()
+        except Exception as e:
+            logger.error(f"[CLEANUP] cleanup_old_uploads in midnight_reset failed: {e}", exc_info=True)
     except Exception as e:
         logger.error(f"Midnight reset error: {e}", exc_info=True)
+
+
+# Retention policy for upload-style collections (fatture / versamenti / chiusure).
+# Documents older than this many days are auto-deleted together with their
+# associated image files on disk. Keeps Mongo & disk usage bounded.
+UPLOADS_RETENTION_DAYS = 90  # ~3 mesi
+
+async def cleanup_old_uploads(retention_days: int = UPLOADS_RETENTION_DAYS) -> Dict[str, int]:
+    """Delete fatture / versamenti / chiusure older than `retention_days` together
+    with their associated image files on disk.
+
+    Cutoff is based on `created_at` (ISO 8601 UTC string, lexicographically
+    comparable). Returns a dict {collection: deleted_count}.
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=retention_days)).isoformat()
+    # Each entry: (collection_name, list_of_image_file_fields)
+    targets = [
+        ("invoices",  ["image_file"]),
+        ("versamenti", ["image_file"]),
+        ("chiusure",  ["image_file", "piatti_file"]),
+    ]
+    summary: Dict[str, int] = {}
+    for coll_name, file_fields in targets:
+        try:
+            coll = db[coll_name]
+            # Fetch only what's needed to unlink files, then bulk-delete.
+            projection = {"_id": 0, "id": 1}
+            for f in file_fields:
+                projection[f] = 1
+            old_docs = await coll.find(
+                {"created_at": {"$lt": cutoff}}, projection
+            ).to_list(100000)
+            if not old_docs:
+                summary[coll_name] = 0
+                continue
+            # Best-effort file cleanup before DB delete.
+            files_removed = 0
+            for d in old_docs:
+                for f in file_fields:
+                    fn = d.get(f)
+                    if not fn:
+                        continue
+                    try:
+                        p = UPLOADS_DIR / fn
+                        if p.exists():
+                            p.unlink()
+                            files_removed += 1
+                    except Exception as e:
+                        logger.warning(f"[CLEANUP] Could not delete file {fn} for {coll_name}: {e}")
+            old_ids = [d["id"] for d in old_docs if d.get("id")]
+            del_res = await coll.delete_many({"id": {"$in": old_ids}})
+            summary[coll_name] = del_res.deleted_count
+            logger.info(
+                f"[CLEANUP] {coll_name}: deleted {del_res.deleted_count} docs older than "
+                f"{retention_days}d, removed {files_removed} image files"
+            )
+        except Exception as e:
+            logger.error(f"[CLEANUP] Failed for {coll_name}: {e}", exc_info=True)
+            summary[coll_name] = -1
+    return summary
 
 
 async def recover_stale_orders():
@@ -3262,6 +3329,25 @@ async def _orders_aggregate_for_date(date_rome_str: str, restaurant_id: Optional
     return results
 
 
+@api_router.post("/admin/_cleanup-old-uploads")
+async def admin_cleanup_old_uploads(
+    retention_days: int = UPLOADS_RETENTION_DAYS,
+    token_data: dict = Depends(verify_token)
+):
+    """Admin-only: cancella manualmente fatture / versamenti / chiusure più
+    vecchie di `retention_days` (default 90 = 3 mesi). Restituisce il numero
+    di documenti eliminati per ciascuna collezione. La pulizia gira anche
+    automaticamente ad ogni scatto di mezzanotte e all'avvio del server.
+    """
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    if retention_days < 1:
+        raise HTTPException(status_code=400, detail="retention_days deve essere >= 1")
+    logger.info(f"[ADMIN] Manual cleanup_old_uploads triggered (retention={retention_days}d)")
+    deleted = await cleanup_old_uploads(retention_days=retention_days)
+    return {"retention_days": retention_days, "deleted": deleted}
+
+
 @api_router.post("/admin/_simulate-midnight-reset")
 async def admin_simulate_midnight_reset(token_data: dict = Depends(verify_token)):
     """Admin-only: simula completamente lo scatto di mezzanotte.
@@ -4228,6 +4314,13 @@ async def startup_scheduler():
     # Self-healing: archive any stale orders left from previous day
     # (in case midnight_reset never ran due to server downtime)
     await recover_stale_orders()
+
+    # Retention: drop fatture / versamenti / chiusure older than 3 months
+    # at boot too, so admins don't have to wait for the next midnight.
+    try:
+        await cleanup_old_uploads()
+    except Exception as e:
+        logger.error(f"[CLEANUP] startup cleanup_old_uploads failed: {e}", exc_info=True)
     
     # Seed beverage catalog if empty (9 beverages for Flaminio)
     await _ensure_beverages_seeded()
