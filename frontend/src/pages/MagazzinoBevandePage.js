@@ -13,7 +13,7 @@ const API = `${BACKEND_URL}/api`;
 // aritmetica (solo cifre, +, -, *, /, ., parentesi, spazi).
 const evaluateValue = (v) => {
   if (v === '' || v === null || v === undefined) return 0;
-  const s = String(v).trim().replace(',', '.');
+  const s = String(v).trim().replace(/,/g, '.');
   if (s.startsWith('=')) {
     const expr = s.slice(1).trim();
     if (!expr || !/^[\d+\-*/.() \s]*$/.test(expr)) return 0;

@@ -49,7 +49,9 @@ const findPasta = (line) => {
 // Valuta una formula "=…" (stessa logica della pagina Magazzino Bevande)
 const evaluateValue = (v) => {
   if (v === '' || v === null || v === undefined) return 0;
-  const s = String(v).trim().replace(',', '.');
+  // Sostituisco TUTTE le virgole con punti (non solo la prima): scrivere
+  // "=10,50+3,20" deve funzionare allo stesso modo di "=10.50+3.20".
+  const s = String(v).trim().replace(/,/g, '.');
   if (s.startsWith('=')) {
     const expr = s.slice(1).trim();
     if (!expr || !/^[\d+\-*/.() \s]*$/.test(expr)) return 0;
@@ -514,7 +516,7 @@ const ReportBetaPageInner = () => {
     // Il prezzo è quello manuale se presente, altrimenti 0
     let manualEuro = 0;
     unrecognized.forEach(u => {
-      const raw = (manualPrices[u.idx] ?? '').toString().replace(',', '.').trim();
+      const raw = (manualPrices[u.idx] ?? '').toString().replace(/,/g, '.').trim();
       const n = parseFloat(raw);
       if (!Number.isNaN(n) && n > 0) manualEuro += n;
     });
@@ -525,7 +527,7 @@ const ReportBetaPageInner = () => {
       totalCount: recognizedCount + unrecognized.length,
       totalEuro: recognizedEuro + manualEuro,
       missingPriceCount: unrecognized.filter(u => {
-        const raw = (manualPrices[u.idx] ?? '').toString().replace(',', '.').trim();
+        const raw = (manualPrices[u.idx] ?? '').toString().replace(/,/g, '.').trim();
         const n = parseFloat(raw);
         return Number.isNaN(n) || n <= 0;
       }).length,
@@ -749,7 +751,7 @@ const ReportBetaPageInner = () => {
               </div>
               <div className="grid grid-cols-11 gap-1.5">
                 {CASH_DENOMINATIONS.map(d => {
-                  const raw = (cash[d.key] || '').replace(',', '.');
+                  const raw = (cash[d.key] || '').replace(/,/g, '.');
                   const n = parseFloat(raw);
                   const subTot = (!raw || Number.isNaN(n) || n < 0) ? 0 : n * d.value;
                   return (

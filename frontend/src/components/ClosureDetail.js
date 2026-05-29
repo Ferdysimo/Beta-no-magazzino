@@ -40,7 +40,7 @@ const CASH_BOX_STYLE = {
 
 const evalNum = (v) => {
   if (v === undefined || v === null || v === '') return 0;
-  const s = String(v).trim().replace(',', '.');
+  const s = String(v).trim().replace(/,/g, '.');
   if (s.startsWith('=')) {
     const expr = s.slice(1).trim();
     if (!expr || !/^[\d+\-*/.() \s]*$/.test(expr)) return 0;
