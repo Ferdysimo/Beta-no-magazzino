@@ -194,6 +194,7 @@ const ReportBetaPageInner = () => {
   // dal CASH SERA di ieri). L'utente può sbloccarlo esplicitamente per correzioni.
   const [forceMattina, setForceMattina] = useState(false);
   const [focusedField, setFocusedField] = useState(null); // key | null (preview bar)
+  const [showDebug, setShowDebug] = useState(false);
   const [commentPopover, setCommentPopover] = useState(null); // { key, value }
   const commentInputRef = React.useRef(null);
   const [cashLoaded, setCashLoaded] = useState(false);
@@ -571,6 +572,69 @@ const ReportBetaPageInner = () => {
     total += spicciValues.total;
     return total;
   }, [cashRow, pasteAnalysis.totalEuro, bevTotalInc, spicciValues.total]);
+
+  // Trace dettagliato del calcolo di CASH SERA — usato dalla console di debug.
+  // Riproduce ESATTAMENTE la stessa formula del frontend, passo per passo,
+  // così l'utente può verificare ogni voce e capire dove un conto non torna.
+  const cashSeraTrace = useMemo(() => {
+    const fmt = (n) => (Number(n) || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const steps = [];
+    let running = 0;
+
+    // 1. Riga "Riepilogo Cassa" — segni + / − applicati ai campi
+    steps.push({ section: 'Riepilogo Cassa', label: '— inizio —', raw: '', value: 0, sign: '', running: 0 });
+    for (const f of CASH_FIELDS) {
+      const raw = cashRow[f.key] || '';
+      const v = evaluateValue(raw);
+      let delta = 0;
+      let sign = '=';
+      if (f.op === 'base' || f.op === 'plus') { delta = v; sign = '+'; }
+      else if (f.op === 'minus') { delta = -v; sign = '−'; }
+      running += delta;
+      steps.push({
+        section: 'Riepilogo Cassa',
+        label: f.label,
+        raw,
+        value: v,
+        sign,
+        delta,
+        running,
+      });
+    }
+    const baseSum = running;
+
+    // 2. Paste riconosciute + prezzi manuali
+    steps.push({ section: 'Paste', label: 'totale paste (€)', raw: `${pasteAnalysis.totalCount} righe`, value: pasteAnalysis.totalEuro, sign: '+', delta: pasteAnalysis.totalEuro, running: running + pasteAnalysis.totalEuro });
+    running += pasteAnalysis.totalEuro;
+
+    // 3. Bevande vendute
+    steps.push({ section: 'Bevande', label: 'incasso bevande (€)', raw: `${bevSales.reduce((s, r) => s + Math.max(0, r.qty), 0)} pz`, value: bevTotalInc, sign: '+', delta: bevTotalInc, running: running + bevTotalInc });
+    running += bevTotalInc;
+
+    // 4. Spicci aperti (dettaglio per taglio)
+    for (const r of spicciValues.rows) {
+      steps.push({
+        section: 'Spicci aperti',
+        label: `${r.label} aperti × ${r.aperti}`,
+        raw: String(cashRow[r.key] || ''),
+        value: r.value,
+        sign: '+',
+        delta: r.value,
+        running: running + r.value,
+      });
+      running += r.value;
+    }
+
+    return {
+      steps,
+      base: baseSum,
+      paste: pasteAnalysis.totalEuro,
+      bev: bevTotalInc,
+      spicci: spicciValues.total,
+      final: running,
+      fmt,
+    };
+  }, [cashRow, pasteAnalysis.totalEuro, pasteAnalysis.totalCount, bevTotalInc, bevSales, spicciValues.total, spicciValues.rows]);
 
   const setCashValue = (key, v) => setCash(p => ({ ...p, [key]: v }));
   const setManualPrice = (idx, v) => setManualPrices(p => ({ ...p, [idx]: v }));
@@ -1093,6 +1157,81 @@ const ReportBetaPageInner = () => {
               </div>
             </div>
           </section>
+        </div>
+
+        {/* ============ DEBUG CONSOLE (flusso completo del calcolo CASH SERA) ============ */}
+        <div className="max-w-[1600px] mx-auto mt-4 px-2 sm:px-4">
+          <button
+            type="button"
+            data-testid="toggle-debug-console"
+            onClick={() => setShowDebug(v => !v)}
+            className="w-full bg-gray-900 hover:bg-gray-800 text-[#F5C518] font-mono font-bold py-2 rounded-t-lg border border-gray-800 text-sm flex items-center justify-between px-4"
+          >
+            <span>{showDebug ? '▼' : '▶'} Console di calcolo — flusso CASH SERA</span>
+            <span className="text-[11px] text-gray-400">
+              base €{cashSeraTrace.fmt(cashSeraTrace.base)} + paste €{cashSeraTrace.fmt(cashSeraTrace.paste)} + bev €{cashSeraTrace.fmt(cashSeraTrace.bev)} + spicci €{cashSeraTrace.fmt(cashSeraTrace.spicci)} = <b className="text-[#F5C518]">€{cashSeraTrace.fmt(cashSeraTrace.final)}</b>
+            </span>
+          </button>
+          {showDebug && (
+            <div className="bg-gray-950 text-gray-100 font-mono text-[11px] p-3 rounded-b-lg border border-t-0 border-gray-800 max-h-[500px] overflow-y-auto">
+              {/* Tabella step-by-step */}
+              <table className="w-full" data-testid="debug-trace">
+                <thead className="sticky top-0 bg-gray-900 text-gray-400">
+                  <tr>
+                    <th className="text-left p-1">Sezione</th>
+                    <th className="text-left p-1">Campo</th>
+                    <th className="text-left p-1">Input</th>
+                    <th className="text-right p-1">Valore</th>
+                    <th className="text-center p-1">Segno</th>
+                    <th className="text-right p-1">Delta</th>
+                    <th className="text-right p-1">Subtotale</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cashSeraTrace.steps.map((s, i) => {
+                    const sectionColor = s.section === 'Riepilogo Cassa' ? 'text-amber-300'
+                      : s.section === 'Paste' ? 'text-rose-300'
+                      : s.section === 'Bevande' ? 'text-sky-300'
+                      : s.section === 'Spicci aperti' ? 'text-emerald-300'
+                      : 'text-gray-400';
+                    return (
+                      <tr key={i} className="border-t border-gray-800 hover:bg-gray-800/60">
+                        <td className={`p-1 ${sectionColor}`}>{s.section}</td>
+                        <td className="p-1 font-bold">{s.label}</td>
+                        <td className="p-1 text-gray-400 truncate" style={{ maxWidth: 200 }} title={s.raw}>{s.raw || <span className="italic text-gray-600">(vuoto)</span>}</td>
+                        <td className="p-1 text-right">{cashSeraTrace.fmt(s.value)}</td>
+                        <td className={`p-1 text-center font-black ${s.sign === '−' ? 'text-rose-400' : s.sign === '+' ? 'text-emerald-400' : 'text-gray-500'}`}>{s.sign}</td>
+                        <td className={`p-1 text-right ${s.delta < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{s.delta !== undefined ? cashSeraTrace.fmt(s.delta) : '—'}</td>
+                        <td className="p-1 text-right text-[#F5C518] font-bold">€{cashSeraTrace.fmt(s.running)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot className="border-t-2 border-[#F5C518]">
+                  <tr>
+                    <td colSpan="6" className="p-2 text-right font-bold text-gray-300 uppercase tracking-wider">CASH SERA totale</td>
+                    <td className="p-2 text-right text-[#F5C518] font-black text-base">€{cashSeraTrace.fmt(cashSeraTrace.final)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+
+              {/* Formula riassuntiva esplicita */}
+              <div className="mt-3 p-2 bg-gray-900 rounded border border-gray-700 text-[11px]">
+                <div className="text-gray-400 mb-1">Formula CASH SERA:</div>
+                <div className="font-bold">
+                  CASH SERA = <span className="text-amber-300">(mattina + altro + arr − glo − just − del − bp − sat − ft − pos − vers)</span> + <span className="text-rose-300">paste €</span> + <span className="text-sky-300">bevande €</span> + <span className="text-emerald-300">spicci aperti €</span>
+                </div>
+                <div className="mt-1 text-gray-500">
+                  = <span className="text-amber-300">{cashSeraTrace.fmt(cashSeraTrace.base)}</span> + <span className="text-rose-300">{cashSeraTrace.fmt(cashSeraTrace.paste)}</span> + <span className="text-sky-300">{cashSeraTrace.fmt(cashSeraTrace.bev)}</span> + <span className="text-emerald-300">{cashSeraTrace.fmt(cashSeraTrace.spicci)}</span> = <b className="text-[#F5C518]">€{cashSeraTrace.fmt(cashSeraTrace.final)}</b>
+                </div>
+              </div>
+
+              {/* Cassa banconote (separato dal calcolo CASH SERA — è una conta fisica) */}
+              <div className="mt-2 p-2 bg-gray-900 rounded border border-gray-700 text-[11px]">
+                <div className="text-gray-400 mb-1">Nota: la sezione "Cassa" (conta banconote/monete) è un controllo fisico SEPARATO e NON entra nel calcolo CASH SERA. Totale conta cassa: <b className="text-[#F5C518]">€{cashSeraTrace.fmt(cashTotal)}</b></div>
+              </div>
+            </div>
+          )}
         </div>
       </main>
 
