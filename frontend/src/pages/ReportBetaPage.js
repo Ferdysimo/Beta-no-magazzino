@@ -175,7 +175,7 @@ const CommentPopover = ({ inputRef, value, onChange, onSave, onCancel }) => {
 
 const ReportBetaPageInner = () => {
   const navigate = useNavigate();
-  const { token, isAdmin } = useAuth();
+  const { token, isAdmin, restaurant, effectiveRestaurant } = useAuth();
   const [pasteText, setPasteText] = useState('');
   const [cash, setCash] = useState({});
   const [manualPrices, setManualPrices] = useState({});
@@ -1188,6 +1188,30 @@ const ReportBetaPageInner = () => {
                   })}
                 </div>
               </div>
+            </div>
+
+            {/* Collegamenti rapidi sotto Spicci/Cassetto — discreti, non invadenti */}
+            <div className="flex justify-end gap-2 mt-1">
+              {((effectiveRestaurant?.location || restaurant?.location) === 'Flaminio') && (
+                <button
+                  type="button"
+                  data-testid="report-quicklink-magazzino-bevande"
+                  onClick={() => navigate('/magazzino-bevande')}
+                  className="text-[11px] text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2.5 py-1 rounded border border-gray-300 bg-white transition-colors"
+                  title="Apri Magazzino Bevande"
+                >
+                  Magazzino Bevande →
+                </button>
+              )}
+              <button
+                type="button"
+                data-testid="report-quicklink-report-ieri"
+                onClick={() => navigate('/report-ieri')}
+                className="text-[11px] text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2.5 py-1 rounded border border-gray-300 bg-white transition-colors"
+                title="Apri Report di ieri"
+              >
+                Report di ieri →
+              </button>
             </div>
           </section>
         </div>
