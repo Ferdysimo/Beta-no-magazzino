@@ -838,7 +838,7 @@ async def get_current_restaurant(token_data: dict = Depends(verify_token)):
 
 @api_router.get("/admin/restaurants")
 async def get_admin_restaurants(token_data: dict = Depends(verify_token)):
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in ("admin", "supervisor"):
         raise HTTPException(status_code=403, detail="Admin only")
     restaurants = await db.restaurants.find(
         {"role": "restaurant"},
@@ -877,7 +877,7 @@ async def get_diagnostics(token_data: dict = Depends(verify_token)):
     """Live system diagnostics for the Admin dashboard.
     Reports per-restaurant WebSocket state, recent disconnect events,
     last 50 API calls and last 50 errors."""
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in ("admin", "supervisor"):
         raise HTTPException(status_code=403, detail="Admin only")
 
     now = datetime.now(timezone.utc)
@@ -3488,7 +3488,7 @@ async def list_closures(
     """Lista delle chiusure (date) con riepilogo: incasso, # paste, # bevande, ecc.
     Filtra per `restaurant_id` se fornito (richiesto per la vista per-locale).
     """
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in ("admin", "supervisor"):
         raise HTTPException(status_code=403, detail="Admin only")
     cutoff = (datetime.now(ROME_TZ) - timedelta(days=max(1, min(days, 365)))).strftime("%Y-%m-%d")
     today = _today_rome_str()
@@ -3556,7 +3556,7 @@ async def admin_audit_log_groups(
     token_data: dict = Depends(verify_token),
 ):
     """Raggruppa l'audit-log per (locale, data report). Una entry = una chiusura/report."""
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in ("admin", "supervisor"):
         raise HTTPException(status_code=403, detail="Admin only")
     match: Dict[str, object] = {}
     if date_from or date_to:
@@ -3621,7 +3621,7 @@ async def admin_audit_log(
     token_data: dict = Depends(verify_token),
 ):
     """Audit-log dei salvataggi su Report (Cassa + Bevande). Admin only."""
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in ("admin", "supervisor"):
         raise HTTPException(status_code=403, detail="Admin only")
     q: Dict[str, object] = {}
     if date_from or date_to:
@@ -3720,7 +3720,7 @@ async def closure_detail_admin(
     token_data: dict = Depends(verify_token),
 ):
     """Dettaglio completo di una chiusura (data Rome YYYY-MM-DD). Admin only."""
-    if token_data.get("role") != "admin":
+    if token_data.get("role") not in ("admin", "supervisor"):
         raise HTTPException(status_code=403, detail="Admin only")
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
         raise HTTPException(status_code=400, detail="Data non valida")
@@ -4387,6 +4387,25 @@ async def startup_scheduler():
     
     # Seed beverage catalog if empty (9 beverages for Flaminio)
     await _ensure_beverages_seeded()
+
+    # Seed Federico (role "supervisor"): has access to Storico Chiusure,
+    # Controllo Report (audit-cassa) and Diagnostica Live — nothing else.
+    try:
+        federico = await db.restaurants.find_one({"username": "Federico"})
+        if not federico:
+            await db.restaurants.insert_one({
+                "id": str(uuid.uuid4()),
+                "name": "Supervisore",
+                "username": "Federico",
+                "password": pwd_context.hash("Pastasciutta@32"),
+                "location": "Supervisione",
+                "role": "supervisor",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "order_counter": 0,
+            })
+            logger.info("[SEED] Created Federico (role=supervisor)")
+    except Exception as e:
+        logger.warning(f"[SEED] Could not ensure Federico account: {e}")
     
     # Create MongoDB indexes for faster queries
     await db.orders.create_index([("restaurant_id", 1), ("status", 1)])

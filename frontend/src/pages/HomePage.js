@@ -12,6 +12,7 @@ const HomePage = () => {
   const { restaurant, token, isAdmin, effectiveRestaurant, selectRestaurant, clearSelectedRestaurant } = useAuth();
   const navigate = useNavigate();
   const [restaurants, setRestaurants] = useState([]);
+  const isSupervisor = restaurant?.role === 'supervisor';
 
   // Magazziniere goes straight to magazzino
   useEffect(() => {
@@ -28,6 +29,52 @@ const HomePage = () => {
       }).then(res => setRestaurants(res.data)).catch(console.error);
     }
   }, [isAdmin, token]);
+
+  // Supervisor: solo 3 pulsanti, niente locali, niente cassa.
+  if (isSupervisor) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5]">
+        <Header />
+        <main className="max-w-3xl mx-auto p-6">
+          <div className="bg-[#ECECEC] border border-gray-300 rounded-lg p-8">
+            <div className="flex items-center gap-4 mb-6">
+              <img src="/logo-icon.png" alt="Pastasciutta Roma" className="h-16 object-contain" />
+              <div>
+                <h1 className="font-heading text-3xl font-bold text-gray-800 uppercase">Supervisione</h1>
+                <p className="text-gray-600">Pannello di controllo</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <button
+                data-testid="supervisor-storico-chiusure"
+                onClick={() => navigate('/storico-chiusure')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Storico Chiusure</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Archivio giornaliero di cassa, paste e bevande</span>
+              </button>
+              <button
+                data-testid="supervisor-audit-cassa"
+                onClick={() => navigate('/audit-cassa')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Controllo Report</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Audit log: ogni movimento/operazione su Cassa e Bevande</span>
+              </button>
+              <button
+                data-testid="supervisor-diagnostica"
+                onClick={() => navigate('/diagnostica')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Diagnostica live</span>
+                <span className="block text-xs text-gray-500 mt-0.5">WebSocket, latenze e errori in tempo reale</span>
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   // Admin without selected restaurant: show selector
   if (isAdmin && !effectiveRestaurant) {
@@ -73,36 +120,12 @@ const HomePage = () => {
                 <span className="block text-xs text-gray-500 mt-0.5">Accedi alle funzionalità del magazziniere</span>
               </button>
               <button
-                data-testid="admin-diagnostica"
-                onClick={() => navigate('/diagnostica')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <span className="font-bold text-lg text-gray-800">Diagnostica live</span>
-                <span className="block text-xs text-gray-500 mt-0.5">WebSocket, latenze e errori in tempo reale</span>
-              </button>
-              <button
                 data-testid="admin-cronologia"
                 onClick={() => navigate('/magazzino/cronologia')}
                 className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
               >
                 <span className="font-bold text-lg text-gray-800">Cronologia movimenti</span>
                 <span className="block text-xs text-gray-500 mt-0.5">Storico carichi, evasioni e forzature di magazzino</span>
-              </button>
-              <button
-                data-testid="admin-storico-chiusure"
-                onClick={() => navigate('/storico-chiusure')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <span className="font-bold text-lg text-gray-800">Storico Chiusure</span>
-                <span className="block text-xs text-gray-500 mt-0.5">Archivio giornaliero di cassa, paste e bevande</span>
-              </button>
-              <button
-                data-testid="admin-audit-cassa"
-                onClick={() => navigate('/audit-cassa')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <span className="font-bold text-lg text-gray-800">Controllo Report</span>
-                <span className="block text-xs text-gray-500 mt-0.5">Audit log: ogni movimento/operazione su Cassa e Bevande</span>
               </button>
             </div>
           </div>
@@ -232,10 +255,6 @@ const HomePage = () => {
             </button>
             {(showLocation === 'Flaminio') && (
               <>
-                <button data-testid="btn-magazzino-bevande" onClick={() => navigate('/magazzino-bevande')}
-                  className="border border-gray-400 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-md font-medium text-sm transition-colors">
-                  Magazzino Bevande
-                </button>
                 <button data-testid="btn-report-ieri" onClick={() => navigate('/report-ieri')}
                   className="border border-gray-400 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-md font-medium text-sm transition-colors">
                   Report Ieri

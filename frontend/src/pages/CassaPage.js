@@ -47,16 +47,11 @@ const CassaPage = () => {
   const inputRef = useRef(null);
   const [tick, setTick] = useState(0);
 
-  const showBeverages = restaurant?.username === 'Flaminio' || (isAdmin && restaurant?.location === 'Flaminio');
-  const beveragesVisible = showBeverages && !hideBeverages;
+  // La tabella bevande in Cassa è stata rimossa su richiesta.
+  const showBeverages = false;
+  const beveragesVisible = false;
 
-  const toggleBeverages = () => {
-    setHideBeverages(prev => {
-      const next = !prev;
-      try { localStorage.setItem('cassa_hide_beverages', next ? '1' : '0'); } catch (e) { /* ignore */ }
-      return next;
-    });
-  };
+  const toggleBeverages = () => {};
 
   // Tick every second for live timer colors
   useEffect(() => {

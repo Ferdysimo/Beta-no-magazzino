@@ -19,7 +19,6 @@ import MagazzinierePage from './pages/MagazzinierePage';
 import ProdottiMagazzinoPage from './pages/ProdottiMagazzinoPage';
 import MediaLocaliPage from './pages/MediaLocaliPage';
 import DiagnosticaLivePage from './pages/DiagnosticaLivePage';
-import MagazzinoBevandePage from './pages/MagazzinoBevandePage';
 import ReportBevandePage from './pages/ReportBevandePage';
 import RichiestaMercePage from './pages/RichiestaMercePage';
 import NuovaRichiestaPage from './pages/NuovaRichiestaPage';
@@ -33,7 +32,6 @@ import CronologiaMovimentiPage from './pages/CronologiaMovimentiPage';
 import ReportBetaPage from './pages/ReportBetaPage';
 import ReportIeriPage from './pages/ReportIeriPage';
 import AuditCassaPage from './pages/AuditCassaPage';
-import StoricoBevandePage from './pages/StoricoBevandePage';
 import StoricoChiusurePage from './pages/StoricoChiusurePage';
 import UpdateBanner from './components/UpdateBanner';
 
@@ -226,16 +224,6 @@ function AppRoutes() {
       <Route path="/diagnostica" element={
         <ProtectedRoute>
           <DiagnosticaLivePage />
-        </ProtectedRoute>
-      } />
-      <Route path="/magazzino-bevande" element={
-        <ProtectedRoute>
-          <MagazzinoBevandePage />
-        </ProtectedRoute>
-      } />
-      <Route path="/magazzino-bevande/storico" element={
-        <ProtectedRoute>
-          <StoricoBevandePage />
         </ProtectedRoute>
       } />
       <Route path="/report-bevande" element={
