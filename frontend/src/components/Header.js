@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 export const APP_VERSION = '2026041914';
 
 const Header = () => {
-  const { logout, isAdmin, effectiveRestaurant, clearSelectedRestaurant } = useAuth();
+  const { logout, canImpersonate, effectiveRestaurant, clearSelectedRestaurant } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -16,9 +16,9 @@ const Header = () => {
   };
 
   const handleHome = () => {
-    // For an admin impersonating a restaurant, "Home" should go back to
-    // the admin main dashboard, not stay inside the impersonated locale.
-    if (isAdmin && effectiveRestaurant) {
+    // Per Admin/Supervisor che stanno impersonando un locale, "Home" torna alla
+    // dashboard di selezione, non resta dentro al locale impersonato.
+    if (canImpersonate && effectiveRestaurant) {
       clearSelectedRestaurant();
     }
     navigate('/home');
@@ -42,7 +42,7 @@ const Header = () => {
         >
           Home
         </button>
-        {isAdmin && effectiveRestaurant && (
+        {canImpersonate && effectiveRestaurant && (
           <button
             data-testid="header-switch-location"
             onClick={handleSwitchLocation}

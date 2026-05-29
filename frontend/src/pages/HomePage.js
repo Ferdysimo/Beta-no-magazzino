@@ -9,10 +9,9 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 const HomePage = () => {
-  const { restaurant, token, isAdmin, effectiveRestaurant, selectRestaurant, clearSelectedRestaurant } = useAuth();
+  const { restaurant, token, isAdmin, isSupervisor, canImpersonate, effectiveRestaurant, selectRestaurant, clearSelectedRestaurant } = useAuth();
   const navigate = useNavigate();
   const [restaurants, setRestaurants] = useState([]);
-  const isSupervisor = restaurant?.role === 'supervisor';
 
   // Magazziniere goes straight to magazzino
   useEffect(() => {
@@ -21,73 +20,29 @@ const HomePage = () => {
     }
   }, [restaurant, navigate]);
 
-  // Admin: fetch restaurant list
+  // Admin/Supervisor: fetch restaurant list
   useEffect(() => {
-    if (isAdmin && token) {
+    if (canImpersonate && token) {
       axios.get(`${API}/admin/restaurants`, {
         headers: { Authorization: `Bearer ${token}` }
       }).then(res => setRestaurants(res.data)).catch(console.error);
     }
-  }, [isAdmin, token]);
+  }, [canImpersonate, token]);
 
-  // Supervisor: solo 3 pulsanti, niente locali, niente cassa.
-  if (isSupervisor) {
+  // Admin/Supervisor without selected restaurant: show selector
+  if (canImpersonate && !effectiveRestaurant) {
     return (
       <div className="min-h-screen bg-[#F5F5F5]">
         <Header />
+        {isAdmin && <SystemAlertsBanner />}
         <main className="max-w-3xl mx-auto p-6">
           <div className="bg-[#ECECEC] border border-gray-300 rounded-lg p-8">
             <div className="flex items-center gap-4 mb-6">
               <img src="/logo-icon.png" alt="Pastasciutta Roma" className="h-16 object-contain" />
               <div>
-                <h1 className="font-heading text-3xl font-bold text-gray-800 uppercase">Supervisione</h1>
-                <p className="text-gray-600">Pannello di controllo</p>
-              </div>
-            </div>
-            <div className="space-y-3">
-              <button
-                data-testid="supervisor-storico-chiusure"
-                onClick={() => navigate('/storico-chiusure')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <span className="font-bold text-lg text-gray-800">Storico Chiusure</span>
-                <span className="block text-xs text-gray-500 mt-0.5">Archivio giornaliero di cassa, paste e bevande</span>
-              </button>
-              <button
-                data-testid="supervisor-audit-cassa"
-                onClick={() => navigate('/audit-cassa')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <span className="font-bold text-lg text-gray-800">Controllo Report</span>
-                <span className="block text-xs text-gray-500 mt-0.5">Audit log: ogni movimento/operazione su Cassa e Bevande</span>
-              </button>
-              <button
-                data-testid="supervisor-diagnostica"
-                onClick={() => navigate('/diagnostica')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <span className="font-bold text-lg text-gray-800">Diagnostica live</span>
-                <span className="block text-xs text-gray-500 mt-0.5">WebSocket, latenze e errori in tempo reale</span>
-              </button>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  // Admin without selected restaurant: show selector
-  if (isAdmin && !effectiveRestaurant) {
-    return (
-      <div className="min-h-screen bg-[#F5F5F5]">
-        <Header />
-        <SystemAlertsBanner />
-        <main className="max-w-3xl mx-auto p-6">
-          <div className="bg-[#ECECEC] border border-gray-300 rounded-lg p-8">
-            <div className="flex items-center gap-4 mb-6">
-              <img src="/logo-icon.png" alt="Pastasciutta Roma" className="h-16 object-contain" />
-              <div>
-                <h1 className="font-heading text-3xl font-bold text-gray-800 uppercase">Amministratore</h1>
+                <h1 className="font-heading text-3xl font-bold text-gray-800 uppercase">
+                  {isSupervisor ? 'Supervisione' : 'Amministratore'}
+                </h1>
                 <p className="text-gray-600">Seleziona un locale</p>
               </div>
             </div>
@@ -104,29 +59,61 @@ const HomePage = () => {
               ))}
             </div>
             <div className="mt-6 pt-6 border-t border-gray-300 space-y-3">
-              <button
-                data-testid="admin-numeri"
-                onClick={() => navigate('/media-locali')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <span className="font-bold text-lg text-gray-800">Numeri</span>
-              </button>
-              <button
-                data-testid="admin-magazzino"
-                onClick={() => navigate('/magazzino')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <span className="font-bold text-lg text-gray-800">Magazzino</span>
-                <span className="block text-xs text-gray-500 mt-0.5">Accedi alle funzionalità del magazziniere</span>
-              </button>
-              <button
-                data-testid="admin-cronologia"
-                onClick={() => navigate('/magazzino/cronologia')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <span className="font-bold text-lg text-gray-800">Cronologia movimenti</span>
-                <span className="block text-xs text-gray-500 mt-0.5">Storico carichi, evasioni e forzature di magazzino</span>
-              </button>
+              {isAdmin && (
+                <>
+                  <button
+                    data-testid="admin-numeri"
+                    onClick={() => navigate('/media-locali')}
+                    className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+                  >
+                    <span className="font-bold text-lg text-gray-800">Numeri</span>
+                  </button>
+                  <button
+                    data-testid="admin-magazzino"
+                    onClick={() => navigate('/magazzino')}
+                    className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+                  >
+                    <span className="font-bold text-lg text-gray-800">Magazzino</span>
+                    <span className="block text-xs text-gray-500 mt-0.5">Accedi alle funzionalità del magazziniere</span>
+                  </button>
+                  <button
+                    data-testid="admin-cronologia"
+                    onClick={() => navigate('/magazzino/cronologia')}
+                    className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+                  >
+                    <span className="font-bold text-lg text-gray-800">Cronologia movimenti</span>
+                    <span className="block text-xs text-gray-500 mt-0.5">Storico carichi, evasioni e forzature di magazzino</span>
+                  </button>
+                </>
+              )}
+              {isSupervisor && (
+                <>
+                  <button
+                    data-testid="supervisor-storico-chiusure"
+                    onClick={() => navigate('/storico-chiusure')}
+                    className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+                  >
+                    <span className="font-bold text-lg text-gray-800">Storico Chiusure</span>
+                    <span className="block text-xs text-gray-500 mt-0.5">Archivio giornaliero di cassa, paste e bevande</span>
+                  </button>
+                  <button
+                    data-testid="supervisor-audit-cassa"
+                    onClick={() => navigate('/audit-cassa')}
+                    className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+                  >
+                    <span className="font-bold text-lg text-gray-800">Controllo Report</span>
+                    <span className="block text-xs text-gray-500 mt-0.5">Audit log: ogni movimento/operazione su Cassa e Bevande</span>
+                  </button>
+                  <button
+                    data-testid="supervisor-diagnostica"
+                    onClick={() => navigate('/diagnostica')}
+                    className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+                  >
+                    <span className="font-bold text-lg text-gray-800">Diagnostica live</span>
+                    <span className="block text-xs text-gray-500 mt-0.5">WebSocket, latenze e errori in tempo reale</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </main>
@@ -159,7 +146,7 @@ const HomePage = () => {
                 <p className="font-heading text-xl font-semibold text-gray-800" data-testid="restaurant-location">
                   {showLocation}
                 </p>
-                {isAdmin && (
+                {canImpersonate && (
                   <button
                     data-testid="admin-switch-location"
                     onClick={clearSelectedRestaurant}

@@ -89,12 +89,12 @@ async def diagnostics_middleware(request: Request, call_next):
                         rid = payload.get("restaurant_id", "") or ""
                         rname = payload.get("restaurant_name", "") or ""
                         role = payload.get("role", "") or ""
-                        # Admin overriding a specific restaurant via header
-                        if role == "admin":
+                        # Admin/supervisor overriding a specific restaurant via header
+                        if role in ("admin", "supervisor"):
                             override = request.headers.get("X-Admin-Restaurant-Id")
                             if override:
                                 rid = override
-                                rname = f"(admin → {RESTAURANT_LOCATION_CACHE.get(rid, rid[:8])})"
+                                rname = f"({role} → {RESTAURANT_LOCATION_CACHE.get(rid, rid[:8])})"
                 except Exception:
                     pass
                 location = RESTAURANT_LOCATION_CACHE.get(rid, "")
@@ -577,11 +577,11 @@ async def _get_flaminio_restaurant_id() -> Optional[str]:
 
 async def _effective_restaurant_id(request: Request, token_data: dict) -> str:
     """Restituisce il restaurant_id "effettivo" della chiamata.
-    - Per Admin: usa l'header X-Restaurant-Id se presente (impersonificazione).
-    - Per non-Admin: usa sempre il restaurant_id del token.
+    - Per Admin/Supervisor: usa l'header X-Restaurant-Id se presente (impersonificazione).
+    - Per altri ruoli: usa sempre il restaurant_id del token.
     """
-    is_admin = token_data.get("role") == "admin"
-    if is_admin:
+    can_impersonate = token_data.get("role") in ("admin", "supervisor")
+    if can_impersonate:
         rid = request.headers.get("X-Restaurant-Id") or request.headers.get("x-restaurant-id")
         if rid:
             return rid
@@ -742,8 +742,8 @@ def create_token(restaurant_id: str, restaurant_name: str, role: str = "restaura
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security), request: Request = None) -> dict:
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
-        # Admin can act as any restaurant via header
-        if payload.get("role") == "admin" and request:
+        # Admin and supervisor can act as any restaurant via header
+        if payload.get("role") in ("admin", "supervisor") and request:
             admin_restaurant_id = request.headers.get("X-Admin-Restaurant-Id")
             if admin_restaurant_id:
                 payload["restaurant_id"] = admin_restaurant_id

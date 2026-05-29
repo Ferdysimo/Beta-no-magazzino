@@ -15,9 +15,13 @@ export const AuthProvider = ({ children }) => {
   );
 
   const isAdmin = restaurant?.role === 'admin';
+  const isSupervisor = restaurant?.role === 'supervisor';
+  // Sia Admin sia Supervisor possono "selezionare" un locale e impersonarlo
+  // (lato API tramite X-Admin-Restaurant-Id / X-Restaurant-Id).
+  const canImpersonate = isAdmin || isSupervisor;
 
-  // The effective restaurant: for admin it's the selected one, for others it's their own
-  const effectiveRestaurant = isAdmin ? adminSelectedRestaurant : restaurant;
+  // The effective restaurant: for admin/supervisor it's the selected one, for others it's their own
+  const effectiveRestaurant = canImpersonate ? adminSelectedRestaurant : restaurant;
 
   const selectRestaurant = (rest) => {
     setAdminSelectedRestaurant(rest);
@@ -29,13 +33,13 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('admin_selected_restaurant');
   };
 
-  // ===== Axios interceptor: per Admin invia X-Restaurant-Id del locale impersonato =====
+  // ===== Axios interceptor: per Admin/Supervisor invia X-Restaurant-Id del locale impersonato =====
   // Usiamo un ref così l'interceptor è registrato una volta sola ma legge sempre
   // il valore aggiornato di adminSelectedRestaurant.
   const adminRestRef = useRef(adminSelectedRestaurant);
   const isAdminRef = useRef(false);
   useEffect(() => { adminRestRef.current = adminSelectedRestaurant; }, [adminSelectedRestaurant]);
-  useEffect(() => { isAdminRef.current = restaurant?.role === 'admin'; }, [restaurant]);
+  useEffect(() => { isAdminRef.current = restaurant?.role === 'admin' || restaurant?.role === 'supervisor'; }, [restaurant]);
   useEffect(() => {
     const id = axios.interceptors.request.use((config) => {
       try {
@@ -118,7 +122,8 @@ export const AuthProvider = ({ children }) => {
   return (
     <AuthContext.Provider value={{
       restaurant, token, loading, login, logout,
-      isAdmin, effectiveRestaurant, adminSelectedRestaurant,
+      isAdmin, isSupervisor, canImpersonate,
+      effectiveRestaurant, adminSelectedRestaurant,
       selectRestaurant, clearSelectedRestaurant
     }}>
       {children}
