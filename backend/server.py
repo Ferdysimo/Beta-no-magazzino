@@ -742,8 +742,14 @@ def create_token(restaurant_id: str, restaurant_name: str, role: str = "restaura
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security), request: Request = None) -> dict:
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
-        # Admin and supervisor can act as any restaurant via header
-        if payload.get("role") in ("admin", "supervisor") and request:
+        # Supervisor has the same operational privileges as Admin: normalize so
+        # every existing `role == "admin"` check keeps working unchanged.
+        # The original role is preserved under `original_role` for audit display.
+        if payload.get("role") == "supervisor":
+            payload["original_role"] = "supervisor"
+            payload["role"] = "admin"
+        # Admin/Supervisor can act as any restaurant via header
+        if payload.get("role") == "admin" and request:
             admin_restaurant_id = request.headers.get("X-Admin-Restaurant-Id")
             if admin_restaurant_id:
                 payload["restaurant_id"] = admin_restaurant_id
