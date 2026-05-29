@@ -768,7 +768,7 @@ const ReportBetaPageInner = () => {
                         placeholder="0"
                         className="w-full h-11 border border-gray-200 rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518]"
                       />
-                      <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
+                      <span className="text-[10px] font-bold text-gray-700 mt-0.5 text-center leading-none">
                         {subTot > 0 ? `€${fmtEur(subTot)}` : '\u00A0'}
                       </span>
                     </div>
@@ -811,7 +811,7 @@ const ReportBetaPageInner = () => {
                       <div className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-base text-gray-900">
                         {b.qty}
                       </div>
-                      <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
+                      <span className="text-[10px] font-bold text-gray-700 mt-0.5 text-center leading-none">
                         €{b.inc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
