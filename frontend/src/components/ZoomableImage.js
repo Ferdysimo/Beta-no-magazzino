@@ -44,14 +44,11 @@ const ZoomableImage = ({ src, alt = '', className = '', ...rest }) => {
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setOpen(false); }}
-            className="absolute top-4 right-4 bg-white/15 hover:bg-white/30 text-white text-2xl w-12 h-12 rounded-full flex items-center justify-center backdrop-blur z-10"
+            className="absolute top-4 right-4 bg-white/15 hover:bg-white/30 text-white text-2xl w-12 h-12 rounded-full flex items-center justify-center backdrop-blur z-20"
             aria-label="Chiudi"
           >
             ×
           </button>
-          <span className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70 text-xs select-none pointer-events-none bg-black/30 backdrop-blur px-3 py-1 rounded-full">
-            Pinch / rotellina per zoom · doppio click per reset · Esc per chiudere
-          </span>
         </div>
       )}
     </>

@@ -47,7 +47,7 @@ const PhotoLightbox = ({ photos, index, onChangeIndex, onClose, resolve }) => {
       {/* Close */}
       <button
         onClick={(e) => { e.stopPropagation(); onClose(); }}
-        className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur"
+        className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur z-20"
         data-testid="photo-lightbox-close"
         title="Chiudi (Esc)"
       >
@@ -55,7 +55,7 @@ const PhotoLightbox = ({ photos, index, onChangeIndex, onClose, resolve }) => {
       </button>
 
       {/* Counter / Label */}
-      <div className="absolute top-4 left-4 text-white text-sm bg-white/10 backdrop-blur px-3 py-1 rounded-full">
+      <div className="absolute top-4 left-4 text-white text-sm bg-white/10 backdrop-blur px-3 py-1 rounded-full z-20">
         {total > 1 && <span className="font-semibold">{index + 1}/{total}</span>}
         {current.label && <span className={total > 1 ? 'ml-2 opacity-90' : 'font-semibold'}>{current.label}</span>}
       </div>
@@ -64,7 +64,7 @@ const PhotoLightbox = ({ photos, index, onChangeIndex, onClose, resolve }) => {
       {total > 1 && (
         <button
           onClick={(e) => { e.stopPropagation(); prev(); }}
-          className="absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur"
+          className="absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur z-20"
           data-testid="photo-lightbox-prev"
           title="Precedente (←)"
         >
@@ -76,7 +76,7 @@ const PhotoLightbox = ({ photos, index, onChangeIndex, onClose, resolve }) => {
       {total > 1 && (
         <button
           onClick={(e) => { e.stopPropagation(); next(); }}
-          className="absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur"
+          className="absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur z-20"
           data-testid="photo-lightbox-next"
           title="Successiva (→)"
         >
@@ -86,11 +86,6 @@ const PhotoLightbox = ({ photos, index, onChangeIndex, onClose, resolve }) => {
 
       {/* Image (pan + zoom: wheel desktop, pinch su mobile, doppio click reset) */}
       <PanZoomImage src={src} alt={current.label || 'photo'} />
-
-      {/* Hint zoom (sparisce dopo 3s) */}
-      <span className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70 text-xs select-none pointer-events-none bg-black/30 backdrop-blur px-3 py-1 rounded-full">
-        Pinch / rotellina per zoom · doppio click per reset
-      </span>
     </div>
   );
 };
