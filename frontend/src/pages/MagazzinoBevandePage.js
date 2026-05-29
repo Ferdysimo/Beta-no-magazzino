@@ -61,7 +61,7 @@ const BevCommentPopover = ({ inputRef, value, onChange, onSave, onCancel }) => (
 );
 
 const MagazzinoBevandePageInner = () => {
-  const { token, isAdmin, restaurant } = useAuth();
+  const { token, isAdmin, restaurant, effectiveRestaurant } = useAuth();
   const navigate = useNavigate();
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -232,6 +232,30 @@ const MagazzinoBevandePageInner = () => {
               <span className="text-[11px] text-emerald-700">
                 ● Salvato {savedAt.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
               </span>
+            )}
+            {isAdmin && effectiveRestaurant?.id && (
+              <button
+                data-testid="btn-bev-reset"
+                onClick={async () => {
+                  const label = effectiveRestaurant.location || effectiveRestaurant.username;
+                  const ok = window.confirm(`Azzerare TUTTI i dati Magazzino Bevande di "${label}"?\n\nVerranno cancellate tutte le righe (tutte le date), Mattina inclusa.\nL'operazione non è reversibile.`);
+                  if (!ok) return;
+                  try {
+                    const res = await axios.post(`${API}/admin/beverages/reset`,
+                      { restaurant_id: effectiveRestaurant.id },
+                      { headers: { Authorization: `Bearer ${token}` } }
+                    );
+                    window.alert(`Reset eseguito: cancellate ${res.data?.deleted || 0} righe.\nRicarica la pagina per vedere lo stato pulito.`);
+                    window.location.reload();
+                  } catch (e) {
+                    window.alert('Errore durante il reset: ' + (e?.response?.data?.detail || e.message));
+                  }
+                }}
+                className="flex items-center gap-2 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300 font-bold px-3 py-2 rounded-lg text-sm"
+                title="Admin: azzera tutti i dati Magazzino Bevande di questo locale"
+              >
+                Reset Bevande
+              </button>
             )}
             <button
               data-testid="btn-bev-history"

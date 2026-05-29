@@ -3378,6 +3378,21 @@ async def list_closures(
     return {"items": items}
 
 
+@api_router.post("/admin/beverages/reset")
+async def admin_beverages_reset(payload: Dict, token_data: dict = Depends(verify_token)):
+    """Admin-only: azzera (cancella tutte le righe) il Magazzino Bevande di un locale.
+    Tutte le date vengono rimosse. Riaprendo la pagina partirà tutto da 0 (anche la
+    colonna Mattina, perché viene calcolata dal Sera di ieri che non esiste più)."""
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    rid = (payload or {}).get("restaurant_id")
+    if not rid or not isinstance(rid, str):
+        raise HTTPException(status_code=400, detail="restaurant_id mancante")
+    res = await db.beverage_daily_counts.delete_many({"restaurant_id": rid})
+    logger.info(f"[ADMIN] Reset Magazzino Bevande per {rid}: {res.deleted_count} righe cancellate")
+    return {"ok": True, "deleted": res.deleted_count}
+
+
 @api_router.get("/admin/audit-log/groups")
 async def admin_audit_log_groups(
     date_from: Optional[str] = None,
