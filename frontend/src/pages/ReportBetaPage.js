@@ -607,7 +607,7 @@ const ReportBetaPageInner = () => {
               data-testid="paste-textarea"
               value={pasteText}
               onChange={(e) => setPasteText(e.target.value)}
-              placeholder={'Incolla qui le paste\n1 AMAT\n2 CARB\n3 mezza ROM\n...'}
+              placeholder={''}
               spellCheck={false}
               className="w-full flex-1 min-h-[120px] p-2 border border-gray-200 rounded font-mono text-xs focus:outline-none focus:border-[#F5C518] resize-none"
             />
