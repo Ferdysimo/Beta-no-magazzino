@@ -947,9 +947,21 @@ async def get_media_locali(token_data: dict = Depends(verify_token)):
         {"_id": 0, "password": 0}
     ).to_list(100)
     
-    # Date range: same day last month to today
+    # Date range: same day last month to today.
+    # NB: usare semplicemente `today.replace(month=today.month - 1)` esplode
+    # ogni volta che il giorno corrente non esiste nel mese precedente
+    # (es. 31 maggio → 31 aprile). Si clampa al massimo numero di giorni
+    # del mese di destinazione.
+    import calendar
     today = datetime.now(ROME_TZ).replace(hour=23, minute=59, second=59)
-    from_date = today.replace(month=today.month - 1) if today.month > 1 else today.replace(year=today.year - 1, month=12)
+    if today.month > 1:
+        prev_year, prev_month = today.year, today.month - 1
+    else:
+        prev_year, prev_month = today.year - 1, 12
+    last_day_prev = calendar.monthrange(prev_year, prev_month)[1]
+    from_date = today.replace(
+        year=prev_year, month=prev_month, day=min(today.day, last_day_prev)
+    )
     
     result = []
     
