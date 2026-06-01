@@ -14,11 +14,12 @@ export const AuthProvider = ({ children }) => {
     JSON.parse(localStorage.getItem('admin_selected_restaurant') || 'null')
   );
 
-  const isAdmin = restaurant?.role === 'admin';
   const isSupervisor = restaurant?.role === 'supervisor';
-  // Sia Admin sia Supervisor possono "selezionare" un locale e impersonarlo
-  // (lato API tramite X-Admin-Restaurant-Id / X-Restaurant-Id).
-  const canImpersonate = isAdmin || isSupervisor;
+  // Federico (supervisor) ha gli stessi privilegi pieni di Admin: trattiamolo
+  // come admin in tutto il frontend (guard pagine, pulsanti, ecc.).
+  const isAdmin = restaurant?.role === 'admin' || isSupervisor;
+  // Alias storico mantenuto per chiarezza nei call site che vogliono ENTRAMBI.
+  const canImpersonate = isAdmin;
 
   // The effective restaurant: for admin/supervisor it's the selected one, for others it's their own
   const effectiveRestaurant = canImpersonate ? adminSelectedRestaurant : restaurant;

@@ -59,61 +59,53 @@ const HomePage = () => {
               ))}
             </div>
             <div className="mt-6 pt-6 border-t border-gray-300 space-y-3">
-              {isAdmin && (
-                <>
-                  <button
-                    data-testid="admin-numeri"
-                    onClick={() => navigate('/media-locali')}
-                    className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-                  >
-                    <span className="font-bold text-lg text-gray-800">Numeri</span>
-                  </button>
-                  <button
-                    data-testid="admin-magazzino"
-                    onClick={() => navigate('/magazzino')}
-                    className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-                  >
-                    <span className="font-bold text-lg text-gray-800">Magazzino</span>
-                    <span className="block text-xs text-gray-500 mt-0.5">Accedi alle funzionalità del magazziniere</span>
-                  </button>
-                  <button
-                    data-testid="admin-cronologia"
-                    onClick={() => navigate('/magazzino/cronologia')}
-                    className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-                  >
-                    <span className="font-bold text-lg text-gray-800">Cronologia movimenti</span>
-                    <span className="block text-xs text-gray-500 mt-0.5">Storico carichi, evasioni e forzature di magazzino</span>
-                  </button>
-                </>
-              )}
-              {isSupervisor && (
-                <>
-                  <button
-                    data-testid="supervisor-storico-chiusure"
-                    onClick={() => navigate('/storico-chiusure')}
-                    className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-                  >
-                    <span className="font-bold text-lg text-gray-800">Storico Chiusure</span>
-                    <span className="block text-xs text-gray-500 mt-0.5">Archivio giornaliero di cassa, paste e bevande</span>
-                  </button>
-                  <button
-                    data-testid="supervisor-audit-cassa"
-                    onClick={() => navigate('/audit-cassa')}
-                    className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-                  >
-                    <span className="font-bold text-lg text-gray-800">Controllo Report</span>
-                    <span className="block text-xs text-gray-500 mt-0.5">Audit log: ogni movimento/operazione su Cassa e Bevande</span>
-                  </button>
-                  <button
-                    data-testid="supervisor-diagnostica"
-                    onClick={() => navigate('/diagnostica')}
-                    className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-                  >
-                    <span className="font-bold text-lg text-gray-800">Diagnostica live</span>
-                    <span className="block text-xs text-gray-500 mt-0.5">WebSocket, latenze e errori in tempo reale</span>
-                  </button>
-                </>
-              )}
+              <button
+                data-testid="admin-numeri"
+                onClick={() => navigate('/media-locali')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Numeri</span>
+              </button>
+              <button
+                data-testid="admin-magazzino"
+                onClick={() => navigate('/magazzino')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Magazzino</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Accedi alle funzionalità del magazziniere</span>
+              </button>
+              <button
+                data-testid="admin-cronologia"
+                onClick={() => navigate('/magazzino/cronologia')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Cronologia movimenti</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Storico carichi, evasioni e forzature di magazzino</span>
+              </button>
+              <button
+                data-testid="admin-storico-chiusure"
+                onClick={() => navigate('/storico-chiusure')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Storico Chiusure</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Archivio giornaliero di cassa, paste e bevande</span>
+              </button>
+              <button
+                data-testid="admin-audit-cassa"
+                onClick={() => navigate('/audit-cassa')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Controllo Report</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Audit log: ogni movimento/operazione su Cassa e Bevande</span>
+              </button>
+              <button
+                data-testid="admin-diagnostica"
+                onClick={() => navigate('/diagnostica')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Diagnostica live</span>
+                <span className="block text-xs text-gray-500 mt-0.5">WebSocket, latenze e errori in tempo reale</span>
+              </button>
             </div>
           </div>
         </main>
