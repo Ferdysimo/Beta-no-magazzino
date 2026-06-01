@@ -188,6 +188,7 @@ export const OrderProvider = ({ children }) => {
 
     ws.onopen = () => {
       console.log('WebSocket connected');
+      const wasReconnect = reconnectAttemptsRef.current > 0;
       reconnectAttemptsRef.current = 0;
       wsConnectedRef.current = true;
 
@@ -195,6 +196,15 @@ export const OrderProvider = ({ children }) => {
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
+      }
+
+      // CRITICAL: after a reconnect (network drop, server restart, midnight reset
+      // broadcast missed, device wake-up, ...), re-sync state from the backend.
+      // Without this, stale orders from previous days could remain in the local
+      // state and appear mixed with today's new ones until the user manually
+      // refreshes the page. Trigger an authoritative HTTP fetch.
+      if (wasReconnect) {
+        fetchOrdersImpl(true);
       }
 
       // Start keepalive ping
@@ -264,6 +274,29 @@ export const OrderProvider = ({ children }) => {
       fetchOrdersImpl(false);
     }, POLLING_FALLBACK_MS);
 
+    // CRITICAL safety net: every minute, sniff for "ghost orders" — i.e. orders
+    // in local state whose `created_at` falls on a different Rome day than the
+    // current Rome day. This catches the case where the tablet was open across
+    // midnight and missed the `daily_reset` WebSocket broadcast (server restart,
+    // network blip, device asleep). Without this, yesterday's orders (which can
+    // have numbers like #600+) would remain mixed with today's #1, #2, …
+    const staleGuardInterval = setInterval(() => {
+      try {
+        const list = ordersRef.current || [];
+        if (list.length === 0) return;
+        const todayRome = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' });
+        const hasStale = list.some(o => {
+          if (!o?.created_at) return false;
+          const createdRome = new Date(o.created_at).toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' });
+          return createdRome !== todayRome;
+        });
+        if (hasStale) {
+          console.warn('[STALE-GUARD] Detected orders from a different Rome day in local state — forcing refetch');
+          fetchOrdersImpl(true);
+        }
+      } catch (e) { /* no-op */ }
+    }, 60 * 1000);
+
     return () => {
       mountedRef.current = false;
       wsClosedIntentionallyRef.current = true;
@@ -272,6 +305,7 @@ export const OrderProvider = ({ children }) => {
       if (flushTimerRef.current) { clearTimeout(flushTimerRef.current); flushTimerRef.current = null; }
       if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
       if (pollingIntervalRef.current) { clearInterval(pollingIntervalRef.current); pollingIntervalRef.current = null; }
+      clearInterval(staleGuardInterval);
       clearTimeout(wsDelay);
     };
   }, [activeRestaurant?.id, token]); // eslint-disable-line react-hooks/exhaustive-deps

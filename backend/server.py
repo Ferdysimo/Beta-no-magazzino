@@ -1113,11 +1113,19 @@ async def get_orders(
     token_data: dict = Depends(verify_token)
 ):
     restaurant_id = token_data["restaurant_id"]
-    
-    query = {"restaurant_id": restaurant_id}
+
+    # Belt-and-suspenders: only serve orders created in the CURRENT Rome day.
+    # Even if `midnight_reset` failed silently and left stale rows in `db.orders`,
+    # this filter prevents yesterday's high-numbered orders from leaking into the
+    # Tablet Generale during today's service.
+    start_utc, end_utc = _today_rome_bounds_utc()
+    query = {
+        "restaurant_id": restaurant_id,
+        "created_at": {"$gte": start_utc, "$lt": end_utc},
+    }
     if status and status != "all":
         query["status"] = status
-    
+
     orders = await db.orders.find(query, {"_id": 0}).sort("order_number", -1).to_list(500)
     return [OrderResponse(**o) for o in orders]
 
