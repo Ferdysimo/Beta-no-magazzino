@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 // Build version - changes force CDN cache invalidation
-export const APP_VERSION = '2026041914';
+export const APP_VERSION = '2026060108';
 
 const Header = () => {
   const { logout, canImpersonate, effectiveRestaurant, clearSelectedRestaurant } = useAuth();
