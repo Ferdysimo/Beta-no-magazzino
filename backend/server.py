@@ -4044,18 +4044,22 @@ async def analisi_magazzino(
     if token_data.get("role") not in ("magazzino", "admin"):
         raise HTTPException(status_code=403, detail="Solo magazziniere/admin")
 
-    # ISO range strings. Stored created_at/evasa_at have format "YYYY-MM-DDTHH:MM:SS.ffffff+00:00".
-    # Use [from, next_day) lexicographic interval for correctness.
+    # ISO range strings. Stored created_at/evasa_at have format
+    # "YYYY-MM-DDTHH:MM:SS.ffffff+00:00" (UTC). The user picks Rome-local days,
+    # so we need to convert the Rome-local midnight boundaries to UTC ISO
+    # strings before doing the lexicographic comparison. Without this, every
+    # carico/richiesta done in the first ~2 hours of a Rome day was mis-
+    # attributed to the previous day (and viceversa).
     try:
-        dt_from = datetime.strptime(date_from, "%Y-%m-%d")
-        dt_to = datetime.strptime(date_to, "%Y-%m-%d")
+        dt_from_rome = datetime.strptime(date_from, "%Y-%m-%d").replace(tzinfo=ROME_TZ)
+        dt_to_rome = datetime.strptime(date_to, "%Y-%m-%d").replace(tzinfo=ROME_TZ)
     except ValueError:
         raise HTTPException(status_code=400, detail="Formato data non valido (attendo YYYY-MM-DD)")
-    if dt_to < dt_from:
+    if dt_to_rome < dt_from_rome:
         raise HTTPException(status_code=400, detail="La data finale deve essere >= data iniziale")
-    from_iso = dt_from.strftime("%Y-%m-%dT00:00:00")
-    next_day = dt_to + timedelta(days=1)
-    to_iso_excl = next_day.strftime("%Y-%m-%dT00:00:00")
+    # [Rome midnight of date_from, Rome midnight of date_to + 1 day) in UTC ISO
+    from_iso = dt_from_rome.astimezone(timezone.utc).isoformat()
+    to_iso_excl = (dt_to_rome + timedelta(days=1)).astimezone(timezone.utc).isoformat()
 
     # Active restaurant locations (columns)
     restaurants = await db.restaurants.find(
