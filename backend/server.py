@@ -4078,11 +4078,21 @@ async def analisi_magazzino(
     ]).to_list(5000)
     incoming_map = {r["_id"]: int(r["total"]) for r in incoming_agg}
 
-    # Outgoing: from richieste evase (use evasa_at date)
+    # Outgoing: from richieste — attribuite al giorno di CREAZIONE della
+    # richiesta (non più al giorno di evasione). Una richiesta entra nel
+    # report solo dopo che è passata 1 ora dalla sua creazione (grace
+    # period: entro l'ora i locali possono ancora modificarla — di fatto
+    # la finestra di modifica è 20 min, ma teniamo 1h come margine pieno).
+    # Stato: qualunque, perché le richieste cancellate vengono `delete_one`
+    # in DB → spariscono automaticamente da qui.
+    grace_cutoff_iso = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
     outgoing_agg = await db.richieste.aggregate([
         {"$match": {
-            "evasa_at": {"$gte": from_iso, "$lt": to_iso_excl},
-            "status": {"$in": ["evasa", "confermata"]},
+            "created_at": {
+                "$gte": from_iso,
+                "$lt": to_iso_excl,
+                "$lte": grace_cutoff_iso,
+            },
         }},
         {"$unwind": "$items"},
         {"$group": {
