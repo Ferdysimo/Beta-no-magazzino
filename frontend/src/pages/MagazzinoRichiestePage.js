@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
+import NavLinkSpa from '../components/NavLinkSpa';
+import useScrollMemory from '../hooks/useScrollMemory';
 import { formatItalianDateTime } from '../utils/formatDate';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -21,6 +23,11 @@ const MagazzinoRichiestePage = () => {
   const [pending, setPending] = useState([]);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const storicoRef = useRef(null);
+  // Memorizza lo scroll della pagina (sezioni "Da evadere" + "Evase")
+  useScrollMemory('mag-richieste-page');
+  // E lo scroll INTERNO del box "Storico" (overflow-y-auto)
+  useScrollMemory('mag-richieste-storico', storicoRef);
 
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -87,12 +94,13 @@ const MagazzinoRichiestePage = () => {
               <div className="p-4 text-gray-400 text-center text-sm">Nessuna richiesta da evadere.</div>
             ) : daEvadere.map(r => (
               <div key={r.id} data-testid={`mag-ddt-${r.ddt_number}`} className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                <button
-                  onClick={() => navigate(`/ddt/${r.id}`)}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded border border-gray-300 text-sm font-semibold whitespace-nowrap"
+                <NavLinkSpa
+                  to={`/ddt/${r.id}`}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded border border-gray-300 text-sm font-semibold whitespace-nowrap no-underline"
+                  title="Click → apri · Ctrl/⌘+click → nuova scheda"
                 >
                   VEDI DDT {r.ddt_number}
-                </button>
+                </NavLinkSpa>
                 <div className="flex-1 text-sm text-gray-700">
                   <div className="font-semibold text-gray-900 flex items-center gap-2 flex-wrap">
                     {r.restaurant_location}
@@ -130,12 +138,13 @@ const MagazzinoRichiestePage = () => {
               <div className="p-4 text-gray-400 text-center text-sm">Nessuna richiesta in attesa.</div>
             ) : evase.map(r => (
               <div key={r.id} className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                <button
-                  onClick={() => navigate(`/ddt/${r.id}`)}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded border border-gray-300 text-sm font-semibold whitespace-nowrap"
+                <NavLinkSpa
+                  to={`/ddt/${r.id}`}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded border border-gray-300 text-sm font-semibold whitespace-nowrap no-underline"
+                  title="Click → apri · Ctrl/⌘+click → nuova scheda"
                 >
                   VEDI DDT {r.ddt_number}
-                </button>
+                </NavLinkSpa>
                 <div className="flex-1 text-sm text-gray-700">
                   <div className="font-semibold text-gray-900">{r.restaurant_location}</div>
                   <div className="text-xs text-gray-500">Evasa il {formatItalianDateTime(r.evasa_at)}</div>
@@ -153,19 +162,20 @@ const MagazzinoRichiestePage = () => {
           <h2 className="text-lg font-bold text-gray-800 mb-3">
             Storico <span className="text-sm text-gray-500 font-normal">({history.length})</span>
           </h2>
-          <div className="bg-white border border-gray-200 rounded-lg divide-y max-h-96 overflow-y-auto">
+          <div ref={storicoRef} className="bg-white border border-gray-200 rounded-lg divide-y max-h-96 overflow-y-auto">
             {history.length === 0 ? (
               <div className="p-4 text-gray-400 text-center text-sm">Nessuna richiesta nello storico.</div>
             ) : history.map(r => {
               const isError = r.status === 'errore';
               return (
                 <div key={r.id} className={`p-3 flex flex-col sm:flex-row sm:items-center gap-2 text-sm ${isError ? 'bg-red-50' : ''}`}>
-                  <button
-                    onClick={() => navigate(`/ddt/${r.id}`)}
-                    className={`px-3 py-1.5 rounded border text-xs font-semibold whitespace-nowrap ${isError ? 'bg-red-100 hover:bg-red-200 border-red-300 text-red-800' : 'bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-800'}`}
+                  <NavLinkSpa
+                    to={`/ddt/${r.id}`}
+                    className={`px-3 py-1.5 rounded border text-xs font-semibold whitespace-nowrap no-underline ${isError ? 'bg-red-100 hover:bg-red-200 border-red-300 text-red-800' : 'bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-800'}`}
+                    title="Click → apri · Ctrl/⌘+click → nuova scheda"
                   >
                     DDT {r.ddt_number}
-                  </button>
+                  </NavLinkSpa>
                   <div className={`flex-1 ${isError ? 'text-red-800' : ''}`}>
                     <span className="font-semibold">{r.restaurant_location}</span>
                     {isError ? (

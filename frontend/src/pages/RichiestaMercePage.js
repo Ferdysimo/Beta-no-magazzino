@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
+import NavLinkSpa from '../components/NavLinkSpa';
+import useScrollMemory from '../hooks/useScrollMemory';
 import { formatItalianDateTime } from '../utils/formatDate';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -16,6 +18,7 @@ const RichiestaMercePage = () => {
   const [errorModal, setErrorModal] = useState(null); // {id, ddt_number}
   const [errorReason, setErrorReason] = useState('');
   const [submittingError, setSubmittingError] = useState(false);
+  useScrollMemory('locale-richieste-page');
 
   const headers = () => {
     const h = { Authorization: `Bearer ${token}` };
@@ -121,12 +124,13 @@ const RichiestaMercePage = () => {
               <div className="p-4 text-gray-400 text-center text-sm">Nessuna richiesta aperta.</div>
             ) : daEvadere.map(r => (
               <div key={r.id} data-testid={`richiesta-open-${r.ddt_number}`} className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                <button
-                  onClick={() => navigate(`/ddt/${r.id}`)}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded border border-gray-300 text-sm font-semibold whitespace-nowrap"
+                <NavLinkSpa
+                  to={`/ddt/${r.id}`}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded border border-gray-300 text-sm font-semibold whitespace-nowrap no-underline"
+                  title="Click → apri · Ctrl/⌘+click → nuova scheda"
                 >
                   VEDI DDT {r.ddt_number}
-                </button>
+                </NavLinkSpa>
                 <div className="flex-1 text-sm text-gray-700">
                   <div>Richiesta del <strong>{formatItalianDateTime(r.created_at)}</strong></div>
                   {r.status === 'evasa' && r.evasa_at && (
@@ -180,12 +184,13 @@ const RichiestaMercePage = () => {
                   data-testid={`richiesta-closed-${r.ddt_number}`}
                   className={`p-3 sm:p-4 flex flex-col sm:flex-row sm:items-start gap-3 ${isError ? 'bg-red-50' : ''}`}
                 >
-                  <button
-                    onClick={() => navigate(`/ddt/${r.id}`)}
-                    className={`px-4 py-2 rounded border text-sm font-semibold whitespace-nowrap self-start ${isError ? 'bg-red-100 hover:bg-red-200 border-red-300 text-red-800' : 'bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-800'}`}
+                  <NavLinkSpa
+                    to={`/ddt/${r.id}`}
+                    className={`px-4 py-2 rounded border text-sm font-semibold whitespace-nowrap self-start no-underline ${isError ? 'bg-red-100 hover:bg-red-200 border-red-300 text-red-800' : 'bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-800'}`}
+                    title="Click → apri · Ctrl/⌘+click → nuova scheda"
                   >
                     VEDI DDT {r.ddt_number}
-                  </button>
+                  </NavLinkSpa>
                   <div className={`flex-1 text-sm space-y-0.5 ${isError ? 'text-red-800' : 'text-gray-700'}`}>
                     <div>Richiesta del <strong>{formatItalianDateTime(r.created_at)}</strong></div>
                     {r.evasa_at && <div>Evasa il <strong>{formatItalianDateTime(r.evasa_at)}</strong></div>}
