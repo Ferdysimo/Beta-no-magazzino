@@ -25,6 +25,8 @@ const DDTViewPage = () => {
   const { token, restaurant, isAdmin } = useAuth();
   const [ddt, setDdt] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Tick di 1s per il countdown "Modificabile per ancora MM:SS"
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     const fetch = async () => {
@@ -43,6 +45,38 @@ const DDTViewPage = () => {
   }, [id, token]);
 
   const handlePrint = () => window.print();
+
+  // Countdown: minuti/secondi rimanenti prima del congelamento (20 min totali).
+  // Visibile SOLO al locale proprietario quando la richiesta è ancora pending.
+  // L'admin non lo vede (può modificare in qualsiasi momento).
+  const editWindow = (() => {
+    if (!ddt || ddt.status !== 'pending') return null;
+    if (isAdmin) return null;
+    const isOwner = ddt.restaurant_id === restaurant?.id;
+    if (!isOwner) return null;
+    try {
+      const created = new Date(ddt.created_at).getTime();
+      const deadline = created + 20 * 60 * 1000;
+      const remainingMs = deadline - now;
+      if (remainingMs <= 0) return { expired: true };
+      return {
+        expired: false,
+        ms: remainingMs,
+        mm: Math.floor(remainingMs / 60000),
+        ss: Math.floor((remainingMs % 60000) / 1000),
+        critical: remainingMs <= 5 * 60 * 1000,
+      };
+    } catch {
+      return null;
+    }
+  })();
+
+  // Refresh ogni secondo SOLO finché c'è una finestra di modifica attiva.
+  useEffect(() => {
+    if (!editWindow || editWindow.expired) return;
+    const i = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(i);
+  }, [editWindow]);
 
   // Editable rules: status pending + (admin OR (owner AND within 20min))
   const canEdit = (() => {
@@ -88,6 +122,19 @@ const DDTViewPage = () => {
               </span>
             );
           })()}
+          {canEdit && editWindow && !editWindow.expired && (
+            <span
+              data-testid="ddt-edit-countdown"
+              title="Tempo restante per modificare la bolla. Dopo, la richiesta viene congelata."
+              className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold tabular-nums border transition-colors ${
+                editWindow.critical
+                  ? 'bg-red-100 text-red-800 border-red-300 animate-pulse'
+                  : 'bg-amber-100 text-amber-900 border-amber-300'
+              }`}
+            >
+              ⏱ Modificabile per ancora {String(editWindow.mm).padStart(2,'0')}:{String(editWindow.ss).padStart(2,'0')}
+            </span>
+          )}
           {canEdit && (
             <button
               data-testid="btn-modifica-ddt"
