@@ -107,6 +107,7 @@ const NuovaRichiestaPage = () => {
 
   const hasExtra = extraNote.trim().length > 0;
 
+  // Imposta la quantità a un valore ASSOLUTO (usato dal tastierino numerico).
   const setQty = (productId, qty) => {
     const n = Math.max(0, Math.floor(Number(qty) || 0));
     setCart(c => {
@@ -117,8 +118,18 @@ const NuovaRichiestaPage = () => {
     });
   };
 
-  const increment = (p) => setQty(p.id, (cart[p.id] || 0) + 1);
-  const decrement = (p) => setQty(p.id, (cart[p.id] || 0) - 1);
+  // Incremento/decremento RELATIVO. Usiamo la forma `setCart(c => ...)` con
+  // accesso a `c[id]` SOLO dentro il callback, altrimenti tap rapidi consecutivi
+  // leggerebbero lo stesso valore "stale" dal closure di React e contribuirebbero
+  // un unico +1 (sintomo: l'utente preme +5 ma trova 1).
+  const increment = (p) => setCart(c => ({ ...c, [p.id]: (c[p.id] || 0) + 1 }));
+  const decrement = (p) => setCart(c => {
+    const cur = c[p.id] || 0;
+    const next = { ...c };
+    if (cur - 1 <= 0) delete next[p.id];
+    else next[p.id] = cur - 1;
+    return next;
+  });
 
   const openKeypad = (p) => {
     setKeypadProductId(p.id);
