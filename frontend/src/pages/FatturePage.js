@@ -4,6 +4,9 @@ import Header from '../components/Header';
 import axios from 'axios';
 import { Upload, Check, Trash2, Eye, X, FileText, Edit2, Plus, Settings } from 'lucide-react';
 import PhotoLightbox from '../components/PhotoLightbox';
+import Pagination from '../components/Pagination';
+
+const PAGE_SIZE = 10;
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -36,6 +39,12 @@ const FatturePage = () => {
   const [filterDate, setFilterDate] = useState('');
   const [filterSupplier, setFilterSupplier] = useState('all');
   const [lightboxIndex, setLightboxIndex] = useState(-1);
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [filterDate, filterSupplier, invoices.length]);
+  const pagedInvoices = useMemo(
+    () => invoices.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [invoices, page]
+  );
 
   const lightboxPhotos = useMemo(() => (
     (invoices || [])
@@ -476,7 +485,7 @@ const FatturePage = () => {
 
           {/* Invoice Cards */}
           <div className="space-y-3">
-            {invoices.map((invoice) => (
+            {pagedInvoices.map((invoice) => (
               <div
                 key={invoice.id}
                 className={`bg-white rounded-lg border-2 p-4 flex items-center gap-4 ${
@@ -554,6 +563,13 @@ const FatturePage = () => {
               </div>
             )}
           </div>
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={invoices.length}
+            onChange={setPage}
+            testIdPrefix="fatture-pg"
+          />
         </div>
       </main>
 

@@ -5,6 +5,9 @@ import axios from 'axios';
 import { X, FileText, Trash2, Eye, Search } from 'lucide-react';
 import { compressImage, friendlyUploadError } from '../utils/compressImage';
 import PhotoLightbox from '../components/PhotoLightbox';
+import Pagination from '../components/Pagination';
+
+const PAGE_SIZE = 10;
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -36,6 +39,12 @@ const VersamentiPage = () => {
   const [versamenti, setVersamenti] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [lightboxIndex, setLightboxIndex] = useState(-1);
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [searchTerm, versamenti.length]);
+  const pagedVersamenti = useMemo(
+    () => versamenti.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [versamenti, page]
+  );
 
   const lightboxPhotos = useMemo(() => (
     (versamenti || [])
@@ -333,7 +342,7 @@ const VersamentiPage = () => {
 
           {/* Versamenti Cards */}
           <div className="space-y-3">
-            {versamenti.map((versamento) => (
+            {pagedVersamenti.map((versamento) => (
               <div
                 key={versamento.id}
                 className="bg-white rounded-lg border border-gray-200 p-4 flex items-center gap-4 hover:bg-gray-50 transition-colors"
@@ -394,6 +403,13 @@ const VersamentiPage = () => {
               </div>
             )}
           </div>
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={versamenti.length}
+            onChange={setPage}
+            testIdPrefix="versamenti-pg"
+          />
         </div>
       </main>
 

@@ -5,6 +5,9 @@ import axios from 'axios';
 import { X, FileText, Trash2, Eye, Search, Upload, Receipt } from 'lucide-react';
 import { compressImage, friendlyUploadError } from '../utils/compressImage';
 import PhotoLightbox from '../components/PhotoLightbox';
+import Pagination from '../components/Pagination';
+
+const PAGE_SIZE = 10;
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -41,6 +44,14 @@ const ChiusurePage = () => {
   const piattiInputRef = useRef(null);
   const [piattiTargetId, setPiattiTargetId] = useState(null);
   const [piattiUploadingId, setPiattiUploadingId] = useState(null);
+  const [page, setPage] = useState(1);
+
+  // Reset alla prima pagina ogni volta che filtri o lista cambiano
+  useEffect(() => { setPage(1); }, [searchTerm, filterTipologia, chiusure.length]);
+  const pagedChiusure = useMemo(
+    () => chiusure.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [chiusure, page]
+  );
 
   // Set current date/time on load
   useEffect(() => {
@@ -437,7 +448,7 @@ const ChiusurePage = () => {
 
           {/* Chiusure Cards */}
           <div className="space-y-3">
-            {chiusure.map((chiusura) => (
+            {pagedChiusure.map((chiusura) => (
               <div
                 key={chiusura.id}
                 className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 flex flex-wrap sm:flex-nowrap items-center gap-3 hover:bg-gray-50 transition-colors"
@@ -549,6 +560,13 @@ const ChiusurePage = () => {
               </div>
             )}
           </div>
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={chiusure.length}
+            onChange={setPage}
+            testIdPrefix="chiusure-pg"
+          />
         </div>
       </main>
 
