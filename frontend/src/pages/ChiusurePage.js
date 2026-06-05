@@ -6,6 +6,7 @@ import { X, FileText, Trash2, Eye, Search, Upload, Receipt } from 'lucide-react'
 import { compressImage, friendlyUploadError } from '../utils/compressImage';
 import PhotoLightbox from '../components/PhotoLightbox';
 import Pagination from '../components/Pagination';
+import useSessionState from '../hooks/useSessionState';
 
 const PAGE_SIZE = 10;
 
@@ -44,10 +45,15 @@ const ChiusurePage = () => {
   const piattiInputRef = useRef(null);
   const [piattiTargetId, setPiattiTargetId] = useState(null);
   const [piattiUploadingId, setPiattiUploadingId] = useState(null);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useSessionState('chiusure-page', 1);
 
-  // Reset alla prima pagina ogni volta che filtri o lista cambiano
-  useEffect(() => { setPage(1); }, [searchTerm, filterTipologia, chiusure.length]);
+  // Reset alla prima pagina SOLO quando cambiano i filtri (non al primo load).
+  // Se il numero di elementi diminuisce sotto la pagina corrente, riallinea.
+  useEffect(() => { setPage(1); }, [searchTerm, filterTipologia]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(chiusure.length / PAGE_SIZE));
+    if (page > maxPage) setPage(maxPage);
+  }, [chiusure.length, page]); // eslint-disable-line react-hooks/exhaustive-deps
   const pagedChiusure = useMemo(
     () => chiusure.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
     [chiusure, page]

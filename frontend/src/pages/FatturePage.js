@@ -5,6 +5,7 @@ import axios from 'axios';
 import { Upload, Check, Trash2, Eye, X, FileText, Edit2, Plus, Settings } from 'lucide-react';
 import PhotoLightbox from '../components/PhotoLightbox';
 import Pagination from '../components/Pagination';
+import useSessionState from '../hooks/useSessionState';
 
 const PAGE_SIZE = 10;
 
@@ -39,8 +40,12 @@ const FatturePage = () => {
   const [filterDate, setFilterDate] = useState('');
   const [filterSupplier, setFilterSupplier] = useState('all');
   const [lightboxIndex, setLightboxIndex] = useState(-1);
-  const [page, setPage] = useState(1);
-  useEffect(() => { setPage(1); }, [filterDate, filterSupplier, invoices.length]);
+  const [page, setPage] = useSessionState('fatture-page', 1);
+  useEffect(() => { setPage(1); }, [filterDate, filterSupplier]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(invoices.length / PAGE_SIZE));
+    if (page > maxPage) setPage(maxPage);
+  }, [invoices.length, page]); // eslint-disable-line react-hooks/exhaustive-deps
   const pagedInvoices = useMemo(
     () => invoices.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
     [invoices, page]

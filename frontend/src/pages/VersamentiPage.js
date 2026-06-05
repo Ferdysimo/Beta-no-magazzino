@@ -6,6 +6,7 @@ import { X, FileText, Trash2, Eye, Search } from 'lucide-react';
 import { compressImage, friendlyUploadError } from '../utils/compressImage';
 import PhotoLightbox from '../components/PhotoLightbox';
 import Pagination from '../components/Pagination';
+import useSessionState from '../hooks/useSessionState';
 
 const PAGE_SIZE = 10;
 
@@ -39,8 +40,12 @@ const VersamentiPage = () => {
   const [versamenti, setVersamenti] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [lightboxIndex, setLightboxIndex] = useState(-1);
-  const [page, setPage] = useState(1);
-  useEffect(() => { setPage(1); }, [searchTerm, versamenti.length]);
+  const [page, setPage] = useSessionState('versamenti-page', 1);
+  useEffect(() => { setPage(1); }, [searchTerm]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(versamenti.length / PAGE_SIZE));
+    if (page > maxPage) setPage(maxPage);
+  }, [versamenti.length, page]); // eslint-disable-line react-hooks/exhaustive-deps
   const pagedVersamenti = useMemo(
     () => versamenti.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
     [versamenti, page]
