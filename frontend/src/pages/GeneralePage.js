@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrders } from '../contexts/OrderContext';
 import Header from '../components/Header';
@@ -67,6 +67,36 @@ const GeneralePage = () => {
     } catch (error) {
       console.error('Error hiding order from generale:', error);
     }
+  };
+
+  // Doppio-tap di conferma sul cestino. Il PRIMO tap arma la conferma (animazione)
+  // e attende 2s. Il SECONDO tap entro 2s ESEGUE l'hide. Evita tap accidentali
+  // durante il servizio (causa di "paste sparite da sole" segnalate da Brazza).
+  const [pendingDelete, setPendingDelete] = useState(null); // { id, expires }
+  const pendingDeleteTimerRef = useRef(null);
+  useEffect(() => () => {
+    if (pendingDeleteTimerRef.current) clearTimeout(pendingDeleteTimerRef.current);
+  }, []);
+
+  const onDeleteTap = (orderId) => {
+    const now = Date.now();
+    if (pendingDelete && pendingDelete.id === orderId && now <= pendingDelete.expires) {
+      // Secondo tap entro la finestra → conferma
+      if (pendingDeleteTimerRef.current) {
+        clearTimeout(pendingDeleteTimerRef.current);
+        pendingDeleteTimerRef.current = null;
+      }
+      setPendingDelete(null);
+      handleDelete(orderId);
+      return;
+    }
+    // Primo tap → arma
+    setPendingDelete({ id: orderId, expires: now + 2000 });
+    if (pendingDeleteTimerRef.current) clearTimeout(pendingDeleteTimerRef.current);
+    pendingDeleteTimerRef.current = setTimeout(() => {
+      pendingDeleteTimerRef.current = null;
+      setPendingDelete(null);
+    }, 2000);
   };
 
   return (
@@ -172,14 +202,24 @@ const GeneralePage = () => {
                     <Camera size={20} />
                   </button>
                   
-                  {/* Delete Button */}
-                  <button
-                    data-testid={`generale-delete-${order.order_number}`}
-                    onClick={() => handleDelete(order.id)}
-                    className="w-10 h-10 flex items-center justify-center bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
-                  >
-                    <Trash2 size={20} />
-                  </button>
+                  {/* Delete Button — richiede doppio tap */}
+                  {(() => {
+                    const isArmed = pendingDelete && pendingDelete.id === order.id;
+                    return (
+                      <button
+                        data-testid={`generale-delete-${order.order_number}`}
+                        onClick={() => onDeleteTap(order.id)}
+                        title={isArmed ? 'Tap di nuovo per confermare' : 'Tap due volte per nascondere'}
+                        className={`w-10 h-10 flex items-center justify-center rounded transition-colors text-white ${
+                          isArmed
+                            ? 'bg-red-800 ring-4 ring-red-300 animate-pulse'
+                            : 'bg-red-600 hover:bg-red-700'
+                        }`}
+                      >
+                        <Trash2 size={20} />
+                      </button>
+                    );
+                  })()}
                 </div>
               </div>
             );
