@@ -810,7 +810,8 @@ const ReportBetaPageInner = () => {
                 </div>
               </div>
               <div className="flex items-stretch gap-1.5">
-                {CASH_FIELDS.map(f => {
+                {/* Tutti i campi tranne VERS: VERS viene renderizzato come ULTIMO box DOPO CASH SERA */}
+                {CASH_FIELDS.filter(f => f.key !== 'vers').map(f => {
                   const computed = evaluateValue(cashRow[f.key]);
                   const sign = f.op === 'minus' ? '−' : (f.op === 'plus' ? '+' : '=');
                   const hasComment = !!cashComments[f.key];
@@ -919,6 +920,90 @@ const ReportBetaPageInner = () => {
                   </div>
                   <span className="text-[9px] text-gray-700 mt-0.5 text-center leading-none font-bold">totale</span>
                 </div>
+                {/* VERS — ULTIMO box, DOPO CASH SERA (bianco, con palette colori) */}
+                {(() => {
+                  const f = CASH_FIELDS.find(x => x.key === 'vers');
+                  if (!f) return null;
+                  const computed = evaluateValue(cashRow[f.key]);
+                  const sign = '−';
+                  const hasComment = !!cashComments[f.key];
+                  const rawVal = cashRow[f.key] || '';
+                  const isFormula = rawVal.trim().startsWith('=');
+                  const versTextColor = !isFormula && versColor ? COLOR_MAP[versColor] : null;
+                  const boxStyle = CASH_BOX_STYLE.vers;
+                  return (
+                    <div
+                      className="flex-1 min-w-[60px] flex flex-col relative rounded p-1"
+                      style={{ backgroundColor: boxStyle.bg }}
+                    >
+                      <label
+                        className="text-[10px] font-extrabold text-center leading-none mb-0.5 truncate uppercase"
+                        title={f.label}
+                        style={{ color: boxStyle.text }}
+                      >
+                        {f.label}
+                      </label>
+                      <input
+                        data-testid={`cash-row-${f.key}`}
+                        type="text"
+                        inputMode="decimal"
+                        value={(() => {
+                          const isFocused = focusedField === f.key;
+                          if (isFocused) return rawVal;
+                          if (!rawVal) return '';
+                          const abs = Math.abs(computed);
+                          return Number.isInteger(abs)
+                            ? String(abs)
+                            : abs.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        })()}
+                        onChange={(e) => setCashRowValue(f.key, e.target.value)}
+                        onFocus={() => setFocusedField(f.key)}
+                        onBlur={() => setFocusedField(curr => curr === f.key ? null : curr)}
+                        onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
+                        placeholder="−"
+                        style={versTextColor ? { color: versTextColor } : undefined}
+                        className={`w-full h-11 border rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] border-gray-200 ${
+                          isFormula && focusedField === f.key ? 'bg-rose-100 text-rose-800 border-rose-300' : 'bg-white'
+                        }`}
+                        title={isFormula ? `Formula: ${rawVal} = ${computed.toLocaleString('it-IT', { maximumFractionDigits: 2 })}` : 'Clicca per modificare'}
+                      />
+                      {hasComment && (
+                        <span
+                          title={cashComments[f.key]}
+                          className="absolute top-3 right-0 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-amber-600 z-10"
+                        />
+                      )}
+                      <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
+                        {computed !== 0 ? `${sign}€${Math.abs(computed).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
+                      </span>
+                      {/* Palette colori — solo se NON formula e non vuoto */}
+                      {!isFormula && rawVal.trim() !== '' && (
+                        <div className="flex items-center justify-center gap-0.5 mt-0.5">
+                          {COLOR_PALETTE.map(c => (
+                            <button
+                              key={c.key}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => setVersColor(c.key === versColor ? '' : c.key)}
+                              title={c.label}
+                              className={`w-3 h-3 rounded-full border ${versColor === c.key ? 'ring-2 ring-offset-1 ring-gray-700' : ''}`}
+                              style={{ backgroundColor: c.css, borderColor: c.css === '#FFFFFF' ? '#9ca3af' : c.css }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {commentPopover?.key === f.key && (
+                        <CommentPopover
+                          inputRef={commentInputRef}
+                          value={commentPopover.value}
+                          onChange={(v) => setCommentPopover(p => ({ ...p, value: v }))}
+                          onSave={saveCommentPopover}
+                          onCancel={closeCommentPopover}
+                        />
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -1030,21 +1115,21 @@ const ReportBetaPageInner = () => {
             </div>
 
             {/* ============ SPICCI + CASSETTO SPICCI (stessa riga) ============ */}
-            <div className="flex items-stretch gap-2 max-w-[60%]">
+            <div className="flex items-stretch gap-2 max-w-[42%]">
               {/* --- SPICCI (rotolini aperti) --- */}
-              <div className="bg-white rounded border border-gray-200 p-2 flex-[5] min-w-0">
-              <div className="flex items-baseline justify-between mb-2">
-                <h2 className="text-xs font-bold text-gray-800 uppercase">Spicci</h2>
-                <span className="text-[10px] text-gray-400">
-                  Aperti × valore rotolino/mazzetta
+              <div className="bg-white rounded border border-gray-200 p-1.5 flex-[5] min-w-0">
+              <div className="flex items-baseline justify-between mb-1">
+                <h2 className="text-[11px] font-bold text-gray-800 uppercase">Spicci</h2>
+                <span className="text-[9px] text-gray-400">
+                  ap.×valore
                 </span>
               </div>
-              <div className="flex items-stretch gap-1.5">
+              <div className="flex items-stretch gap-1">
                 {spicciValues.rows.map(r => {
                   const hasComment = !!cashComments[r.key];
                   return (
-                  <div key={r.key} className="flex-1 min-w-[44px] flex flex-col relative">
-                    <label className="text-[10px] font-bold text-gray-800 text-center leading-none mb-0.5">
+                  <div key={r.key} className="flex-1 min-w-[34px] flex flex-col relative">
+                    <label className="text-[9px] font-bold text-gray-800 text-center leading-none mb-0.5">
                       {r.label}
                     </label>
                     <input
@@ -1056,8 +1141,8 @@ const ReportBetaPageInner = () => {
                       onFocus={() => setFocusedField(r.key)}
                       onBlur={() => setFocusedField(curr => curr === r.key ? null : curr)}
                       onContextMenu={(e) => { e.preventDefault(); openCommentPopover(r.key); }}
-                      placeholder="aperti"
-                      className="w-full h-9 border border-gray-200 rounded px-1 text-center font-bold text-xs focus:outline-none focus:border-[#F5C518]"
+                      placeholder="ap."
+                      className="w-full h-7 border border-gray-200 rounded px-0.5 text-center font-bold text-[11px] focus:outline-none focus:border-[#F5C518]"
                     />
                     {hasComment && (
                       <span
@@ -1067,7 +1152,7 @@ const ReportBetaPageInner = () => {
                     )}
                     <div
                       data-testid={`spicci-valore-${r.key}`}
-                      className="w-full h-9 mt-1 bg-yellow-50 border border-yellow-200 rounded flex items-center justify-center font-black text-xs text-gray-900"
+                      className="w-full h-7 mt-0.5 bg-yellow-50 border border-yellow-200 rounded flex items-center justify-center font-black text-[11px] text-gray-900"
                     >
                       €{r.value.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                     </div>
@@ -1085,15 +1170,15 @@ const ReportBetaPageInner = () => {
                   );
                 })}
                 {/* Totale spicci */}
-                <div className="flex-1 min-w-[52px] flex flex-col">
-                  <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">TOT</label>
-                  <div className="w-full h-9 border border-transparent rounded flex items-center justify-center text-[10px] text-gray-400 italic">
+                <div className="flex-1 min-w-[40px] flex flex-col">
+                  <label className="text-[9px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">TOT</label>
+                  <div className="w-full h-7 border border-transparent rounded flex items-center justify-center text-[9px] text-gray-400 italic">
                     {/* nessun input sul totale */}
                     —
                   </div>
                   <div
                     data-testid="spicci-totale"
-                    className="w-full h-9 mt-1 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-xs text-gray-900"
+                    className="w-full h-7 mt-0.5 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-[11px] text-gray-900"
                   >
                     €{spicciValues.total.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                   </div>
@@ -1103,12 +1188,12 @@ const ReportBetaPageInner = () => {
               </div>
 
               {/* --- CASSETTO SPICCI (stock totale, click-to-edit) --- */}
-              <div className="bg-white rounded border border-gray-200 p-2 flex-[4] min-w-0">
-                <div className="flex items-baseline justify-between mb-2">
-                  <h2 className="text-xs font-bold text-gray-800 uppercase">Cassetto Spicci</h2>
-                  <span className="text-[10px] text-gray-400">{isAdmin ? 'click per modificare' : 'solo lettura'}</span>
+              <div className="bg-white rounded border border-gray-200 p-1.5 flex-[4] min-w-0">
+                <div className="flex items-baseline justify-between mb-1">
+                  <h2 className="text-[11px] font-bold text-gray-800 uppercase">Cassetto</h2>
+                  <span className="text-[9px] text-gray-400">{isAdmin ? 'modif.' : 'lett.'}</span>
                 </div>
-                <div className="flex items-stretch gap-1.5">
+                <div className="flex items-stretch gap-1">
                   {CASSETTO_FIELDS.map(f => {
                     const isEditing = editingCassetto === f.key;
                     const hasComment = !!cashComments[f.key];
@@ -1125,8 +1210,8 @@ const ReportBetaPageInner = () => {
                         : residuo.toLocaleString('it-IT', { maximumFractionDigits: 2 });
                     }
                     return (
-                      <div key={f.key} className="flex-1 min-w-[44px] flex flex-col relative">
-                        <label className="text-[10px] font-bold text-gray-800 text-center leading-none mb-0.5">
+                      <div key={f.key} className="flex-1 min-w-[34px] flex flex-col relative">
+                        <label className="text-[9px] font-bold text-gray-800 text-center leading-none mb-0.5">
                           {f.label}
                         </label>
                         {isEditing ? (
@@ -1145,7 +1230,7 @@ const ReportBetaPageInner = () => {
                             }}
                             onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
                             placeholder="stock"
-                            className="w-full h-9 border-2 border-[#F5C518] rounded px-1 text-center font-bold text-xs focus:outline-none bg-yellow-50"
+                            className="w-full h-7 border-2 border-[#F5C518] rounded px-0.5 text-center font-bold text-[11px] focus:outline-none bg-yellow-50"
                           />
                         ) : (
                           <button
@@ -1154,7 +1239,7 @@ const ReportBetaPageInner = () => {
                             onClick={() => startEditCassetto(f)}
                             onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
                             title={isAdmin ? "Clicca per modificare · destro per commento" : "Solo lettura · destro per commento"}
-                            className={`w-full h-9 border rounded px-1 text-center font-black text-xs transition-colors ${
+                            className={`w-full h-7 border rounded px-0.5 text-center font-black text-[11px] transition-colors ${
                               isAdmin ? 'cursor-pointer' : 'cursor-not-allowed'
                             } ${
                               isNegative
