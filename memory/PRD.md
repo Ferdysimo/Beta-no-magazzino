@@ -154,3 +154,9 @@ Applicate 7 modifiche di layout/logica richieste dall'utente su `/app/frontend/s
 - **Auto-fill prev_sera → mattina**: decomposizione automatica del totale del giorno prima in casse (×24) + sfuse (es. 76 → 3 casse + 4 sfuse).
 - **Placeholder trasparenti rimossi** da tutti gli input bevande (Magazzino Sera, Scarti, Magazzino Mattina).
 - Test E2E manuale: Mattina AL 5 casse + 12 sfuse → tot 132 ✓.
+
+## Sessione fork — 09/06/2026 (Magazzino Mattina: read-only + forza mattina)
+- **Magazzino Mattina ora read-only di default** in ReportBetaPage. Il valore atteso allo scatto di mezzanotte verrà dal Magazzino Sera della sera prima (consistente con la logica di MagazzinoBevandePage).
+- **Pulsante "🔒 forza mattina"** accanto al titolo della sezione: cliccandolo sblocca temporaneamente gli input casse/sfuse (label → "🔓 mattina sbloccato" in rosso).
+- Stato `forceMagMattina` separato da `forceMattina` (cassa) per evitare collisione.
+- Input bloccati hanno: `readOnly`, `tabIndex=-1`, sfondo grigio, cursor `not-allowed`.

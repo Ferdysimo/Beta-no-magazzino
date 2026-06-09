@@ -197,6 +197,9 @@ const ReportBetaPageInner = () => {
   // Forza modifica CASH MATTINA (normalmente è read-only perché auto-popolato
   // dal CASH SERA di ieri). L'utente può sbloccarlo esplicitamente per correzioni.
   const [forceMattina, setForceMattina] = useState(false);
+  // Forza modifica MAGAZZINO MATTINA bevande (normalmente è read-only: allo
+  // scatto di mezzanotte viene auto-popolato dal MAGAZZINO SERA della sera prima).
+  const [forceMagMattina, setForceMagMattina] = useState(false);
   const [focusedField, setFocusedField] = useState(null); // key | null (preview bar)
   const [showDebug, setShowDebug] = useState(false);
   const [commentPopover, setCommentPopover] = useState(null); // { key, value }
@@ -1216,10 +1219,27 @@ const ReportBetaPageInner = () => {
 
             {/* ============ MAGAZZINO MATTINA (casse + sfuse, in sync con Magazzino Bevande) ============ */}
             <div className="bg-white rounded border border-gray-200 p-2">
-              <div className="flex items-baseline justify-between mb-2">
-                <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Mattina</h2>
+              <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Mattina</h2>
+                  <button
+                    type="button"
+                    data-testid="force-mag-mattina-toggle"
+                    onClick={() => setForceMagMattina(v => !v)}
+                    title={forceMagMattina ? 'Modifica forzata di MAGAZZINO MATTINA attiva — clicca per bloccare' : 'Sblocca MAGAZZINO MATTINA per forzare valori manuali (normalmente auto-popolato dal Magazzino Sera della sera prima)'}
+                    className={`text-[10px] font-bold px-2 py-1 rounded transition-colors ${
+                      forceMagMattina
+                        ? 'bg-rose-100 text-rose-700 border border-rose-300 hover:bg-rose-200'
+                        : 'bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200'
+                    }`}
+                  >
+                    {forceMagMattina ? '🔓 mattina sbloccato' : '🔒 forza mattina'}
+                  </button>
+                </div>
                 <span className="text-[10px] text-gray-400">
-                  Casse (×{PEZZI_PER_CASSA}) + Sfuse = totale · sync live · supporta formule "=..."
+                  {forceMagMattina
+                    ? `Modifica forzata · Casse (×${PEZZI_PER_CASSA}) + Sfuse`
+                    : `Auto da Magazzino Sera del giorno prima · Casse (×${PEZZI_PER_CASSA}) + Sfuse`}
                 </span>
               </div>
               {beverages.length === 0 ? (
@@ -1239,6 +1259,7 @@ const ReportBetaPageInner = () => {
                     const total = (casseEmpty && sfuseEmpty) ? null : (casseN * PEZZI_PER_CASSA + sfuseN);
                     const isFormulaCasse = typeof casseRaw === 'string' && casseRaw.trim().startsWith('=');
                     const isFormulaSfuse = typeof sfuseRaw === 'string' && sfuseRaw.trim().startsWith('=');
+                    const locked = !forceMagMattina;
                     return (
                       <div
                         key={b.sigla}
@@ -1256,13 +1277,19 @@ const ReportBetaPageInner = () => {
                             inputMode="decimal"
                             value={casseRaw}
                             onChange={(e) => handleCasseSfuseChange(b.sigla, 'mattina', 'casse', e.target.value)}
-                            title={isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : `Casse × ${PEZZI_PER_CASSA}`}
+                            readOnly={locked}
+                            tabIndex={locked ? -1 : 0}
+                            title={locked
+                              ? 'Auto-popolato da Magazzino Sera del giorno prima (clicca sul lucchetto per forzare)'
+                              : (isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : `Casse × ${PEZZI_PER_CASSA}`)}
                             className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
-                              isFormulaCasse
-                                ? 'bg-rose-100 border-rose-300 text-rose-800'
-                                : casseEmpty
-                                  ? 'bg-gray-50 border-gray-200 text-gray-700'
-                                  : 'bg-emerald-50 border-emerald-200 text-gray-900'
+                              locked
+                                ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-not-allowed'
+                                : isFormulaCasse
+                                  ? 'bg-rose-100 border-rose-300 text-rose-800'
+                                  : casseEmpty
+                                    ? 'bg-gray-50 border-gray-200 text-gray-700'
+                                    : 'bg-emerald-50 border-emerald-200 text-gray-900'
                             }`}
                           />
                           {/* SFUSE (×1) */}
@@ -1272,13 +1299,19 @@ const ReportBetaPageInner = () => {
                             inputMode="decimal"
                             value={sfuseRaw}
                             onChange={(e) => handleCasseSfuseChange(b.sigla, 'mattina', 'sfuse', e.target.value)}
-                            title={isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Bottiglie sfuse'}
+                            readOnly={locked}
+                            tabIndex={locked ? -1 : 0}
+                            title={locked
+                              ? 'Auto-popolato da Magazzino Sera del giorno prima (clicca sul lucchetto per forzare)'
+                              : (isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Bottiglie sfuse')}
                             className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-teal-400 ${
-                              isFormulaSfuse
-                                ? 'bg-rose-100 border-rose-300 text-rose-800'
-                                : sfuseEmpty
-                                  ? 'bg-gray-50 border-gray-200 text-gray-700'
-                                  : 'bg-teal-50 border-teal-200 text-gray-900'
+                              locked
+                                ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-not-allowed'
+                                : isFormulaSfuse
+                                  ? 'bg-rose-100 border-rose-300 text-rose-800'
+                                  : sfuseEmpty
+                                    ? 'bg-gray-50 border-gray-200 text-gray-700'
+                                    : 'bg-teal-50 border-teal-200 text-gray-900'
                             }`}
                           />
                         </div>
