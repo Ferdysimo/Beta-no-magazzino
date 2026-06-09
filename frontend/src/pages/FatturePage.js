@@ -175,7 +175,7 @@ const FatturePage = () => {
           setImporto('');
           const now = new Date();
           setInvoiceDate(new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
-          setSuccess('Fattura caricata con successo!');
+          setSuccess('DDT caricato con successo!');
           setTimeout(() => setSuccess(''), 3000);
           
           fetchInvoices();
@@ -250,7 +250,7 @@ const FatturePage = () => {
 
   // Delete invoice
   const deleteInvoice = async (invoiceId) => {
-    if (!window.confirm('Sei sicuro di voler eliminare questa fattura?')) return;
+    if (!window.confirm('Sei sicuro di voler eliminare questo DDT?')) return;
     
     try {
       await axios.delete(`${API}/invoices/${invoiceId}`, {
@@ -300,7 +300,7 @@ const FatturePage = () => {
       <main className="max-w-4xl mx-auto p-6">
         {/* Page Header */}
         <h1 className="font-heading text-3xl font-bold text-gray-900 mb-6">
-          Elenco fatture {restaurant?.location}
+          Elenco DDT {restaurant?.location}
         </h1>
 
         {/* Upload Form */}
@@ -308,7 +308,7 @@ const FatturePage = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* File Upload */}
             <div className="flex items-center gap-4">
-              <label className="w-32 text-gray-700 font-medium">Foto Fattura</label>
+              <label className="w-32 text-gray-700 font-medium">Foto DDT</label>
               <div className="flex-1">
                 <input
                   ref={fileInputRef}
@@ -425,7 +425,7 @@ const FatturePage = () => {
                 className="h-10 px-3 border border-gray-300 rounded-md bg-gray-100"
                 disabled
               >
-                <option>Fatture</option>
+                <option>DDT</option>
               </select>
             </div>
 
@@ -449,7 +449,7 @@ const FatturePage = () => {
                 className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-md font-medium transition-colors disabled:opacity-50"
                 data-testid="upload-btn"
               >
-                {loading ? 'Caricamento...' : 'Carica fattura'}
+                {loading ? 'Caricamento...' : 'Carica DDT'}
               </button>
             </div>
           </form>
@@ -460,7 +460,7 @@ const FatturePage = () => {
 
         {/* Invoices List */}
         <div>
-          <h2 className="font-heading text-2xl font-bold text-gray-900 mb-4">Elenco fatture</h2>
+          <h2 className="font-heading text-2xl font-bold text-gray-900 mb-4">Elenco DDT</h2>
           
           {/* Filters */}
           <div className="flex items-center gap-4 mb-4">
@@ -504,7 +504,7 @@ const FatturePage = () => {
                   onClick={() => openLightboxFor(invoice.image_data)}
                 >
                   {invoice.image_data ? (
-                    <img src={resolveImageSrc(invoice.image_data)} alt="Fattura" className="w-full h-full object-cover" />
+                    <img src={resolveImageSrc(invoice.image_data)} alt="DDT" className="w-full h-full object-cover" />
                   ) : (
                     <FileText className="text-gray-400" size={24} />
                   )}
@@ -531,7 +531,7 @@ const FatturePage = () => {
                     </div>
                   ) : null}
                   <div className="text-sm text-gray-500">
-                    Data fattura: {formatDate(invoice.invoice_date)}
+                    Data DDT: {formatDate(invoice.invoice_date)}
                   </div>
                   <div className="text-xs text-gray-400">
                     Caricata: {formatDate(invoice.created_at)}
@@ -571,7 +571,7 @@ const FatturePage = () => {
 
             {invoices.length === 0 && (
               <div className="text-center text-gray-500 py-8">
-                Nessuna fattura trovata
+                Nessun DDT trovato
               </div>
             )}
           </div>

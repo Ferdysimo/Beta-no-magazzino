@@ -200,7 +200,7 @@ const HomePage = () => {
                 </button>
                 <button data-testid="btn-fatture" onClick={() => navigate('/fatture')}
                   className="bg-[#60A5FA] hover:bg-[#3B82F6] text-white px-4 py-2 rounded-md font-medium text-sm transition-colors">
-                  Fatture
+                  DDT
                 </button>
               </div>
             </div>
