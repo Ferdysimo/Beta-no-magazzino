@@ -137,3 +137,11 @@ Applicate 7 modifiche di layout/logica richieste dall'utente su `/app/frontend/s
 6. **Breakdown costi paste rimosso**: niente più grid per sigla; restano solo TOT PASTE e TOT €.
 7. **Cap 15€** su `setManualPrice`: qualsiasi valore numerico > 15 viene troncato a 15 (formule "=..." non ammesse in input manuale comunque).
 - Testato via screenshot tool: layout corretto, ordine sezioni corretto, cap 15€ verificato (input 50→15, 20→15, 8→8).
+
+## Sessione fork — 09/06/2026 (Magazzino Sera: casse + sfuse)
+- **Sezione "Magazzino Sera" spostata come 3ª sezione** (subito dopo Riepilogo Cassa, prima di Vendite Bevande) in `/app/frontend/src/pages/ReportBetaPage.js`.
+- **UI a 2 quadratini per bevanda**: input sinistro = **casse** (moltiplicate × 24), input destro = **sfuse** (×1). Sintesi "tot N" sotto la coppia.
+- **Costante `PEZZI_PER_CASSA = 24`** (fissa, uguale per tutte le bevande).
+- **Backend**: esteso `BeverageDailyUpsert` e `GET /api/beverages/daily` con campi `sera_casse` e `sera_sfuse`. Il totale `sera` salvato a DB resta la somma `casse*24 + sfuse` (retrocompatibile con tutta la logica downstream — Vendite Bevande, prev_sera, cash_sera_full).
+- **Persistenza verificata**: refresh → casse/sfuse ricaricati correttamente, totale ricalcolato.
+- Test E2E manuale: AL: 3 casse + 4 sfuse → "tot 76" ✓ (3×24+4=76).

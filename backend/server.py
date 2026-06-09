@@ -2904,6 +2904,11 @@ class BeverageDailyUpsert(BaseModel):
     inUsc: Optional[str] = ""
     scarti: Optional[str] = ""
     sera: Optional[str] = ""
+    # NEW (09/06/2026) — "sera" può essere espresso come somma di casse (×24) + sfuse.
+    # Se entrambi presenti il frontend manda comunque il totale come `sera` (string),
+    # qui salviamo separatamente i due input grezzi per ripristinarli a refresh.
+    sera_casse: Optional[str] = ""
+    sera_sfuse: Optional[str] = ""
     comments: Optional[Dict[str, str]] = None  # { 'inUsc': '...', 'scarti': '...' }
 
 
@@ -2920,6 +2925,8 @@ async def get_beverage_daily_counts(request: Request, token_data: dict = Depends
         "inUsc": d.get("inUsc", ""),
         "scarti": d.get("scarti", ""),
         "sera": d.get("sera", ""),
+        "sera_casse": d.get("sera_casse", ""),
+        "sera_sfuse": d.get("sera_sfuse", ""),
         "comments": d.get("comments") or {},
     } for d in today_docs}
 
@@ -2958,6 +2965,8 @@ async def upsert_beverage_daily(
         "inUsc": data.inUsc or "",
         "scarti": data.scarti or "",
         "sera": data.sera or "",
+        "sera_casse": data.sera_casse or "",
+        "sera_sfuse": data.sera_sfuse or "",
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     # Sanitize commenti (max 500 char per chiave, scarto chiavi non-valide)

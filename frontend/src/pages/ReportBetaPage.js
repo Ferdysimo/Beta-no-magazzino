@@ -246,6 +246,8 @@ const ReportBetaPageInner = () => {
                 inUsc: remote.inUsc || '',
                 scarti: remote.scarti || '',
                 sera: seraLocked ? (local?.sera ?? '') : (remote.sera || ''),
+                sera_casse: seraLocked ? (local?.sera_casse ?? '') : (remote.sera_casse || ''),
+                sera_sfuse: seraLocked ? (local?.sera_sfuse ?? '') : (remote.sera_sfuse || ''),
               };
             } else if (prev[b.sigla] !== undefined && prev[b.sigla] !== '') {
               merged[b.sigla] = {
@@ -253,6 +255,8 @@ const ReportBetaPageInner = () => {
                 inUsc: '',
                 scarti: '',
                 sera: seraLocked ? (local?.sera ?? '') : '',
+                sera_casse: seraLocked ? (local?.sera_casse ?? '') : '',
+                sera_sfuse: seraLocked ? (local?.sera_sfuse ?? '') : '',
               };
             } else {
               merged[b.sigla] = {
@@ -260,6 +264,8 @@ const ReportBetaPageInner = () => {
                 inUsc: '',
                 scarti: '',
                 sera: seraLocked ? (local?.sera ?? '') : '',
+                sera_casse: seraLocked ? (local?.sera_casse ?? '') : '',
+                sera_sfuse: seraLocked ? (local?.sera_sfuse ?? '') : '',
               };
             }
           });
@@ -285,6 +291,8 @@ const ReportBetaPageInner = () => {
           inUsc: row.inUsc ?? '',
           scarti: row.scarti ?? '',
           sera: row.sera ?? '',
+          sera_casse: row.sera_casse ?? '',
+          sera_sfuse: row.sera_sfuse ?? '',
           comments: row.comments || {},
         }, { headers: { Authorization: `Bearer ${token}` } });
         // Mantieni protezione del valore locale per altri 2s dopo il save
@@ -294,6 +302,33 @@ const ReportBetaPageInner = () => {
       }
     }, 600);
   }, [token]);
+
+  // Magazzino Sera (Report): l'utente inserisce CASSE (×24) e SFUSE separatamente.
+  // Il totale "sera" memorizzato a DB è la somma calcolata casse*24 + sfuse.
+  const PEZZI_PER_CASSA = 24;
+  const handleCasseSfuseChange = (sigla, field, value) => {
+    // field ∈ { 'sera_casse', 'sera_sfuse' }
+    bevPendingSeraUntil.current[sigla] = Date.now() + 4000;
+    setBevCounts(prev => {
+      const current = prev[sigla] || { mattina: '', inUsc: '', scarti: '', sera: '', sera_casse: '', sera_sfuse: '' };
+      const nextRow = { ...current, [field]: value };
+      const casseRaw = field === 'sera_casse' ? value : (nextRow.sera_casse ?? '');
+      const sfuseRaw = field === 'sera_sfuse' ? value : (nextRow.sera_sfuse ?? '');
+      const casseEmpty = casseRaw === '' || casseRaw === null || casseRaw === undefined;
+      const sfuseEmpty = sfuseRaw === '' || sfuseRaw === null || sfuseRaw === undefined;
+      if (casseEmpty && sfuseEmpty) {
+        nextRow.sera = '';
+      } else {
+        const c = evaluateValue(casseRaw);
+        const s = evaluateValue(sfuseRaw);
+        const total = c * PEZZI_PER_CASSA + s;
+        nextRow.sera = Number.isInteger(total) ? String(total) : String(+total.toFixed(2));
+      }
+      const next = { ...prev, [sigla]: nextRow };
+      scheduleBevSave(sigla, nextRow);
+      return next;
+    });
+  };
 
   const handleSeraChange = (sigla, value) => {
     // Estendi la finestra di protezione contro il poll-override
@@ -1007,6 +1042,96 @@ const ReportBetaPageInner = () => {
               </div>
             </div>
 
+            {/* ============ MAGAZZINO SERA (editabile, sync live con Magazzino Bevande) ============ */}
+            <div className="bg-white rounded border border-gray-200 p-2">
+              <div className="flex items-baseline justify-between mb-2">
+                <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Sera</h2>
+                <span className="text-[10px] text-gray-400">
+                  Casse (×{PEZZI_PER_CASSA}) + Sfuse = totale · sync live · supporta formule "=..."
+                </span>
+              </div>
+              {beverages.length === 0 ? (
+                <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
+                  Nessuna bevanda configurata.
+                </div>
+              ) : (
+                <div className="flex items-stretch gap-2">
+                  {beverages.map(b => {
+                    const row = bevCounts[b.sigla] || {};
+                    const casseRaw = row.sera_casse ?? '';
+                    const sfuseRaw = row.sera_sfuse ?? '';
+                    const isFocusedSera = focusedSeraSigla === b.sigla;
+                    const casseEmpty = casseRaw === '' || casseRaw === null || casseRaw === undefined;
+                    const sfuseEmpty = sfuseRaw === '' || sfuseRaw === null || sfuseRaw === undefined;
+                    const casseN = evaluateValue(casseRaw);
+                    const sfuseN = evaluateValue(sfuseRaw);
+                    const total = (casseEmpty && sfuseEmpty) ? null : (casseN * PEZZI_PER_CASSA + sfuseN);
+                    const isFormulaCasse = typeof casseRaw === 'string' && casseRaw.trim().startsWith('=');
+                    const isFormulaSfuse = typeof sfuseRaw === 'string' && sfuseRaw.trim().startsWith('=');
+                    return (
+                      <div
+                        key={b.sigla}
+                        data-testid={`mag-sera-${b.sigla}`}
+                        className="flex-1 min-w-[90px] flex flex-col"
+                      >
+                        <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
+                          {b.sigla}
+                        </label>
+                        <div className="flex gap-1">
+                          {/* CASSE (× PEZZI_PER_CASSA) */}
+                          <input
+                            data-testid={`bev-mag-sera-casse-${b.sigla}`}
+                            type="text"
+                            inputMode="decimal"
+                            value={casseRaw}
+                            onChange={(e) => handleCasseSfuseChange(b.sigla, 'sera_casse', e.target.value)}
+                            onFocus={() => setFocusedSeraSigla(b.sigla)}
+                            onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
+                            placeholder="cas"
+                            title={isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : `Casse × ${PEZZI_PER_CASSA}`}
+                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-amber-400 ${
+                              isFormulaCasse && isFocusedSera
+                                ? 'bg-rose-100 border-rose-300 text-rose-800'
+                                : casseEmpty
+                                  ? 'bg-gray-50 border-gray-200 text-gray-700'
+                                  : 'bg-amber-50 border-amber-200 text-gray-900'
+                            }`}
+                          />
+                          {/* SFUSE (×1) */}
+                          <input
+                            data-testid={`bev-mag-sera-sfuse-${b.sigla}`}
+                            type="text"
+                            inputMode="decimal"
+                            value={sfuseRaw}
+                            onChange={(e) => handleCasseSfuseChange(b.sigla, 'sera_sfuse', e.target.value)}
+                            onFocus={() => setFocusedSeraSigla(b.sigla)}
+                            onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
+                            placeholder="sf."
+                            title={isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Bottiglie sfuse'}
+                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-sky-400 ${
+                              isFormulaSfuse && isFocusedSera
+                                ? 'bg-rose-100 border-rose-300 text-rose-800'
+                                : sfuseEmpty
+                                  ? 'bg-gray-50 border-gray-200 text-gray-700'
+                                  : 'bg-sky-50 border-sky-200 text-gray-900'
+                            }`}
+                          />
+                        </div>
+                        <span
+                          data-testid={`bev-mag-sera-total-${b.sigla}`}
+                          className={`text-[10px] mt-0.5 text-center leading-none font-bold ${total === null ? 'text-gray-400' : 'text-gray-800'}`}
+                        >
+                          {total === null
+                            ? 'sera'
+                            : `tot ${Number.isInteger(total) ? total : (+total.toFixed(2))}`}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* ============ VENDITE BEVANDE ============ */}
             <div className="bg-white rounded border border-gray-200 p-2">
               <div className="flex items-baseline justify-between mb-2">
@@ -1049,67 +1174,6 @@ const ReportBetaPageInner = () => {
                       &nbsp;
                     </span>
                   </div>
-                </div>
-              )}
-            </div>
-
-            {/* ============ MAGAZZINO SERA (editabile, sync live con Magazzino Bevande) ============ */}
-            <div className="bg-white rounded border border-gray-200 p-2">
-              <div className="flex items-baseline justify-between mb-2">
-                <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Sera</h2>
-                <span className="text-[10px] text-gray-400">Editabile · sync live con Magazzino Bevande · supporta formule "=..."</span>
-              </div>
-              {beverages.length === 0 ? (
-                <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
-                  Nessuna bevanda configurata.
-                </div>
-              ) : (
-                <div className="flex items-stretch gap-1.5">
-                  {beverages.map(b => {
-                    const seraRaw = bevCounts[b.sigla]?.sera ?? '';
-                    const isFocusedSera = focusedSeraSigla === b.sigla;
-                    const isFormulaSera = typeof seraRaw === 'string' && seraRaw.trim().startsWith('=');
-                    const computedSera = evaluateValue(seraRaw);
-                    const displayValue = (() => {
-                      if (isFocusedSera) return seraRaw;
-                      if (seraRaw === '' || seraRaw === null || seraRaw === undefined) return '';
-                      const abs = Math.abs(computedSera);
-                      return Number.isInteger(abs)
-                        ? String(abs)
-                        : abs.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    })();
-                    return (
-                      <div
-                        key={b.sigla}
-                        className="flex-1 min-w-[60px] flex flex-col"
-                      >
-                        <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
-                          {b.sigla}
-                        </label>
-                        <input
-                          data-testid={`bev-mag-sera-${b.sigla}`}
-                          type="text"
-                          inputMode="decimal"
-                          value={displayValue}
-                          onChange={(e) => handleSeraChange(b.sigla, e.target.value)}
-                          onFocus={() => setFocusedSeraSigla(b.sigla)}
-                          onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
-                          placeholder="—"
-                          title={isFormulaSera ? `Formula: ${seraRaw} = ${computedSera.toLocaleString('it-IT', { maximumFractionDigits: 2 })}` : undefined}
-                          className={`w-full h-11 rounded text-center font-black text-base border focus:outline-none focus:ring-2 focus:ring-amber-400 ${
-                            isFormulaSera && isFocusedSera
-                              ? 'bg-rose-100 border-rose-300 text-rose-800'
-                              : seraRaw === '' || seraRaw === null || seraRaw === undefined
-                                ? 'bg-gray-50 border-gray-200 text-gray-700'
-                                : 'bg-amber-50 border-amber-200 text-gray-900'
-                          }`}
-                        />
-                        <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
-                          sera
-                        </span>
-                      </div>
-                    );
-                  })}
                 </div>
               )}
             </div>
