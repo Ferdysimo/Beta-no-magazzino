@@ -114,6 +114,22 @@ const HomePage = () => {
                 <span className="font-bold text-lg text-gray-800">Cestino Generale — Audit</span>
                 <span className="block text-xs text-gray-500 mt-0.5">Registro silenzioso degli ordini nascosti dal Tablet Generale</span>
               </button>
+              <button
+                data-testid="btn-admin-ddt"
+                onClick={() => navigate('/admin/ddt')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">DDT</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Caricamento Documenti di Trasporto · fornitore · numero · importo</span>
+              </button>
+              <button
+                data-testid="btn-admin-fatture"
+                onClick={() => navigate('/admin/fatture')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Fatture</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Abbina fatture ai DDT · BLU / VERDE CHECK OK / ORO pagato</span>
+              </button>
             </div>
           </div>
         </main>

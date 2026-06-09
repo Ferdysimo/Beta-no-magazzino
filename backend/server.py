@@ -602,7 +602,7 @@ async def _ensure_beverages_seeded():
 class InvoiceCreate(BaseModel):
     supplier: str
     paid: bool = False
-    control_code: str
+    control_code: Optional[str] = ""
     image_data: str  # Base64 encoded image
     invoice_date: str = None  # Date selected by user
 
@@ -611,7 +611,7 @@ class InvoiceResponse(BaseModel):
     restaurant_id: str
     supplier: str
     paid: bool
-    control_code: str
+    control_code: Optional[str] = ""
     image_url: str
     created_at: str
     uploaded_by: str
@@ -1849,15 +1849,18 @@ async def create_invoice(data: InvoiceCreate, token_data: dict = Depends(verify_
     restaurant_id = token_data["restaurant_id"]
     restaurant_name = token_data["restaurant_name"]
 
-    # Check for duplicate control code within today (Rome day)
-    start_utc, end_utc = _today_rome_utc_range()
-    existing = await db.invoices.find_one({
-        "restaurant_id": restaurant_id,
-        "control_code": data.control_code,
-        "created_at": {"$gte": start_utc, "$lte": end_utc}
-    })
-    if existing:
-        raise HTTPException(status_code=400, detail="Codice di controllo già usato oggi")
+    # Codice di controllo: ora opzionale. Verifichiamo duplicati nel giorno
+    # solo se l'utente lo specifica esplicitamente, altrimenti accettiamo
+    # qualsiasi numero di fatture.
+    if data.control_code and data.control_code.strip():
+        start_utc, end_utc = _today_rome_utc_range()
+        existing = await db.invoices.find_one({
+            "restaurant_id": restaurant_id,
+            "control_code": data.control_code,
+            "created_at": {"$gte": start_utc, "$lte": end_utc}
+        })
+        if existing:
+            raise HTTPException(status_code=400, detail="Codice di controllo già usato oggi")
     
     invoice_id = str(uuid.uuid4())
     
@@ -4487,6 +4490,225 @@ async def delete_chiusura_piatti(chiusura_id: str, token_data: dict = Depends(ve
             p.unlink()
     await db.chiusure.update_one({"id": chiusura_id}, {"$unset": {"piatti_file": ""}})
     return {"message": "Foto piatti rimossa"}
+
+
+# ==================== DDT (Documenti di Trasporto) ====================
+# Schema DDT:
+#   id, restaurant_id, supplier, ddt_number, importo, image_file, created_at,
+#   uploaded_by, paid (bool), paid_at (ISO or None),
+#   invoices: [ { id, image_file, importo, created_at } ]
+# Stato calcolato (frontend):
+#   - paid=true → ORO (in fondo)
+#   - sum(invoices.importo) ≈ importo → VERDE "CHECK OK, PAGA"
+#   - altrimenti → BLU
+
+class DDTCreate(BaseModel):
+    supplier: str
+    ddt_number: str
+    importo: float
+    image_data: str  # base64
+    ddt_date: Optional[str] = None
+
+class DDTInvoiceCreate(BaseModel):
+    importo: float
+    image_data: str  # base64
+
+def _serialize_ddt(d: dict) -> dict:
+    """Restituisce un DDT con URL immagini e somma fatture (no _id)."""
+    base_url = "/api/uploads/"
+    invs = d.get("invoices") or []
+    inv_out = []
+    sum_inv = 0.0
+    for it in invs:
+        img = it.get("image_file") or ""
+        try:
+            imp = float(it.get("importo") or 0)
+        except Exception:
+            imp = 0.0
+        sum_inv += imp
+        inv_out.append({
+            "id": it.get("id"),
+            "image_url": base_url + img if img else "",
+            "importo": imp,
+            "created_at": it.get("created_at"),
+        })
+    return {
+        "id": d.get("id"),
+        "restaurant_id": d.get("restaurant_id"),
+        "supplier": d.get("supplier") or "",
+        "ddt_number": d.get("ddt_number") or "",
+        "importo": float(d.get("importo") or 0),
+        "image_url": base_url + (d.get("image_file") or "") if d.get("image_file") else "",
+        "ddt_date": d.get("ddt_date"),
+        "created_at": d.get("created_at"),
+        "uploaded_by": d.get("uploaded_by") or "",
+        "paid": bool(d.get("paid", False)),
+        "paid_at": d.get("paid_at"),
+        "invoices": inv_out,
+        "invoices_sum": round(sum_inv, 2),
+    }
+
+
+@api_router.post("/ddts")
+async def create_ddt(
+    request: Request,
+    data: DDTCreate,
+    token_data: dict = Depends(verify_token),
+):
+    """Crea un nuovo DDT. Disponibile a tutti gli utenti autenticati.
+    Per Admin/Supervisor supporta `X-Restaurant-Id` (impersonificazione)."""
+    rid = await _effective_restaurant_id(request, token_data)
+    restaurant_name = token_data.get("restaurant_name") or ""
+    if not data.supplier.strip():
+        raise HTTPException(status_code=400, detail="Fornitore obbligatorio")
+    if not data.ddt_number.strip():
+        raise HTTPException(status_code=400, detail="Numero DDT obbligatorio")
+    if not data.image_data:
+        raise HTTPException(status_code=400, detail="Immagine DDT obbligatoria")
+    image_filename = save_image_to_disk(data.image_data, "ddt")
+    ddt_id = str(uuid.uuid4())
+    doc = {
+        "id": ddt_id,
+        "restaurant_id": rid,
+        "supplier": data.supplier.strip(),
+        "ddt_number": data.ddt_number.strip(),
+        "importo": float(data.importo or 0),
+        "image_file": image_filename,
+        "ddt_date": data.ddt_date or datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "uploaded_by": restaurant_name,
+        "paid": False,
+        "paid_at": None,
+        "invoices": [],
+    }
+    await db.ddts.insert_one(doc)
+    return _serialize_ddt(doc)
+
+
+@api_router.get("/ddts")
+async def list_ddts(
+    request: Request,
+    token_data: dict = Depends(verify_token),
+):
+    """Ritorna tutti i DDT. Admin/Supervisor: tutti i locali (o filtrato via
+    X-Restaurant-Id). Altri ruoli: solo il proprio ristorante."""
+    role = token_data.get("role")
+    if role in ("admin", "supervisor"):
+        impersonate = request.headers.get("X-Restaurant-Id") or request.headers.get("x-restaurant-id")
+        query = {"restaurant_id": impersonate} if impersonate else {}
+    else:
+        query = {"restaurant_id": token_data["restaurant_id"]}
+    cursor = db.ddts.find(query, {"_id": 0}).sort([("paid", 1), ("created_at", -1)])
+    docs = await cursor.to_list(1000)
+    return [_serialize_ddt(d) for d in docs]
+
+
+@api_router.post("/ddts/{ddt_id}/invoices")
+async def add_invoice_to_ddt(
+    ddt_id: str,
+    data: DDTInvoiceCreate,
+    token_data: dict = Depends(verify_token),
+):
+    """Allega una fattura a un DDT esistente."""
+    doc = await db.ddts.find_one({"id": ddt_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="DDT non trovato")
+    # Solo admin/supervisor o stesso ristorante
+    role = token_data.get("role")
+    if role not in ("admin", "supervisor") and doc.get("restaurant_id") != token_data.get("restaurant_id"):
+        raise HTTPException(status_code=403, detail="Non autorizzato")
+    if not data.image_data:
+        raise HTTPException(status_code=400, detail="Immagine fattura obbligatoria")
+    image_filename = save_image_to_disk(data.image_data, "fattura_ddt")
+    inv = {
+        "id": str(uuid.uuid4()),
+        "image_file": image_filename,
+        "importo": float(data.importo or 0),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.ddts.update_one({"id": ddt_id}, {"$push": {"invoices": inv}})
+    new_doc = await db.ddts.find_one({"id": ddt_id}, {"_id": 0})
+    return _serialize_ddt(new_doc)
+
+
+@api_router.delete("/ddts/{ddt_id}/invoices/{inv_id}")
+async def remove_invoice_from_ddt(
+    ddt_id: str,
+    inv_id: str,
+    token_data: dict = Depends(verify_token),
+):
+    doc = await db.ddts.find_one({"id": ddt_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="DDT non trovato")
+    role = token_data.get("role")
+    if role not in ("admin", "supervisor") and doc.get("restaurant_id") != token_data.get("restaurant_id"):
+        raise HTTPException(status_code=403, detail="Non autorizzato")
+    inv = next((i for i in (doc.get("invoices") or []) if i.get("id") == inv_id), None)
+    if inv:
+        img = inv.get("image_file") or ""
+        if img:
+            p = UPLOADS_DIR / img
+            if p.exists():
+                try:
+                    p.unlink()
+                except Exception:
+                    pass
+    await db.ddts.update_one({"id": ddt_id}, {"$pull": {"invoices": {"id": inv_id}}})
+    new_doc = await db.ddts.find_one({"id": ddt_id}, {"_id": 0})
+    return _serialize_ddt(new_doc)
+
+
+@api_router.post("/ddts/{ddt_id}/pay")
+async def mark_ddt_paid(
+    ddt_id: str,
+    token_data: dict = Depends(verify_token),
+):
+    """Segna il DDT come pagato. Richiede che la somma delle fatture allegate
+    corrisponda all'importo del DDT (tolleranza 0.01€). Solo admin/supervisor."""
+    role = token_data.get("role")
+    if role not in ("admin", "supervisor"):
+        raise HTTPException(status_code=403, detail="Solo admin")
+    doc = await db.ddts.find_one({"id": ddt_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="DDT non trovato")
+    importo = float(doc.get("importo") or 0)
+    inv_sum = sum(float(i.get("importo") or 0) for i in (doc.get("invoices") or []))
+    if abs(importo - inv_sum) > 0.01:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Importo non coincide: DDT €{importo:.2f} vs fatture €{inv_sum:.2f}",
+        )
+    await db.ddts.update_one(
+        {"id": ddt_id},
+        {"$set": {"paid": True, "paid_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    new_doc = await db.ddts.find_one({"id": ddt_id}, {"_id": 0})
+    return _serialize_ddt(new_doc)
+
+
+@api_router.delete("/ddts/{ddt_id}")
+async def delete_ddt(
+    ddt_id: str,
+    token_data: dict = Depends(verify_token),
+):
+    role = token_data.get("role")
+    if role not in ("admin", "supervisor"):
+        raise HTTPException(status_code=403, detail="Solo admin")
+    doc = await db.ddts.find_one({"id": ddt_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="DDT non trovato")
+    # Cancella immagini su disco
+    for img in [doc.get("image_file")] + [i.get("image_file") for i in (doc.get("invoices") or [])]:
+        if img:
+            p = UPLOADS_DIR / img
+            if p.exists():
+                try:
+                    p.unlink()
+                except Exception:
+                    pass
+    await db.ddts.delete_one({"id": ddt_id})
+    return {"message": "DDT eliminato"}
+
 
 # Include the router in the main app
 app.include_router(api_router)

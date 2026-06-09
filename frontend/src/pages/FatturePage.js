@@ -146,10 +146,6 @@ const FatturePage = () => {
       setError('Seleziona un fornitore');
       return;
     }
-    if (!controlCode.trim()) {
-      setError('Inserisci il codice di controllo');
-      return;
-    }
     
     setLoading(true);
     setError('');
@@ -161,7 +157,7 @@ const FatturePage = () => {
           await axios.post(`${API}/invoices`, {
             supplier,
             paid,
-            control_code: controlCode.trim(),
+            control_code: '',
             image_data: reader.result,
             invoice_date: new Date(invoiceDate).toISOString()
           }, {
@@ -414,19 +410,6 @@ const FatturePage = () => {
               >
                 <option>Fatture</option>
               </select>
-            </div>
-
-            {/* Control Code */}
-            <div className="flex items-center gap-4">
-              <label className="w-32 text-gray-700 font-medium">Codice di controllo</label>
-              <input
-                type="text"
-                value={controlCode}
-                onChange={(e) => setControlCode(e.target.value)}
-                className="flex-1 max-w-xs h-10 px-3 border border-gray-300 rounded-md focus:border-blue-500 focus:outline-none"
-                placeholder="Codice univoco"
-                data-testid="control-code-input"
-              />
             </div>
 
             {/* Error/Success Messages */}
