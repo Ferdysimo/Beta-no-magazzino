@@ -1156,6 +1156,40 @@ async def get_next_order_number(token_data: dict = Depends(verify_token)):
         raise HTTPException(status_code=404, detail="Restaurant not found")
     return {"next_number": (rest.get("order_counter", 0) or 0) + 1}
 
+
+@api_router.get("/orders/today-paste-list")
+async def get_today_paste_list(
+    request: Request,
+    token_data: dict = Depends(verify_token),
+):
+    """Return ALL pasta orders for the CURRENT Rome day of the effective
+    restaurant (supports Admin/Supervisor impersonation via X-Restaurant-Id).
+
+    Used by ReportBetaPage to auto-populate the paste column so that the
+    cashier does not need to manually paste the list.
+
+    Includes orders with hidden_generale=True (they were still sold/cashed).
+    """
+    rid = await _effective_restaurant_id(request, token_data)
+    start_utc, end_utc = _today_rome_bounds_utc()
+    cursor = db.orders.find(
+        {
+            "restaurant_id": rid,
+            "created_at": {"$gte": start_utc, "$lt": end_utc},
+        },
+        {"_id": 0, "order_number": 1, "description": 1, "hidden_generale": 1},
+    ).sort("order_number", 1)
+    docs = await cursor.to_list(2000)
+    items = [
+        {
+            "order_number": d.get("order_number"),
+            "description": (d.get("description") or "").strip(),
+            "hidden_generale": bool(d.get("hidden_generale", False)),
+        }
+        for d in docs
+    ]
+    return {"items": items, "count": len(items)}
+
 @api_router.get("/orders/{order_id}", response_model=OrderResponse)
 async def get_order(order_id: str, token_data: dict = Depends(verify_token)):
     order = await db.orders.find_one(

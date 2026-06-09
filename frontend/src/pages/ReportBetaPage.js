@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
+import { useOrders } from '../contexts/OrderContext';
 import Header from '../components/Header';
 import PasswordGate from '../components/PasswordGate';
 
@@ -205,6 +206,12 @@ const ReportBetaPageInner = () => {
   const [showSpicci, setShowSpicci] = useState(false);
   // Scarti collassabile via toggle nel suo header.
   const [showScarti, setShowScarti] = useState(false);
+  // Auto-popolamento colonna PASTE dalle paste mandate dal Cassa.
+  // - manualPasteOverride=false (default): pasteText è sincronizzato con autoPasteText
+  // - manualPasteOverride=true: l'utente ha sbloccato la modifica manuale (override)
+  const [manualPasteOverride, setManualPasteOverride] = useState(false);
+  const [autoPasteText, setAutoPasteText] = useState('');
+  const [autoPasteCount, setAutoPasteCount] = useState(0);
   const [focusedField, setFocusedField] = useState(null); // key | null (preview bar)
   const [showDebug, setShowDebug] = useState(false);
   const [commentPopover, setCommentPopover] = useState(null); // { key, value }
@@ -467,6 +474,72 @@ const ReportBetaPageInner = () => {
     }, 500);
     return () => { if (cashSaveTimer.current) clearTimeout(cashSaveTimer.current); };
   }, [cashRow, cashComments, versColor, pasteText, cash, manualPrices, cashLoaded, token]);
+
+  // Auto-popolamento PASTE dalle paste mandate dal Cassa (live, per il locale effettivo).
+  // - Fetch iniziale + polling 5s + ascolto eventi WS via OrderContext (refresh immediato).
+  // - Include hidden_generale=true (sono state vendute/incassate).
+  // - Se l'utente sblocca "Modifica manuale" l'override locale non viene sovrascritto.
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    const eid = effectiveRestaurant?.id;
+    const headers = { Authorization: `Bearer ${token}` };
+    if (isAdmin && eid) {
+      // Impersonificazione admin/supervisor → propaga il ristorante target
+      headers['X-Restaurant-Id'] = eid;
+    }
+    const load = async () => {
+      try {
+        const res = await axios.get(`${API}/orders/today-paste-list`, { headers });
+        if (cancelled) return;
+        const items = res.data?.items || [];
+        const text = items.map(it => (it.description || '').trim()).filter(Boolean).join('\n');
+        setAutoPasteText(text);
+        setAutoPasteCount(items.length);
+      } catch (e) {
+        // 401/403 in scenari edge: ignora silenziosamente
+      }
+    };
+    load();
+    // Polling come fallback; il WS sotto (OrderContext) farà i refresh "live".
+    const id = setInterval(load, 5000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [token, isAdmin, effectiveRestaurant?.id]);
+
+  // Sincronizza pasteText con autoPasteText quando NON è in override manuale.
+  useEffect(() => {
+    if (manualPasteOverride) return;
+    if (autoPasteText === pasteText) return;
+    setPasteText(autoPasteText);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoPasteText, manualPasteOverride]);
+
+  // Quando un ordine viene creato/modificato/eliminato dall'OrderContext (WS live)
+  // forziamo un refetch immediato così la colonna PASTE è subito aggiornata.
+  // Ascoltiamo lo state `orders` esposto dall'OrderContext: cambia → triggera.
+  // Nota: l'OrderContext è connesso al ristorante del JWT; in caso di
+  // impersonificazione admin il polling 5s farà da safety net.
+  const orderCtx = useOrders();
+  const orderTrigger = orderCtx?.orders?.length ?? 0;
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    const eid = effectiveRestaurant?.id;
+    const headers = { Authorization: `Bearer ${token}` };
+    if (isAdmin && eid) headers['X-Restaurant-Id'] = eid;
+    (async () => {
+      try {
+        const res = await axios.get(`${API}/orders/today-paste-list`, { headers });
+        if (cancelled) return;
+        const items = res.data?.items || [];
+        const text = items.map(it => (it.description || '').trim()).filter(Boolean).join('\n');
+        setAutoPasteText(text);
+        setAutoPasteCount(items.length);
+      } catch (e) { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderTrigger]);
 
   // Info del quadratino attualmente selezionato (per la barra preview in basso)
   const previewInfo = useMemo(() => {
@@ -786,18 +859,50 @@ const ReportBetaPageInner = () => {
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[14fr_86fr] gap-2 min-h-0">
           {/* ============== SINISTRA — PASTE ============== */}
           <section className="bg-white rounded border border-gray-200 p-2 flex flex-col min-h-0">
-            <div className="flex items-baseline justify-between mb-1">
+            <div className="flex items-baseline justify-between mb-1 gap-1 flex-wrap">
               <h2 className="text-xs font-bold text-gray-800 uppercase">Paste</h2>
-              <span className="text-[10px] text-gray-400">1 per riga</span>
+              <span className="text-[10px] text-gray-400">
+                {manualPasteOverride ? 'manuale' : `auto · ${autoPasteCount} live`}
+              </span>
             </div>
+            <button
+              type="button"
+              data-testid="toggle-paste-manual"
+              onClick={() => {
+                if (manualPasteOverride) {
+                  // Torna ad auto: ricarica dal server (azzera modifiche manuali)
+                  setManualPasteOverride(false);
+                  setPasteText(autoPasteText);
+                } else {
+                  setManualPasteOverride(true);
+                }
+              }}
+              title={manualPasteOverride
+                ? 'Torna alla modalità automatica (sovrascrive le modifiche manuali)'
+                : 'Sblocca per modificare manualmente le paste (override locale, non persistente)'}
+              className={`text-[10px] font-bold px-2 py-1 rounded mb-1 transition-colors ${
+                manualPasteOverride
+                  ? 'bg-rose-100 text-rose-700 border border-rose-300 hover:bg-rose-200'
+                  : 'bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200'
+              }`}
+            >
+              {manualPasteOverride ? '🔓 manuale — torna auto' : '🔒 auto — modifica manuale'}
+            </button>
 
             <textarea
               data-testid="paste-textarea"
               value={pasteText}
-              onChange={(e) => setPasteText(e.target.value)}
-              placeholder={''}
+              onChange={(e) => { if (manualPasteOverride) setPasteText(e.target.value); }}
+              readOnly={!manualPasteOverride}
               spellCheck={false}
-              className="w-full flex-1 min-h-[120px] p-2 border border-gray-200 rounded font-mono text-xs focus:outline-none focus:border-[#F5C518] resize-none"
+              title={manualPasteOverride
+                ? 'Modifica manuale attiva'
+                : 'Auto-popolato dalle paste mandate dal Cassa (live)'}
+              className={`w-full flex-1 min-h-[120px] p-2 border rounded font-mono text-xs focus:outline-none resize-none ${
+                manualPasteOverride
+                  ? 'border-rose-300 focus:border-rose-500 bg-white'
+                  : 'border-gray-200 bg-gray-50 cursor-not-allowed'
+              }`}
             />
 
             {/* Non riconosciute con prezzo manuale */}
