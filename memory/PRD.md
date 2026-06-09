@@ -160,3 +160,11 @@ Applicate 7 modifiche di layout/logica richieste dall'utente su `/app/frontend/s
 - **Pulsante "🔒 forza mattina"** accanto al titolo della sezione: cliccandolo sblocca temporaneamente gli input casse/sfuse (label → "🔓 mattina sbloccato" in rosso).
 - Stato `forceMagMattina` separato da `forceMattina` (cassa) per evitare collisione.
 - Input bloccati hanno: `readOnly`, `tabIndex=-1`, sfondo grigio, cursor `not-allowed`.
+
+## Sessione fork — 09/06/2026 (Sezione "Ingressi" porting)
+- **Sezione "Ingressi"** (indigo) aggiunta tra Magazzino Sera e Scarti.
+- 1 quadratino unità per bevanda, sync live con `bevCounts.inUsc` (campo esistente, stesso usato da MagazzinoBevandePage).
+- Supporta formule "=..." (sfondo rosa quando formula).
+- Nessun placeholder trasparente (rispetta richiesta utente).
+- Handler `handleInUscChange(sigla, value)` con debounce 600ms.
+- Test E2E manuale: AL Ingressi=12 → persistito a reload ✓.
