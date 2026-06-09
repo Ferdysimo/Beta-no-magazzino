@@ -1365,7 +1365,27 @@ async def hide_from_generale(order_id: str, token_data: dict = Depends(verify_to
     
     if not result:
         raise HTTPException(status_code=404, detail="Order not found")
-    
+
+    # Audit silenzioso: tracciamo CHI ha nascosto QUALE ordine e QUANDO.
+    # Serve a diagnosticare segnalazioni del tipo "paste sparite da sole" sui
+    # tablet Generale. La collezione `generale_hide_log` è admin-only.
+    try:
+        await db.generale_hide_log.insert_one({
+            "id": str(uuid.uuid4()),
+            "order_id": order_id,
+            "order_number": result.get("order_number"),
+            "order_description": result.get("description"),
+            "restaurant_id": restaurant_id,
+            "restaurant_location": RESTAURANT_LOCATION_CACHE.get(restaurant_id),
+            "by_user_id": token_data.get("user_id") or token_data.get("sub"),
+            "by_username": token_data.get("username"),
+            "by_role": token_data.get("original_role") or token_data.get("role"),
+            "hidden_at": datetime.now(timezone.utc).isoformat(),
+            "frozen_timer": frozen_timer,
+        })
+    except Exception as e:
+        logger.warning(f"[HIDE_LOG] could not log hide_generale: {e}")
+
     order_response = {k: v for k, v in result.items() if k != "_id"}
     
     await manager.broadcast_to_restaurant(restaurant_id, {
@@ -3435,6 +3455,26 @@ async def admin_cleanup_old_uploads(
     logger.info(f"[ADMIN] Manual cleanup_old_uploads triggered (retention={retention_days}d)")
     deleted = await cleanup_old_uploads(retention_days=retention_days)
     return {"retention_days": retention_days, "deleted": deleted}
+
+
+@api_router.get("/admin/generale-hide-log")
+async def get_generale_hide_log(
+    restaurant_id: Optional[str] = None,
+    limit: int = 200,
+    token_data: dict = Depends(verify_token),
+):
+    """Audit log silenzioso: ogni volta che qualcuno preme il cestino sul
+    Tablet Generale per nascondere un ordine, qui viene registrato chi/quando/
+    quale ordine. Admin only. Filtrabile per restaurant_id.
+    """
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    query = {}
+    if restaurant_id:
+        query["restaurant_id"] = restaurant_id
+    limit = max(1, min(limit, 1000))
+    rows = await db.generale_hide_log.find(query, {"_id": 0}).sort("hidden_at", -1).to_list(limit)
+    return {"items": rows, "count": len(rows)}
 
 
 @api_router.post("/admin/_simulate-midnight-reset")
