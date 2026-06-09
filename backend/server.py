@@ -2905,10 +2905,12 @@ class BeverageDailyUpsert(BaseModel):
     scarti: Optional[str] = ""
     sera: Optional[str] = ""
     # NEW (09/06/2026) — "mattina" e "sera" possono essere espressi come
-    # somma di casse (×24) + sfuse. Il frontend manda anche il totale calcolato
-    # (mattina/sera come stringa intera) per retrocompatibilità.
+    # somma di casse (×24) + sfuse. "inUsc" (ingressi) può essere espresso
+    # come numero di casse (×24). Il frontend manda comunque il totale
+    # calcolato come stringa intera in mattina/inUsc/sera per retrocompatibilità.
     mattina_casse: Optional[str] = ""
     mattina_sfuse: Optional[str] = ""
+    inUsc_casse: Optional[str] = ""
     sera_casse: Optional[str] = ""
     sera_sfuse: Optional[str] = ""
     comments: Optional[Dict[str, str]] = None  # { 'inUsc': '...', 'scarti': '...' }
@@ -2929,6 +2931,7 @@ async def get_beverage_daily_counts(request: Request, token_data: dict = Depends
         "sera": d.get("sera", ""),
         "mattina_casse": d.get("mattina_casse", ""),
         "mattina_sfuse": d.get("mattina_sfuse", ""),
+        "inUsc_casse": d.get("inUsc_casse", ""),
         "sera_casse": d.get("sera_casse", ""),
         "sera_sfuse": d.get("sera_sfuse", ""),
         "comments": d.get("comments") or {},
@@ -2971,6 +2974,7 @@ async def upsert_beverage_daily(
         "sera": data.sera or "",
         "mattina_casse": data.mattina_casse or "",
         "mattina_sfuse": data.mattina_sfuse or "",
+        "inUsc_casse": data.inUsc_casse or "",
         "sera_casse": data.sera_casse or "",
         "sera_sfuse": data.sera_sfuse or "",
         "updated_at": datetime.now(timezone.utc).isoformat(),

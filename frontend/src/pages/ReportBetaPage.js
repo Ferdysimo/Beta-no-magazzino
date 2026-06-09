@@ -251,6 +251,7 @@ const ReportBetaPageInner = () => {
                 sera: seraLocked ? (local?.sera ?? '') : (remote.sera || ''),
                 mattina_casse: remote.mattina_casse || '',
                 mattina_sfuse: remote.mattina_sfuse || '',
+                inUsc_casse: remote.inUsc_casse || '',
                 sera_casse: seraLocked ? (local?.sera_casse ?? '') : (remote.sera_casse || ''),
                 sera_sfuse: seraLocked ? (local?.sera_sfuse ?? '') : (remote.sera_sfuse || ''),
               };
@@ -268,6 +269,7 @@ const ReportBetaPageInner = () => {
                 sera: seraLocked ? (local?.sera ?? '') : '',
                 mattina_casse: prevCasse > 0 ? String(prevCasse) : '',
                 mattina_sfuse: prevSfuse > 0 ? String(prevSfuse) : '',
+                inUsc_casse: '',
                 sera_casse: seraLocked ? (local?.sera_casse ?? '') : '',
                 sera_sfuse: seraLocked ? (local?.sera_sfuse ?? '') : '',
               };
@@ -279,6 +281,7 @@ const ReportBetaPageInner = () => {
                 sera: seraLocked ? (local?.sera ?? '') : '',
                 mattina_casse: '',
                 mattina_sfuse: '',
+                inUsc_casse: '',
                 sera_casse: seraLocked ? (local?.sera_casse ?? '') : '',
                 sera_sfuse: seraLocked ? (local?.sera_sfuse ?? '') : '',
               };
@@ -308,6 +311,7 @@ const ReportBetaPageInner = () => {
           sera: row.sera ?? '',
           mattina_casse: row.mattina_casse ?? '',
           mattina_sfuse: row.mattina_sfuse ?? '',
+          inUsc_casse: row.inUsc_casse ?? '',
           sera_casse: row.sera_casse ?? '',
           sera_sfuse: row.sera_sfuse ?? '',
           comments: row.comments || {},
@@ -375,12 +379,27 @@ const ReportBetaPageInner = () => {
     });
   };
 
-  // Ingressi / Uscite (unità, in sync con MagazzinoBevandePage)
+  // Ingressi (input in CASSE: il valore digitato viene moltiplicato per
+  // PEZZI_PER_CASSA prima del salvataggio nel campo unità `inUsc`).
+  // Manteniamo `inUsc_casse` separato così a refresh mostriamo il numero di casse digitato (anche con virgola).
   const handleInUscChange = (sigla, value) => {
     bevPendingSeraUntil.current[sigla] = Date.now() + 4000;
     setBevCounts(prev => {
-      const current = prev[sigla] || { mattina: '', inUsc: '', scarti: '', sera: '', sera_casse: '', sera_sfuse: '' };
-      const nextRow = { ...current, inUsc: value };
+      const current = prev[sigla] || {
+        mattina: '', inUsc: '', scarti: '', sera: '',
+        mattina_casse: '', mattina_sfuse: '',
+        inUsc_casse: '',
+        sera_casse: '', sera_sfuse: '',
+      };
+      const nextRow = { ...current, inUsc_casse: value };
+      const empty = value === '' || value === null || value === undefined;
+      if (empty) {
+        nextRow.inUsc = '';
+      } else {
+        const c = evaluateValue(value);
+        const total = c * PEZZI_PER_CASSA;
+        nextRow.inUsc = Number.isInteger(total) ? String(total) : String(+total.toFixed(2));
+      }
       const next = { ...prev, [sigla]: nextRow };
       scheduleBevSave(sigla, nextRow);
       return next;
@@ -1175,12 +1194,12 @@ const ReportBetaPageInner = () => {
               )}
             </div>
 
-            {/* ============ INGRESSI / USCITE (1 quadratino per bevanda, unità — in sync con Magazzino Bevande) ============ */}
+            {/* ============ INGRESSI (1 quadratino per bevanda, valore in CASSE — moltiplicato ×24 prima di salvare) ============ */}
             <div className="bg-white rounded border border-gray-200 p-2">
               <div className="flex items-baseline justify-between mb-2">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Ingressi</h2>
                 <span className="text-[10px] text-gray-400">
-                  Unità singole · sync live con Magazzino Bevande · supporta formule "=..."
+                  Casse (×{PEZZI_PER_CASSA}) · sync live con Magazzino Bevande · supporta formule "=..."
                 </span>
               </div>
               {beverages.length === 0 ? (
@@ -1191,10 +1210,11 @@ const ReportBetaPageInner = () => {
                 <div className="flex items-stretch gap-2">
                   {beverages.map(b => {
                     const row = bevCounts[b.sigla] || {};
-                    const inRaw = row.inUsc ?? '';
-                    const inEmpty = inRaw === '' || inRaw === null || inRaw === undefined;
-                    const inN = evaluateValue(inRaw);
-                    const isFormulaIn = typeof inRaw === 'string' && inRaw.trim().startsWith('=');
+                    const casseRaw = row.inUsc_casse ?? '';
+                    const casseEmpty = casseRaw === '' || casseRaw === null || casseRaw === undefined;
+                    const casseN = evaluateValue(casseRaw);
+                    const total = casseEmpty ? null : casseN * PEZZI_PER_CASSA;
+                    const isFormulaCasse = typeof casseRaw === 'string' && casseRaw.trim().startsWith('=');
                     return (
                       <div
                         key={b.sigla}
@@ -1208,19 +1228,24 @@ const ReportBetaPageInner = () => {
                           data-testid={`bev-ingressi-${b.sigla}`}
                           type="text"
                           inputMode="decimal"
-                          value={inRaw}
+                          value={casseRaw}
                           onChange={(e) => handleInUscChange(b.sigla, e.target.value)}
-                          title={isFormulaIn ? `Formula: ${inRaw} = ${inN}` : 'Ingressi / Uscite (unità singole)'}
+                          title={isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN} casse → ${casseN * PEZZI_PER_CASSA} unità` : `Numero casse · ×${PEZZI_PER_CASSA}`}
                           className={`w-full h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
-                            isFormulaIn
+                            isFormulaCasse
                               ? 'bg-rose-100 border-rose-300 text-rose-800'
-                              : inEmpty
+                              : casseEmpty
                                 ? 'bg-gray-50 border-gray-200 text-gray-700'
                                 : 'bg-indigo-50 border-indigo-200 text-gray-900'
                           }`}
                         />
-                        <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
-                          ingressi
+                        <span
+                          data-testid={`bev-ingressi-total-${b.sigla}`}
+                          className={`text-[10px] mt-0.5 text-center leading-none font-bold ${total === null ? 'text-gray-400' : 'text-gray-800'}`}
+                        >
+                          {total === null
+                            ? 'ingressi'
+                            : `tot ${Number.isInteger(total) ? total : (+total.toFixed(2))}`}
                         </span>
                       </div>
                     );
