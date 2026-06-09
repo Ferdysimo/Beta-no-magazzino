@@ -201,11 +201,6 @@ const ReportBetaPageInner = () => {
   // Forza modifica MAGAZZINO MATTINA bevande (normalmente è read-only: allo
   // scatto di mezzanotte viene auto-popolato dal MAGAZZINO SERA della sera prima).
   const [forceMagMattina, setForceMagMattina] = useState(false);
-  // Toggle UI per compattare la pagina e farla entrare in 1920×1080 senza scroll.
-  // Spicci + Cassetto vengono mostrati on-demand con un tasto floating.
-  const [showSpicci, setShowSpicci] = useState(false);
-  // Scarti collassabile via toggle nel suo header.
-  const [showScarti, setShowScarti] = useState(false);
   // Auto-popolamento colonna PASTE dalle paste mandate dal Cassa.
   // - manualPasteOverride=false (default): pasteText è sincronizzato con autoPasteText
   // - manualPasteOverride=true: l'utente ha sbloccato la modifica manuale (override)
@@ -958,10 +953,10 @@ const ReportBetaPageInner = () => {
           </section>
 
           {/* ============== DESTRA — CASSA + AREA FUTURA ============== */}
-          <section className="flex flex-col gap-2 min-h-0">
+          <section className="flex flex-col gap-1.5 min-h-0">
             {/* Riga banconote */}
-            <div className="bg-white rounded border border-gray-200 p-2">
-              <div className="flex items-baseline justify-between mb-2">
+            <div className="bg-white rounded border border-gray-200 p-1.5">
+              <div className="flex items-baseline justify-between mb-1">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Cassa</h2>
                 <span className="text-[10px] text-gray-400">pezzi</span>
               </div>
@@ -1004,8 +999,8 @@ const ReportBetaPageInner = () => {
             </div>
 
             {/* ============ RIEPILOGO CASSA ============ */}
-            <div className="bg-white rounded border border-gray-200 p-2">
-              <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
+            <div className="bg-white rounded border border-gray-200 p-1.5">
+              <div className="flex items-baseline justify-between mb-1 gap-2 flex-wrap">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Riepilogo Cassa</h2>
                 <div className="flex items-center gap-2">
                   <button
@@ -1225,8 +1220,8 @@ const ReportBetaPageInner = () => {
             </div>
 
             {/* ============ MAGAZZINO SERA (editabile, sync live con Magazzino Bevande) ============ */}
-            <div className="bg-white rounded border border-gray-200 p-2">
-              <div className="flex items-baseline justify-between mb-2">
+            <div className="bg-white rounded border border-gray-200 p-1.5">
+              <div className="flex items-baseline justify-between mb-1">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Sera</h2>
                 <span className="text-[10px] text-gray-400">
                   Casse (×{PEZZI_PER_CASSA}) + Sfuse = totale · sync live · supporta formule "=..."
@@ -1313,8 +1308,8 @@ const ReportBetaPageInner = () => {
             </div>
 
             {/* ============ INGRESSI (1 quadratino per bevanda, valore in CASSE — moltiplicato ×24 prima di salvare) ============ */}
-            <div className="bg-white rounded border border-gray-200 p-2">
-              <div className="flex items-baseline justify-between mb-2">
+            <div className="bg-white rounded border border-gray-200 p-1.5">
+              <div className="flex items-baseline justify-between mb-1">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Ingressi</h2>
                 <span className="text-[10px] text-gray-400">
                   Casse (×{PEZZI_PER_CASSA}) · sync live con Magazzino Bevande · supporta formule "=..."
@@ -1373,31 +1368,19 @@ const ReportBetaPageInner = () => {
             </div>
 
             {/* ============ SCARTI (1 quadratino per bevanda, unità singole — in sync con Magazzino Bevande) ============ */}
-            <div className="bg-white rounded border border-gray-200 p-2">
-              <div className="flex items-baseline justify-between mb-2 gap-2">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xs font-bold text-gray-800 uppercase">Scarti</h2>
-                  <button
-                    type="button"
-                    data-testid="toggle-scarti"
-                    onClick={() => setShowScarti(v => !v)}
-                    title={showScarti ? 'Nascondi Scarti' : 'Mostra Scarti'}
-                    className="text-[10px] font-bold px-2 py-0.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300"
-                  >
-                    {showScarti ? '▼ nascondi' : '▶ mostra'}
-                  </button>
-                </div>
+            <div className="bg-white rounded border border-gray-200 p-1.5">
+              <div className="flex items-baseline justify-between mb-1 gap-2">
+                <h2 className="text-xs font-bold text-gray-800 uppercase">Scarti</h2>
                 <span className="text-[10px] text-gray-400">
                   Unità singole · sync live con Magazzino Bevande · supporta formule "=..."
                 </span>
               </div>
-              {showScarti && (
-                beverages.length === 0 ? (
-                  <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
-                    Nessuna bevanda configurata.
-                  </div>
-                ) : (
-                  <div className="flex items-stretch gap-2">
+              {beverages.length === 0 ? (
+                <div className="h-8 flex items-center justify-center text-xs text-gray-400 italic">
+                  Nessuna bevanda configurata.
+                </div>
+              ) : (
+                <div className="flex items-stretch gap-2">
                   {beverages.map(b => {
                     const row = bevCounts[b.sigla] || {};
                     const scRaw = row.scarti ?? '';
@@ -1435,13 +1418,12 @@ const ReportBetaPageInner = () => {
                     );
                   })}
                 </div>
-                )
               )}
             </div>
 
             {/* ============ MAGAZZINO MATTINA (casse + sfuse, in sync con Magazzino Bevande) ============ */}
-            <div className="bg-white rounded border border-gray-200 p-2">
-              <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
+            <div className="bg-white rounded border border-gray-200 p-1.5">
+              <div className="flex items-baseline justify-between mb-1 gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
                   <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Mattina</h2>
                   <button
@@ -1553,8 +1535,8 @@ const ReportBetaPageInner = () => {
             </div>
 
             {/* ============ VENDITE BEVANDE ============ */}
-            <div className="bg-white rounded border border-gray-200 p-2">
-              <div className="flex items-baseline justify-between mb-2">
+            <div className="bg-white rounded border border-gray-200 p-1.5">
+              <div className="flex items-baseline justify-between mb-1">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Vendite Bevande</h2>
                 <span className="text-[10px] text-gray-400">Q.tà · Incasso — in sync con Magazzino Bevande</span>
               </div>
@@ -1598,8 +1580,7 @@ const ReportBetaPageInner = () => {
               )}
             </div>
 
-            {/* ============ SPICCI + CASSETTO SPICCI (stessa riga) — toggle floating ============ */}
-            {showSpicci && (
+            {/* ============ SPICCI + CASSETTO SPICCI (stessa riga) ============ */}
             <div className="flex items-stretch gap-2 max-w-[42%]">
               {/* --- SPICCI (rotolini aperti) --- */}
               <div className="bg-white rounded border border-gray-200 p-1.5 flex-[5] min-w-0">
@@ -1758,7 +1739,6 @@ const ReportBetaPageInner = () => {
                 </div>
               </div>
             </div>
-            )}
 
             {/* Collegamenti rapidi sotto Spicci/Cassetto — discreti, non invadenti */}
             <div className="flex justify-end gap-2 mt-1">
@@ -1915,21 +1895,6 @@ const ReportBetaPageInner = () => {
           )}
         </div>
       </main>
-
-      {/* ============ BOTTONE FLOATING SPICCI (bottom-right) ============ */}
-      <button
-        type="button"
-        data-testid="toggle-spicci-floating"
-        onClick={() => setShowSpicci(v => !v)}
-        title={showSpicci ? 'Nascondi Spicci e Cassetto' : 'Mostra Spicci e Cassetto'}
-        className={`fixed z-30 right-4 bottom-16 text-xs font-bold px-3 py-2 rounded-full shadow-lg border transition-colors ${
-          showSpicci
-            ? 'bg-[#F5C518] text-gray-900 border-amber-600 hover:bg-amber-300'
-            : 'bg-gray-800 text-[#F5C518] border-gray-900 hover:bg-gray-700'
-        }`}
-      >
-        {showSpicci ? '× Spicci' : '💰 Spicci'}
-      </button>
 
       {/* ============ BARRA PREVIEW (in basso, fixed) ============ */}
       <div
