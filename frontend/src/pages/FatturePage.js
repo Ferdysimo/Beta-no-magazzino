@@ -30,6 +30,7 @@ const FatturePage = () => {
   const [supplier, setSupplier] = useState('');
   const [paid, setPaid] = useState(false);
   const [controlCode, setControlCode] = useState('');
+  const [importo, setImporto] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -159,7 +160,8 @@ const FatturePage = () => {
             paid,
             control_code: '',
             image_data: reader.result,
-            invoice_date: new Date(invoiceDate).toISOString()
+            invoice_date: new Date(invoiceDate).toISOString(),
+            importo: parseFloat((importo || '0').toString().replace(',', '.')) || 0,
           }, {
             headers: { Authorization: `Bearer ${token}` }
           });
@@ -170,6 +172,7 @@ const FatturePage = () => {
           setSupplier('');
           setPaid(false);
           setControlCode('');
+          setImporto('');
           const now = new Date();
           setInvoiceDate(new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
           setSuccess('Fattura caricata con successo!');
@@ -384,6 +387,20 @@ const FatturePage = () => {
               </button>
             </div>
 
+            {/* Importo */}
+            <div className="flex items-center gap-4">
+              <label className="w-32 text-gray-700 font-medium">Importo (€)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={importo}
+                onChange={(e) => setImporto(e.target.value)}
+                placeholder="es. 1250,00"
+                data-testid="invoice-importo-input"
+                className="flex-1 max-w-xs h-10 px-3 border border-gray-300 rounded-md focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+
             {/* Paid Checkbox */}
             <div className="flex items-center gap-4">
               <label className="w-32 text-gray-700 font-medium">Stato</label>
@@ -495,17 +512,24 @@ const FatturePage = () => {
 
                 {/* Info */}
                 <div className="flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-gray-800">{invoice.supplier}</span>
+                    {Number(invoice.importo || 0) > 0 && (
+                      <span className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full font-bold">
+                        € {Number(invoice.importo).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    )}
                     {invoice.paid && (
                       <span className="bg-green-500 text-white text-xs px-2 py-0.5 rounded-full">
                         PAGATO
                       </span>
                     )}
                   </div>
-                  <div className="text-sm text-gray-600">
-                    Codice: <strong>{invoice.control_code}</strong>
-                  </div>
+                  {invoice.control_code ? (
+                    <div className="text-sm text-gray-600">
+                      Codice: <strong>{invoice.control_code}</strong>
+                    </div>
+                  ) : null}
                   <div className="text-sm text-gray-500">
                     Data fattura: {formatDate(invoice.invoice_date)}
                   </div>
