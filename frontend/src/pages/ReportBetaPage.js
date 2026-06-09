@@ -342,6 +342,18 @@ const ReportBetaPageInner = () => {
     });
   };
 
+  // Scarti (unità, in sync con MagazzinoBevandePage)
+  const handleScartiChange = (sigla, value) => {
+    bevPendingSeraUntil.current[sigla] = Date.now() + 4000;
+    setBevCounts(prev => {
+      const current = prev[sigla] || { mattina: '', inUsc: '', scarti: '', sera: '', sera_casse: '', sera_sfuse: '' };
+      const nextRow = { ...current, scarti: value };
+      const next = { ...prev, [sigla]: nextRow };
+      scheduleBevSave(sigla, nextRow);
+      return next;
+    });
+  };
+
   // Riepilogo cassa: caricamento iniziale (no polling, è la sorgente di verità qui)
   useEffect(() => {
     if (!token) return;
@@ -1124,6 +1136,61 @@ const ReportBetaPageInner = () => {
                           {total === null
                             ? 'sera'
                             : `tot ${Number.isInteger(total) ? total : (+total.toFixed(2))}`}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* ============ SCARTI (1 quadratino per bevanda, unità singole — in sync con Magazzino Bevande) ============ */}
+            <div className="bg-white rounded border border-gray-200 p-2">
+              <div className="flex items-baseline justify-between mb-2">
+                <h2 className="text-xs font-bold text-gray-800 uppercase">Scarti</h2>
+                <span className="text-[10px] text-gray-400">
+                  Unità singole · sync live con Magazzino Bevande · supporta formule "=..."
+                </span>
+              </div>
+              {beverages.length === 0 ? (
+                <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
+                  Nessuna bevanda configurata.
+                </div>
+              ) : (
+                <div className="flex items-stretch gap-2">
+                  {beverages.map(b => {
+                    const row = bevCounts[b.sigla] || {};
+                    const scRaw = row.scarti ?? '';
+                    const scEmpty = scRaw === '' || scRaw === null || scRaw === undefined;
+                    const scN = evaluateValue(scRaw);
+                    const isFormulaSc = typeof scRaw === 'string' && scRaw.trim().startsWith('=');
+                    return (
+                      <div
+                        key={b.sigla}
+                        data-testid={`scarti-${b.sigla}`}
+                        className="flex-1 min-w-[60px] flex flex-col"
+                      >
+                        <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
+                          {b.sigla}
+                        </label>
+                        <input
+                          data-testid={`bev-scarti-${b.sigla}`}
+                          type="text"
+                          inputMode="decimal"
+                          value={scRaw}
+                          onChange={(e) => handleScartiChange(b.sigla, e.target.value)}
+                          placeholder="—"
+                          title={isFormulaSc ? `Formula: ${scRaw} = ${scN}` : 'Unità scartate (singole)'}
+                          className={`w-full h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-rose-400 ${
+                            isFormulaSc
+                              ? 'bg-rose-100 border-rose-300 text-rose-800'
+                              : scEmpty
+                                ? 'bg-gray-50 border-gray-200 text-gray-700'
+                                : 'bg-rose-50 border-rose-200 text-gray-900'
+                          }`}
+                        />
+                        <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
+                          scarti
                         </span>
                       </div>
                     );
