@@ -62,6 +62,13 @@ const AdminFattureGlobaliPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isAdmin]);
 
+  useEffect(() => {
+    if (!lightboxUrl) return;
+    const onKey = (e) => { if (e.key === 'Escape') setLightboxUrl(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightboxUrl]);
+
   const restaurantNameById = useMemo(() => {
     const map = {};
     (restaurants || []).forEach(r => { map[r.id] = r.location || r.username || r.name || r.id; });
@@ -422,10 +429,18 @@ const AdminFattureGlobaliPage = () => {
       {lightboxUrl && (
         <div
           className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
-          onClick={() => setLightboxUrl(null)}
           data-testid="fg-lightbox"
         >
-          <PanZoomImage src={lightboxUrl} alt="fattura" />
+          <button
+            type="button"
+            onClick={() => setLightboxUrl(null)}
+            data-testid="fg-lightbox-close"
+            title="Chiudi"
+            className="fixed top-4 right-4 z-[60] w-12 h-12 rounded-full bg-white text-gray-900 text-2xl font-bold shadow-lg hover:bg-gray-100 flex items-center justify-center"
+          >×</button>
+          <div className="max-w-[95vw] max-h-[95vh] w-full h-full flex items-center justify-center">
+            <PanZoomImage src={lightboxUrl} alt="fattura" />
+          </div>
         </div>
       )}
     </div>
