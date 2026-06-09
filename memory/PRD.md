@@ -126,3 +126,14 @@ Sistema di gestione ordini pasta per multi-ristorante (Flaminio, Grazie, Largo d
 - **Sezione "Magazzino Sera"** aggiunta nel Report (read-only, fonte: Magazzino Bevande): card con il solo valore "sera" per ogni bevanda, evidenziato in `amber-50` quando popolato.
 - **Test pytest aggiunto**: `/app/backend/tests/test_multi_tenancy.py` (7/7 PASS) — copre isolamento `/api/cash/daily`, `/api/beverages/daily`, `prev_cash_sera` carry-over, non-admin no-impersonation.
 
+
+## Sessione fork — 09/06/2026 (ReportBetaPage UI tuning)
+Applicate 7 modifiche di layout/logica richieste dall'utente su `/app/frontend/src/pages/ReportBetaPage.js`:
+1. **CASH_FIELDS riordinati**: VERS spostato come ultimo box prima di CASH SERA; BP/SAT/POS raggruppati consecutivamente.
+2. **Colori box Riepilogo Cassa**: BP/SAT/POS condividono lo stesso azzurro chiaro (`#dbeafe`); VERS = bianco (`#ffffff`).
+3. **Riepilogo Cassa = 2ª sezione**: ora subito dopo "Cassa banconote", prima di Vendite Bevande e Magazzino Sera.
+4. **Colonna "Paste" ridotta**: layout grid passato da `1fr_3fr` (25%) a `14fr_86fr` (~14%).
+5. **Spicci + Cassetto Spicci compatti**: wrapper `max-w-[60%]`, altezze input/display da `h-11` a `h-9`, font `text-sm` → `text-xs`, `min-w` ridotti.
+6. **Breakdown costi paste rimosso**: niente più grid per sigla; restano solo TOT PASTE e TOT €.
+7. **Cap 15€** su `setManualPrice`: qualsiasi valore numerico > 15 viene troncato a 15 (formule "=..." non ammesse in input manuale comunque).
+- Testato via screenshot tool: layout corretto, ordine sezioni corretto, cap 15€ verificato (input 50→15, 20→15, 8→8).

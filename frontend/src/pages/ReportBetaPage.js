@@ -66,6 +66,8 @@ const evaluateValue = (v) => {
 };
 
 // Definizione del riepilogo cassa Flaminio (Report)
+// NB: VERS è in fondo perché nel render viene SPOSTATO fuori dal map ed
+// emesso dopo CASH SERA come ultimo box bianco a destra.
 const CASH_FIELDS = [
   { key: 'mattina', label: 'CASH MATTINA', op: 'base', readonly: true  },
   { key: 'altro',   label: 'ALTRO',        op: 'plus',  readonly: false },
@@ -74,26 +76,26 @@ const CASH_FIELDS = [
   { key: 'delv',    label: 'DEL',          op: 'minus', readonly: false },
   { key: 'bp',      label: 'BP',           op: 'minus', readonly: false },
   { key: 'sat',     label: 'SAT',          op: 'minus', readonly: false },
-  { key: 'ft',      label: 'FT',           op: 'minus', readonly: false },
   { key: 'pos',     label: 'POS',          op: 'minus', readonly: false },
-  { key: 'vers',    label: 'VERS',         op: 'minus', readonly: false },
+  { key: 'ft',      label: 'FT',           op: 'minus', readonly: false },
   { key: 'arr',     label: 'ARR',          op: 'plus',  readonly: false },
+  { key: 'vers',    label: 'VERS',         op: 'minus', readonly: false },
 ];
 
 // Colore di SFONDO per ogni quadratino del Riepilogo Cassa (label resta nera).
-// VERS è scuro → label bianca per leggibilità.
+// BP/SAT/POS condividono lo stesso blu chiaro per essere riconosciuti come "trio".
 export const CASH_BOX_STYLE = {
   mattina: { bg: '#f3f4f6', text: '#111827' }, // neutro
   altro:   { bg: '#ede9fe', text: '#111827' }, // viola chiaro
   glo:     { bg: '#fef3c7', text: '#111827' }, // giallo chiaro
   just:    { bg: '#ffedd5', text: '#111827' }, // arancio chiaro
   delv:    { bg: '#dcfce7', text: '#111827' }, // verde chiaro
-  bp:      { bg: '#e3c9a1', text: '#111827' }, // marrone tenue
-  sat:     { bg: '#e3c9a1', text: '#111827' }, // marrone tenue
-  ft:      { bg: '#e0f2fe', text: '#111827' }, // azzurro chiaro
+  bp:      { bg: '#dbeafe', text: '#111827' }, // blu chiaro (= POS)
+  sat:     { bg: '#dbeafe', text: '#111827' }, // blu chiaro (= POS)
   pos:     { bg: '#dbeafe', text: '#111827' }, // blu chiaro
-  vers:    { bg: '#111827', text: '#ffffff' }, // nero
+  ft:      { bg: '#e0f2fe', text: '#111827' }, // azzurro chiaro
   arr:     { bg: '#fee2e2', text: '#111827' }, // rosso chiaro
+  vers:    { bg: '#ffffff', text: '#111827' }, // bianco (separato, dopo CASH SERA)
 };
 
 // Definizione del box SPICCI (rotolini / mazzette aperte)
@@ -639,7 +641,23 @@ const ReportBetaPageInner = () => {
   }, [cashRow, pasteAnalysis.totalEuro, pasteAnalysis.totalCount, bevTotalInc, bevSales, spicciValues.total, spicciValues.rows]);
 
   const setCashValue = (key, v) => setCash(p => ({ ...p, [key]: v }));
-  const setManualPrice = (idx, v) => setManualPrices(p => ({ ...p, [idx]: v }));
+  const setManualPrice = (idx, v) => {
+    // Cap manuale: massimo 15€ per una pasta sconosciuta (vale per
+    // qualsiasi cifra numerica digitata; le formule "=" non sono ammesse qui).
+    const raw = (v ?? '').toString();
+    if (raw.trim() === '') {
+      setManualPrices(p => ({ ...p, [idx]: '' }));
+      return;
+    }
+    const normalized = raw.replace(/,/g, '.');
+    const n = parseFloat(normalized);
+    if (!Number.isNaN(n) && n > 15) {
+      // Sostituisco con 15 (preserva la virgola italiana nello stato visivo)
+      setManualPrices(p => ({ ...p, [idx]: '15' }));
+      return;
+    }
+    setManualPrices(p => ({ ...p, [idx]: raw }));
+  };
   const fmtEur = (n) => n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
@@ -660,8 +678,8 @@ const ReportBetaPageInner = () => {
           </button>
         </div>
 
-        {/* Layout: paste a sinistra (1/4) + tutto il resto a destra (3/4) */}
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_3fr] gap-2 min-h-0">
+        {/* Layout: paste a sinistra (~14%) + tutto il resto a destra (~86%) */}
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-[14fr_86fr] gap-2 min-h-0">
           {/* ============== SINISTRA — PASTE ============== */}
           <section className="bg-white rounded border border-gray-200 p-2 flex flex-col min-h-0">
             <div className="flex items-baseline justify-between mb-1">
@@ -695,6 +713,7 @@ const ReportBetaPageInner = () => {
                         value={manualPrices[u.idx] ?? ''}
                         onChange={(e) => setManualPrice(u.idx, e.target.value)}
                         placeholder="€"
+                        title="Max 15€"
                         className="w-12 h-6 border border-rose-300 rounded px-1 text-center font-bold text-[11px] focus:outline-none focus:border-rose-500"
                       />
                     </div>
@@ -702,26 +721,6 @@ const ReportBetaPageInner = () => {
                 </div>
               </div>
             )}
-
-            {/* Breakdown compatto */}
-            <div className="mt-1 grid grid-cols-4 gap-1 flex-shrink-0">
-              {PASTA_PRICES.map(p => {
-                const b = pasteAnalysis.breakdown[p.sigla];
-                const active = b.count > 0;
-                return (
-                  <div
-                    key={p.sigla}
-                    data-testid={`breakdown-${p.sigla}`}
-                    className={`rounded border px-1 py-0.5 text-center ${active ? 'bg-yellow-50 border-yellow-300' : 'bg-gray-50 border-gray-200'}`}
-                  >
-                    <div className="font-bold text-gray-800 text-[10px] leading-tight">{p.sigla}</div>
-                    <div className="text-[10px] text-gray-700 leading-tight">
-                      <span className="font-bold">{b.count}</span>·€{b.total}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
 
             {/* Totali */}
             <div className="mt-1 grid grid-cols-2 gap-1 flex-shrink-0">
@@ -785,113 +784,6 @@ const ReportBetaPageInner = () => {
                   <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">in €</span>
                 </div>
               </div>
-            </div>
-
-            {/* ============ VENDITE BEVANDE ============ */}
-            <div className="bg-white rounded border border-gray-200 p-2">
-              <div className="flex items-baseline justify-between mb-2">
-                <h2 className="text-xs font-bold text-gray-800 uppercase">Vendite Bevande</h2>
-                <span className="text-[10px] text-gray-400">Q.tà · Incasso — in sync con Magazzino Bevande</span>
-              </div>
-              {bevSales.length === 0 ? (
-                <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
-                  Nessuna bevanda configurata.
-                </div>
-              ) : (
-                <div className="flex items-stretch gap-1.5">
-                  {bevSales.map(b => (
-                    <div
-                      key={b.sigla}
-                      data-testid={`bev-sales-${b.sigla}`}
-                      className="flex-1 min-w-[60px] flex flex-col"
-                    >
-                      <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
-                        {b.sigla}
-                      </label>
-                      <div className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-base text-gray-900">
-                        {b.qty}
-                      </div>
-                      <span className="text-[10px] font-bold text-gray-700 mt-0.5 text-center leading-none">
-                        €{b.inc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  ))}
-                  {/* Totale — solo importo € (no quantità, no sfondo nero) */}
-                  <div className="flex-1 min-w-[70px] flex flex-col">
-                    <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">Tot</label>
-                    <div
-                      data-testid="bev-sales-total-inc"
-                      className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-base text-gray-900"
-                    >
-                      €{bevTotalInc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
-                    <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
-                      &nbsp;
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* ============ MAGAZZINO SERA (editabile, sync live con Magazzino Bevande) ============ */}
-            <div className="bg-white rounded border border-gray-200 p-2">
-              <div className="flex items-baseline justify-between mb-2">
-                <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Sera</h2>
-                <span className="text-[10px] text-gray-400">Editabile · sync live con Magazzino Bevande · supporta formule "=..."</span>
-              </div>
-              {beverages.length === 0 ? (
-                <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
-                  Nessuna bevanda configurata.
-                </div>
-              ) : (
-                <div className="flex items-stretch gap-1.5">
-                  {beverages.map(b => {
-                    const seraRaw = bevCounts[b.sigla]?.sera ?? '';
-                    const isFocusedSera = focusedSeraSigla === b.sigla;
-                    const isFormulaSera = typeof seraRaw === 'string' && seraRaw.trim().startsWith('=');
-                    const computedSera = evaluateValue(seraRaw);
-                    const displayValue = (() => {
-                      if (isFocusedSera) return seraRaw;
-                      if (seraRaw === '' || seraRaw === null || seraRaw === undefined) return '';
-                      const abs = Math.abs(computedSera);
-                      return Number.isInteger(abs)
-                        ? String(abs)
-                        : abs.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    })();
-                    return (
-                      <div
-                        key={b.sigla}
-                        className="flex-1 min-w-[60px] flex flex-col"
-                      >
-                        <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
-                          {b.sigla}
-                        </label>
-                        <input
-                          data-testid={`bev-mag-sera-${b.sigla}`}
-                          type="text"
-                          inputMode="decimal"
-                          value={displayValue}
-                          onChange={(e) => handleSeraChange(b.sigla, e.target.value)}
-                          onFocus={() => setFocusedSeraSigla(b.sigla)}
-                          onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
-                          placeholder="—"
-                          title={isFormulaSera ? `Formula: ${seraRaw} = ${computedSera.toLocaleString('it-IT', { maximumFractionDigits: 2 })}` : undefined}
-                          className={`w-full h-11 rounded text-center font-black text-base border focus:outline-none focus:ring-2 focus:ring-amber-400 ${
-                            isFormulaSera && isFocusedSera
-                              ? 'bg-rose-100 border-rose-300 text-rose-800'
-                              : seraRaw === '' || seraRaw === null || seraRaw === undefined
-                                ? 'bg-gray-50 border-gray-200 text-gray-700'
-                                : 'bg-amber-50 border-amber-200 text-gray-900'
-                          }`}
-                        />
-                        <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
-                          sera
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
 
             {/* ============ RIEPILOGO CASSA ============ */}
@@ -1030,8 +922,115 @@ const ReportBetaPageInner = () => {
               </div>
             </div>
 
+            {/* ============ VENDITE BEVANDE ============ */}
+            <div className="bg-white rounded border border-gray-200 p-2">
+              <div className="flex items-baseline justify-between mb-2">
+                <h2 className="text-xs font-bold text-gray-800 uppercase">Vendite Bevande</h2>
+                <span className="text-[10px] text-gray-400">Q.tà · Incasso — in sync con Magazzino Bevande</span>
+              </div>
+              {bevSales.length === 0 ? (
+                <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
+                  Nessuna bevanda configurata.
+                </div>
+              ) : (
+                <div className="flex items-stretch gap-1.5">
+                  {bevSales.map(b => (
+                    <div
+                      key={b.sigla}
+                      data-testid={`bev-sales-${b.sigla}`}
+                      className="flex-1 min-w-[60px] flex flex-col"
+                    >
+                      <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
+                        {b.sigla}
+                      </label>
+                      <div className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-base text-gray-900">
+                        {b.qty}
+                      </div>
+                      <span className="text-[10px] font-bold text-gray-700 mt-0.5 text-center leading-none">
+                        €{b.inc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  ))}
+                  {/* Totale — solo importo € (no quantità, no sfondo nero) */}
+                  <div className="flex-1 min-w-[70px] flex flex-col">
+                    <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">Tot</label>
+                    <div
+                      data-testid="bev-sales-total-inc"
+                      className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-base text-gray-900"
+                    >
+                      €{bevTotalInc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                    <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
+                      &nbsp;
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ============ MAGAZZINO SERA (editabile, sync live con Magazzino Bevande) ============ */}
+            <div className="bg-white rounded border border-gray-200 p-2">
+              <div className="flex items-baseline justify-between mb-2">
+                <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Sera</h2>
+                <span className="text-[10px] text-gray-400">Editabile · sync live con Magazzino Bevande · supporta formule "=..."</span>
+              </div>
+              {beverages.length === 0 ? (
+                <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
+                  Nessuna bevanda configurata.
+                </div>
+              ) : (
+                <div className="flex items-stretch gap-1.5">
+                  {beverages.map(b => {
+                    const seraRaw = bevCounts[b.sigla]?.sera ?? '';
+                    const isFocusedSera = focusedSeraSigla === b.sigla;
+                    const isFormulaSera = typeof seraRaw === 'string' && seraRaw.trim().startsWith('=');
+                    const computedSera = evaluateValue(seraRaw);
+                    const displayValue = (() => {
+                      if (isFocusedSera) return seraRaw;
+                      if (seraRaw === '' || seraRaw === null || seraRaw === undefined) return '';
+                      const abs = Math.abs(computedSera);
+                      return Number.isInteger(abs)
+                        ? String(abs)
+                        : abs.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    })();
+                    return (
+                      <div
+                        key={b.sigla}
+                        className="flex-1 min-w-[60px] flex flex-col"
+                      >
+                        <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
+                          {b.sigla}
+                        </label>
+                        <input
+                          data-testid={`bev-mag-sera-${b.sigla}`}
+                          type="text"
+                          inputMode="decimal"
+                          value={displayValue}
+                          onChange={(e) => handleSeraChange(b.sigla, e.target.value)}
+                          onFocus={() => setFocusedSeraSigla(b.sigla)}
+                          onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
+                          placeholder="—"
+                          title={isFormulaSera ? `Formula: ${seraRaw} = ${computedSera.toLocaleString('it-IT', { maximumFractionDigits: 2 })}` : undefined}
+                          className={`w-full h-11 rounded text-center font-black text-base border focus:outline-none focus:ring-2 focus:ring-amber-400 ${
+                            isFormulaSera && isFocusedSera
+                              ? 'bg-rose-100 border-rose-300 text-rose-800'
+                              : seraRaw === '' || seraRaw === null || seraRaw === undefined
+                                ? 'bg-gray-50 border-gray-200 text-gray-700'
+                                : 'bg-amber-50 border-amber-200 text-gray-900'
+                          }`}
+                        />
+                        <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
+                          sera
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* ============ SPICCI + CASSETTO SPICCI (stessa riga) ============ */}
-            <div className="flex items-stretch gap-2">
+            <div className="flex items-stretch gap-2 max-w-[60%]">
               {/* --- SPICCI (rotolini aperti) --- */}
               <div className="bg-white rounded border border-gray-200 p-2 flex-[5] min-w-0">
               <div className="flex items-baseline justify-between mb-2">
@@ -1044,7 +1043,7 @@ const ReportBetaPageInner = () => {
                 {spicciValues.rows.map(r => {
                   const hasComment = !!cashComments[r.key];
                   return (
-                  <div key={r.key} className="flex-1 min-w-[50px] flex flex-col relative">
+                  <div key={r.key} className="flex-1 min-w-[44px] flex flex-col relative">
                     <label className="text-[10px] font-bold text-gray-800 text-center leading-none mb-0.5">
                       {r.label}
                     </label>
@@ -1058,7 +1057,7 @@ const ReportBetaPageInner = () => {
                       onBlur={() => setFocusedField(curr => curr === r.key ? null : curr)}
                       onContextMenu={(e) => { e.preventDefault(); openCommentPopover(r.key); }}
                       placeholder="aperti"
-                      className="w-full h-11 border border-gray-200 rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518]"
+                      className="w-full h-9 border border-gray-200 rounded px-1 text-center font-bold text-xs focus:outline-none focus:border-[#F5C518]"
                     />
                     {hasComment && (
                       <span
@@ -1068,7 +1067,7 @@ const ReportBetaPageInner = () => {
                     )}
                     <div
                       data-testid={`spicci-valore-${r.key}`}
-                      className="w-full h-11 mt-1 bg-yellow-50 border border-yellow-200 rounded flex items-center justify-center font-black text-sm text-gray-900"
+                      className="w-full h-9 mt-1 bg-yellow-50 border border-yellow-200 rounded flex items-center justify-center font-black text-xs text-gray-900"
                     >
                       €{r.value.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                     </div>
@@ -1086,15 +1085,15 @@ const ReportBetaPageInner = () => {
                   );
                 })}
                 {/* Totale spicci */}
-                <div className="flex-1 min-w-[60px] flex flex-col">
+                <div className="flex-1 min-w-[52px] flex flex-col">
                   <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">TOT</label>
-                  <div className="w-full h-11 border border-transparent rounded flex items-center justify-center text-[10px] text-gray-400 italic">
+                  <div className="w-full h-9 border border-transparent rounded flex items-center justify-center text-[10px] text-gray-400 italic">
                     {/* nessun input sul totale */}
                     —
                   </div>
                   <div
                     data-testid="spicci-totale"
-                    className="w-full h-11 mt-1 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-sm text-gray-900"
+                    className="w-full h-9 mt-1 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-xs text-gray-900"
                   >
                     €{spicciValues.total.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                   </div>
@@ -1126,7 +1125,7 @@ const ReportBetaPageInner = () => {
                         : residuo.toLocaleString('it-IT', { maximumFractionDigits: 2 });
                     }
                     return (
-                      <div key={f.key} className="flex-1 min-w-[50px] flex flex-col relative">
+                      <div key={f.key} className="flex-1 min-w-[44px] flex flex-col relative">
                         <label className="text-[10px] font-bold text-gray-800 text-center leading-none mb-0.5">
                           {f.label}
                         </label>
@@ -1146,7 +1145,7 @@ const ReportBetaPageInner = () => {
                             }}
                             onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
                             placeholder="stock"
-                            className="w-full h-11 border-2 border-[#F5C518] rounded px-1 text-center font-bold text-sm focus:outline-none bg-yellow-50"
+                            className="w-full h-9 border-2 border-[#F5C518] rounded px-1 text-center font-bold text-xs focus:outline-none bg-yellow-50"
                           />
                         ) : (
                           <button
@@ -1155,7 +1154,7 @@ const ReportBetaPageInner = () => {
                             onClick={() => startEditCassetto(f)}
                             onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
                             title={isAdmin ? "Clicca per modificare · destro per commento" : "Solo lettura · destro per commento"}
-                            className={`w-full h-11 border rounded px-1 text-center font-black text-sm transition-colors ${
+                            className={`w-full h-9 border rounded px-1 text-center font-black text-xs transition-colors ${
                               isAdmin ? 'cursor-pointer' : 'cursor-not-allowed'
                             } ${
                               isNegative
