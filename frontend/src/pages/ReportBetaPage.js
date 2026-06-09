@@ -493,9 +493,14 @@ const ReportBetaPageInner = () => {
         const res = await axios.get(`${API}/orders/today-paste-list`, { headers });
         if (cancelled) return;
         const items = res.data?.items || [];
-        const text = items.map(it => (it.description || '').trim()).filter(Boolean).join('\n');
+        // Formato riga: "<order_number>  <description>" — il parser usa \b
+        // sulla sigla, quindi il numero d'ordine non rompe il riconoscimento.
+        const text = items
+          .filter(it => (it.description || '').trim().length > 0)
+          .map(it => `${it.order_number}  ${(it.description || '').trim()}`)
+          .join('\n');
         setAutoPasteText(text);
-        setAutoPasteCount(items.length);
+        setAutoPasteCount(items.filter(it => (it.description || '').trim().length > 0).length);
       } catch (e) {
         // 401/403 in scenari edge: ignora silenziosamente
       }
@@ -532,9 +537,12 @@ const ReportBetaPageInner = () => {
         const res = await axios.get(`${API}/orders/today-paste-list`, { headers });
         if (cancelled) return;
         const items = res.data?.items || [];
-        const text = items.map(it => (it.description || '').trim()).filter(Boolean).join('\n');
+        const text = items
+          .filter(it => (it.description || '').trim().length > 0)
+          .map(it => `${it.order_number}  ${(it.description || '').trim()}`)
+          .join('\n');
         setAutoPasteText(text);
-        setAutoPasteCount(items.length);
+        setAutoPasteCount(items.filter(it => (it.description || '').trim().length > 0).length);
       } catch (e) { /* ignore */ }
     })();
     return () => { cancelled = true; };
