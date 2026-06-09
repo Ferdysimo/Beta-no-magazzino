@@ -145,3 +145,12 @@ Applicate 7 modifiche di layout/logica richieste dall'utente su `/app/frontend/s
 - **Backend**: esteso `BeverageDailyUpsert` e `GET /api/beverages/daily` con campi `sera_casse` e `sera_sfuse`. Il totale `sera` salvato a DB resta la somma `casse*24 + sfuse` (retrocompatibile con tutta la logica downstream — Vendite Bevande, prev_sera, cash_sera_full).
 - **Persistenza verificata**: refresh → casse/sfuse ricaricati correttamente, totale ricalcolato.
 - Test E2E manuale: AL: 3 casse + 4 sfuse → "tot 76" ✓ (3×24+4=76).
+
+## Sessione fork — 09/06/2026 (Scarti + Magazzino Mattina porting)
+- **Sezione "Scarti"** (rosa) aggiunta sotto Magazzino Sera: 1 quadratino unità per bevanda, sync live con `bevCounts.scarti` (campo esistente).
+- **Sezione "Magazzino Mattina"** (verde/turchese) aggiunta sotto Scarti: 2 quadratini per bevanda (Casse ×24 + Sfuse), totale `tot N`.
+- **Backend**: estesi `BeverageDailyUpsert` + GET/PUT `/api/beverages/daily` con `mattina_casse` e `mattina_sfuse`.
+- **Handler refactor**: `handleCasseSfuseChange(sigla, slot, kind, value)` parametrizzato per slot ∈ {mattina, sera}.
+- **Auto-fill prev_sera → mattina**: decomposizione automatica del totale del giorno prima in casse (×24) + sfuse (es. 76 → 3 casse + 4 sfuse).
+- **Placeholder trasparenti rimossi** da tutti gli input bevande (Magazzino Sera, Scarti, Magazzino Mattina).
+- Test E2E manuale: Mattina AL 5 casse + 12 sfuse → tot 132 ✓.

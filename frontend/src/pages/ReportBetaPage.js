@@ -246,15 +246,25 @@ const ReportBetaPageInner = () => {
                 inUsc: remote.inUsc || '',
                 scarti: remote.scarti || '',
                 sera: seraLocked ? (local?.sera ?? '') : (remote.sera || ''),
+                mattina_casse: remote.mattina_casse || '',
+                mattina_sfuse: remote.mattina_sfuse || '',
                 sera_casse: seraLocked ? (local?.sera_casse ?? '') : (remote.sera_casse || ''),
                 sera_sfuse: seraLocked ? (local?.sera_sfuse ?? '') : (remote.sera_sfuse || ''),
               };
             } else if (prev[b.sigla] !== undefined && prev[b.sigla] !== '') {
+              // Auto-fill mattina dal sera del giorno prima.
+              // Decomposizione automatica del totale in casse (×24) + sfuse,
+              // così l'utente vede subito un breakdown ragionevole e può rifinirlo.
+              const prevTot = Number(prev[b.sigla]) || 0;
+              const prevCasse = prevTot > 0 ? Math.floor(prevTot / 24) : 0;
+              const prevSfuse = prevTot - prevCasse * 24;
               merged[b.sigla] = {
                 mattina: String(prev[b.sigla]),
                 inUsc: '',
                 scarti: '',
                 sera: seraLocked ? (local?.sera ?? '') : '',
+                mattina_casse: prevCasse > 0 ? String(prevCasse) : '',
+                mattina_sfuse: prevSfuse > 0 ? String(prevSfuse) : '',
                 sera_casse: seraLocked ? (local?.sera_casse ?? '') : '',
                 sera_sfuse: seraLocked ? (local?.sera_sfuse ?? '') : '',
               };
@@ -264,6 +274,8 @@ const ReportBetaPageInner = () => {
                 inUsc: '',
                 scarti: '',
                 sera: seraLocked ? (local?.sera ?? '') : '',
+                mattina_casse: '',
+                mattina_sfuse: '',
                 sera_casse: seraLocked ? (local?.sera_casse ?? '') : '',
                 sera_sfuse: seraLocked ? (local?.sera_sfuse ?? '') : '',
               };
@@ -291,6 +303,8 @@ const ReportBetaPageInner = () => {
           inUsc: row.inUsc ?? '',
           scarti: row.scarti ?? '',
           sera: row.sera ?? '',
+          mattina_casse: row.mattina_casse ?? '',
+          mattina_sfuse: row.mattina_sfuse ?? '',
           sera_casse: row.sera_casse ?? '',
           sera_sfuse: row.sera_sfuse ?? '',
           comments: row.comments || {},
@@ -303,26 +317,30 @@ const ReportBetaPageInner = () => {
     }, 600);
   }, [token]);
 
-  // Magazzino Sera (Report): l'utente inserisce CASSE (×24) e SFUSE separatamente.
-  // Il totale "sera" memorizzato a DB è la somma calcolata casse*24 + sfuse.
+  // Magazzino (Mattina o Sera): l'utente inserisce CASSE (×24) e SFUSE separatamente.
+  // Il totale (mattina o sera) memorizzato a DB è la somma calcolata casse*24 + sfuse.
   const PEZZI_PER_CASSA = 24;
-  const handleCasseSfuseChange = (sigla, field, value) => {
-    // field ∈ { 'sera_casse', 'sera_sfuse' }
+  const handleCasseSfuseChange = (sigla, slot /* 'mattina'|'sera' */, kind /* 'casse'|'sfuse' */, value) => {
     bevPendingSeraUntil.current[sigla] = Date.now() + 4000;
+    const fieldKey = `${slot}_${kind}`; // es. 'sera_casse' | 'mattina_sfuse'
     setBevCounts(prev => {
-      const current = prev[sigla] || { mattina: '', inUsc: '', scarti: '', sera: '', sera_casse: '', sera_sfuse: '' };
-      const nextRow = { ...current, [field]: value };
-      const casseRaw = field === 'sera_casse' ? value : (nextRow.sera_casse ?? '');
-      const sfuseRaw = field === 'sera_sfuse' ? value : (nextRow.sera_sfuse ?? '');
+      const current = prev[sigla] || {
+        mattina: '', inUsc: '', scarti: '', sera: '',
+        mattina_casse: '', mattina_sfuse: '',
+        sera_casse: '', sera_sfuse: '',
+      };
+      const nextRow = { ...current, [fieldKey]: value };
+      const casseRaw = kind === 'casse' ? value : (nextRow[`${slot}_casse`] ?? '');
+      const sfuseRaw = kind === 'sfuse' ? value : (nextRow[`${slot}_sfuse`] ?? '');
       const casseEmpty = casseRaw === '' || casseRaw === null || casseRaw === undefined;
       const sfuseEmpty = sfuseRaw === '' || sfuseRaw === null || sfuseRaw === undefined;
       if (casseEmpty && sfuseEmpty) {
-        nextRow.sera = '';
+        nextRow[slot] = '';
       } else {
         const c = evaluateValue(casseRaw);
         const s = evaluateValue(sfuseRaw);
         const total = c * PEZZI_PER_CASSA + s;
-        nextRow.sera = Number.isInteger(total) ? String(total) : String(+total.toFixed(2));
+        nextRow[slot] = Number.isInteger(total) ? String(total) : String(+total.toFixed(2));
       }
       const next = { ...prev, [sigla]: nextRow };
       scheduleBevSave(sigla, nextRow);
@@ -1096,10 +1114,9 @@ const ReportBetaPageInner = () => {
                             type="text"
                             inputMode="decimal"
                             value={casseRaw}
-                            onChange={(e) => handleCasseSfuseChange(b.sigla, 'sera_casse', e.target.value)}
+                            onChange={(e) => handleCasseSfuseChange(b.sigla, 'sera', 'casse', e.target.value)}
                             onFocus={() => setFocusedSeraSigla(b.sigla)}
                             onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
-                            placeholder="cas"
                             title={isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : `Casse × ${PEZZI_PER_CASSA}`}
                             className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-amber-400 ${
                               isFormulaCasse && isFocusedSera
@@ -1115,10 +1132,9 @@ const ReportBetaPageInner = () => {
                             type="text"
                             inputMode="decimal"
                             value={sfuseRaw}
-                            onChange={(e) => handleCasseSfuseChange(b.sigla, 'sera_sfuse', e.target.value)}
+                            onChange={(e) => handleCasseSfuseChange(b.sigla, 'sera', 'sfuse', e.target.value)}
                             onFocus={() => setFocusedSeraSigla(b.sigla)}
                             onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
-                            placeholder="sf."
                             title={isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Bottiglie sfuse'}
                             className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-sky-400 ${
                               isFormulaSfuse && isFocusedSera
@@ -1179,7 +1195,6 @@ const ReportBetaPageInner = () => {
                           inputMode="decimal"
                           value={scRaw}
                           onChange={(e) => handleScartiChange(b.sigla, e.target.value)}
-                          placeholder="—"
                           title={isFormulaSc ? `Formula: ${scRaw} = ${scN}` : 'Unità scartate (singole)'}
                           className={`w-full h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-rose-400 ${
                             isFormulaSc
@@ -1191,6 +1206,89 @@ const ReportBetaPageInner = () => {
                         />
                         <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
                           scarti
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* ============ MAGAZZINO MATTINA (casse + sfuse, in sync con Magazzino Bevande) ============ */}
+            <div className="bg-white rounded border border-gray-200 p-2">
+              <div className="flex items-baseline justify-between mb-2">
+                <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Mattina</h2>
+                <span className="text-[10px] text-gray-400">
+                  Casse (×{PEZZI_PER_CASSA}) + Sfuse = totale · sync live · supporta formule "=..."
+                </span>
+              </div>
+              {beverages.length === 0 ? (
+                <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
+                  Nessuna bevanda configurata.
+                </div>
+              ) : (
+                <div className="flex items-stretch gap-2">
+                  {beverages.map(b => {
+                    const row = bevCounts[b.sigla] || {};
+                    const casseRaw = row.mattina_casse ?? '';
+                    const sfuseRaw = row.mattina_sfuse ?? '';
+                    const casseEmpty = casseRaw === '' || casseRaw === null || casseRaw === undefined;
+                    const sfuseEmpty = sfuseRaw === '' || sfuseRaw === null || sfuseRaw === undefined;
+                    const casseN = evaluateValue(casseRaw);
+                    const sfuseN = evaluateValue(sfuseRaw);
+                    const total = (casseEmpty && sfuseEmpty) ? null : (casseN * PEZZI_PER_CASSA + sfuseN);
+                    const isFormulaCasse = typeof casseRaw === 'string' && casseRaw.trim().startsWith('=');
+                    const isFormulaSfuse = typeof sfuseRaw === 'string' && sfuseRaw.trim().startsWith('=');
+                    return (
+                      <div
+                        key={b.sigla}
+                        data-testid={`mag-mattina-${b.sigla}`}
+                        className="flex-1 min-w-[90px] flex flex-col"
+                      >
+                        <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
+                          {b.sigla}
+                        </label>
+                        <div className="flex gap-1">
+                          {/* CASSE (× PEZZI_PER_CASSA) */}
+                          <input
+                            data-testid={`bev-mag-mattina-casse-${b.sigla}`}
+                            type="text"
+                            inputMode="decimal"
+                            value={casseRaw}
+                            onChange={(e) => handleCasseSfuseChange(b.sigla, 'mattina', 'casse', e.target.value)}
+                            title={isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : `Casse × ${PEZZI_PER_CASSA}`}
+                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                              isFormulaCasse
+                                ? 'bg-rose-100 border-rose-300 text-rose-800'
+                                : casseEmpty
+                                  ? 'bg-gray-50 border-gray-200 text-gray-700'
+                                  : 'bg-emerald-50 border-emerald-200 text-gray-900'
+                            }`}
+                          />
+                          {/* SFUSE (×1) */}
+                          <input
+                            data-testid={`bev-mag-mattina-sfuse-${b.sigla}`}
+                            type="text"
+                            inputMode="decimal"
+                            value={sfuseRaw}
+                            onChange={(e) => handleCasseSfuseChange(b.sigla, 'mattina', 'sfuse', e.target.value)}
+                            title={isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Bottiglie sfuse'}
+                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-teal-400 ${
+                              isFormulaSfuse
+                                ? 'bg-rose-100 border-rose-300 text-rose-800'
+                                : sfuseEmpty
+                                  ? 'bg-gray-50 border-gray-200 text-gray-700'
+                                  : 'bg-teal-50 border-teal-200 text-gray-900'
+                            }`}
+                          />
+                        </div>
+                        <span
+                          data-testid={`bev-mag-mattina-total-${b.sigla}`}
+                          className={`text-[10px] mt-0.5 text-center leading-none font-bold ${total === null ? 'text-gray-400' : 'text-gray-800'}`}
+                        >
+                          {total === null
+                            ? 'mattina'
+                            : `tot ${Number.isInteger(total) ? total : (+total.toFixed(2))}`}
                         </span>
                       </div>
                     );
