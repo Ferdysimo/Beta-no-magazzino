@@ -4672,7 +4672,8 @@ async def mark_global_paid(
     if not doc:
         raise HTTPException(status_code=404, detail="Fattura globale non trovata")
     enriched = await _enrich_global_invoice(doc)
-    if abs(enriched["importo"] - enriched["linked_sum"]) > 0.01:
+    # Tolleranza ±1€
+    if abs(enriched["importo"] - enriched["linked_sum"]) > 1.0:
         raise HTTPException(
             status_code=400,
             detail=f"Importi non coincidono: globale €{enriched['importo']:.2f} vs locali €{enriched['linked_sum']:.2f}",

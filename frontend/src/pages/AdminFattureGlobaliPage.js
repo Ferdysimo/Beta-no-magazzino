@@ -10,12 +10,15 @@ const API = `${BACKEND_URL}/api`;
 
 const fmtEur = (n) => Number(n || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const TOLLERANZA = 1.0; // ±1€
+
 const STATUS = (g) => {
   if (g.paid) return 'paid';
   const importo = Number(g.importo || 0);
   const sum = Number(g.linked_sum || 0);
-  if (importo > 0 && Math.abs(importo - sum) < 0.01) return 'ready';
-  return 'pending';
+  if (sum <= 0) return 'pending';            // BLU — nessuna fattura locale ancora abbinata
+  if (Math.abs(importo - sum) <= TOLLERANZA) return 'ready';   // VERDE — match (±1€)
+  return 'mismatch';                          // ROSSO — abbinate ma importo non coincide
 };
 
 const AdminFattureGlobaliPage = () => {
@@ -177,11 +180,13 @@ const AdminFattureGlobaliPage = () => {
   const rowClass = (st) => {
     if (st === 'paid') return 'bg-amber-50 border-l-4 border-amber-500';
     if (st === 'ready') return 'bg-emerald-50 border-l-4 border-emerald-500';
+    if (st === 'mismatch') return 'bg-rose-50 border-l-4 border-rose-500';
     return 'bg-blue-50 border-l-4 border-blue-500';
   };
   const badge = (st) => {
     if (st === 'paid') return <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[10px] font-bold uppercase">PAGATO</span>;
     if (st === 'ready') return <span className="px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 text-[10px] font-bold uppercase">CHECK OK</span>;
+    if (st === 'mismatch') return <span className="px-2 py-0.5 rounded-full bg-rose-200 text-rose-900 text-[10px] font-bold uppercase">NON COINCIDE</span>;
     return <span className="px-2 py-0.5 rounded-full bg-blue-200 text-blue-900 text-[10px] font-bold uppercase">IN ATTESA</span>;
   };
 
@@ -282,8 +287,15 @@ const AdminFattureGlobaliPage = () => {
                       <span>Importo: <b>€ {fmtEur(g.importo)}</b></span>
                       <span>Abbinate locali: <b>€ {fmtEur(g.linked_sum)}</b></span>
                       {!g.paid && (
-                        <span className={diff > 0.005 ? 'text-blue-700' : (diff < -0.005 ? 'text-rose-700' : 'text-emerald-700 font-bold')}>
-                          {diff > 0.005 ? `Mancano € ${fmtEur(diff)}` : diff < -0.005 ? `Eccesso € ${fmtEur(-diff)}` : 'Importi coincidono ✓'}
+                        <span className={
+                          Math.abs(diff) <= TOLLERANZA ? 'text-emerald-700 font-bold' :
+                          diff > TOLLERANZA ? 'text-blue-700' : 'text-rose-700 font-bold'
+                        }>
+                          {Math.abs(diff) <= TOLLERANZA
+                            ? `Importi coincidono ✓ (±${TOLLERANZA}€)`
+                            : diff > TOLLERANZA
+                              ? `Mancano € ${fmtEur(diff)}`
+                              : `Eccesso € ${fmtEur(-diff)} — non coincide`}
                         </span>
                       )}
                     </div>
