@@ -4678,10 +4678,19 @@ async def mark_global_paid(
             status_code=400,
             detail=f"Importi non coincidono: globale €{enriched['importo']:.2f} vs locali €{enriched['linked_sum']:.2f}",
         )
+    now_iso = datetime.now(timezone.utc).isoformat()
     await db.fatture_globali.update_one(
         {"id": fg_id},
-        {"$set": {"paid": True, "paid_at": datetime.now(timezone.utc).isoformat()}},
+        {"$set": {"paid": True, "paid_at": now_iso}},
     )
+    # Propaga il pagamento a TUTTE le fatture locali (DDT) abbinate:
+    # diventano automaticamente "PAGATO" lato pagina DDT dei vari locali.
+    linked_ids = doc.get("linked_invoice_ids") or []
+    if linked_ids:
+        await db.invoices.update_many(
+            {"id": {"$in": linked_ids}},
+            {"$set": {"paid": True, "paid_at": now_iso, "paid_via_global_id": fg_id}},
+        )
     new_doc = await db.fatture_globali.find_one({"id": fg_id}, {"_id": 0})
     return await _enrich_global_invoice(new_doc)
 

@@ -28,7 +28,6 @@ const FatturePage = () => {
   const [preview, setPreview] = useState(null);
   const [invoiceDate, setInvoiceDate] = useState('');
   const [supplier, setSupplier] = useState('');
-  const [paid, setPaid] = useState(false);
   const [controlCode, setControlCode] = useState('');
   const [importo, setImporto] = useState('');
   const [loading, setLoading] = useState(false);
@@ -157,7 +156,7 @@ const FatturePage = () => {
         try {
           await axios.post(`${API}/invoices`, {
             supplier,
-            paid,
+            paid: false,
             control_code: '',
             image_data: reader.result,
             invoice_date: new Date(invoiceDate).toISOString(),
@@ -170,7 +169,6 @@ const FatturePage = () => {
           setSelectedFile(null);
           setPreview(null);
           setSupplier('');
-          setPaid(false);
           setControlCode('');
           setImporto('');
           const now = new Date();
@@ -233,18 +231,6 @@ const FatturePage = () => {
       fetchSuppliers();
     } catch (err) {
       setSupplierError(err.response?.data?.detail || 'Errore');
-    }
-  };
-
-  // Toggle paid status
-  const togglePaid = async (invoice) => {
-    try {
-      await axios.patch(`${API}/invoices/${invoice.id}?paid=${!invoice.paid}`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      fetchInvoices();
-    } catch (err) {
-      console.error('Error updating invoice:', err);
     }
   };
 
@@ -401,23 +387,6 @@ const FatturePage = () => {
               />
             </div>
 
-            {/* Paid Checkbox */}
-            <div className="flex items-center gap-4">
-              <label className="w-32 text-gray-700 font-medium">Stato</label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={paid}
-                  onChange={(e) => setPaid(e.target.checked)}
-                  className="w-5 h-5 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                  data-testid="paid-checkbox"
-                />
-                <span className={`font-medium ${paid ? 'text-green-600' : 'text-gray-600'}`}>
-                  Pagato
-                </span>
-              </label>
-            </div>
-
             {/* Tipologia (fixed) */}
             <div className="flex items-center gap-4">
               <label className="w-32 text-gray-700 font-medium">Tipologia</label>
@@ -546,17 +515,6 @@ const FatturePage = () => {
                     title="Visualizza"
                   >
                     <Eye size={18} />
-                  </button>
-                  <button
-                    onClick={() => togglePaid(invoice)}
-                    className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
-                      invoice.paid 
-                        ? 'bg-gray-400 hover:bg-gray-500 text-white' 
-                        : 'bg-green-500 hover:bg-green-600 text-white'
-                    }`}
-                    title={invoice.paid ? 'Segna non pagato' : 'Segna pagato'}
-                  >
-                    <Check size={18} />
                   </button>
                   <button
                     onClick={() => deleteInvoice(invoice.id)}
