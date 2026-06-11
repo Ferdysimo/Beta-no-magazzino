@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
@@ -20,15 +20,26 @@ const fmtDate = (s) => {
 
 const StoricoChiusurePage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const urlDate = searchParams.get('date');
+  const urlRid = searchParams.get('rid');
   const { token, isAdmin } = useAuth();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(urlDate || null);
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   // Selettore locale
   const [restaurants, setRestaurants] = useState([]);
-  const [selectedRestId, setSelectedRestId] = useState(() => localStorage.getItem('closures_rest_id') || '');
+  const [selectedRestId, setSelectedRestId] = useState(
+    () => urlRid || localStorage.getItem('closures_rest_id') || ''
+  );
+
+  // Sync URL params → state (per supportare navigazione da Chiusure Excel)
+  useEffect(() => {
+    if (urlDate) setSelectedDate(urlDate);
+    if (urlRid) setSelectedRestId(urlRid);
+  }, [urlDate, urlRid]);
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 

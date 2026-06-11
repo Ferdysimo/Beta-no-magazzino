@@ -8,37 +8,39 @@ import { ArrowLeft, Plus, Trash2, RefreshCw } from 'lucide-react';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-// Etichette campi cassa (allineate a ReportBetaPage)
-const CASH_LABELS = {
-  mattina: 'Mattina', altro: 'Altro', arr: 'Arr.',
-  glo: 'Glo', just: 'Just', delv: 'Delv',
-  bp: 'BP', sat: 'Sat', ft: 'Ft', pos: 'POS', vers: 'Vers',
-  sp5: 'Sp.5€', sp2: 'Sp.2€', sp1: 'Sp.1€', sp05: 'Sp.0,5€',
-  cd5: 'Cd.5€', cd2: 'Cd.2€', cd1: 'Cd.1€', cd05: 'Cd.0,5€',
-};
-
-// Colore di sfondo dell'header colonna per gruppo
-const groupOf = (f) => {
-  if (['mattina', 'altro', 'arr'].includes(f)) return 'entrate';
-  if (['glo', 'just', 'delv'].includes(f)) return 'delivery';
-  if (['bp', 'sat', 'ft', 'pos', 'vers'].includes(f)) return 'pagamenti';
-  if (f.startsWith('sp')) return 'spicci';
-  if (f.startsWith('cd')) return 'cassetto';
-  return 'altro';
-};
-const GROUP_BG = {
-  entrate: '#dcfce7',     // verde chiaro
-  delivery: '#ffedd5',    // arancio chiaro
-  pagamenti: '#dbeafe',   // azzurro chiaro
-  spicci: '#fef3c7',      // giallo chiaro
-  cassetto: '#fde68a',    // giallo più carico
-};
-
+// Etichette descrittive bevande (per tooltip)
 const BEV_NAMES = {
   AL: 'Acqua nat.', AG: 'Acqua friz.', C: 'Coca', CZ: 'Coca Zero',
   F: 'Fanta', S: 'Sprite', B: 'Peroni', VB: 'Vino B.', VR: 'Vino R.',
 };
-const BEV_BG = '#ecfeff'; // ciano leggero
+
+// Gruppi macro per le bevande con i loro colori. Le 4 metriche sono:
+const BEV_GROUPS = [
+  { key: 'inUsc',  label: 'INGRESSI / USCITE', headerBg: '#bbf7d0', cellBg: '#f0fdf4' }, // verde
+  { key: 'scarti', label: 'SCARTI',            headerBg: '#fecaca', cellBg: '#fef2f2' }, // rosso chiaro
+  { key: 'sera',   label: 'MAGAZZINO SERA',    headerBg: '#bfdbfe', cellBg: '#eff6ff' }, // blu chiaro
+  { key: 'qty',    label: 'VENDITE',           headerBg: '#fde68a', cellBg: '#fffbeb' }, // giallo
+];
+
+// Cassa: campi €
+const CASH_EUR_FIELDS = [
+  { key: 'arr',     label: 'Arr.',  hint: 'Arrotondamento' },
+  { key: 'altro',   label: 'Altro', hint: 'Altre entrate' },
+  { key: 'vers',    label: 'Vers.', hint: 'Versamento' },
+  { key: 'glo',     label: 'Glo',   hint: 'Glovo' },
+  { key: 'just',    label: 'Just',  hint: 'JustEat' },
+  { key: 'delv',    label: 'Del',   hint: 'Deliveroo' },
+  { key: 'bp',      label: 'BP',    hint: 'Banca Popolare' },
+  { key: 'sat',     label: 'SAT',   hint: 'Satispay' },
+  { key: 'pos',     label: 'POS',   hint: 'Cassa POS' },
+  { key: 'ft',      label: 'FT',    hint: 'Fatture' },
+];
+const SPICCI_FIELDS = [
+  { key: 'sp5',  label: 'Sp.5€'   },
+  { key: 'sp2',  label: 'Sp.2€'   },
+  { key: 'sp1',  label: 'Sp.1€'   },
+  { key: 'sp05', label: 'Sp.0,5€' },
+];
 
 const fmtEur = (n) => (Number(n) || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtInt = (n) => {
@@ -56,25 +58,29 @@ const dayName = (s) => {
   } catch (e) { return ''; }
 };
 
-const Th = ({ children, bg, sticky, left, width, title }) => (
+// ─── Cell helpers ──────────────────────────────────────────────────────────
+const Th = ({ children, bg, color, sticky, top, left, width, title, colSpan, borderTop }) => (
   <th
     title={title || ''}
+    colSpan={colSpan}
     style={{
-      background: bg || '#374151',
-      color: bg ? '#1f2937' : '#fff',
+      background: bg || '#1f2937',
+      color: color || '#fff',
       position: sticky ? 'sticky' : undefined,
-      top: 0,
+      top: top !== undefined ? top : undefined,
       left: left !== undefined ? left : undefined,
-      zIndex: sticky ? (left !== undefined ? 30 : 20) : undefined,
+      zIndex: sticky ? (left !== undefined ? 40 : 30) : undefined,
       width: width || undefined,
       minWidth: width || undefined,
-      borderRight: '1px solid #d1d5db',
-      borderBottom: '1px solid #d1d5db',
+      borderRight: '1px solid #94a3b8',
+      borderBottom: '1px solid #94a3b8',
+      borderTop: borderTop || undefined,
       padding: '4px 6px',
       fontWeight: 700,
       fontSize: 11,
       textAlign: 'center',
       whiteSpace: 'nowrap',
+      letterSpacing: '0.02em',
     }}
   >
     {children}
@@ -95,7 +101,7 @@ const Td = ({ children, bg, sticky, left, mono, align = 'right', bold, color, ti
       padding: '3px 6px',
       fontFamily: mono ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : undefined,
       fontVariantNumeric: 'tabular-nums',
-      fontSize: 11,
+      fontSize: 12,
       textAlign: align,
       whiteSpace: 'nowrap',
       fontWeight: bold ? 700 : 400,
@@ -112,18 +118,14 @@ const ChiusureExcelPage = () => {
   const [selectedRestId, setSelectedRestId] = useState(() => localStorage.getItem('closures_excel_rest_id') || '');
   const [days, setDays] = useState(() => Number(localStorage.getItem('closures_excel_days')) || 30);
   const [items, setItems] = useState([]);
-  const [cashFields, setCashFields] = useState([]);
   const [bevSigle, setBevSigle] = useState([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
-
-  // Restaurant effettivo: o quello scelto, o il primo della lista
   const effectiveRestId = selectedRestId || restaurants[0]?.id || '';
 
-  // Carico lista ristoranti
   useEffect(() => {
     if (!isAdmin || !token) return;
     (async () => {
@@ -138,7 +140,7 @@ const ChiusureExcelPage = () => {
 
   const loadGrid = useCallback(async () => {
     if (!isAdmin || !token || !effectiveRestId) {
-      setItems([]); setCashFields([]); setBevSigle([]); return;
+      setItems([]); setBevSigle([]); return;
     }
     setLoading(true);
     try {
@@ -147,7 +149,6 @@ const ChiusureExcelPage = () => {
         { headers }
       );
       setItems(res.data?.items || []);
-      setCashFields(res.data?.cash_fields || []);
       setBevSigle(res.data?.bev_sigle || []);
     } catch (e) {
       console.error('load grid', e);
@@ -159,7 +160,6 @@ const ChiusureExcelPage = () => {
 
   useEffect(() => { loadGrid(); }, [loadGrid]);
 
-  // Sync localStorage quando cambia selectedRestId/days
   useEffect(() => {
     if (selectedRestId) localStorage.setItem('closures_excel_rest_id', selectedRestId);
   }, [selectedRestId]);
@@ -178,56 +178,53 @@ const ChiusureExcelPage = () => {
       }, { headers });
       setMsg(`Generate ${res.data.cash_rows_written} chiusure mock (${res.data.bev_rows_written} righe bevande)`);
       await loadGrid();
-    } catch (e) {
-      console.error(e); setMsg('Errore generazione mock');
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { console.error(e); setMsg('Errore generazione mock'); } finally { setBusy(false); }
   };
 
   const onDeleteMock = async () => {
     if (!effectiveRestId) return;
-    const ok = window.confirm('Cancellare TUTTE le chiusure mock per il locale selezionato? (Solo le righe con flag mock:true.)');
+    const ok = window.confirm('Cancellare TUTTE le chiusure mock per il locale selezionato?');
     if (!ok) return;
     setBusy(true); setMsg('');
     try {
       const res = await axios.delete(`${API}/admin/closures/mock?restaurant_id=${effectiveRestId}`, { headers });
       setMsg(`Cancellate ${res.data.cash_deleted} chiusure mock (${res.data.bev_deleted} righe bevande)`);
       await loadGrid();
-    } catch (e) {
-      console.error(e); setMsg('Errore cancellazione mock');
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { console.error(e); setMsg('Errore cancellazione mock'); } finally { setBusy(false); }
   };
 
-  // Totali colonna (footer)
+  const onRowClick = (date) => {
+    if (!effectiveRestId || !date) return;
+    navigate(`/storico-chiusure?date=${date}&rid=${effectiveRestId}`);
+  };
+
+  // Totali colonna
   const totals = useMemo(() => {
-    const t = { cash: {}, bev: {}, paste_count: 0, paste_total_eur: 0, cash_sera: 0, bev_total_qty: 0, bev_total_inc: 0, orders_total: 0 };
-    cashFields.forEach(f => { t.cash[f] = 0; });
-    bevSigle.forEach(sigla => {
-      t.bev[sigla] = { mattina: 0, inUsc: 0, scarti: 0, sera: 0, qty: 0, incasso: 0 };
+    const t = {
+      bev: {}, // bev[group][sigla]
+      paste_count: 0, cash: {}, spicci: {}, cash_sera: 0,
+    };
+    BEV_GROUPS.forEach(g => {
+      t.bev[g.key] = {};
+      bevSigle.forEach(s => { t.bev[g.key][s] = 0; });
     });
+    CASH_EUR_FIELDS.forEach(f => { t.cash[f.key] = 0; });
+    SPICCI_FIELDS.forEach(f => { t.spicci[f.key] = 0; });
+
     items.forEach(r => {
-      cashFields.forEach(f => { t.cash[f] += Number(r.cash?.[f] || 0); });
       bevSigle.forEach(sigla => {
         const b = r.beverages?.[sigla] || {};
-        t.bev[sigla].mattina += Number(b.mattina || 0);
-        t.bev[sigla].inUsc += Number(b.inUsc || 0);
-        t.bev[sigla].scarti += Number(b.scarti || 0);
-        t.bev[sigla].sera += Number(b.sera || 0);
-        t.bev[sigla].qty += Number(b.qty || 0);
-        t.bev[sigla].incasso += Number(b.incasso || 0);
+        BEV_GROUPS.forEach(g => {
+          t.bev[g.key][sigla] += Number(b[g.key] || 0);
+        });
       });
       t.paste_count += Number(r.paste_count || 0);
-      t.paste_total_eur += Number(r.paste_total_eur || 0);
+      CASH_EUR_FIELDS.forEach(f => { t.cash[f.key] += Number(r.cash?.[f.key] || 0); });
+      SPICCI_FIELDS.forEach(f => { t.spicci[f.key] += Number(r.cash?.[f.key] || 0); });
       t.cash_sera += Number(r.cash_sera || 0);
-      t.bev_total_qty += Number(r.bev_total_qty || 0);
-      t.bev_total_inc += Number(r.bev_total_inc || 0);
-      t.orders_total += Number(r.orders_total || 0);
     });
     return t;
-  }, [items, cashFields, bevSigle]);
+  }, [items, bevSigle]);
 
   if (!isAdmin) {
     return (
@@ -242,9 +239,16 @@ const ChiusureExcelPage = () => {
     );
   }
 
-  // Posizioni colonne sticky a sinistra
-  const DATE_W = 110;
+  // Posizioni sticky a sinistra
+  const DATE_W = 100;
   const DAY_W = 50;
+
+  // Larghezza colonne (px) — uniformi per gruppo
+  const BEV_W = 38;       // bevande: piccola, numero
+  const PASTE_W = 60;
+  const EUR_W = 78;       // colonne €
+  const SPICCI_W = 56;
+  const SERA_W = 92;
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -258,7 +262,7 @@ const ChiusureExcelPage = () => {
           >
             <ArrowLeft size={16} /> Home
           </button>
-          <span className="text-[11px] text-gray-500">Vista Excel — una riga per giorno</span>
+          <span className="text-[11px] text-gray-500">Vista Excel — una riga per giorno (clicca per aprire il dettaglio)</span>
         </div>
 
         <h1 className="font-heading text-xl sm:text-2xl font-bold text-gray-900 uppercase mb-3">
@@ -327,7 +331,7 @@ const ChiusureExcelPage = () => {
           </div>
 
           <div className="w-full text-[11px] text-gray-500 mt-1">
-            {items.length} {items.length === 1 ? 'riga' : 'righe'} • somma in fondo
+            {items.length} {items.length === 1 ? 'riga' : 'righe'} • somma totale in fondo
             {msg && <span className="ml-3 text-blue-700 font-medium">• {msg}</span>}
           </div>
         </div>
@@ -348,127 +352,145 @@ const ChiusureExcelPage = () => {
           ) : (
             <table style={{ borderCollapse: 'separate', borderSpacing: 0, minWidth: '100%' }}>
               <thead>
-                {/* Riga 1: gruppi */}
+                {/* Riga 1: gruppi macro */}
                 <tr>
-                  <Th sticky left={0} width={DATE_W} bg="#374151">Data</Th>
-                  <Th sticky left={DATE_W} width={DAY_W} bg="#374151">Giorno</Th>
-                  <Th sticky bg="#bbf7d0">CASSA — Entrate</Th>
-                  <Th sticky bg="#fed7aa">Delivery</Th>
-                  <Th sticky bg="#bfdbfe">Pagamenti / Vers.</Th>
-                  <Th sticky bg="#fde68a">Spicci (mazzette)</Th>
-                  <Th sticky bg="#fcd34d">Cassetto (stock)</Th>
-                  <Th sticky bg="#a7f3d0">Paste</Th>
-                  <Th sticky bg={BEV_BG} title="Per ogni sigla: Mattina | Ingressi | Scarti | Sera | Vendute (qty) | €">
-                    Bevande (per sigla)
+                  <Th sticky top={0} left={0} width={DATE_W} bg="#0f172a">Data</Th>
+                  <Th sticky top={0} left={DATE_W} width={DAY_W} bg="#0f172a">Giorno</Th>
+                  {BEV_GROUPS.map(g => (
+                    <Th key={g.key} sticky top={0} colSpan={bevSigle.length}
+                        bg={g.headerBg} color="#111827" title={`${g.label} per sigla bevanda`}>
+                      {g.label}
+                    </Th>
+                  ))}
+                  <Th sticky top={0} bg="#a7f3d0" color="#111827" title="Numero totale di paste mandate quel giorno">
+                    TOT PIATTI
                   </Th>
-                  <Th sticky bg="#fef9c3">Tot. Bev.</Th>
-                  <Th sticky bg="#facc15">CASH SERA</Th>
+                  <Th sticky top={0} colSpan={CASH_EUR_FIELDS.length} bg="#bfdbfe" color="#111827">
+                    CASSA — voci €
+                  </Th>
+                  <Th sticky top={0} colSpan={SPICCI_FIELDS.length} bg="#fde68a" color="#111827"
+                      title="Numero di mazzette di spicci aperte">
+                    SPICCI (aperti)
+                  </Th>
+                  <Th sticky top={0} bg="#facc15" color="#111827" title="Cash in cassa sera (cassa + paste + bevande)">
+                    CASH SERA
+                  </Th>
                 </tr>
-                {/* Riga 2: campi */}
+
+                {/* Riga 2: header colonna */}
                 <tr>
-                  <Th sticky left={0} width={DATE_W} bg="#1f2937">YYYY-MM-DD</Th>
-                  <Th sticky left={DATE_W} width={DAY_W} bg="#1f2937">d.s.</Th>
-                  {/* Campi cash espansi sotto i loro gruppi */}
-                  {['mattina','altro','arr'].map(f => (
-                    <Th key={f} bg={GROUP_BG.entrate}>{CASH_LABELS[f]}</Th>
+                  <Th sticky top={28} left={0} width={DATE_W} bg="#334155">YYYY-MM-DD</Th>
+                  <Th sticky top={28} left={DATE_W} width={DAY_W} bg="#334155">d.s.</Th>
+                  {BEV_GROUPS.map(g => (
+                    bevSigle.map(sigla => (
+                      <Th key={`${g.key}-${sigla}`} sticky top={28} bg={g.headerBg} color="#111827"
+                          width={BEV_W} title={`${BEV_NAMES[sigla] || sigla} — ${g.label}`}>
+                        {sigla}
+                      </Th>
+                    ))
                   ))}
-                  {['glo','just','delv'].map(f => (
-                    <Th key={f} bg={GROUP_BG.delivery}>{CASH_LABELS[f]}</Th>
+                  <Th sticky top={28} bg="#a7f3d0" color="#111827" width={PASTE_W}>N°</Th>
+                  {CASH_EUR_FIELDS.map(f => (
+                    <Th key={f.key} sticky top={28} bg="#bfdbfe" color="#111827" width={EUR_W} title={f.hint}>
+                      {f.label}
+                    </Th>
                   ))}
-                  {['bp','sat','ft','pos','vers'].map(f => (
-                    <Th key={f} bg={GROUP_BG.pagamenti}>{CASH_LABELS[f]}</Th>
+                  {SPICCI_FIELDS.map(f => (
+                    <Th key={f.key} sticky top={28} bg="#fde68a" color="#111827" width={SPICCI_W}>
+                      {f.label}
+                    </Th>
                   ))}
-                  {['sp5','sp2','sp1','sp05'].map(f => (
-                    <Th key={f} bg={GROUP_BG.spicci}>{CASH_LABELS[f]}</Th>
-                  ))}
-                  {['cd5','cd2','cd1','cd05'].map(f => (
-                    <Th key={f} bg={GROUP_BG.cassetto}>{CASH_LABELS[f]}</Th>
-                  ))}
-                  {/* Paste */}
-                  <Th bg="#a7f3d0">N°</Th>
-                  <Th bg="#a7f3d0">€</Th>
-                  {/* Bevande: per ogni sigla 6 colonne (Mat, In, Sc, Sera, Qty, €) */}
-                  {bevSigle.map(sigla => (
-                    <React.Fragment key={sigla}>
-                      <Th bg={BEV_BG} title={`${BEV_NAMES[sigla] || sigla} — Mattina`}>{sigla} Mat</Th>
-                      <Th bg={BEV_BG} title={`${BEV_NAMES[sigla] || sigla} — Ingressi`}>{sigla} In</Th>
-                      <Th bg={BEV_BG} title={`${BEV_NAMES[sigla] || sigla} — Scarti`}>{sigla} Sc</Th>
-                      <Th bg={BEV_BG} title={`${BEV_NAMES[sigla] || sigla} — Sera`}>{sigla} Ser</Th>
-                      <Th bg={BEV_BG} title={`${BEV_NAMES[sigla] || sigla} — Vendute`}>{sigla} Qty</Th>
-                      <Th bg={BEV_BG} title={`${BEV_NAMES[sigla] || sigla} — Incasso €`}>{sigla} €</Th>
-                    </React.Fragment>
-                  ))}
-                  {/* Tot bev */}
-                  <Th bg="#fef9c3">Qty</Th>
-                  <Th bg="#fef9c3">€</Th>
-                  {/* Cash sera */}
-                  <Th bg="#facc15">€</Th>
+                  <Th sticky top={28} bg="#facc15" color="#111827" width={SERA_W}>€</Th>
                 </tr>
               </thead>
+
               <tbody>
                 {items.map((r, idx) => {
-                  const rowBg = r.is_mock ? '#fffbeb' : (idx % 2 === 0 ? '#fff' : '#f9fafb');
+                  const baseBg = r.is_mock ? '#fffbeb' : (idx % 2 === 0 ? '#ffffff' : '#f9fafb');
                   return (
                     <tr
                       key={r.date}
                       data-testid={`closure-row-${r.date}`}
-                      style={{ background: rowBg }}
+                      onClick={() => onRowClick(r.date)}
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.outline = '2px solid #F5C518'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.outline = 'none'; }}
+                      title={`Clicca per aprire il dettaglio del ${fmtDateIT(r.date)}`}
                     >
-                      <Td sticky left={0} bg={rowBg} bold align="center"
+                      <Td sticky left={0} bg={baseBg} bold align="center"
                           title={r.is_mock ? 'Riga MOCK (dati di test)' : ''}>
-                        {fmtDateIT(r.date)}{r.is_mock && <span title="Mock" style={{color:'#92400e', marginLeft:4}}>✱</span>}
+                        {fmtDateIT(r.date)}
+                        {r.is_mock && <span style={{ color: '#92400e', marginLeft: 4 }} title="Mock">✱</span>}
                       </Td>
-                      <Td sticky left={DATE_W} bg={rowBg} align="center" color="#6b7280">{dayName(r.date)}</Td>
-                      {cashFields.map(f => (
-                        <Td key={f} bg={rowBg} mono>{fmtEur(r.cash?.[f] || 0)}</Td>
+                      <Td sticky left={DATE_W} bg={baseBg} align="center" color="#6b7280">
+                        {dayName(r.date)}
+                      </Td>
+
+                      {BEV_GROUPS.map(g => (
+                        bevSigle.map(sigla => {
+                          const b = r.beverages?.[sigla] || {};
+                          const v = b[g.key];
+                          const cellBg = r.is_mock ? baseBg : g.cellBg;
+                          const isVendita = g.key === 'qty';
+                          return (
+                            <Td key={`${g.key}-${sigla}`} bg={cellBg} mono align="center"
+                                bold={isVendita}
+                                color={isVendita ? (Number(v) > 0 ? '#15803d' : '#cbd5e1') : '#374151'}>
+                              {fmtInt(v)}
+                            </Td>
+                          );
+                        })
                       ))}
-                      <Td bg={rowBg} mono align="center" bold>{r.paste_count || ''}</Td>
-                      <Td bg={rowBg} mono>{fmtEur(r.paste_total_eur)}</Td>
-                      {bevSigle.map(sigla => {
-                        const b = r.beverages?.[sigla] || {};
-                        return (
-                          <React.Fragment key={sigla}>
-                            <Td bg={rowBg} mono>{fmtInt(b.mattina)}</Td>
-                            <Td bg={rowBg} mono>{fmtInt(b.inUsc)}</Td>
-                            <Td bg={rowBg} mono>{fmtInt(b.scarti)}</Td>
-                            <Td bg={rowBg} mono>{fmtInt(b.sera)}</Td>
-                            <Td bg={rowBg} mono bold color={b.qty > 0 ? '#15803d' : '#9ca3af'}>{fmtInt(b.qty)}</Td>
-                            <Td bg={rowBg} mono>{fmtEur(b.incasso)}</Td>
-                          </React.Fragment>
-                        );
-                      })}
-                      <Td bg={rowBg} mono bold>{r.bev_total_qty || ''}</Td>
-                      <Td bg={rowBg} mono>{fmtEur(r.bev_total_inc)}</Td>
-                      <Td bg={rowBg} mono bold color="#854d0e">{fmtEur(r.cash_sera)}</Td>
+
+                      <Td bg={baseBg} mono align="center" bold>
+                        {r.paste_count > 0 ? r.paste_count : ''}
+                      </Td>
+
+                      {CASH_EUR_FIELDS.map(f => (
+                        <Td key={f.key} bg={baseBg} mono>
+                          {fmtEur(r.cash?.[f.key] || 0)}
+                        </Td>
+                      ))}
+
+                      {SPICCI_FIELDS.map(f => (
+                        <Td key={f.key} bg={baseBg} mono align="center">
+                          {fmtInt(r.cash?.[f.key])}
+                        </Td>
+                      ))}
+
+                      <Td bg={baseBg} mono bold color="#854d0e">
+                        {fmtEur(r.cash_sera)}
+                      </Td>
                     </tr>
                   );
                 })}
               </tbody>
+
               <tfoot>
-                <tr style={{ background: '#1f2937', color: '#fff', position: 'sticky', bottom: 0 }}>
-                  <Td sticky left={0} bg="#1f2937" color="#fff" bold align="center">TOTALE</Td>
-                  <Td sticky left={DATE_W} bg="#1f2937" color="#fff" align="center">{items.length}gg</Td>
-                  {cashFields.map(f => (
-                    <Td key={f} bg="#1f2937" color="#fde68a" mono bold>{fmtEur(totals.cash[f])}</Td>
+                <tr style={{ background: '#0f172a', color: '#fff' }}>
+                  <Td sticky left={0} bg="#0f172a" color="#fff" bold align="center">TOTALE</Td>
+                  <Td sticky left={DATE_W} bg="#0f172a" color="#cbd5e1" align="center">{items.length}gg</Td>
+
+                  {BEV_GROUPS.map(g => (
+                    bevSigle.map(sigla => (
+                      <Td key={`${g.key}-${sigla}`} bg="#0f172a"
+                          color={g.key === 'qty' ? '#fde68a' : '#fff'} mono align="center"
+                          bold={g.key === 'qty'}>
+                        {fmtInt(totals.bev[g.key][sigla])}
+                      </Td>
+                    ))
                   ))}
-                  <Td bg="#1f2937" color="#fff" mono bold align="center">{totals.paste_count}</Td>
-                  <Td bg="#1f2937" color="#fde68a" mono bold>{fmtEur(totals.paste_total_eur)}</Td>
-                  {bevSigle.map(sigla => {
-                    const t = totals.bev[sigla];
-                    return (
-                      <React.Fragment key={sigla}>
-                        <Td bg="#1f2937" color="#fff" mono>{fmtInt(t.mattina)}</Td>
-                        <Td bg="#1f2937" color="#fff" mono>{fmtInt(t.inUsc)}</Td>
-                        <Td bg="#1f2937" color="#fff" mono>{fmtInt(t.scarti)}</Td>
-                        <Td bg="#1f2937" color="#fff" mono>{fmtInt(t.sera)}</Td>
-                        <Td bg="#1f2937" color="#a7f3d0" mono bold>{fmtInt(t.qty)}</Td>
-                        <Td bg="#1f2937" color="#fde68a" mono bold>{fmtEur(t.incasso)}</Td>
-                      </React.Fragment>
-                    );
-                  })}
-                  <Td bg="#1f2937" color="#a7f3d0" mono bold>{totals.bev_total_qty}</Td>
-                  <Td bg="#1f2937" color="#fde68a" mono bold>{fmtEur(totals.bev_total_inc)}</Td>
-                  <Td bg="#1f2937" color="#facc15" mono bold>{fmtEur(totals.cash_sera)}</Td>
+
+                  <Td bg="#0f172a" color="#a7f3d0" mono bold align="center">{totals.paste_count}</Td>
+                  {CASH_EUR_FIELDS.map(f => (
+                    <Td key={f.key} bg="#0f172a" color="#fff" mono bold>{fmtEur(totals.cash[f.key])}</Td>
+                  ))}
+                  {SPICCI_FIELDS.map(f => (
+                    <Td key={f.key} bg="#0f172a" color="#fff" mono bold align="center">
+                      {fmtInt(totals.spicci[f.key])}
+                    </Td>
+                  ))}
+                  <Td bg="#0f172a" color="#facc15" mono bold>{fmtEur(totals.cash_sera)}</Td>
                 </tr>
               </tfoot>
             </table>
@@ -478,8 +500,8 @@ const ChiusureExcelPage = () => {
         {/* Legenda */}
         <div className="mt-3 text-[11px] text-gray-500 flex flex-wrap gap-3">
           <span>✱ riga mock (dati di test)</span>
-          <span>Colonne fisse: data + giorno della settimana</span>
-          <span>Scroll orizzontale per scorrere tutte le colonne</span>
+          <span>Clicca una riga per aprire il dettaglio chiusura</span>
+          <span>Bevande: AL=Acqua nat. · AG=Acqua friz. · C=Coca · CZ=Coca Zero · F=Fanta · S=Sprite · B=Peroni · VB=Vino B. · VR=Vino R.</span>
         </div>
       </main>
     </div>
