@@ -201,6 +201,9 @@ const ReportBetaPageInner = () => {
   // Forza modifica MAGAZZINO MATTINA bevande (normalmente è read-only: allo
   // scatto di mezzanotte viene auto-popolato dal MAGAZZINO SERA della sera prima).
   const [forceMagMattina, setForceMagMattina] = useState(false);
+  // Toggle collassamento sezioni per ridurre ingombro visivo
+  const [showScarti, setShowScarti] = useState(false);
+  const [showMagMattina, setShowMagMattina] = useState(false);
   // Auto-popolamento colonna PASTE dalle paste mandate dal Cassa.
   // - manualPasteOverride=false (default): pasteText è sincronizzato con autoPasteText
   // - manualPasteOverride=true: l'utente ha sbloccato la modifica manuale (override)
@@ -901,7 +904,7 @@ const ReportBetaPageInner = () => {
               title={manualPasteOverride
                 ? 'Modifica manuale attiva'
                 : 'Auto-popolato dalle paste mandate dal Cassa (live)'}
-              className={`w-full flex-1 min-h-[120px] p-2 border rounded font-mono text-xs focus:outline-none resize-none ${
+              className={`w-full flex-1 min-h-[120px] p-2 border rounded text-[13px] leading-snug tracking-wide font-semibold text-gray-800 focus:outline-none resize-none ${
                 manualPasteOverride
                   ? 'border-rose-300 focus:border-rose-500 bg-white'
                   : 'border-gray-200 bg-gray-50 cursor-not-allowed'
@@ -1001,7 +1004,7 @@ const ReportBetaPageInner = () => {
             {/* ============ RIEPILOGO CASSA ============ */}
             <div className="bg-white rounded border border-gray-200 p-1.5">
               <div className="flex items-baseline justify-between mb-1 gap-2 flex-wrap">
-                <h2 className="text-xs font-bold text-gray-800 uppercase">Riepilogo Cassa</h2>
+                <h2 className="text-xs font-bold text-gray-800 uppercase">Movimentazione finanziaria</h2>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -1310,7 +1313,7 @@ const ReportBetaPageInner = () => {
             {/* ============ INGRESSI (1 quadratino per bevanda, valore in CASSE — moltiplicato ×24 prima di salvare) ============ */}
             <div className="bg-white rounded border border-gray-200 p-1.5">
               <div className="flex items-baseline justify-between mb-1">
-                <h2 className="text-xs font-bold text-gray-800 uppercase">Ingressi</h2>
+                <h2 className="text-xs font-bold text-gray-800 uppercase">Ingressi / Uscite</h2>
                 <span className="text-[10px] text-gray-400">
                   Casse (×{PEZZI_PER_CASSA}) · sync live con Magazzino Bevande · supporta formule "=..."
                 </span>
@@ -1370,17 +1373,29 @@ const ReportBetaPageInner = () => {
             {/* ============ SCARTI (1 quadratino per bevanda, unità singole — in sync con Magazzino Bevande) ============ */}
             <div className="bg-white rounded border border-gray-200 p-1.5">
               <div className="flex items-baseline justify-between mb-1 gap-2">
-                <h2 className="text-xs font-bold text-gray-800 uppercase">Scarti</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xs font-bold text-gray-800 uppercase">Scarti</h2>
+                  <button
+                    type="button"
+                    data-testid="toggle-scarti"
+                    onClick={() => setShowScarti(v => !v)}
+                    title={showScarti ? 'Nascondi Scarti' : 'Mostra Scarti'}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300"
+                  >
+                    {showScarti ? '▼ nascondi' : '▶ mostra'}
+                  </button>
+                </div>
                 <span className="text-[10px] text-gray-400">
                   Unità singole · sync live con Magazzino Bevande · supporta formule "=..."
                 </span>
               </div>
-              {beverages.length === 0 ? (
-                <div className="h-8 flex items-center justify-center text-xs text-gray-400 italic">
-                  Nessuna bevanda configurata.
-                </div>
-              ) : (
-                <div className="flex items-stretch gap-2">
+              {showScarti && (
+                beverages.length === 0 ? (
+                  <div className="h-8 flex items-center justify-center text-xs text-gray-400 italic">
+                    Nessuna bevanda configurata.
+                  </div>
+                ) : (
+                  <div className="flex items-stretch gap-2">
                   {beverages.map(b => {
                     const row = bevCounts[b.sigla] || {};
                     const scRaw = row.scarti ?? '';
@@ -1418,6 +1433,7 @@ const ReportBetaPageInner = () => {
                     );
                   })}
                 </div>
+                )
               )}
             </div>
 
@@ -1426,6 +1442,15 @@ const ReportBetaPageInner = () => {
               <div className="flex items-baseline justify-between mb-1 gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
                   <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Mattina</h2>
+                  <button
+                    type="button"
+                    data-testid="toggle-mag-mattina"
+                    onClick={() => setShowMagMattina(v => !v)}
+                    title={showMagMattina ? 'Nascondi Magazzino Mattina' : 'Mostra Magazzino Mattina'}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300"
+                  >
+                    {showMagMattina ? '▼ nascondi' : '▶ mostra'}
+                  </button>
                   <button
                     type="button"
                     data-testid="force-mag-mattina-toggle"
@@ -1446,7 +1471,8 @@ const ReportBetaPageInner = () => {
                     : `Auto da Magazzino Sera del giorno prima · Casse (×${PEZZI_PER_CASSA}) + Sfuse`}
                 </span>
               </div>
-              {beverages.length === 0 ? (
+              {showMagMattina && (
+                beverages.length === 0 ? (
                 <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
                   Nessuna bevanda configurata.
                 </div>
@@ -1531,6 +1557,7 @@ const ReportBetaPageInner = () => {
                     );
                   })}
                 </div>
+              )
               )}
             </div>
 
