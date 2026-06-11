@@ -168,3 +168,21 @@ Applicate 7 modifiche di layout/logica richieste dall'utente su `/app/frontend/s
 - Nessun placeholder trasparente (rispetta richiesta utente).
 - Handler `handleInUscChange(sigla, value)` con debounce 600ms.
 - Test E2E manuale: AL Ingressi=12 → persistito a reload ✓.
+
+## Sessione fork — 11/06/2026 (Chiusure Excel — Vista Admin a griglia)
+- **Nuova pagina Admin `/chiusure-excel`** (`ChiusureExcelPage.js`) — vista in stile foglio Excel, una riga per giorno con TUTTE le colonne cassa + bevande visibili in scroll orizzontale.
+- Selettore locale (uno alla volta) + selettore periodo (7/14/30/60/90/180/365 giorni).
+- Colonne raggruppate con colori coerenti: Entrate (verde), Delivery (arancio), Pagamenti/Vers (azzurro), Spicci (giallo), Cassetto (oro), Paste, Bevande per sigla (Mat/In/Sc/Ser/Qty/€), Tot. Bev., CASH SERA.
+- Colonna **Data + Giorno della settimana sticky** a sinistra; header e footer sticky.
+- Footer con TOTALI di colonna (somme per il periodo).
+- Mock badge ✱ per righe generate a scopo test.
+- **Backend nuovi endpoint** in `server.py` (prima di `/admin/closures/{date_str}` per evitare shadowing):
+  - `GET /api/admin/closures/grid?days=N&restaurant_id=X` — restituisce `items[]` con tutti i campi cash, bev per sigla, totali calcolati, paste count + €, cash_sera completo. Returns `cash_fields`, `bev_sigle`, `bev_prices` per il rendering dinamico.
+  - `POST /api/admin/closures/generate-mock` — genera N (default 7) chiusure fittizie marcate `mock:true` con valori realistici (mattina 80-250€, vendite bev, paste random).
+  - `DELETE /api/admin/closures/mock?restaurant_id=X` — elimina solo righe `mock:true`, NON tocca chiusure reali.
+- Pulsante **Genera 7 mock** + **Cancella mock** nella toolbar della pagina.
+- Pulsante **"Chiusure Excel"** aggiunto al pannello selettore Admin in `HomePage.js`.
+- Route registrata in `App.js`: `/chiusure-excel`.
+- Test backend via curl: generate (7 cash + 63 bev), grid (7 items), delete (7+63), non-admin → 403. Tutti OK ✓.
+- Test frontend via screenshot tool: navigazione Home → Chiusure Excel funziona, griglia rendering corretto con tutte le colonne, badge mock ✱ visibile, totali in footer corretti.
+

@@ -3835,6 +3835,242 @@ async def _build_closure_detail(date_str: str, restaurant_id: Optional[str]) -> 
     }
 
 
+@api_router.get("/admin/closures/grid")
+async def closures_grid_admin(
+    days: int = 30,
+    restaurant_id: Optional[str] = None,
+    token_data: dict = Depends(verify_token),
+):
+    """Vista Excel-like: una riga per giorno con TUTTI i campi cash + bevande
+    (mattina/inUsc/scarti/sera + qty + incasso per ogni sigla) + totali calcolati.
+    Filtrabile per restaurant_id (richiesto per la vista per-locale)."""
+    if token_data.get("role") not in ("admin", "supervisor"):
+        raise HTTPException(status_code=403, detail="Admin only")
+    days = max(1, min(int(days or 30), 365))
+    cutoff = (datetime.now(ROME_TZ) - timedelta(days=days)).strftime("%Y-%m-%d")
+    today = _today_rome_str()
+    base_q = {"date_rome": {"$gte": cutoff, "$lt": today}}
+    if restaurant_id:
+        base_q["restaurant_id"] = restaurant_id
+
+    dates: set = set()
+    async for d in db.cash_daily_counts.find(base_q, {"date_rome": 1, "_id": 0}):
+        dates.add(d["date_rome"])
+    async for d in db.beverage_daily_counts.find(base_q, {"date_rome": 1, "_id": 0}):
+        dates.add(d["date_rome"])
+
+    bev_prices = {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
+    bev_sigle_sorted = [b["sigla"] for b in sorted(BEVERAGES_CATALOG, key=lambda x: x.get("sort_order", 999))]
+
+    rows: List[Dict] = []
+    for date_str in sorted(dates, reverse=True):
+        cash_q = {"date_rome": date_str}
+        bev_q = {"date_rome": date_str}
+        if restaurant_id:
+            cash_q["restaurant_id"] = restaurant_id
+            bev_q["restaurant_id"] = restaurant_id
+        cash_doc = await db.cash_daily_counts.find_one(cash_q, {"_id": 0}) or {}
+        bev_docs = await db.beverage_daily_counts.find(bev_q, {"_id": 0}).to_list(50)
+        bev_by_sigla = {b["sigla"]: b for b in bev_docs}
+
+        cash_flat: Dict[str, float] = {}
+        for f in ALL_CASH_FIELDS:
+            cash_flat[f] = _eval_cash_value(cash_doc.get(f, ""))
+
+        bev_flat: Dict[str, Dict] = {}
+        bev_total_qty = 0
+        bev_total_inc = 0.0
+        for sigla in bev_sigle_sorted:
+            r = bev_by_sigla.get(sigla, {})
+            m = _eval_cash_value(r.get("mattina"))
+            u = _eval_cash_value(r.get("inUsc"))
+            s = _eval_cash_value(r.get("scarti"))
+            e = _eval_cash_value(r.get("sera"))
+            qty = 0 if e == 0 else (m + u - s - e)
+            inc = max(0, qty) * bev_prices.get(sigla, 0)
+            bev_flat[sigla] = {
+                "mattina": m, "inUsc": u, "scarti": s, "sera": e,
+                "qty": int(qty), "incasso": round(inc, 2),
+            }
+            if qty > 0:
+                bev_total_qty += int(qty)
+                bev_total_inc += inc
+
+        cash_sera = round(_compute_cash_sera_full(cash_doc, bev_docs), 2) if cash_doc else 0.0
+        cash_sera_base = round(_compute_cash_sera(cash_doc), 2) if cash_doc else 0.0
+        spicci_total = round(_compute_spicci_total(cash_doc), 2) if cash_doc else 0.0
+        paste_text = cash_doc.get("paste_text", "") if cash_doc else ""
+        manual_prices = cash_doc.get("manual_prices") or {}
+        paste_count = _compute_paste_count(paste_text)
+        paste_total_eur = round(_compute_paste_total_eur(paste_text, manual_prices), 2)
+        orders_info = await _orders_aggregate_for_date(date_str, restaurant_id=restaurant_id)
+
+        rows.append({
+            "date": date_str,
+            "is_mock": bool(cash_doc.get("mock") or any(b.get("mock") for b in bev_docs)),
+            "cash": cash_flat,
+            "vers_color": cash_doc.get("vers_color", ""),
+            "beverages": bev_flat,
+            "bev_total_qty": bev_total_qty,
+            "bev_total_inc": round(bev_total_inc, 2),
+            "cash_sera_base": cash_sera_base,
+            "spicci_total": spicci_total,
+            "paste_count": paste_count,
+            "paste_total_eur": paste_total_eur,
+            "orders_total": orders_info.get("total_orders", 0),
+            "cash_sera": cash_sera,
+        })
+
+    return {
+        "items": rows,
+        "count": len(rows),
+        "cash_fields": list(ALL_CASH_FIELDS),
+        "bev_sigle": bev_sigle_sorted,
+        "bev_prices": bev_prices,
+    }
+
+
+@api_router.post("/admin/closures/generate-mock")
+async def admin_generate_mock_closures(
+    payload: Dict, token_data: dict = Depends(verify_token)
+):
+    """Genera N chiusure mock per il locale indicato, partendo dal giorno
+    precedente e andando indietro. Le righe sono marcate `mock: true` così
+    da poter essere cancellate con `DELETE /api/admin/closures/mock`.
+    Body: {restaurant_id: str, days: int = 7, overwrite: bool = false}
+    """
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    rid = (payload or {}).get("restaurant_id")
+    days = int((payload or {}).get("days") or 7)
+    overwrite = bool((payload or {}).get("overwrite") or False)
+    if not rid or not isinstance(rid, str):
+        raise HTTPException(status_code=400, detail="restaurant_id mancante")
+    days = max(1, min(days, 90))
+
+    import random
+    random.seed()
+    pasta_siglas = list(PASTA_PRICES_MAP.keys())
+    bev_sigle = [b["sigla"] for b in BEVERAGES_CATALOG]
+
+    created_cash = 0
+    created_bev = 0
+    skipped = 0
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    for offset in range(1, days + 1):
+        date_str = (datetime.now(ROME_TZ) - timedelta(days=offset)).strftime("%Y-%m-%d")
+
+        existing = await db.cash_daily_counts.find_one(
+            {"restaurant_id": rid, "date_rome": date_str}, {"_id": 0, "mock": 1}
+        )
+        if existing and not (existing.get("mock") or overwrite):
+            skipped += 1
+            continue
+
+        mattina = random.randint(80, 250)
+        altro = random.randint(0, 60)
+        glo = random.randint(20, 120)
+        just = random.randint(10, 80)
+        delv = random.randint(20, 100)
+        bp = random.randint(50, 200)
+        sat = random.randint(40, 180)
+        ft = random.randint(20, 90)
+        pos = random.randint(150, 450)
+        vers = random.randint(200, 800)
+        arr = random.randint(0, 20)
+        sp5 = random.randint(0, 3)
+        sp2 = random.randint(0, 4)
+        sp1 = random.randint(0, 6)
+        sp05 = random.randint(0, 6)
+        cd5 = random.randint(2, 8)
+        cd2 = random.randint(3, 10)
+        cd1 = random.randint(5, 15)
+        cd05 = random.randint(5, 15)
+        n_paste = random.randint(15, 50)
+        paste_lines = []
+        for _ in range(n_paste):
+            sigla = random.choice(pasta_siglas)
+            descr = random.choice(["", " - tavolo 5", " - asporto", " - PIET", " - LUCA"])
+            paste_lines.append(f"{sigla}{descr}")
+        paste_text = "\n".join(paste_lines)
+
+        cash_set = {
+            "restaurant_id": rid, "date_rome": date_str,
+            "mattina": str(mattina), "altro": str(altro),
+            "glo": str(glo), "just": str(just), "delv": str(delv),
+            "bp": str(bp), "sat": str(sat), "ft": str(ft),
+            "pos": str(pos), "vers": str(vers), "arr": str(arr),
+            "sp5": str(sp5), "sp2": str(sp2), "sp1": str(sp1), "sp05": str(sp05),
+            "cd5": str(cd5), "cd2": str(cd2), "cd1": str(cd1), "cd05": str(cd05),
+            "vers_color": random.choice(["", "green", "blue", "black"]),
+            "paste_text": paste_text,
+            "manual_prices": {}, "cash_banconote": {}, "comments": {},
+            "mock": True,
+            "updated_at": now_iso,
+        }
+        await db.cash_daily_counts.update_one(
+            {"restaurant_id": rid, "date_rome": date_str},
+            {"$set": cash_set},
+            upsert=True,
+        )
+        created_cash += 1
+
+        for sigla in bev_sigle:
+            existing_bev = await db.beverage_daily_counts.find_one(
+                {"restaurant_id": rid, "date_rome": date_str, "sigla": sigla},
+                {"_id": 0, "mock": 1},
+            )
+            if existing_bev and not (existing_bev.get("mock") or overwrite):
+                continue
+            mattina_q = random.randint(40, 100)
+            ingressi = random.randint(0, 24)
+            scarti = random.randint(0, 3)
+            vendute = random.randint(5, min(40, max(6, mattina_q + ingressi - scarti)))
+            sera_q = max(0, mattina_q + ingressi - scarti - vendute)
+            await db.beverage_daily_counts.update_one(
+                {"restaurant_id": rid, "date_rome": date_str, "sigla": sigla},
+                {"$set": {
+                    "restaurant_id": rid, "date_rome": date_str, "sigla": sigla,
+                    "mattina": str(mattina_q),
+                    "inUsc": str(ingressi),
+                    "scarti": str(scarti),
+                    "sera": str(sera_q),
+                    "mattina_casse": "", "mattina_sfuse": "",
+                    "inUsc_casse": "",
+                    "sera_casse": "", "sera_sfuse": "",
+                    "comments": {}, "mock": True,
+                    "updated_at": now_iso,
+                }},
+                upsert=True,
+            )
+            created_bev += 1
+
+    return {
+        "ok": True, "days_requested": days,
+        "cash_rows_written": created_cash,
+        "bev_rows_written": created_bev,
+        "skipped_existing": skipped,
+    }
+
+
+@api_router.delete("/admin/closures/mock")
+async def admin_delete_mock_closures(
+    restaurant_id: Optional[str] = None,
+    token_data: dict = Depends(verify_token),
+):
+    """Elimina TUTTE le chiusure marcate `mock:true` (cash + bev).
+    Filtrabile per `restaurant_id` (raccomandato)."""
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    q = {"mock": True}
+    if restaurant_id:
+        q["restaurant_id"] = restaurant_id
+    res_cash = await db.cash_daily_counts.delete_many(q)
+    res_bev = await db.beverage_daily_counts.delete_many(q)
+    return {"ok": True, "cash_deleted": res_cash.deleted_count, "bev_deleted": res_bev.deleted_count}
+
+
 @api_router.get("/admin/closures/{date_str}")
 async def closure_detail_admin(
     date_str: str,
@@ -3847,6 +4083,9 @@ async def closure_detail_admin(
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
         raise HTTPException(status_code=400, detail="Data non valida")
     return await _build_closure_detail(date_str, restaurant_id)
+
+
+
 
 
 @api_router.get("/closures/yesterday")

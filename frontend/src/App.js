@@ -35,6 +35,7 @@ import ReportBetaPage from './pages/ReportBetaPage';
 import ReportIeriPage from './pages/ReportIeriPage';
 import AuditCassaPage from './pages/AuditCassaPage';
 import StoricoChiusurePage from './pages/StoricoChiusurePage';
+import ChiusureExcelPage from './pages/ChiusureExcelPage';
 import UpdateBanner from './components/UpdateBanner';
 
 // Protected Route Component
@@ -246,6 +247,11 @@ function AppRoutes() {
       <Route path="/storico-chiusure" element={
         <ProtectedRoute>
           <StoricoChiusurePage />
+        </ProtectedRoute>
+      } />
+      <Route path="/chiusure-excel" element={
+        <ProtectedRoute>
+          <ChiusureExcelPage />
         </ProtectedRoute>
       } />
     </Routes>
