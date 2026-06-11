@@ -1561,54 +1561,9 @@ const ReportBetaPageInner = () => {
               )}
             </div>
 
-            {/* ============ VENDITE BEVANDE ============ */}
-            <div className="bg-white rounded border border-gray-200 p-1.5">
-              <div className="flex items-baseline justify-between mb-1">
-                <h2 className="text-xs font-bold text-gray-800 uppercase">Vendite Bevande</h2>
-                <span className="text-[10px] text-gray-400">Q.tà · Incasso — in sync con Magazzino Bevande</span>
-              </div>
-              {bevSales.length === 0 ? (
-                <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
-                  Nessuna bevanda configurata.
-                </div>
-              ) : (
-                <div className="flex items-stretch gap-1.5">
-                  {bevSales.map(b => (
-                    <div
-                      key={b.sigla}
-                      data-testid={`bev-sales-${b.sigla}`}
-                      className="flex-1 min-w-[60px] flex flex-col"
-                    >
-                      <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
-                        {b.sigla}
-                      </label>
-                      <div className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-base text-gray-900">
-                        {b.qty}
-                      </div>
-                      <span className="text-[10px] font-bold text-gray-700 mt-0.5 text-center leading-none">
-                        €{b.inc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  ))}
-                  {/* Totale — solo importo € (no quantità, no sfondo nero) */}
-                  <div className="flex-1 min-w-[70px] flex flex-col">
-                    <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">Tot</label>
-                    <div
-                      data-testid="bev-sales-total-inc"
-                      className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-base text-gray-900"
-                    >
-                      €{bevTotalInc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
-                    <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
-                      &nbsp;
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* ============ SPICCI + CASSETTO SPICCI (stessa riga) ============ */}
-            <div className="flex items-stretch gap-2 max-w-[42%]">
+            {/* ============ SPICCI + CASSETTO + VENDITE BEVANDE (stessa riga) ============ */}
+            <div className="flex items-stretch gap-2">
+              <div className="flex items-stretch gap-2 w-[42%] flex-shrink-0">
               {/* --- SPICCI (rotolini aperti) --- */}
               <div className="bg-white rounded border border-gray-200 p-1.5 flex-[5] min-w-0">
               <div className="flex items-baseline justify-between mb-1">
@@ -1765,6 +1720,53 @@ const ReportBetaPageInner = () => {
                   })}
                 </div>
               </div>
+              </div>
+            {/* ============ VENDITE BEVANDE ============ */}
+            <div className="bg-white rounded border border-gray-200 p-1.5 flex-1 min-w-0">
+              <div className="flex items-baseline justify-between mb-1">
+                <h2 className="text-xs font-bold text-gray-800 uppercase">Vendite Bevande</h2>
+                <span className="text-[10px] text-gray-400">Q.tà · Incasso — in sync con Magazzino Bevande</span>
+              </div>
+              {bevSales.length === 0 ? (
+                <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
+                  Nessuna bevanda configurata.
+                </div>
+              ) : (
+                <div className="flex items-stretch gap-1.5">
+                  {bevSales.map(b => (
+                    <div
+                      key={b.sigla}
+                      data-testid={`bev-sales-${b.sigla}`}
+                      className="flex-1 min-w-[60px] flex flex-col"
+                    >
+                      <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
+                        {b.sigla}
+                      </label>
+                      <div className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-base text-gray-900">
+                        {b.qty}
+                      </div>
+                      <span className="text-[10px] font-bold text-gray-700 mt-0.5 text-center leading-none">
+                        €{b.inc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  ))}
+                  {/* Totale — solo importo € (no quantità, no sfondo nero) */}
+                  <div className="flex-1 min-w-[70px] flex flex-col">
+                    <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">Tot</label>
+                    <div
+                      data-testid="bev-sales-total-inc"
+                      className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-base text-gray-900"
+                    >
+                      €{bevTotalInc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                    <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
+                      &nbsp;
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
             </div>
 
             {/* Collegamenti rapidi sotto Spicci/Cassetto — discreti, non invadenti */}
