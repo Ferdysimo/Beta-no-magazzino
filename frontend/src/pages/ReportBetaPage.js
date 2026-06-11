@@ -1326,7 +1326,7 @@ const ReportBetaPageInner = () => {
                   Nessuna bevanda configurata.
                 </div>
               ) : (
-                <div className="flex items-stretch gap-1.5">
+                <div className="flex items-stretch gap-1 justify-start">
                   {beverages.map(b => {
                     const row = bevCounts[b.sigla] || {};
                     const casseRaw = row.inUsc_casse ?? '';
@@ -1338,7 +1338,7 @@ const ReportBetaPageInner = () => {
                       <div
                         key={b.sigla}
                         data-testid={`ingressi-${b.sigla}`}
-                        className="flex-1 min-w-[48px] flex flex-col"
+                        className="w-14 flex-none flex flex-col"
                       >
                         <label className="text-[9px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
                           {b.sigla}
@@ -1398,7 +1398,7 @@ const ReportBetaPageInner = () => {
                     Nessuna bevanda configurata.
                   </div>
                 ) : (
-                  <div className="flex items-stretch gap-1.5">
+                  <div className="flex items-stretch gap-1 justify-start">
                   {beverages.map(b => {
                     const row = bevCounts[b.sigla] || {};
                     const scRaw = row.scarti ?? '';
@@ -1409,7 +1409,7 @@ const ReportBetaPageInner = () => {
                       <div
                         key={b.sigla}
                         data-testid={`scarti-${b.sigla}`}
-                        className="flex-1 min-w-[48px] flex flex-col"
+                        className="w-14 flex-none flex flex-col"
                       >
                         <label className="text-[9px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
                           {b.sigla}
