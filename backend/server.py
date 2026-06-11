@@ -602,7 +602,7 @@ async def _ensure_beverages_seeded():
 class InvoiceCreate(BaseModel):
     supplier: str
     paid: bool = False
-    control_code: str
+    control_code: Optional[str] = ""
     image_data: str  # Base64 encoded image
     invoice_date: str = None  # Date selected by user
 
@@ -611,7 +611,7 @@ class InvoiceResponse(BaseModel):
     restaurant_id: str
     supplier: str
     paid: bool
-    control_code: str
+    control_code: Optional[str] = ""
     image_url: str
     created_at: str
     uploaded_by: str
@@ -1849,15 +1849,18 @@ async def create_invoice(data: InvoiceCreate, token_data: dict = Depends(verify_
     restaurant_id = token_data["restaurant_id"]
     restaurant_name = token_data["restaurant_name"]
 
-    # Check for duplicate control code within today (Rome day)
-    start_utc, end_utc = _today_rome_utc_range()
-    existing = await db.invoices.find_one({
-        "restaurant_id": restaurant_id,
-        "control_code": data.control_code,
-        "created_at": {"$gte": start_utc, "$lte": end_utc}
-    })
-    if existing:
-        raise HTTPException(status_code=400, detail="Codice di controllo già usato oggi")
+    # Codice di controllo: ora opzionale. Verifichiamo duplicati nel giorno
+    # solo se l'utente lo specifica esplicitamente, altrimenti accettiamo
+    # qualsiasi numero di fatture.
+    if data.control_code and data.control_code.strip():
+        start_utc, end_utc = _today_rome_utc_range()
+        existing = await db.invoices.find_one({
+            "restaurant_id": restaurant_id,
+            "control_code": data.control_code,
+            "created_at": {"$gte": start_utc, "$lte": end_utc}
+        })
+        if existing:
+            raise HTTPException(status_code=400, detail="Codice di controllo già usato oggi")
     
     invoice_id = str(uuid.uuid4())
     

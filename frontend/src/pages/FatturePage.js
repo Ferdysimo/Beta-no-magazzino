@@ -28,7 +28,6 @@ const FatturePage = () => {
   const [preview, setPreview] = useState(null);
   const [invoiceDate, setInvoiceDate] = useState('');
   const [supplier, setSupplier] = useState('');
-  const [paid, setPaid] = useState(false);
   const [controlCode, setControlCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -146,10 +145,6 @@ const FatturePage = () => {
       setError('Seleziona un fornitore');
       return;
     }
-    if (!controlCode.trim()) {
-      setError('Inserisci il codice di controllo');
-      return;
-    }
     
     setLoading(true);
     setError('');
@@ -160,8 +155,8 @@ const FatturePage = () => {
         try {
           await axios.post(`${API}/invoices`, {
             supplier,
-            paid,
-            control_code: controlCode.trim(),
+            paid: false,
+            control_code: '',
             image_data: reader.result,
             invoice_date: new Date(invoiceDate).toISOString()
           }, {
@@ -172,7 +167,6 @@ const FatturePage = () => {
           setSelectedFile(null);
           setPreview(null);
           setSupplier('');
-          setPaid(false);
           setControlCode('');
           const now = new Date();
           setInvoiceDate(new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
@@ -234,18 +228,6 @@ const FatturePage = () => {
       fetchSuppliers();
     } catch (err) {
       setSupplierError(err.response?.data?.detail || 'Errore');
-    }
-  };
-
-  // Toggle paid status
-  const togglePaid = async (invoice) => {
-    try {
-      await axios.patch(`${API}/invoices/${invoice.id}?paid=${!invoice.paid}`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      fetchInvoices();
-    } catch (err) {
-      console.error('Error updating invoice:', err);
     }
   };
 
@@ -388,23 +370,6 @@ const FatturePage = () => {
               </button>
             </div>
 
-            {/* Paid Checkbox */}
-            <div className="flex items-center gap-4">
-              <label className="w-32 text-gray-700 font-medium">Stato</label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={paid}
-                  onChange={(e) => setPaid(e.target.checked)}
-                  className="w-5 h-5 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                  data-testid="paid-checkbox"
-                />
-                <span className={`font-medium ${paid ? 'text-green-600' : 'text-gray-600'}`}>
-                  Pagato
-                </span>
-              </label>
-            </div>
-
             {/* Tipologia (fixed) */}
             <div className="flex items-center gap-4">
               <label className="w-32 text-gray-700 font-medium">Tipologia</label>
@@ -417,18 +382,6 @@ const FatturePage = () => {
             </div>
 
             {/* Control Code */}
-            <div className="flex items-center gap-4">
-              <label className="w-32 text-gray-700 font-medium">Codice di controllo</label>
-              <input
-                type="text"
-                value={controlCode}
-                onChange={(e) => setControlCode(e.target.value)}
-                className="flex-1 max-w-xs h-10 px-3 border border-gray-300 rounded-md focus:border-blue-500 focus:outline-none"
-                placeholder="Codice univoco"
-                data-testid="control-code-input"
-              />
-            </div>
-
             {/* Error/Success Messages */}
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-md">
@@ -539,17 +492,6 @@ const FatturePage = () => {
                     title="Visualizza"
                   >
                     <Eye size={18} />
-                  </button>
-                  <button
-                    onClick={() => togglePaid(invoice)}
-                    className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
-                      invoice.paid 
-                        ? 'bg-gray-400 hover:bg-gray-500 text-white' 
-                        : 'bg-green-500 hover:bg-green-600 text-white'
-                    }`}
-                    title={invoice.paid ? 'Segna non pagato' : 'Segna pagato'}
-                  >
-                    <Check size={18} />
                   </button>
                   <button
                     onClick={() => deleteInvoice(invoice.id)}

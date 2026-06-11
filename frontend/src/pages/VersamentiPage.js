@@ -278,21 +278,6 @@ const VersamentiPage = () => {
               />
             </div>
 
-            {/* Control Code */}
-            <div className="flex items-start gap-4">
-              <label className="w-32 text-gray-700 font-medium text-sm leading-tight">
-                Codice di controllo<br/>
-                <span className="text-gray-400 text-xs">(per evitare doppioni, inserire lettere o numeri)</span>
-              </label>
-              <input
-                type="text"
-                value={controlCode}
-                onChange={(e) => setControlCode(e.target.value)}
-                className="flex-1 max-w-xs h-10 px-3 border border-gray-300 rounded-md focus:border-blue-500 focus:outline-none"
-                data-testid="versamento-control-code-input"
-              />
-            </div>
-
             {/* Error/Success Messages */}
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-md">
