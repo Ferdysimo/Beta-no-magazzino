@@ -1311,19 +1311,19 @@ const ReportBetaPageInner = () => {
             </div>
 
             {/* ============ INGRESSI (1 quadratino per bevanda, valore in CASSE — moltiplicato ×24 prima di salvare) ============ */}
-            <div className="bg-white rounded border border-gray-200 p-1.5">
-              <div className="flex items-baseline justify-between mb-1">
+            <div className="bg-white rounded border border-gray-200 p-1">
+              <div className="flex items-baseline justify-between mb-0.5">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Ingressi / Uscite</h2>
                 <span className="text-[10px] text-gray-400">
                   Casse (×{PEZZI_PER_CASSA}) · sync live con Magazzino Bevande · supporta formule "=..."
                 </span>
               </div>
               {beverages.length === 0 ? (
-                <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
+                <div className="h-7 flex items-center justify-center text-xs text-gray-400 italic">
                   Nessuna bevanda configurata.
                 </div>
               ) : (
-                <div className="flex items-stretch gap-2">
+                <div className="flex items-stretch gap-1.5">
                   {beverages.map(b => {
                     const row = bevCounts[b.sigla] || {};
                     const casseRaw = row.inUsc_casse ?? '';
@@ -1335,9 +1335,9 @@ const ReportBetaPageInner = () => {
                       <div
                         key={b.sigla}
                         data-testid={`ingressi-${b.sigla}`}
-                        className="flex-1 min-w-[60px] flex flex-col"
+                        className="flex-1 min-w-[48px] flex flex-col"
                       >
-                        <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
+                        <label className="text-[9px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
                           {b.sigla}
                         </label>
                         <input
@@ -1347,7 +1347,7 @@ const ReportBetaPageInner = () => {
                           value={casseRaw}
                           onChange={(e) => handleInUscChange(b.sigla, e.target.value)}
                           title={isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN} casse → ${casseN * PEZZI_PER_CASSA} unità` : `Numero casse · ×${PEZZI_PER_CASSA}`}
-                          className={`w-full h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
+                          className={`w-full h-7 rounded text-center font-black text-[11px] border focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
                             isFormulaCasse
                               ? 'bg-rose-100 border-rose-300 text-rose-800'
                               : casseEmpty
@@ -1357,7 +1357,7 @@ const ReportBetaPageInner = () => {
                         />
                         <span
                           data-testid={`bev-ingressi-total-${b.sigla}`}
-                          className={`text-[10px] mt-0.5 text-center leading-none font-bold ${total === null ? 'text-gray-400' : 'text-gray-800'}`}
+                          className={`text-[9px] text-center leading-none font-bold ${total === null ? 'text-gray-400' : 'text-gray-800'}`}
                         >
                           {total === null
                             ? 'ingressi'
@@ -1371,8 +1371,8 @@ const ReportBetaPageInner = () => {
             </div>
 
             {/* ============ SCARTI (1 quadratino per bevanda, unità singole — in sync con Magazzino Bevande) ============ */}
-            <div className="bg-white rounded border border-gray-200 p-1.5">
-              <div className="flex items-baseline justify-between mb-1 gap-2">
+            <div className="bg-white rounded border border-gray-200 p-1">
+              <div className="flex items-baseline justify-between mb-0.5 gap-2">
                 <div className="flex items-center gap-2">
                   <h2 className="text-xs font-bold text-gray-800 uppercase">Scarti</h2>
                   <button
@@ -1391,11 +1391,11 @@ const ReportBetaPageInner = () => {
               </div>
               {showScarti && (
                 beverages.length === 0 ? (
-                  <div className="h-8 flex items-center justify-center text-xs text-gray-400 italic">
+                  <div className="h-7 flex items-center justify-center text-xs text-gray-400 italic">
                     Nessuna bevanda configurata.
                   </div>
                 ) : (
-                  <div className="flex items-stretch gap-2">
+                  <div className="flex items-stretch gap-1.5">
                   {beverages.map(b => {
                     const row = bevCounts[b.sigla] || {};
                     const scRaw = row.scarti ?? '';
@@ -1406,9 +1406,9 @@ const ReportBetaPageInner = () => {
                       <div
                         key={b.sigla}
                         data-testid={`scarti-${b.sigla}`}
-                        className="flex-1 min-w-[60px] flex flex-col"
+                        className="flex-1 min-w-[48px] flex flex-col"
                       >
-                        <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
+                        <label className="text-[9px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
                           {b.sigla}
                         </label>
                         <input
@@ -1418,7 +1418,7 @@ const ReportBetaPageInner = () => {
                           value={scRaw}
                           onChange={(e) => handleScartiChange(b.sigla, e.target.value)}
                           title={isFormulaSc ? `Formula: ${scRaw} = ${scN}` : 'Unità scartate (singole)'}
-                          className={`w-full h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-rose-400 ${
+                          className={`w-full h-7 rounded text-center font-black text-[11px] border focus:outline-none focus:ring-2 focus:ring-rose-400 ${
                             isFormulaSc
                               ? 'bg-rose-100 border-rose-300 text-rose-800'
                               : scEmpty
