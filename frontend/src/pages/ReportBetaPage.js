@@ -1313,8 +1313,9 @@ const ReportBetaPageInner = () => {
               )}
             </div>
 
-            {/* ============ INGRESSI (1 quadratino per bevanda, valore in CASSE — moltiplicato ×24 prima di salvare) ============ */}
-            <div className="bg-white rounded border border-gray-200 p-1">
+            {/* ============ INGRESSI / USCITE + SPICCI (stessa riga) ============ */}
+            <div className="flex items-stretch gap-2">
+              <div className="bg-white rounded border border-gray-200 p-1 flex-1 min-w-0">
               <div className="flex items-baseline justify-between mb-0.5">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Ingressi / Uscite</h2>
                 <span className="text-[10px] text-gray-400">
@@ -1371,6 +1372,78 @@ const ReportBetaPageInner = () => {
                   })}
                 </div>
               )}
+              </div>
+              {/* --- SPICCI (rotolini aperti) --- */}
+              <div className="bg-white rounded border border-gray-200 p-1 flex-none w-fit">
+              <div className="flex items-baseline justify-between mb-1">
+                <h2 className="text-[11px] font-bold text-gray-800 uppercase">Spicci</h2>
+                <span className="text-[9px] text-gray-400">
+                  ap.×valore
+                </span>
+              </div>
+              <div className="flex items-stretch gap-1">
+                {spicciValues.rows.map(r => {
+                  const hasComment = !!cashComments[r.key];
+                  return (
+                  <div key={r.key} className="flex-1 min-w-[34px] flex flex-col relative">
+                    <label className="text-[9px] font-bold text-gray-800 text-center leading-none mb-0.5">
+                      {r.label}
+                    </label>
+                    <input
+                      data-testid={`spicci-aperti-${r.key}`}
+                      type="text"
+                      inputMode="decimal"
+                      value={cashRow[r.key] || ''}
+                      onChange={(e) => setCashRowValue(r.key, e.target.value)}
+                      onFocus={() => setFocusedField(r.key)}
+                      onBlur={() => setFocusedField(curr => curr === r.key ? null : curr)}
+                      onContextMenu={(e) => { e.preventDefault(); openCommentPopover(r.key); }}
+                      placeholder="ap."
+                      className="w-full h-7 border border-gray-200 rounded px-0.5 text-center font-bold text-[11px] focus:outline-none focus:border-[#F5C518]"
+                    />
+                    {hasComment && (
+                      <span
+                        title={cashComments[r.key]}
+                        className="absolute top-3 right-0 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-amber-600 z-10"
+                      />
+                    )}
+                    <div
+                      data-testid={`spicci-valore-${r.key}`}
+                      className="w-full h-7 mt-0.5 bg-yellow-50 border border-yellow-200 rounded flex items-center justify-center font-black text-[11px] text-gray-900"
+                    >
+                      €{r.value.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                    </div>
+                    <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">×{r.mult}</span>
+                    {commentPopover?.key === r.key && (
+                      <CommentPopover
+                        inputRef={commentInputRef}
+                        value={commentPopover.value}
+                        onChange={(v) => setCommentPopover(p => ({ ...p, value: v }))}
+                        onSave={saveCommentPopover}
+                        onCancel={closeCommentPopover}
+                      />
+                    )}
+                  </div>
+                  );
+                })}
+                {/* Totale spicci */}
+                <div className="flex-1 min-w-[40px] flex flex-col">
+                  <label className="text-[9px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">TOT</label>
+                  <div className="w-full h-7 border border-transparent rounded flex items-center justify-center text-[9px] text-gray-400 italic">
+                    {/* nessun input sul totale */}
+                    —
+                  </div>
+                  <div
+                    data-testid="spicci-totale"
+                    className="w-full h-7 mt-0.5 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-[11px] text-gray-900"
+                  >
+                    €{spicciValues.total.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                  </div>
+                  <span className="text-[9px] text-gray-700 mt-0.5 text-center leading-none font-bold">totale</span>
+                </div>
+              </div>
+              </div>
+
             </div>
 
             {/* ============ SCARTI (1 quadratino per bevanda, unità singole — in sync con Magazzino Bevande) ============ */}
@@ -1566,78 +1639,7 @@ const ReportBetaPageInner = () => {
 
             {/* ============ SPICCI + CASSETTO + VENDITE BEVANDE (stessa riga) ============ */}
             <div className="flex items-stretch gap-2">
-              <div className="flex items-stretch gap-2 w-[42%] flex-shrink-0">
-              {/* --- SPICCI (rotolini aperti) --- */}
-              <div className="bg-white rounded border border-gray-200 p-1.5 flex-[5] min-w-0">
-              <div className="flex items-baseline justify-between mb-1">
-                <h2 className="text-[11px] font-bold text-gray-800 uppercase">Spicci</h2>
-                <span className="text-[9px] text-gray-400">
-                  ap.×valore
-                </span>
-              </div>
-              <div className="flex items-stretch gap-1">
-                {spicciValues.rows.map(r => {
-                  const hasComment = !!cashComments[r.key];
-                  return (
-                  <div key={r.key} className="flex-1 min-w-[34px] flex flex-col relative">
-                    <label className="text-[9px] font-bold text-gray-800 text-center leading-none mb-0.5">
-                      {r.label}
-                    </label>
-                    <input
-                      data-testid={`spicci-aperti-${r.key}`}
-                      type="text"
-                      inputMode="decimal"
-                      value={cashRow[r.key] || ''}
-                      onChange={(e) => setCashRowValue(r.key, e.target.value)}
-                      onFocus={() => setFocusedField(r.key)}
-                      onBlur={() => setFocusedField(curr => curr === r.key ? null : curr)}
-                      onContextMenu={(e) => { e.preventDefault(); openCommentPopover(r.key); }}
-                      placeholder="ap."
-                      className="w-full h-7 border border-gray-200 rounded px-0.5 text-center font-bold text-[11px] focus:outline-none focus:border-[#F5C518]"
-                    />
-                    {hasComment && (
-                      <span
-                        title={cashComments[r.key]}
-                        className="absolute top-3 right-0 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-amber-600 z-10"
-                      />
-                    )}
-                    <div
-                      data-testid={`spicci-valore-${r.key}`}
-                      className="w-full h-7 mt-0.5 bg-yellow-50 border border-yellow-200 rounded flex items-center justify-center font-black text-[11px] text-gray-900"
-                    >
-                      €{r.value.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-                    </div>
-                    <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">×{r.mult}</span>
-                    {commentPopover?.key === r.key && (
-                      <CommentPopover
-                        inputRef={commentInputRef}
-                        value={commentPopover.value}
-                        onChange={(v) => setCommentPopover(p => ({ ...p, value: v }))}
-                        onSave={saveCommentPopover}
-                        onCancel={closeCommentPopover}
-                      />
-                    )}
-                  </div>
-                  );
-                })}
-                {/* Totale spicci */}
-                <div className="flex-1 min-w-[40px] flex flex-col">
-                  <label className="text-[9px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">TOT</label>
-                  <div className="w-full h-7 border border-transparent rounded flex items-center justify-center text-[9px] text-gray-400 italic">
-                    {/* nessun input sul totale */}
-                    —
-                  </div>
-                  <div
-                    data-testid="spicci-totale"
-                    className="w-full h-7 mt-0.5 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-[11px] text-gray-900"
-                  >
-                    €{spicciValues.total.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-                  </div>
-                  <span className="text-[9px] text-gray-700 mt-0.5 text-center leading-none font-bold">totale</span>
-                </div>
-              </div>
-              </div>
-
+              <div className="flex items-stretch gap-2 w-[22%] flex-shrink-0">
               {/* --- CASSETTO SPICCI (stock totale, click-to-edit) --- */}
               <div className="bg-white rounded border border-gray-200 p-1.5 flex-[4] min-w-0">
                 <div className="flex items-baseline justify-between mb-1">
