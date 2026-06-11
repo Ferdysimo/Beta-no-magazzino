@@ -844,7 +844,10 @@ const ReportBetaPageInner = () => {
   const fmtEur = (n) => n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5] flex flex-col overflow-hidden">
+    <div
+      className="min-h-screen bg-[#F5F5F5] flex flex-col overflow-hidden"
+      style={{ zoom: 0.9 }}
+    >
       <Header />
       <main className="flex-1 max-w-[1600px] w-full mx-auto px-3 py-2 flex flex-col min-h-0">
         {/* Titolo compatto */}
