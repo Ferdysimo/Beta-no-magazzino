@@ -169,20 +169,29 @@ Applicate 7 modifiche di layout/logica richieste dall'utente su `/app/frontend/s
 - Handler `handleInUscChange(sigla, value)` con debounce 600ms.
 - Test E2E manuale: AL Ingressi=12 → persistito a reload ✓.
 
-## Sessione fork — 11/06/2026 (Chiusure Excel — Vista Admin a griglia + revisione UX)
+## Sessione fork — 11/06/2026 (Chiusure Excel — Vista Admin a griglia + revisione UX + modalità storica)
 - **Nuova pagina Admin `/chiusure-excel`** (`ChiusureExcelPage.js`) — vista in stile foglio Excel, una riga per giorno.
-- **Colonne (rev2 — su richiesta utente)**: Data, Giorno + 4 macro-header bevande (INGRESSI/USCITE verde, SCARTI rosso chiaro, MAGAZZINO SERA blu, VENDITE giallo) con 9 sotto-colonne per sigla ciascuna → TOT PIATTI (n°) → Arr/Altro/Vers/Glo/Just/Del/BP/SAT/POS/FT (€) → Spicci 5€/2€/1€/0,5€ (numero, SENZA cassetto) → CASH SERA (€ completo).
-- **Click su riga** → naviga a `/storico-chiusure?date=YYYY-MM-DD&rid=X` con la data e il locale pre-selezionati (pre-fill via URL search params).
-- Header sticky (2 livelli: macro-header + sotto-header), colonne Data+Giorno sticky a sinistra, footer con TOTALI di colonna.
-- Mock badge ✱ per righe generate a scopo test.
-- **Backend nuovi endpoint** in `server.py` (prima di `/admin/closures/{date_str}` per evitare shadowing):
-  - `GET /api/admin/closures/grid?days=N&restaurant_id=X` — restituisce `items[]` con cash flat, bev per sigla, totali calcolati, paste count, cash_sera completo.
-  - `POST /api/admin/closures/generate-mock` — genera N (default 7) chiusure fittizie marcate `mock:true` con valori realistici.
-  - `DELETE /api/admin/closures/mock?restaurant_id=X` — elimina solo righe `mock:true`.
-- **StoricoChiusurePage.js** ora legge `?date=` e `?rid=` dalla URL per pre-selezionare data e locale (effetto sync).
-- Pulsante **"Chiusure Excel"** nel pannello selettore Admin in `HomePage.js`.
-- Test backend via curl: generate (7 cash + 63 bev), grid (7 items), delete (7+63), non-admin → 403 ✓.
-- Test frontend via screenshot: navigazione Home → Chiusure Excel → click riga → dettaglio storico OK ✓.
-- **Pendente**: edit mode per Admin sul dettaglio storico (al momento il detail è READ-ONLY via componente `ClosureDetail`). Da implementare in una sessione separata se richiesto.
+- **Colonne (rev2)**: Data, Giorno + 4 macro-header bevande (INGRESSI/USCITE verde, SCARTI rosso chiaro, MAGAZZINO SERA blu, VENDITE giallo) con 9 sotto-colonne per sigla ciascuna → TOT PIATTI → Arr/Altro/Vers/Glo/Just/Del/BP/SAT/POS/FT (€) → Spicci 5€/2€/1€/0,5€ (numero, SENZA cassetto) → CASH SERA (€ completo).
+- **Click su riga** → naviga a `/report-beta?date=YYYY-MM-DD&rid=X` aprendo la PAGINA REPORT vera (`ReportBetaPage`) in **MODALITÀ STORICA** con tutti i dati archiviati di quel giorno, modificabile dall'Admin.
+- **Modalità storica** in `ReportBetaPage`:
+  - Lettura URL `?date=` + `?rid=` con `useSearchParams`.
+  - PasswordGate bypassato per Admin in storico.
+  - Tutti i GET (`/cash/daily`, `/beverages/daily`, `/beverages/inventory`) appendono `?date=&restaurant_id=`.
+  - Tutti i PUT (cash + bev) propagano `date` + `restaurant_id` nel body.
+  - Live paste polling (`/orders/today-paste-list`) **disabilitato** in storico (si usa il `paste_text` archiviato).
+  - Sync `pasteText ← autoPasteText` disabilitato in storico per non azzerare i dati salvati.
+  - Banner "📅 MODALITÀ STORICO — gg/mm/aaaa" + pulsante "← Torna a Chiusure Excel".
+- **Backend nuovi/modificati endpoint**:
+  - `GET /api/cash/daily?date=&restaurant_id=` — accetta opzionali (Admin/Supervisor only).
+  - `GET /api/beverages/daily?date=&restaurant_id=` — accetta opzionali (Admin/Supervisor only).
+  - `PUT /api/cash/daily` — body accetta opzionali `date` + `restaurant_id`.
+  - `PUT /api/beverages/daily` — body accetta opzionali `date` + `restaurant_id`.
+  - Helper `_resolve_historical_mode()` valida formato data + ruolo + non-futuro.
+  - Audit-log loggato con `mode: "historical"` per tracciare correzioni postume.
+  - `GET /api/admin/closures/grid` / `POST /api/admin/closures/generate-mock` / `DELETE /api/admin/closures/mock` (già aggiunti).
+- **Pulsante "Chiusure Excel"** nel pannello selettore Admin in `HomePage.js`.
+- **Test E2E**:
+  - curl backend: GET storico (cash + bev) OK ✓, PUT storico salva e ricarica OK ✓, non-admin → 403 ✓.
+  - screenshot E2E: navigazione Home → Chiusure Excel → click riga 10/06/2026 → ReportBetaPage si apre con banner + dati completi (44 paste €347, CASSA mattina 173/glo 34/just 62/del 90/bp 175/sat 144/pos 307/ft 67, SPICCI 1/1/3/5, VENDITE bev €395, CASH SERA €-214) ✓.
 
 

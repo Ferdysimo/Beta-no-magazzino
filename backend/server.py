@@ -2935,6 +2935,27 @@ def _today_rome_str() -> str:
     return datetime.now(ROME_TZ).strftime("%Y-%m-%d")
 
 
+def _resolve_historical_mode(
+    date_param: Optional[str], rid_param: Optional[str], token_data: dict
+) -> Optional[tuple]:
+    """Se l'utente è admin/supervisor E vengono passati sia `date` che `restaurant_id`,
+    ritorna `(date_str, rid)` per operare in MODALITÀ STORICA. Altrimenti `None`
+    (caller userà today + effective rid). Solleva 400 su date malformata."""
+    if not date_param and not rid_param:
+        return None
+    if not date_param or not rid_param:
+        # Entrambi devono essere presenti per attivare la modalità storica
+        return None
+    if token_data.get("role") not in ("admin", "supervisor"):
+        raise HTTPException(status_code=403, detail="Modalità storica riservata ad Admin")
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_param):
+        raise HTTPException(status_code=400, detail="Data non valida (formato YYYY-MM-DD)")
+    today = _today_rome_str()
+    if date_param > today:
+        raise HTTPException(status_code=400, detail="Data non può essere nel futuro")
+    return (date_param, rid_param)
+
+
 class BeverageDailyUpsert(BaseModel):
     sigla: str
     mattina: Optional[str] = ""
@@ -2951,15 +2972,32 @@ class BeverageDailyUpsert(BaseModel):
     sera_casse: Optional[str] = ""
     sera_sfuse: Optional[str] = ""
     comments: Optional[Dict[str, str]] = None  # { 'inUsc': '...', 'scarti': '...' }
+    # Modalità storica (Admin/Supervisor)
+    date: Optional[str] = None
+    restaurant_id: Optional[str] = None
 
 
 @api_router.get("/beverages/daily")
-async def get_beverage_daily_counts(request: Request, token_data: dict = Depends(verify_token)):
-    """Returns today's counts for the current restaurant + previous-day sera values."""
-    rid = await _effective_restaurant_id(request, token_data)
-    today = _today_rome_str()
+async def get_beverage_daily_counts(
+    request: Request,
+    date: Optional[str] = None,
+    restaurant_id: Optional[str] = None,
+    token_data: dict = Depends(verify_token),
+):
+    """Returns today's counts for the current restaurant + previous-day sera values.
+
+    Modalità storica (Admin/Supervisor): se `date` + `restaurant_id` sono
+    presenti, restituisce i counts di QUEL giorno per QUEL locale.
+    """
+    historical = _resolve_historical_mode(date, restaurant_id, token_data)
+    if historical:
+        target_date, rid = historical
+    else:
+        rid = await _effective_restaurant_id(request, token_data)
+        target_date = _today_rome_str()
+
     today_docs = await db.beverage_daily_counts.find(
-        {"restaurant_id": rid, "date_rome": today}, {"_id": 0}
+        {"restaurant_id": rid, "date_rome": target_date}, {"_id": 0}
     ).to_list(50)
     counts = {d["sigla"]: {
         "mattina": d.get("mattina", ""),
@@ -2976,7 +3014,7 @@ async def get_beverage_daily_counts(request: Request, token_data: dict = Depends
 
     prev_sera = {}
     last_day_doc = await db.beverage_daily_counts.find_one(
-        {"restaurant_id": rid, "date_rome": {"$lt": today}},
+        {"restaurant_id": rid, "date_rome": {"$lt": target_date}},
         sort=[("date_rome", -1)],
         projection={"_id": 0, "date_rome": 1},
     )
@@ -2988,22 +3026,28 @@ async def get_beverage_daily_counts(request: Request, token_data: dict = Depends
         ).to_list(50)
         prev_sera = {d["sigla"]: d.get("sera", "") for d in prev_docs}
 
-    return {"date": today, "counts": counts, "prev_sera": prev_sera}
+    return {"date": target_date, "counts": counts, "prev_sera": prev_sera, "historical": bool(historical)}
 
 
 @api_router.put("/beverages/daily")
 async def upsert_beverage_daily(
     data: BeverageDailyUpsert, request: Request, token_data: dict = Depends(verify_token)
 ):
-    """Upsert a single beverage row for today's counts (auto-save from frontend)."""
-    rid = await _effective_restaurant_id(request, token_data)
-    today = _today_rome_str()
+    """Upsert a single beverage row for today's counts (auto-save from frontend).
+    Modalità storica: se `data.date` + `data.restaurant_id` sono presenti
+    (e l'utente è admin/supervisor), salva per quel giorno+locale."""
+    historical = _resolve_historical_mode(data.date, data.restaurant_id, token_data)
+    if historical:
+        target_date, rid = historical
+    else:
+        rid = await _effective_restaurant_id(request, token_data)
+        target_date = _today_rome_str()
     valid_siglas = {b["sigla"] for b in BEVERAGES_CATALOG}
     if data.sigla not in valid_siglas:
         raise HTTPException(status_code=400, detail=f"Sigla non valida: {data.sigla}")
     set_body = {
         "restaurant_id": rid,
-        "date_rome": today,
+        "date_rome": target_date,
         "sigla": data.sigla,
         "mattina": data.mattina or "",
         "inUsc": data.inUsc or "",
@@ -3027,12 +3071,14 @@ async def upsert_beverage_daily(
     # Audit-log: registro diff per ogni colonna della riga bevanda
     try:
         old_doc = await db.beverage_daily_counts.find_one(
-            {"restaurant_id": rid, "date_rome": today, "sigla": data.sigla}, {"_id": 0}
+            {"restaurant_id": rid, "date_rome": target_date, "sigla": data.sigla}, {"_id": 0}
         ) or {}
         ui = _audit_user_info(request, token_data)
+        if historical:
+            ui = {**ui, "mode": "historical"}
         for col in ("mattina", "inUsc", "scarti", "sera"):
             await _audit_log_change(
-                category="beverage", rid=rid, date_rome=today,
+                category="beverage", rid=rid, date_rome=target_date,
                 field=f"{data.sigla}.{col}",
                 old_value=old_doc.get(col, ""), new_value=set_body.get(col, ""),
                 user_info=ui,
@@ -3042,7 +3088,7 @@ async def upsert_beverage_daily(
             new_c = set_body.get("comments") or {}
             for k in set(old_c.keys()) | set(new_c.keys()):
                 await _audit_log_change(
-                    category="beverage", rid=rid, date_rome=today,
+                    category="beverage", rid=rid, date_rome=target_date,
                     field=f"{data.sigla}.comment.{k}",
                     old_value=old_c.get(k, ""), new_value=new_c.get(k, ""),
                     user_info=ui,
@@ -3050,11 +3096,11 @@ async def upsert_beverage_daily(
     except Exception as e:
         logger.warning(f"[AUDIT] beverage diff failed (non-blocking): {e}")
     await db.beverage_daily_counts.update_one(
-        {"restaurant_id": rid, "date_rome": today, "sigla": data.sigla},
+        {"restaurant_id": rid, "date_rome": target_date, "sigla": data.sigla},
         {"$set": set_body},
         upsert=True,
     )
-    return {"ok": True}
+    return {"ok": True, "historical": bool(historical)}
 
 
 @api_router.get("/beverages/daily/history")
@@ -3351,16 +3397,33 @@ class CashDailyUpsert(BaseModel):
     paste_text: Optional[str] = None
     cash_banconote: Optional[Dict[str, str]] = None
     manual_prices: Optional[Dict[str, str]] = None
+    # Modalità storica (Admin/Supervisor): se entrambi presenti il salvataggio
+    # avviene per il giorno+locale indicati invece che per oggi/ristorante effettivo.
+    date: Optional[str] = None          # YYYY-MM-DD
+    restaurant_id: Optional[str] = None
 
 
 @api_router.get("/cash/daily")
-async def get_cash_daily(request: Request, token_data: dict = Depends(verify_token)):
+async def get_cash_daily(
+    request: Request,
+    date: Optional[str] = None,
+    restaurant_id: Optional[str] = None,
+    token_data: dict = Depends(verify_token),
+):
     """Returns today's cash row for the current restaurant + previous-day computed cash_sera
-    so the frontend can auto-fill CASH MATTINA when starting a new day."""
-    rid = await _effective_restaurant_id(request, token_data)
-    today = _today_rome_str()
+    so the frontend can auto-fill CASH MATTINA when starting a new day.
+
+    Modalità storica (Admin/Supervisor): se `date` + `restaurant_id` sono
+    presenti, ritorna i dati di QUEL giorno per QUEL locale.
+    """
+    historical = _resolve_historical_mode(date, restaurant_id, token_data)
+    if historical:
+        target_date, rid = historical
+    else:
+        rid = await _effective_restaurant_id(request, token_data)
+        target_date = _today_rome_str()
     today_doc = await db.cash_daily_counts.find_one(
-        {"restaurant_id": rid, "date_rome": today}, {"_id": 0}
+        {"restaurant_id": rid, "date_rome": target_date}, {"_id": 0}
     ) or {}
     data = {f: today_doc.get(f, "") for f in ALL_CASH_FIELDS}
     vers_color = today_doc.get("vers_color", "") or ""
@@ -3373,7 +3436,7 @@ async def get_cash_daily(request: Request, token_data: dict = Depends(verify_tok
     prev_row = None
     prev_date = ""
     last_doc = await db.cash_daily_counts.find_one(
-        {"restaurant_id": rid, "date_rome": {"$lt": today}},
+        {"restaurant_id": rid, "date_rome": {"$lt": target_date}},
         sort=[("date_rome", -1)],
         projection={"_id": 0},
     )
@@ -3398,7 +3461,7 @@ async def get_cash_daily(request: Request, token_data: dict = Depends(verify_tok
             if not data.get(cf):
                 data[cf] = last_doc.get(cf, "") or ""
     return {
-        "date": today,
+        "date": target_date,
         "data": data,
         "prev_cash_sera": prev_cash_sera,
         "prev_date": prev_date,
@@ -3408,6 +3471,7 @@ async def get_cash_daily(request: Request, token_data: dict = Depends(verify_tok
         "paste_text": paste_text,
         "cash_banconote": cash_banconote,
         "manual_prices": manual_prices,
+        "historical": bool(historical),
     }
 
 
@@ -3415,14 +3479,20 @@ async def get_cash_daily(request: Request, token_data: dict = Depends(verify_tok
 async def upsert_cash_daily(
     data: CashDailyUpsert, request: Request, token_data: dict = Depends(verify_token)
 ):
-    """Upsert today's cash row (auto-save dal frontend) per il ristorante effettivo."""
-    rid = await _effective_restaurant_id(request, token_data)
-    today = _today_rome_str()
+    """Upsert today's cash row (auto-save dal frontend) per il ristorante effettivo.
+    Modalità storica: se `data.date` + `data.restaurant_id` sono presenti
+    (e admin/supervisor), salva per quel giorno+locale."""
+    historical = _resolve_historical_mode(data.date, data.restaurant_id, token_data)
+    if historical:
+        target_date, rid = historical
+    else:
+        rid = await _effective_restaurant_id(request, token_data)
+        target_date = _today_rome_str()
     payload = {f: (getattr(data, f) or "") for f in ALL_CASH_FIELDS}
     set_payload = {
         **payload,
         "restaurant_id": rid,
-        "date_rome": today,
+        "date_rome": target_date,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     # vers_color: solo valori validi
@@ -3452,21 +3522,24 @@ async def upsert_cash_daily(
         set_payload["comments"] = clean
     # Audit-log: registro ogni delta rispetto al doc esistente
     old_doc = await db.cash_daily_counts.find_one(
-        {"restaurant_id": rid, "date_rome": today}, {"_id": 0}
+        {"restaurant_id": rid, "date_rome": target_date}, {"_id": 0}
     ) or {}
     try:
+        ui = _audit_user_info(request, token_data)
+        if historical:
+            ui = {**ui, "mode": "historical"}
         await _audit_diff_cash(
-            rid=rid, date_rome=today, old_doc=old_doc, set_payload=set_payload,
-            user_info=_audit_user_info(request, token_data),
+            rid=rid, date_rome=target_date, old_doc=old_doc, set_payload=set_payload,
+            user_info=ui,
         )
     except Exception as e:
         logger.warning(f"[AUDIT] cash diff failed (non-blocking): {e}")
     await db.cash_daily_counts.update_one(
-        {"restaurant_id": rid, "date_rome": today},
+        {"restaurant_id": rid, "date_rome": target_date},
         {"$set": set_payload},
         upsert=True,
     )
-    return {"ok": True}
+    return {"ok": True, "historical": bool(historical)}
 
 
 # ---------- Storico Chiusure (Admin only) ----------

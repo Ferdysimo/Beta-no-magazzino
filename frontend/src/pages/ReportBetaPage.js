@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrders } from '../contexts/OrderContext';
@@ -178,7 +178,21 @@ const CommentPopover = ({ inputRef, value, onChange, onSave, onCancel }) => {
 
 const ReportBetaPageInner = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { token, isAdmin, restaurant, effectiveRestaurant } = useAuth();
+  // ───── Modalità storica: ?date=YYYY-MM-DD&rid=<restaurantId> ─────
+  // Solo Admin/Supervisor possono usare: carica la chiusura archiviata di
+  // quel giorno e permette correzioni. Il backend rifiuta per ruoli normali.
+  const urlDate = searchParams.get('date') || '';
+  const urlRid = searchParams.get('rid') || '';
+  const historicalMode = !!(urlDate && urlRid && isAdmin);
+  // Suffisso querystring da appendere alle chiamate fetch in modalità storica
+  const histQS = historicalMode ? `?date=${urlDate}&restaurant_id=${urlRid}` : '';
+  // Oggetto da fondere nel body PUT (cash/daily, beverages/daily) in modalità storica
+  const histBody = useMemo(
+    () => (historicalMode ? { date: urlDate, restaurant_id: urlRid } : {}),
+    [historicalMode, urlDate, urlRid],
+  );
   const [pasteText, setPasteText] = useState('');
   const [cash, setCash] = useState({});
   const [manualPrices, setManualPrices] = useState({});
@@ -234,8 +248,8 @@ const ReportBetaPageInner = () => {
     const load = async () => {
       try {
         const [invRes, dailyRes] = await Promise.all([
-          axios.get(`${API}/beverages/inventory`, { headers }),
-          axios.get(`${API}/beverages/daily`, { headers }),
+          axios.get(`${API}/beverages/inventory${histQS}`, { headers }),
+          axios.get(`${API}/beverages/daily${histQS}`, { headers }),
         ]);
         if (cancelled) return;
         setBeverages(invRes.data || []);
@@ -306,7 +320,7 @@ const ReportBetaPageInner = () => {
     load();
     const id = setInterval(load, 15000);
     return () => { cancelled = true; clearInterval(id); };
-  }, [token, focusedSeraSigla]);
+  }, [token, focusedSeraSigla, histQS]);
 
   // Auto-save debounced di una bevanda (intera riga, come MagazzinoBevandePage)
   const scheduleBevSave = React.useCallback((sigla, row) => {
@@ -325,6 +339,7 @@ const ReportBetaPageInner = () => {
           sera_casse: row.sera_casse ?? '',
           sera_sfuse: row.sera_sfuse ?? '',
           comments: row.comments || {},
+          ...histBody,
         }, { headers: { Authorization: `Bearer ${token}` } });
         // Mantieni protezione del valore locale per altri 2s dopo il save
         bevPendingSeraUntil.current[sigla] = Date.now() + 2000;
@@ -332,7 +347,7 @@ const ReportBetaPageInner = () => {
         console.error('save beverage sera (report)', e);
       }
     }, 600);
-  }, [token]);
+  }, [token, histBody]);
 
   // Magazzino (Mattina o Sera): l'utente inserisce CASSE (×24) e SFUSE separatamente.
   // Il totale (mattina o sera) memorizzato a DB è la somma calcolata casse*24 + sfuse.
@@ -422,7 +437,7 @@ const ReportBetaPageInner = () => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await axios.get(`${API}/cash/daily`, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await axios.get(`${API}/cash/daily${histQS}`, { headers: { Authorization: `Bearer ${token}` } });
         if (cancelled) return;
         const data = res.data?.data || {};
         const prev = res.data?.prev_cash_sera;
@@ -452,7 +467,7 @@ const ReportBetaPageInner = () => {
       }
     })();
     return () => { cancelled = true; };
-  }, [token]);
+  }, [token, histQS]);
 
   // Debounced save del riepilogo cassa
   useEffect(() => {
@@ -466,12 +481,13 @@ const ReportBetaPageInner = () => {
         paste_text: pasteText,
         cash_banconote: cash,
         manual_prices: manualPrices,
+        ...histBody,
       }, {
         headers: { Authorization: `Bearer ${token}` },
       }).catch(() => { /* silenzioso */ });
     }, 500);
     return () => { if (cashSaveTimer.current) clearTimeout(cashSaveTimer.current); };
-  }, [cashRow, cashComments, versColor, pasteText, cash, manualPrices, cashLoaded, token]);
+  }, [cashRow, cashComments, versColor, pasteText, cash, manualPrices, cashLoaded, token, histBody]);
 
   // Auto-popolamento PASTE dalle paste mandate dal Cassa (live, per il locale effettivo).
   // - Fetch iniziale + polling 5s + ascolto eventi WS via OrderContext (refresh immediato).
@@ -479,6 +495,7 @@ const ReportBetaPageInner = () => {
   // - Se l'utente sblocca "Modifica manuale" l'override locale non viene sovrascritto.
   useEffect(() => {
     if (!token) return;
+    if (historicalMode) return; // In modalità storica usiamo il paste_text salvato
     let cancelled = false;
     const eid = effectiveRestaurant?.id;
     const headers = { Authorization: `Bearer ${token}` };
@@ -507,15 +524,16 @@ const ReportBetaPageInner = () => {
     // Polling come fallback; il WS sotto (OrderContext) farà i refresh "live".
     const id = setInterval(load, 5000);
     return () => { cancelled = true; clearInterval(id); };
-  }, [token, isAdmin, effectiveRestaurant?.id]);
+  }, [token, isAdmin, effectiveRestaurant?.id, historicalMode]);
 
   // Sincronizza pasteText con autoPasteText quando NON è in override manuale.
   useEffect(() => {
     if (manualPasteOverride) return;
+    if (historicalMode) return; // Storico: usa il paste_text salvato, non sovrascrivere
     if (autoPasteText === pasteText) return;
     setPasteText(autoPasteText);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoPasteText, manualPasteOverride]);
+  }, [autoPasteText, manualPasteOverride, historicalMode]);
 
   // Quando un ordine viene creato/modificato/eliminato dall'OrderContext (WS live)
   // forziamo un refetch immediato così la colonna PASTE è subito aggiornata.
@@ -526,6 +544,7 @@ const ReportBetaPageInner = () => {
   const orderTrigger = orderCtx?.orders?.length ?? 0;
   useEffect(() => {
     if (!token) return;
+    if (historicalMode) return; // In modalità storica nessun refresh live
     let cancelled = false;
     const eid = effectiveRestaurant?.id;
     const headers = { Authorization: `Bearer ${token}` };
@@ -545,7 +564,7 @@ const ReportBetaPageInner = () => {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderTrigger]);
+  }, [orderTrigger, historicalMode]);
 
   // Info del quadratino attualmente selezionato (per la barra preview in basso)
   const previewInfo = useMemo(() => {
@@ -849,6 +868,28 @@ const ReportBetaPageInner = () => {
       style={{ zoom: 0.9 }}
     >
       <Header />
+      {historicalMode && (
+        <div
+          data-testid="historical-banner"
+          className="bg-amber-100 border-y-2 border-amber-500 text-amber-900 px-4 py-2 flex items-center justify-between gap-3 flex-wrap"
+          style={{ fontSize: 14 }}
+        >
+          <div className="flex items-center gap-2 font-bold">
+            <span style={{ fontSize: 18 }}>📅</span>
+            MODALITÀ STORICO — {(() => {
+              const [y, m, d] = urlDate.split('-');
+              return `${d}/${m}/${y}`;
+            })()} — Le modifiche aggiornano la chiusura archiviata
+          </div>
+          <button
+            data-testid="historical-back"
+            onClick={() => navigate('/chiusure-excel')}
+            className="bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 py-1 rounded text-xs"
+          >
+            ← Torna a Chiusure Excel
+          </button>
+        </div>
+      )}
       <main className="flex-1 max-w-[1600px] w-full mx-auto px-3 py-2 flex flex-col min-h-0">
         {/* Titolo compatto */}
         <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
@@ -1964,16 +2005,23 @@ const ReportBetaPageInner = () => {
   );
 };
 
-// Wrapper con password gate "0123" (sblocco condiviso con Magazzino Bevande nella stessa sessione)
-const ReportBetaPage = () => (
-  <PasswordGate
-    password="0123"
-    storageKey="flaminio-section-unlocked"
-    title="Report Cassa"
-    subtitle="Inserisci la password per accedere"
-  >
-    <ReportBetaPageInner />
-  </PasswordGate>
-);
+// Wrapper con password gate "0123" (sblocco condiviso con Magazzino Bevande nella stessa sessione).
+// In MODALITÀ STORICA (?date=...&rid=...) l'Admin bypassa la password.
+const ReportBetaPage = () => {
+  const [searchParams] = useSearchParams();
+  const { isAdmin } = useAuth();
+  const isHistorical = !!(searchParams.get('date') && searchParams.get('rid') && isAdmin);
+  if (isHistorical) return <ReportBetaPageInner />;
+  return (
+    <PasswordGate
+      password="0123"
+      storageKey="flaminio-section-unlocked"
+      title="Report Cassa"
+      subtitle="Inserisci la password per accedere"
+    >
+      <ReportBetaPageInner />
+    </PasswordGate>
+  );
+};
 
 export default ReportBetaPage;

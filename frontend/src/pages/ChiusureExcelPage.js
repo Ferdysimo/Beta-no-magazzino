@@ -195,7 +195,7 @@ const ChiusureExcelPage = () => {
 
   const onRowClick = (date) => {
     if (!effectiveRestId || !date) return;
-    navigate(`/storico-chiusure?date=${date}&rid=${effectiveRestId}`);
+    navigate(`/report-beta?date=${date}&rid=${effectiveRestId}`);
   };
 
   // Totali colonna
