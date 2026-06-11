@@ -1267,15 +1267,18 @@ const ReportBetaPageInner = () => {
             </div>
 
             {/* ============ MAGAZZINO SERA (editabile, sync live con Magazzino Bevande) ============ */}
-            <div className="bg-white rounded border border-gray-200 p-1.5">
+            <div
+              className="rounded border p-1.5"
+              style={{ background: '#F5C518', borderColor: '#D4A800' }}
+            >
               <div className="flex items-baseline justify-between mb-1">
-                <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Sera</h2>
-                <span className="text-[10px] text-gray-400">
+                <h2 className="text-xs font-bold text-gray-900 uppercase">Magazzino Sera</h2>
+                <span className="text-[10px] text-gray-800">
                   Casse (×{PEZZI_PER_CASSA}) + Sfuse = totale · sync live · supporta formule "=..."
                 </span>
               </div>
               {beverages.length === 0 ? (
-                <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
+                <div className="h-11 flex items-center justify-center text-xs text-gray-700 italic">
                   Nessuna bevanda configurata.
                 </div>
               ) : (
@@ -1298,7 +1301,7 @@ const ReportBetaPageInner = () => {
                         data-testid={`mag-sera-${b.sigla}`}
                         className="flex-1 min-w-[90px] flex flex-col"
                       >
-                        <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
+                        <label className="text-[10px] font-semibold text-gray-900 text-center leading-none mb-0.5 truncate" title={b.name}>
                           {b.sigla}
                         </label>
                         <div className="flex gap-1">
@@ -1312,12 +1315,12 @@ const ReportBetaPageInner = () => {
                             onFocus={() => setFocusedSeraSigla(b.sigla)}
                             onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
                             title={isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : `Casse × ${PEZZI_PER_CASSA}`}
-                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-amber-400 ${
+                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-yellow-600 ${
                               isFormulaCasse && isFocusedSera
                                 ? 'bg-rose-100 border-rose-300 text-rose-800'
                                 : casseEmpty
-                                  ? 'bg-gray-50 border-gray-200 text-gray-700'
-                                  : 'bg-amber-50 border-amber-200 text-gray-900'
+                                  ? 'bg-yellow-50 border-yellow-700 text-gray-800'
+                                  : 'bg-white border-yellow-700 text-gray-900'
                             }`}
                           />
                           {/* SFUSE (×1) */}
@@ -1330,18 +1333,18 @@ const ReportBetaPageInner = () => {
                             onFocus={() => setFocusedSeraSigla(b.sigla)}
                             onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
                             title={isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Bottiglie sfuse'}
-                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-sky-400 ${
+                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-yellow-600 ${
                               isFormulaSfuse && isFocusedSera
                                 ? 'bg-rose-100 border-rose-300 text-rose-800'
                                 : sfuseEmpty
-                                  ? 'bg-gray-50 border-gray-200 text-gray-700'
-                                  : 'bg-sky-50 border-sky-200 text-gray-900'
+                                  ? 'bg-yellow-50 border-yellow-700 text-gray-800'
+                                  : 'bg-white border-yellow-700 text-gray-900'
                             }`}
                           />
                         </div>
                         <span
                           data-testid={`bev-mag-sera-total-${b.sigla}`}
-                          className={`text-[10px] mt-0.5 text-center leading-none font-bold ${total === null ? 'text-gray-400' : 'text-gray-800'}`}
+                          className={`text-[10px] mt-0.5 text-center leading-none font-bold ${total === null ? 'text-gray-700' : 'text-gray-900'}`}
                         >
                           {total === null
                             ? 'sera'
