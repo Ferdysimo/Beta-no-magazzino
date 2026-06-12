@@ -90,7 +90,7 @@ async def diagnostics_middleware(request: Request, call_next):
                         rname = payload.get("restaurant_name", "") or ""
                         role = payload.get("role", "") or ""
                         # Admin/supervisor overriding a specific restaurant via header
-                        if role in ("admin", "supervisor"):
+                        if role in ("admin",):
                             override = request.headers.get("X-Admin-Restaurant-Id")
                             if override:
                                 rid = override
@@ -580,7 +580,7 @@ async def _effective_restaurant_id(request: Request, token_data: dict) -> str:
     - Per Admin/Supervisor: usa l'header X-Restaurant-Id se presente (impersonificazione).
     - Per altri ruoli: usa sempre il restaurant_id del token.
     """
-    can_impersonate = token_data.get("role") in ("admin", "supervisor")
+    can_impersonate = token_data.get("role") in ("admin",)
     if can_impersonate:
         rid = request.headers.get("X-Restaurant-Id") or request.headers.get("x-restaurant-id")
         if rid:
@@ -730,10 +730,11 @@ def save_image_to_disk(base64_data: str, prefix: str) -> str:
     filepath.write_bytes(base64.b64decode(data))
     return filename
 
-def create_token(restaurant_id: str, restaurant_name: str, role: str = "restaurant") -> str:
+def create_token(restaurant_id: str, restaurant_name: str, role: str = "restaurant", username: str = "") -> str:
     payload = {
         "restaurant_id": restaurant_id,
         "restaurant_name": restaurant_name,
+        "username": username or restaurant_name,
         "role": role,
         "exp": datetime.now(timezone.utc).timestamp() + 86400 * 7
     }
@@ -742,13 +743,13 @@ def create_token(restaurant_id: str, restaurant_name: str, role: str = "restaura
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security), request: Request = None) -> dict:
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
-        # Supervisor has the same operational privileges as Admin: normalize so
-        # every existing `role == "admin"` check keeps working unchanged.
-        # The original role is preserved under `original_role` for audit display.
+        # Solo "Federico" (supervisor) ha gli stessi privilegi operativi dell'Admin.
+        # Altri supervisori restano col loro ruolo limitato.
         if payload.get("role") == "supervisor":
             payload["original_role"] = "supervisor"
-            payload["role"] = "admin"
-        # Admin/Supervisor can act as any restaurant via header
+            if payload.get("username") == "Federico":
+                payload["role"] = "admin"
+        # Admin (e Federico promosso) può agire come qualsiasi locale via header
         if payload.get("role") == "admin" and request:
             admin_restaurant_id = request.headers.get("X-Admin-Restaurant-Id")
             if admin_restaurant_id:
@@ -818,7 +819,7 @@ async def login(data: LoginRequest):
     if not restaurant or not pwd_context.verify(data.password, restaurant["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    token = create_token(restaurant["id"], restaurant["name"], restaurant.get("role", "restaurant"))
+    token = create_token(restaurant["id"], restaurant["name"], restaurant.get("role", "restaurant"), restaurant.get("username", ""))
     
     return LoginResponse(
         token=token,
@@ -844,7 +845,7 @@ async def get_current_restaurant(token_data: dict = Depends(verify_token)):
 
 @api_router.get("/admin/restaurants")
 async def get_admin_restaurants(token_data: dict = Depends(verify_token)):
-    if token_data.get("role") not in ("admin", "supervisor"):
+    if token_data.get("role") not in ("admin",):
         raise HTTPException(status_code=403, detail="Admin only")
     restaurants = await db.restaurants.find(
         {"role": "restaurant"},
@@ -883,7 +884,7 @@ async def get_diagnostics(token_data: dict = Depends(verify_token)):
     """Live system diagnostics for the Admin dashboard.
     Reports per-restaurant WebSocket state, recent disconnect events,
     last 50 API calls and last 50 errors."""
-    if token_data.get("role") not in ("admin", "supervisor"):
+    if token_data.get("role") not in ("admin",):
         raise HTTPException(status_code=403, detail="Admin only")
 
     now = datetime.now(timezone.utc)
@@ -2946,7 +2947,7 @@ def _resolve_historical_mode(
     if not date_param or not rid_param:
         # Entrambi devono essere presenti per attivare la modalità storica
         return None
-    if token_data.get("role") not in ("admin", "supervisor"):
+    if token_data.get("role") not in ("admin",):
         raise HTTPException(status_code=403, detail="Modalità storica riservata ad Admin")
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_param):
         raise HTTPException(status_code=400, detail="Data non valida (formato YYYY-MM-DD)")
@@ -3726,7 +3727,7 @@ async def list_closures(
     """Lista delle chiusure (date) con riepilogo: incasso, # paste, # bevande, ecc.
     Filtra per `restaurant_id` se fornito (richiesto per la vista per-locale).
     """
-    if token_data.get("role") not in ("admin", "supervisor"):
+    if token_data.get("role") not in ("admin",):
         raise HTTPException(status_code=403, detail="Admin only")
     cutoff = (datetime.now(ROME_TZ) - timedelta(days=max(1, min(days, 365)))).strftime("%Y-%m-%d")
     today = _today_rome_str()
@@ -3804,7 +3805,7 @@ async def admin_audit_log_groups(
     token_data: dict = Depends(verify_token),
 ):
     """Raggruppa l'audit-log per (locale, data report). Una entry = una chiusura/report."""
-    if token_data.get("role") not in ("admin", "supervisor"):
+    if token_data.get("role") not in ("admin",):
         raise HTTPException(status_code=403, detail="Admin only")
     match: Dict[str, object] = {}
     if date_from or date_to:
@@ -3869,7 +3870,7 @@ async def admin_audit_log(
     token_data: dict = Depends(verify_token),
 ):
     """Audit-log dei salvataggi su Report (Cassa + Bevande). Admin only."""
-    if token_data.get("role") not in ("admin", "supervisor"):
+    if token_data.get("role") not in ("admin",):
         raise HTTPException(status_code=403, detail="Admin only")
     q: Dict[str, object] = {}
     if date_from or date_to:
@@ -3973,7 +3974,7 @@ async def closures_grid_admin(
     """Vista Excel-like: una riga per giorno con TUTTI i campi cash + bevande
     (mattina/inUsc/scarti/sera + qty + incasso per ogni sigla) + totali calcolati.
     Filtrabile per restaurant_id (richiesto per la vista per-locale)."""
-    if token_data.get("role") not in ("admin", "supervisor"):
+    if token_data.get("role") not in ("admin",):
         raise HTTPException(status_code=403, detail="Admin only")
     days = max(1, min(int(days or 30), 365))
     cutoff = (datetime.now(ROME_TZ) - timedelta(days=days)).strftime("%Y-%m-%d")
@@ -4225,7 +4226,7 @@ async def get_pasta_dictionary(
     torna il default `PASTA_PRICES_MAP`. Tutti possono leggere il proprio dict;
     Admin/Supervisor possono leggere quello di qualsiasi locale specificando `restaurant_id`."""
     role = token_data.get("role")
-    if restaurant_id and role not in ("admin", "supervisor"):
+    if restaurant_id and role not in ("admin",):
         # Utenti non admin/supervisor non possono leggere il dict di un altro locale
         raise HTTPException(status_code=403, detail="Admin only per leggere dict altri locali")
     rid = restaurant_id
@@ -4255,7 +4256,7 @@ async def upsert_pasta_dictionary(
     token_data: dict = Depends(verify_token),
 ):
     """Sovrascrive il dizionario paste di un ristorante. Solo Admin/Supervisor."""
-    if token_data.get("role") not in ("admin", "supervisor"):
+    if token_data.get("role") not in ("admin",):
         raise HTTPException(status_code=403, detail="Solo Admin/Supervisor possono modificare il dizionario")
     if not data.restaurant_id or not isinstance(data.restaurant_id, str):
         raise HTTPException(status_code=400, detail="restaurant_id mancante")
@@ -4297,7 +4298,7 @@ async def reset_pasta_dictionary(
     token_data: dict = Depends(verify_token),
 ):
     """Resetta il dizionario di un ristorante al default. Solo Admin/Supervisor."""
-    if token_data.get("role") not in ("admin", "supervisor"):
+    if token_data.get("role") not in ("admin",):
         raise HTTPException(status_code=403, detail="Solo Admin/Supervisor")
     res = await db.pasta_dictionary.delete_one({"restaurant_id": restaurant_id})
     return {"ok": True, "deleted": res.deleted_count}
@@ -4312,7 +4313,7 @@ async def admin_snapshot_today(
     Non tocca i dati di oggi. Sovrascrive eventuali dati esistenti sulla data target.
     Body: {restaurant_id?: str, target_date?: 'YYYY-MM-DD'}
     """
-    if token_data.get("role") not in ("admin", "supervisor"):
+    if token_data.get("role") not in ("admin",):
         raise HTTPException(status_code=403, detail="Solo Admin/Supervisor")
     p = payload or {}
     rid = p.get("restaurant_id") or await _effective_restaurant_id(request, token_data)
@@ -4373,7 +4374,7 @@ async def closure_detail_admin(
     token_data: dict = Depends(verify_token),
 ):
     """Dettaglio completo di una chiusura (data Rome YYYY-MM-DD). Admin only."""
-    if token_data.get("role") not in ("admin", "supervisor"):
+    if token_data.get("role") not in ("admin",):
         raise HTTPException(status_code=403, detail="Admin only")
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
         raise HTTPException(status_code=400, detail="Data non valida")

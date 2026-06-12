@@ -14,10 +14,13 @@ export const AuthProvider = ({ children }) => {
     JSON.parse(localStorage.getItem('admin_selected_restaurant') || 'null')
   );
 
+  // "Federico" è l'unico supervisore con privilegi pieni tipo admin (vede tutti
+  // i locali, pannello admin, dizionario, chiusure excel, ecc.).
+  // Altri account "supervisor" (futuri) avranno solo i permessi di base senza
+  // i pulsanti admin extra.
   const isSupervisor = restaurant?.role === 'supervisor';
-  // Federico (supervisor) ha gli stessi privilegi pieni di Admin: trattiamolo
-  // come admin in tutto il frontend (guard pagine, pulsanti, ecc.).
-  const isAdmin = restaurant?.role === 'admin' || isSupervisor;
+  const isFederico = isSupervisor && restaurant?.username === 'Federico';
+  const isAdmin = restaurant?.role === 'admin' || isFederico;
   // Alias storico mantenuto per chiarezza nei call site che vogliono ENTRAMBI.
   const canImpersonate = isAdmin;
 
@@ -34,13 +37,16 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('admin_selected_restaurant');
   };
 
-  // ===== Axios interceptor: per Admin/Supervisor invia X-Restaurant-Id del locale impersonato =====
+  // ===== Axios interceptor: per Admin/Federico invia X-Restaurant-Id del locale impersonato =====
   // Usiamo un ref così l'interceptor è registrato una volta sola ma legge sempre
   // il valore aggiornato di adminSelectedRestaurant.
   const adminRestRef = useRef(adminSelectedRestaurant);
   const isAdminRef = useRef(false);
   useEffect(() => { adminRestRef.current = adminSelectedRestaurant; }, [adminSelectedRestaurant]);
-  useEffect(() => { isAdminRef.current = restaurant?.role === 'admin' || restaurant?.role === 'supervisor'; }, [restaurant]);
+  useEffect(() => {
+    const r = restaurant?.role;
+    isAdminRef.current = r === 'admin' || (r === 'supervisor' && restaurant?.username === 'Federico');
+  }, [restaurant]);
   useEffect(() => {
     const id = axios.interceptors.request.use((config) => {
       try {
@@ -123,7 +129,7 @@ export const AuthProvider = ({ children }) => {
   return (
     <AuthContext.Provider value={{
       restaurant, token, loading, login, logout,
-      isAdmin, isSupervisor, canImpersonate,
+      isAdmin, isSupervisor, isFederico, canImpersonate,
       effectiveRestaurant, adminSelectedRestaurant,
       selectRestaurant, clearSelectedRestaurant
     }}>
