@@ -9,7 +9,7 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 const HomePage = () => {
-  const { restaurant, token, isAdmin, isSupervisor, canImpersonate, effectiveRestaurant, selectRestaurant, clearSelectedRestaurant } = useAuth();
+  const { restaurant, token, isAdmin, isSupervisor, isFederico, canImpersonate, effectiveRestaurant, selectRestaurant, clearSelectedRestaurant } = useAuth();
   const navigate = useNavigate();
   const [restaurants, setRestaurants] = useState([]);
 
@@ -66,6 +66,7 @@ const HomePage = () => {
               >
                 <span className="font-bold text-lg text-gray-800">Numeri</span>
               </button>
+              {!isFederico && (
               <button
                 data-testid="admin-magazzino"
                 onClick={() => navigate('/magazzino')}
@@ -74,6 +75,8 @@ const HomePage = () => {
                 <span className="font-bold text-lg text-gray-800">Magazzino</span>
                 <span className="block text-xs text-gray-500 mt-0.5">Accedi alle funzionalità del magazziniere</span>
               </button>
+              )}
+              {!isFederico && (
               <button
                 data-testid="admin-cronologia"
                 onClick={() => navigate('/magazzino/cronologia')}
@@ -82,6 +85,7 @@ const HomePage = () => {
                 <span className="font-bold text-lg text-gray-800">Cronologia movimenti</span>
                 <span className="block text-xs text-gray-500 mt-0.5">Storico carichi, evasioni e forzature di magazzino</span>
               </button>
+              )}
               <button
                 data-testid="admin-storico-chiusure"
                 onClick={() => navigate('/storico-chiusure')}
@@ -114,6 +118,7 @@ const HomePage = () => {
                 <span className="font-bold text-lg text-gray-800">Controllo Report</span>
                 <span className="block text-xs text-gray-500 mt-0.5">Audit log: ogni movimento/operazione su Cassa e Bevande</span>
               </button>
+              {!isFederico && (
               <button
                 data-testid="admin-diagnostica"
                 onClick={() => navigate('/diagnostica')}
@@ -122,6 +127,8 @@ const HomePage = () => {
                 <span className="font-bold text-lg text-gray-800">Diagnostica live</span>
                 <span className="block text-xs text-gray-500 mt-0.5">WebSocket, latenze e errori in tempo reale</span>
               </button>
+              )}
+              {!isFederico && (
               <button
                 data-testid="admin-cestino-generale"
                 onClick={() => navigate('/cestino-generale')}
@@ -130,6 +137,7 @@ const HomePage = () => {
                 <span className="font-bold text-lg text-gray-800">Cestino Generale — Audit</span>
                 <span className="block text-xs text-gray-500 mt-0.5">Registro silenzioso degli ordini nascosti dal Tablet Generale</span>
               </button>
+              )}
             </div>
           </div>
         </main>
