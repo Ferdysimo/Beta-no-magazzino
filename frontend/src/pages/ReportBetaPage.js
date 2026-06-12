@@ -982,11 +982,11 @@ const ReportBetaPageInner = () => {
             <div className="mt-1 grid grid-cols-2 gap-1 flex-shrink-0">
               <div data-testid="total-paste-count" className="bg-gray-900 text-white rounded px-2 py-1 flex flex-col items-center">
                 <span className="text-[9px] uppercase opacity-70">Tot paste</span>
-                <span className="text-xl font-black leading-none">{pasteAnalysis.totalCount}</span>
+                <span className="text-xl font-semibold leading-none">{pasteAnalysis.totalCount}</span>
               </div>
               <div data-testid="total-paste-euro" className="bg-[#F5C518] text-gray-900 rounded px-2 py-1 flex flex-col items-center">
                 <span className="text-[9px] uppercase opacity-80">Tot €</span>
-                <span className="text-xl font-black leading-none">€{fmtEur(pasteAnalysis.totalEuro)}</span>
+                <span className="text-xl font-semibold leading-none">€{fmtEur(pasteAnalysis.totalEuro)}</span>
               </div>
             </div>
             {pasteAnalysis.missingPriceCount > 0 && (
@@ -999,7 +999,7 @@ const ReportBetaPageInner = () => {
           {/* ============== DESTRA — CASSA + AREA FUTURA ============== */}
           <section className="flex flex-col gap-1.5 min-h-0">
             {/* Riga banconote */}
-            <div className="bg-white rounded p-1.5" style={{ border: '2px solid #111827' }}>
+            <div className="bg-white rounded p-1.5" style={{ border: '2px solid #4ade80' }}>
               <div className="flex items-baseline justify-center mb-1">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Cassa</h2>
               </div>
@@ -1032,17 +1032,16 @@ const ReportBetaPageInner = () => {
                   <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">Tot</label>
                   <div
                     data-testid="cash-total"
-                    className="w-full h-11 bg-gray-900 text-[#F5C518] rounded flex items-center justify-center font-black text-sm"
+                    className="w-full h-11 bg-gray-900 text-[#F5C518] rounded flex items-center justify-center font-semibold text-sm"
                   >
                     €{fmtEur(cashTotal)}
                   </div>
-                  <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">in €</span>
                 </div>
               </div>
             </div>
 
             {/* ============ RIEPILOGO CASSA ============ */}
-            <div className="bg-white rounded p-1.5" style={{ border: '2px solid #111827' }}>
+            <div className="bg-white rounded p-1.5" style={{ border: '2px solid #4ade80' }}>
               <div className="relative flex items-center justify-center mb-1">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Movimentazione finanziaria</h2>
                 <div className="absolute right-0 flex items-center gap-2">
@@ -1082,7 +1081,7 @@ const ReportBetaPageInner = () => {
                       style={{ backgroundColor: boxStyle.bg }}
                     >
                       <label
-                        className="text-[10px] font-extrabold text-center leading-none mb-0.5 truncate uppercase"
+                        className="text-[10px] font-semibold text-center leading-none mb-0.5 truncate uppercase"
                         title={f.label}
                         style={{ color: boxStyle.text }}
                       >
@@ -1166,11 +1165,10 @@ const ReportBetaPageInner = () => {
                   <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">CASH SERA</label>
                   <div
                     data-testid="cash-row-sera"
-                    className="w-full h-11 bg-gray-900 text-[#F5C518] rounded flex items-center justify-center font-black text-sm"
+                    className="w-full h-11 bg-gray-900 text-[#F5C518] rounded flex items-center justify-center font-semibold text-sm"
                   >
                     €{cashSera.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
-                  <span className="text-[9px] text-gray-700 mt-0.5 text-center leading-none font-bold">totale</span>
                 </div>
                 {/* VERS — ULTIMO box, DOPO CASH SERA (bianco, con palette colori) */}
                 {(() => {
@@ -1189,7 +1187,7 @@ const ReportBetaPageInner = () => {
                       style={{ backgroundColor: boxStyle.bg }}
                     >
                       <label
-                        className="text-[10px] font-extrabold text-center leading-none mb-0.5 truncate uppercase"
+                        className="text-[10px] font-semibold text-center leading-none mb-0.5 truncate uppercase"
                         title={f.label}
                         style={{ color: boxStyle.text }}
                       >
@@ -1329,7 +1327,7 @@ const ReportBetaPageInner = () => {
                             title={locked
                               ? 'Auto-popolato da Magazzino Sera del giorno prima (clicca sul lucchetto per forzare)'
                               : (isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : `Casse × ${PEZZI_PER_CASSA}`)}
-                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                            className={`w-1/2 h-9 rounded text-center font-semibold text-sm border focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
                               locked
                                 ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-not-allowed'
                                 : isFormulaCasse
@@ -1351,7 +1349,7 @@ const ReportBetaPageInner = () => {
                             title={locked
                               ? 'Auto-popolato da Magazzino Sera del giorno prima (clicca sul lucchetto per forzare)'
                               : (isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Bottiglie sfuse')}
-                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-teal-400 ${
+                            className={`w-1/2 h-9 rounded text-center font-semibold text-sm border focus:outline-none focus:ring-2 focus:ring-teal-400 ${
                               locked
                                 ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-not-allowed'
                                 : isFormulaSfuse
@@ -1362,14 +1360,6 @@ const ReportBetaPageInner = () => {
                             }`}
                           />
                         </div>
-                        <span
-                          data-testid={`bev-mag-mattina-total-${b.sigla}`}
-                          className={`text-[10px] mt-0.5 text-center leading-none font-bold ${total === null ? 'text-gray-400' : 'text-gray-800'}`}
-                        >
-                          {total === null
-                            ? 'mattina'
-                            : `tot ${Number.isInteger(total) ? total : (+total.toFixed(2))}`}
-                        </span>
                       </div>
                     );
                   })}
@@ -1413,7 +1403,7 @@ const ReportBetaPageInner = () => {
                           value={casseRaw}
                           onChange={(e) => handleInUscChange(b.sigla, e.target.value)}
                           title={isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN} casse → ${casseN * PEZZI_PER_CASSA} unità` : `Numero casse · ×${PEZZI_PER_CASSA}`}
-                          className={`w-full h-7 rounded text-center font-black text-[11px] border focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
+                          className={`w-full h-7 rounded text-center font-semibold text-[11px] border focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
                             isFormulaCasse
                               ? 'bg-rose-100 border-rose-300 text-rose-800'
                               : casseEmpty
@@ -1423,12 +1413,8 @@ const ReportBetaPageInner = () => {
                         />
                         <span
                           data-testid={`bev-ingressi-total-${b.sigla}`}
-                          className={`text-[9px] text-center leading-none font-bold ${total === null ? 'text-gray-400' : 'text-gray-800'}`}
-                        >
-                          {total === null
-                            ? 'ingressi'
-                            : `tot ${Number.isInteger(total) ? total : (+total.toFixed(2))}`}
-                        </span>
+                          className="hidden"
+                        />
                       </div>
                     );
                   })}
@@ -1437,10 +1423,10 @@ const ReportBetaPageInner = () => {
               </div>
 
               {/* --- SCARTI --- */}
-              <div className="bg-white rounded border border-gray-200 p-1 flex-1 min-w-0">
-                <div className="flex items-baseline justify-between mb-0.5 gap-2">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-xs font-bold text-gray-800 uppercase">Scarti</h2>
+              <div className="bg-white rounded p-1 flex-1 min-w-0" style={{ border: '2px solid #F5C518' }}>
+                <div className="relative flex items-center justify-center mb-0.5">
+                  <h2 className="text-xs font-bold text-gray-800 uppercase">Scarti</h2>
+                  <div className="absolute right-0">
                     <button
                       type="button"
                       data-testid="toggle-scarti"
@@ -1479,7 +1465,7 @@ const ReportBetaPageInner = () => {
                               value={scRaw}
                               onChange={(e) => handleScartiChange(b.sigla, e.target.value)}
                               title={isFormulaSc ? `Formula: ${scRaw} = ${scN}` : 'Unità scartate (singole)'}
-                              className={`w-full h-7 rounded text-center font-black text-[11px] border focus:outline-none focus:ring-2 focus:ring-rose-400 ${
+                              className={`w-full h-7 rounded text-center font-semibold text-[11px] border focus:outline-none focus:ring-2 focus:ring-rose-400 ${
                                 isFormulaSc
                                   ? 'bg-rose-100 border-rose-300 text-rose-800'
                                   : scEmpty
@@ -1487,7 +1473,6 @@ const ReportBetaPageInner = () => {
                                     : 'bg-rose-50 border-rose-200 text-gray-900'
                               }`}
                             />
-                            <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">scarti</span>
                           </div>
                         );
                       })}
@@ -1543,7 +1528,7 @@ const ReportBetaPageInner = () => {
                             onFocus={() => setFocusedSeraSigla(b.sigla)}
                             onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
                             title={isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : `Casse × ${PEZZI_PER_CASSA}`}
-                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-amber-400 ${
+                            className={`w-1/2 h-9 rounded text-center font-semibold text-sm border focus:outline-none focus:ring-2 focus:ring-amber-400 ${
                               isFormulaCasse && isFocusedSera
                                 ? 'bg-rose-100 border-rose-300 text-rose-800'
                                 : casseEmpty
@@ -1561,7 +1546,7 @@ const ReportBetaPageInner = () => {
                             onFocus={() => setFocusedSeraSigla(b.sigla)}
                             onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
                             title={isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Bottiglie sfuse'}
-                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-sky-400 ${
+                            className={`w-1/2 h-9 rounded text-center font-semibold text-sm border focus:outline-none focus:ring-2 focus:ring-sky-400 ${
                               isFormulaSfuse && isFocusedSera
                                 ? 'bg-rose-100 border-rose-300 text-rose-800'
                                 : sfuseEmpty
@@ -1572,12 +1557,8 @@ const ReportBetaPageInner = () => {
                         </div>
                         <span
                           data-testid={`bev-mag-sera-total-${b.sigla}`}
-                          className={`text-[10px] mt-0.5 text-center leading-none font-bold ${total === null ? 'text-gray-400' : 'text-gray-800'}`}
-                        >
-                          {total === null
-                            ? 'sera'
-                            : `tot ${Number.isInteger(total) ? total : (+total.toFixed(2))}`}
-                        </span>
+                          className="hidden"
+                        />
                       </div>
                     );
                   })}
@@ -1607,12 +1588,9 @@ const ReportBetaPageInner = () => {
                         <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
                           {b.sigla}
                         </label>
-                        <div className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-base text-gray-900">
+                        <div className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-semibold text-base text-gray-900">
                           {b.qty}
                         </div>
-                        <span className="text-[10px] font-bold text-gray-700 mt-0.5 text-center leading-none">
-                          €{b.inc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
                       </div>
                     ))}
                     {/* Totale — solo importo € */}
@@ -1620,11 +1598,10 @@ const ReportBetaPageInner = () => {
                       <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">Tot</label>
                       <div
                         data-testid="bev-sales-total-inc"
-                        className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-base text-gray-900"
+                        className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-semibold text-base text-gray-900"
                       >
                         €{bevTotalInc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
-                      <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">&nbsp;</span>
                     </div>
                   </div>
                 )}
@@ -1669,11 +1646,10 @@ const ReportBetaPageInner = () => {
                           )}
                           <div
                             data-testid={`spicci-valore-${r.key}`}
-                            className="w-full h-7 mt-0.5 bg-yellow-50 border border-yellow-200 rounded flex items-center justify-center font-black text-[11px] text-gray-900"
+                            className="w-full h-7 mt-0.5 bg-yellow-50 border border-yellow-200 rounded flex items-center justify-center font-semibold text-[11px] text-gray-900"
                           >
                             €{r.value.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                           </div>
-                          <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">×{r.mult}</span>
                           {commentPopover?.key === r.key && (
                             <CommentPopover
                               inputRef={commentInputRef}
@@ -1694,11 +1670,10 @@ const ReportBetaPageInner = () => {
                         </div>
                         <div
                           data-testid="spicci-totale"
-                          className="w-full h-7 mt-0.5 bg-white border border-gray-200 rounded flex items-center justify-center font-black text-[11px] text-gray-900"
+                          className="w-full h-7 mt-0.5 bg-white border border-gray-200 rounded flex items-center justify-center font-semibold text-[11px] text-gray-900"
                         >
                           €{spicciValues.total.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                         </div>
-                        <span className="text-[9px] text-gray-700 mt-0.5 text-center leading-none font-bold">totale</span>
                       </div>
                     </div>
                   </div>
@@ -1754,7 +1729,7 @@ const ReportBetaPageInner = () => {
                                 onClick={() => startEditCassetto(f)}
                                 onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
                                 title={isAdmin ? "Clicca per modificare · destro per commento" : "Solo lettura · destro per commento"}
-                                className={`w-full h-7 border rounded px-0.5 text-center font-black text-[11px] transition-colors ${
+                                className={`w-full h-7 border rounded px-0.5 text-center font-semibold text-[11px] transition-colors ${
                                   isAdmin ? 'cursor-pointer' : 'cursor-not-allowed'
                                 } ${
                                   isNegative
@@ -1858,7 +1833,7 @@ const ReportBetaPageInner = () => {
                         <td className="p-1 font-bold">{s.label}</td>
                         <td className="p-1 text-gray-400 truncate" style={{ maxWidth: 200 }} title={s.raw}>{s.raw || <span className="italic text-gray-600">(vuoto)</span>}</td>
                         <td className="p-1 text-right">{cashSeraTrace.fmt(s.value)}</td>
-                        <td className={`p-1 text-center font-black ${s.sign === '−' ? 'text-rose-400' : s.sign === '+' ? 'text-emerald-400' : 'text-gray-500'}`}>{s.sign}</td>
+                        <td className={`p-1 text-center font-semibold ${s.sign === '−' ? 'text-rose-400' : s.sign === '+' ? 'text-emerald-400' : 'text-gray-500'}`}>{s.sign}</td>
                         <td className={`p-1 text-right ${s.delta < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{s.delta !== undefined ? cashSeraTrace.fmt(s.delta) : '—'}</td>
                         <td className="p-1 text-right text-[#F5C518] font-bold">€{cashSeraTrace.fmt(s.running)}</td>
                       </tr>
@@ -1868,7 +1843,7 @@ const ReportBetaPageInner = () => {
                 <tfoot className="border-t-2 border-[#F5C518]">
                   <tr>
                     <td colSpan="6" className="p-2 text-right font-bold text-gray-300 uppercase tracking-wider">CASH SERA totale</td>
-                    <td className="p-2 text-right text-[#F5C518] font-black text-base">€{cashSeraTrace.fmt(cashSeraTrace.final)}</td>
+                    <td className="p-2 text-right text-[#F5C518] font-semibold text-base">€{cashSeraTrace.fmt(cashSeraTrace.final)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -1889,12 +1864,12 @@ const ReportBetaPageInner = () => {
                 <div className="grid grid-cols-3 gap-3 text-center">
                   <div>
                     <div className="text-gray-400 text-[10px] uppercase tracking-wider mb-0.5">Tot Cassa fisica</div>
-                    <div className="text-emerald-300 font-black text-base">€{cashSeraTrace.fmt(cashTotal)}</div>
+                    <div className="text-emerald-300 font-semibold text-base">€{cashSeraTrace.fmt(cashTotal)}</div>
                     <div className="text-gray-500 text-[10px]">(conta banconote/monete)</div>
                   </div>
                   <div>
                     <div className="text-gray-400 text-[10px] uppercase tracking-wider mb-0.5">CASH SERA calcolato</div>
-                    <div className="text-[#F5C518] font-black text-base">€{cashSeraTrace.fmt(cashSeraTrace.final)}</div>
+                    <div className="text-[#F5C518] font-semibold text-base">€{cashSeraTrace.fmt(cashSeraTrace.final)}</div>
                     <div className="text-gray-500 text-[10px]">(formula)</div>
                   </div>
                   <div>
@@ -1907,7 +1882,7 @@ const ReportBetaPageInner = () => {
                       const arrow = ok ? '=' : (diff > 0 ? '↑ cassa eccede' : '↓ cassa manca');
                       return (
                         <>
-                          <div className={`font-black text-base ${color}`}>
+                          <div className={`font-semibold text-base ${color}`}>
                             {diff >= 0 ? '+' : ''}€{cashSeraTrace.fmt(diff)}
                           </div>
                           <div className={`text-[10px] font-bold ${color}`}>{arrow}</div>
@@ -1964,13 +1939,13 @@ const ReportBetaPageInner = () => {
                 </div>
               </div>
               <div className="flex-1 min-w-0 flex items-center justify-center bg-gray-800 rounded px-4 py-2 border border-gray-700">
-                <span className="text-3xl font-black font-mono text-white tracking-wide truncate">
+                <span className="text-3xl font-semibold font-mono text-white tracking-wide truncate">
                   {previewInfo.raw || <em className="text-gray-500 italic text-xl">vuoto</em>}
                 </span>
               </div>
               <div className="flex-shrink-0 text-right">
                 <div className="text-[10px] uppercase tracking-widest text-gray-400">Risultato</div>
-                <div className="text-xl font-black text-emerald-400">{previewInfo.formatted}</div>
+                <div className="text-xl font-semibold text-emerald-400">{previewInfo.formatted}</div>
               </div>
               {previewInfo.comment && (
                 <div className="flex-shrink-0 bg-amber-100 text-amber-900 border border-amber-400 rounded px-2 py-1 max-w-xs">
