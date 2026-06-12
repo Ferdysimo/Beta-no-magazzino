@@ -909,7 +909,7 @@ const ReportBetaPageInner = () => {
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[14fr_86fr] gap-2 min-h-0">
           {/* ============== SINISTRA — PASTE ============== */}
           <section className="bg-white rounded border border-gray-200 p-2 flex flex-col min-h-0">
-            <div className="flex items-baseline justify-between mb-1 gap-1 flex-wrap">
+            <div className="flex items-baseline justify-center mb-1 gap-1 flex-wrap">
               <h2 className="text-xs font-bold text-gray-800 uppercase">Paste</h2>
             </div>
             <button
@@ -999,8 +999,8 @@ const ReportBetaPageInner = () => {
           {/* ============== DESTRA — CASSA + AREA FUTURA ============== */}
           <section className="flex flex-col gap-1.5 min-h-0">
             {/* Riga banconote */}
-            <div className="bg-white rounded border border-gray-200 p-1.5">
-              <div className="flex items-baseline justify-between mb-1">
+            <div className="bg-white rounded p-1.5" style={{ border: '2px solid #111827' }}>
+              <div className="flex items-baseline justify-center mb-1">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Cassa</h2>
               </div>
               <div className="grid grid-cols-11 gap-1.5">
@@ -1042,10 +1042,10 @@ const ReportBetaPageInner = () => {
             </div>
 
             {/* ============ RIEPILOGO CASSA ============ */}
-            <div className="bg-white rounded border border-gray-200 p-1.5">
-              <div className="flex items-baseline justify-between mb-1 gap-2 flex-wrap">
+            <div className="bg-white rounded p-1.5" style={{ border: '2px solid #111827' }}>
+              <div className="relative flex items-center justify-center mb-1">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Movimentazione finanziaria</h2>
-                <div className="flex items-center gap-2">
+                <div className="absolute right-0 flex items-center gap-2">
                   <button
                     type="button"
                     data-testid="toggle-force-mattina"
@@ -1260,10 +1260,10 @@ const ReportBetaPageInner = () => {
             </div>
 
             {/* ============ MAGAZZINO MATTINA (casse + sfuse, in sync con Magazzino Bevande) ============ */}
-            <div className="bg-white rounded border border-gray-200 p-1.5">
-              <div className="flex items-baseline justify-between mb-1 gap-2 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Mattina</h2>
+            <div className="bg-white rounded p-1.5" style={{ border: '2px solid #F5C518' }}>
+              <div className="relative flex items-center justify-center mb-1">
+                <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Mattina</h2>
+                <div className="absolute right-0 flex items-center gap-2">
                   <button
                     type="button"
                     data-testid="toggle-mag-mattina"
@@ -1380,8 +1380,8 @@ const ReportBetaPageInner = () => {
 
             {/* ============ INGRESSI / USCITE + SCARTI (stessa riga) ============ */}
             <div className="flex items-stretch gap-2">
-              <div className="bg-white rounded border border-gray-200 p-1 flex-1 min-w-0">
-              <div className="flex items-baseline justify-between mb-0.5">
+              <div className="bg-white rounded p-1 flex-1 min-w-0" style={{ border: '2px solid #F5C518' }}>
+              <div className="flex items-baseline justify-center mb-0.5">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Ingressi / Uscite</h2>
               </div>
               {beverages.length === 0 ? (
@@ -1502,7 +1502,7 @@ const ReportBetaPageInner = () => {
               className="bg-white rounded p-1.5"
               style={{ border: '2px solid #F5C518' }}
             >
-              <div className="flex items-baseline justify-between mb-1">
+              <div className="flex items-baseline justify-center mb-1">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Sera</h2>
               </div>
               {beverages.length === 0 ? (
@@ -1588,8 +1588,8 @@ const ReportBetaPageInner = () => {
             {/* ============ VENDITE BEVANDE + (MOVIMENTI + CASSETTO) (stessa riga) ============ */}
             <div className="flex items-stretch gap-2">
               {/* --- VENDITE BEVANDE (a sinistra, occupa lo spazio rimanente) --- */}
-              <div className="bg-white rounded border border-gray-200 p-1.5 flex-1 min-w-0">
-                <div className="flex items-baseline justify-between mb-1">
+              <div className="bg-white rounded p-1.5 flex-1 min-w-0" style={{ border: '2px solid #F5C518' }}>
+                <div className="flex items-baseline justify-center mb-1">
                   <h2 className="text-xs font-bold text-gray-800 uppercase">Vendite Bevande</h2>
                 </div>
                 {bevSales.length === 0 ? (
@@ -1631,8 +1631,8 @@ const ReportBetaPageInner = () => {
               </div>
 
               {/* --- MOVIMENTI + CASSETTO (sezione unica a destra) --- */}
-              <div className="bg-white rounded border border-gray-200 p-1.5 w-[42%] flex-shrink-0">
-                <div className="flex items-baseline justify-between mb-1">
+              <div className="bg-white rounded p-1.5 w-[42%] flex-shrink-0" style={{ border: '2px solid #2563eb' }}>
+                <div className="flex items-baseline justify-center mb-1">
                   <h2 className="text-xs font-bold text-gray-800 uppercase">Spicci</h2>
                 </div>
                 <div className="flex items-stretch gap-2">
