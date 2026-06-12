@@ -932,6 +932,44 @@ const ReportBetaPageInner = () => {
           </button>
         </div>
       )}
+      {!historicalMode && isAdmin && (
+        <div
+          data-testid="test-snapshot-banner"
+          className="bg-indigo-50 border-y border-indigo-300 text-indigo-900 px-4 py-1.5 flex items-center justify-between gap-3 flex-wrap"
+          style={{ fontSize: 12 }}
+        >
+          <div className="font-semibold">
+            🧪 STRUMENTO TEST (solo Admin/Supervisor) — Archivia il report di OGGI come chiusura passata per testare la Vista Excel
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              data-testid="test-snapshot-button"
+              onClick={async () => {
+                const todayStr = new Date().toISOString().slice(0, 10);
+                const yest = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+                const target = window.prompt(
+                  `Su che data vuoi archiviare il report di oggi (${todayStr})?\nDeve essere precedente a oggi. Default: ieri (${yest})`,
+                  yest,
+                );
+                if (!target) return;
+                try {
+                  const eid = effectiveRestaurant?.id || restaurant?.id;
+                  const res = await axios.post(`${API}/admin/closures/snapshot-today`, {
+                    restaurant_id: eid, target_date: target,
+                  }, { headers: { Authorization: `Bearer ${token}` } });
+                  alert(`✓ Archiviato come ${res.data.target_date} (cash:${res.data.cash_copied} · bev:${res.data.bev_copied}).\nApro la Vista Excel...`);
+                  navigate('/chiusure-excel');
+                } catch (e) {
+                  alert('Errore: ' + (e.response?.data?.detail || e.message));
+                }
+              }}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1 rounded text-xs"
+            >
+              📦 Archivia ora come chiusura passata
+            </button>
+          </div>
+        </div>
+      )}
       <main className="flex-1 max-w-[1600px] w-full mx-auto px-3 py-2 flex flex-col min-h-0">
         {/* Titolo compatto */}
         <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">

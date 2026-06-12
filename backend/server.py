@@ -4303,6 +4303,69 @@ async def reset_pasta_dictionary(
     return {"ok": True, "deleted": res.deleted_count}
 
 
+@api_router.post("/admin/closures/snapshot-today")
+async def admin_snapshot_today(
+    payload: Dict, request: Request, token_data: dict = Depends(verify_token),
+):
+    """[TEST] Copia la chiusura di OGGI alla data target (default: ieri),
+    così l'admin può vederla subito nella Vista Excel senza aspettare mezzanotte.
+    Non tocca i dati di oggi. Sovrascrive eventuali dati esistenti sulla data target.
+    Body: {restaurant_id?: str, target_date?: 'YYYY-MM-DD'}
+    """
+    if token_data.get("role") not in ("admin", "supervisor"):
+        raise HTTPException(status_code=403, detail="Solo Admin/Supervisor")
+    p = payload or {}
+    rid = p.get("restaurant_id") or await _effective_restaurant_id(request, token_data)
+    if not rid:
+        raise HTTPException(status_code=400, detail="restaurant_id mancante")
+    target_date = p.get("target_date") or (
+        datetime.now(ROME_TZ) - timedelta(days=1)
+    ).strftime("%Y-%m-%d")
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", target_date):
+        raise HTTPException(status_code=400, detail="target_date formato non valido")
+    today = _today_rome_str()
+    if target_date >= today:
+        raise HTTPException(status_code=400, detail="target_date deve essere precedente a oggi")
+
+    # Copia cash_daily_counts
+    cash_doc = await db.cash_daily_counts.find_one(
+        {"restaurant_id": rid, "date_rome": today}, {"_id": 0}
+    )
+    cash_copied = 0
+    if cash_doc:
+        cash_copy = {**cash_doc, "date_rome": target_date, "mock": True,
+                     "updated_at": datetime.now(timezone.utc).isoformat()}
+        await db.cash_daily_counts.update_one(
+            {"restaurant_id": rid, "date_rome": target_date},
+            {"$set": cash_copy},
+            upsert=True,
+        )
+        cash_copied = 1
+
+    # Copia beverage_daily_counts (tutte le sigle)
+    bev_docs = await db.beverage_daily_counts.find(
+        {"restaurant_id": rid, "date_rome": today}, {"_id": 0}
+    ).to_list(50)
+    bev_copied = 0
+    for b in bev_docs:
+        b_copy = {**b, "date_rome": target_date, "mock": True,
+                  "updated_at": datetime.now(timezone.utc).isoformat()}
+        await db.beverage_daily_counts.update_one(
+            {"restaurant_id": rid, "date_rome": target_date, "sigla": b["sigla"]},
+            {"$set": b_copy},
+            upsert=True,
+        )
+        bev_copied += 1
+
+    return {
+        "ok": True,
+        "restaurant_id": rid,
+        "target_date": target_date,
+        "cash_copied": cash_copied,
+        "bev_copied": bev_copied,
+    }
+
+
 @api_router.get("/admin/closures/{date_str}")
 async def closure_detail_admin(
     date_str: str,
