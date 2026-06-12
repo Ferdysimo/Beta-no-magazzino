@@ -911,9 +911,6 @@ const ReportBetaPageInner = () => {
           <section className="bg-white rounded border border-gray-200 p-2 flex flex-col min-h-0">
             <div className="flex items-baseline justify-between mb-1 gap-1 flex-wrap">
               <h2 className="text-xs font-bold text-gray-800 uppercase">Paste</h2>
-              <span className="text-[10px] text-gray-400">
-                {manualPasteOverride ? 'manuale' : `auto · ${autoPasteCount} live`}
-              </span>
             </div>
             <button
               type="button"
@@ -928,15 +925,15 @@ const ReportBetaPageInner = () => {
                 }
               }}
               title={manualPasteOverride
-                ? 'Torna alla modalità automatica (sovrascrive le modifiche manuali)'
-                : 'Sblocca per modificare manualmente le paste (override locale, non persistente)'}
-              className={`text-[10px] font-bold px-2 py-1 rounded mb-1 transition-colors ${
+                ? 'Aggiornamenti automatici BLOCCATI — clicca per riattivare'
+                : 'Blocca gli aggiornamenti automatici (le paste live dal Cassa non sovrascriveranno più questo box)'}
+              className={`text-[11px] font-bold px-2 py-1 rounded mb-1 transition-colors uppercase tracking-wide ${
                 manualPasteOverride
-                  ? 'bg-rose-100 text-rose-700 border border-rose-300 hover:bg-rose-200'
-                  : 'bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200'
+                  ? 'bg-red-600 text-white border border-red-700 hover:bg-red-700'
+                  : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
               }`}
             >
-              {manualPasteOverride ? '🔓 manuale — torna auto' : '🔒 auto — modifica manuale'}
+              {manualPasteOverride ? 'AGGIORNAMENTI BLOCCATI' : 'BLOCCA AGGIORNAMENTI'}
             </button>
 
             <textarea
@@ -1005,7 +1002,6 @@ const ReportBetaPageInner = () => {
             <div className="bg-white rounded border border-gray-200 p-1.5">
               <div className="flex items-baseline justify-between mb-1">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Cassa</h2>
-                <span className="text-[10px] text-gray-400">pezzi</span>
               </div>
               <div className="grid grid-cols-11 gap-1.5">
                 {CASH_DENOMINATIONS.map(d => {
@@ -1063,9 +1059,6 @@ const ReportBetaPageInner = () => {
                   >
                     {forceMattina ? '🔓 mattina sbloccato' : '🔒 forza mattina'}
                   </button>
-                  <span className="text-[10px] text-gray-400">
-                    Mattina = Sera del giorno prima · formule "=..." supportate
-                  </span>
                 </div>
               </div>
               <div className="flex items-stretch gap-1.5">
@@ -1294,11 +1287,6 @@ const ReportBetaPageInner = () => {
                     {forceMagMattina ? '🔓 mattina sbloccato' : '🔒 forza mattina'}
                   </button>
                 </div>
-                <span className="text-[10px] text-gray-400">
-                  {forceMagMattina
-                    ? `Modifica forzata · Casse (×${PEZZI_PER_CASSA}) + Sfuse`
-                    : `Auto da Magazzino Sera del giorno prima · Casse (×${PEZZI_PER_CASSA}) + Sfuse`}
-                </span>
               </div>
               {showMagMattina && (
                 beverages.length === 0 ? (
@@ -1395,9 +1383,6 @@ const ReportBetaPageInner = () => {
               <div className="bg-white rounded border border-gray-200 p-1 flex-1 min-w-0">
               <div className="flex items-baseline justify-between mb-0.5">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Ingressi / Uscite</h2>
-                <span className="text-[10px] text-gray-400">
-                  Casse (×{PEZZI_PER_CASSA}) · sync live con Magazzino Bevande · supporta formule "=..."
-                </span>
               </div>
               {beverages.length === 0 ? (
                 <div className="h-7 flex items-center justify-center text-xs text-gray-400 italic">
@@ -1466,7 +1451,6 @@ const ReportBetaPageInner = () => {
                       {showScarti ? '▼ nascondi' : '▶ mostra'}
                     </button>
                   </div>
-                  <span className="text-[10px] text-gray-400">Unità singole · formule "=..."</span>
                 </div>
                 {showScarti && (
                   beverages.length === 0 ? (
@@ -1520,9 +1504,6 @@ const ReportBetaPageInner = () => {
             >
               <div className="flex items-baseline justify-between mb-1">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Sera</h2>
-                <span className="text-[10px] text-gray-400">
-                  Casse (×{PEZZI_PER_CASSA}) + Sfuse = totale · sync live · supporta formule "=..."
-                </span>
               </div>
               {beverages.length === 0 ? (
                 <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
@@ -1610,7 +1591,6 @@ const ReportBetaPageInner = () => {
               <div className="bg-white rounded border border-gray-200 p-1.5 flex-1 min-w-0">
                 <div className="flex items-baseline justify-between mb-1">
                   <h2 className="text-xs font-bold text-gray-800 uppercase">Vendite Bevande</h2>
-                  <span className="text-[10px] text-gray-400">Q.tà · Incasso — in sync con Magazzino Bevande</span>
                 </div>
                 {bevSales.length === 0 ? (
                   <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
@@ -1653,15 +1633,13 @@ const ReportBetaPageInner = () => {
               {/* --- MOVIMENTI + CASSETTO (sezione unica a destra) --- */}
               <div className="bg-white rounded border border-gray-200 p-1.5 w-[42%] flex-shrink-0">
                 <div className="flex items-baseline justify-between mb-1">
-                  <h2 className="text-xs font-bold text-gray-800 uppercase">Movimenti + Cassetto</h2>
-                  <span className="text-[10px] text-gray-400">Spicci aperti (Movimenti) · stock Cassetto</span>
+                  <h2 className="text-xs font-bold text-gray-800 uppercase">Spicci</h2>
                 </div>
                 <div className="flex items-stretch gap-2">
                   {/* MOVIMENTI (era "Spicci") */}
                   <div className="flex-[5] min-w-0 rounded border border-gray-200 bg-gray-50 p-1">
                     <div className="flex items-baseline justify-between mb-0.5 px-0.5">
                       <h3 className="text-[10px] font-bold text-gray-700 uppercase">Movimenti</h3>
-                      <span className="text-[9px] text-gray-400">ap.×valore</span>
                     </div>
                     <div className="flex items-stretch gap-1">
                       {spicciValues.rows.map(r => {
@@ -1729,7 +1707,6 @@ const ReportBetaPageInner = () => {
                   <div className="flex-[4] min-w-0 rounded border border-gray-200 bg-gray-50 p-1">
                     <div className="flex items-baseline justify-between mb-0.5 px-0.5">
                       <h3 className="text-[10px] font-bold text-gray-700 uppercase">Cassetto</h3>
-                      <span className="text-[9px] text-gray-400">{isAdmin ? 'modif.' : 'lett.'}</span>
                     </div>
                     <div className="flex items-stretch gap-1">
                       {CASSETTO_FIELDS.map(f => {
