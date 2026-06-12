@@ -3171,39 +3171,78 @@ def _compute_cash_sera(row: dict) -> float:
 # Moltiplicatori spicci (mazzette/rotolini aperti) — devono restare allineati al frontend
 SPICCI_MULTIPLIERS = {"sp5": 50, "sp2": 50, "sp1": 25, "sp05": 20}
 
-# Listino paste (deve restare allineato a PASTA_PRICES nel frontend ReportBetaPage.js)
+# Listino paste DI DEFAULT (deve restare allineato a PASTA_PRICES nel frontend ReportBetaPage.js).
+# Ogni ristorante può sovrascrivere il dizionario nella collection `pasta_dictionary`.
 PASTA_PRICES_MAP = {
     "CARB": 8, "AMAT": 8, "CACIO": 8, "PESTO": 8,
     "TART": 8, "RAGU": 8, "POM": 7, "CARZUC": 8,
 }
 
 
+async def _get_pasta_dict_for(restaurant_id: Optional[str]) -> Dict[str, float]:
+    """Ritorna il dizionario {sigla: prezzo} effettivo per il ristorante.
+    Se la collection `pasta_dictionary` ha un override per quel ristorante,
+    usa quello; altrimenti torna il `PASTA_PRICES_MAP` di default."""
+    if restaurant_id:
+        doc = await db.pasta_dictionary.find_one({"restaurant_id": restaurant_id}, {"_id": 0, "siglas": 1})
+        if doc and doc.get("siglas"):
+            try:
+                return {
+                    str(s["sigla"]).upper().strip(): float(s["price"])
+                    for s in doc["siglas"]
+                    if str(s.get("sigla", "")).strip()
+                }
+            except Exception as e:
+                logger.warning(f"[PASTA_DICT] Override invalid for rid={restaurant_id}: {e}")
+    return dict(PASTA_PRICES_MAP)
+
+
+# Regex per matchare una sigla SOLO se appare immediatamente dopo un eventuale
+# numero d'ordine + whitespace iniziale. Esempio:
+#   "42 CARB - PIET"    → match CARB ✓
+#   "42 PIETRO CARB"    → NO match ✗
+#   "42 - CARB"         → NO match ✗  (c'è '-' tra numero e sigla)
+#   "CARB tavolo 5"     → match CARB ✓ (nessun numero, sigla è prima parola)
+def _pasta_recognized_sigla(line: str, dict_map: Dict[str, float]) -> Optional[str]:
+    if not line:
+        return None
+    upper = line.upper()
+    # XL esclude la riga (va in manuali)
+    if re.search(r"\bXL\b", upper):
+        return None
+    siglas_sorted = sorted(dict_map.keys(), key=len, reverse=True)
+    for sigla in siglas_sorted:
+        # ^\s*(?:\d+\s+)?SIGLA(?:\b|$)
+        pattern = rf"^\s*(?:\d+\s+)?{re.escape(sigla)}(?:\b|$)"
+        if re.search(pattern, upper):
+            return sigla
+    return None
+
+
+
 def _compute_spicci_total(row: dict) -> float:
     return sum(_eval_cash_value(row.get(k, "")) * v for k, v in SPICCI_MULTIPLIERS.items())
 
 
-def _compute_paste_total_eur(paste_text: str, manual_prices: Optional[dict] = None) -> float:
-    """Somma € paste: riconosciute (prezzo da PASTA_PRICES_MAP) + non riconosciute con
+def _compute_paste_total_eur(
+    paste_text: str,
+    manual_prices: Optional[dict] = None,
+    dict_map: Optional[Dict[str, float]] = None,
+) -> float:
+    """Somma € paste: riconosciute (prezzo da dict_map) + non riconosciute con
     prezzo manuale assegnato. Mirror del frontend `pasteAnalysis.totalEuro`."""
     if not paste_text:
         return 0.0
+    if dict_map is None:
+        dict_map = PASTA_PRICES_MAP
     lines = [l.strip() for l in paste_text.split("\n")]
     lines = [l for l in lines if l]
     total = 0.0
-    siglas_sorted = sorted(PASTA_PRICES_MAP.keys(), key=len, reverse=True)
     mp = manual_prices or {}
     for idx, line in enumerate(lines):
-        upper = line.upper()
-        if re.search(r"\bXL\b", upper):
-            recognized_price = None
-        else:
-            recognized_price = None
-            for sigla in siglas_sorted:
-                if re.search(rf"\b{sigla}\b", upper):
-                    recognized_price = PASTA_PRICES_MAP[sigla]
-                    break
-        if recognized_price is not None:
-            total += recognized_price
+        recognized_sigla = _pasta_recognized_sigla(line, dict_map)
+        if recognized_sigla is not None:
+            total += dict_map[recognized_sigla]
         else:
             raw = mp.get(str(idx), mp.get(idx, ""))
             try:
@@ -3236,25 +3275,24 @@ def _compute_paste_count(paste_text: str) -> int:
     return sum(1 for line in paste_text.split("\n") if line.strip())
 
 
-def _compute_paste_unrecognized(paste_text: str, manual_prices: dict) -> List[Dict]:
-    """Estrae le righe non riconosciute (senza sigla pasta) con eventuale prezzo manuale.
+def _compute_paste_unrecognized(
+    paste_text: str,
+    manual_prices: dict,
+    dict_map: Optional[Dict[str, float]] = None,
+) -> List[Dict]:
+    """Estrae le righe non riconosciute (sigla pasta non valida per la regola di posizionamento).
     L'indice usato per il match con manual_prices è quello della riga dopo split + trim+filter,
     coerente col frontend ReportBetaPage `pasteAnalysis`."""
     if not paste_text:
         return []
+    if dict_map is None:
+        dict_map = PASTA_PRICES_MAP
     lines = [l.strip() for l in paste_text.split("\n")]
     lines = [l for l in lines if l]
-    siglas_sorted = sorted(PASTA_PRICES_MAP.keys(), key=len, reverse=True)
     out: List[Dict] = []
     mp = manual_prices or {}
     for idx, line in enumerate(lines):
-        upper = line.upper()
-        # Esclusione XL e ricerca sigla (mirror di findPasta nel frontend)
-        if re.search(r"\bXL\b", upper):
-            recognized = False
-        else:
-            recognized = any(re.search(rf"\b{s}\b", upper) for s in siglas_sorted)
-        if recognized:
+        if _pasta_recognized_sigla(line, dict_map) is not None:
             continue
         raw_price = mp.get(str(idx), mp.get(idx, ""))
         try:
@@ -3267,13 +3305,18 @@ def _compute_paste_unrecognized(paste_text: str, manual_prices: dict) -> List[Di
     return out
 
 
-def _compute_cash_sera_full(cash_row: dict, bev_docs: list) -> float:
+def _compute_cash_sera_full(
+    cash_row: dict,
+    bev_docs: list,
+    dict_map: Optional[Dict[str, float]] = None,
+) -> float:
     """Cash sera completo: include paste (riconosciute + manuali), bevande e spicci."""
     base = _compute_cash_sera(cash_row)
     return base + _compute_spicci_total(cash_row) \
                 + _compute_paste_total_eur(
                     cash_row.get("paste_text", "") or "",
                     cash_row.get("manual_prices") or {},
+                    dict_map,
                 ) \
                 + _compute_bev_total_eur(bev_docs)
 
@@ -3697,6 +3740,14 @@ async def list_closures(
         dates.add(d["date_rome"])
     items = []
     bev_prices = {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
+    # Dizionario paste per ristorante (se single restaurant); altrimenti per riga
+    dict_for_rid_cache: Dict[str, Dict[str, float]] = {}
+    async def _dict_for(rid_local: Optional[str]) -> Dict[str, float]:
+        if not rid_local:
+            return dict(PASTA_PRICES_MAP)
+        if rid_local not in dict_for_rid_cache:
+            dict_for_rid_cache[rid_local] = await _get_pasta_dict_for(rid_local)
+        return dict_for_rid_cache[rid_local]
     for date_str in sorted(dates, reverse=True):
         cash_q = {"date_rome": date_str}
         bev_q = {"date_rome": date_str}
@@ -3705,7 +3756,9 @@ async def list_closures(
             bev_q["restaurant_id"] = restaurant_id
         cash_doc = await db.cash_daily_counts.find_one(cash_q, {"_id": 0}) or {}
         bev_docs = await db.beverage_daily_counts.find(bev_q, {"_id": 0}).to_list(50)
-        cash_sera = round(_compute_cash_sera_full(cash_doc, bev_docs), 2) if cash_doc else 0.0
+        rid_for_dict = restaurant_id or cash_doc.get("restaurant_id")
+        dmap = await _dict_for(rid_for_dict)
+        cash_sera = round(_compute_cash_sera_full(cash_doc, bev_docs, dmap), 2) if cash_doc else 0.0
         bev_total_qty = 0
         bev_total_inc = 0.0
         for r in bev_docs:
@@ -3857,7 +3910,8 @@ async def _build_closure_detail(date_str: str, restaurant_id: Optional[str]) -> 
         bev_q["restaurant_id"] = restaurant_id
     cash_doc = await db.cash_daily_counts.find_one(cash_q, {"_id": 0}) or {}
     bev_docs = await db.beverage_daily_counts.find(bev_q, {"_id": 0}).to_list(50)
-    cash_sera = round(_compute_cash_sera_full(cash_doc, bev_docs), 2) if cash_doc else 0.0
+    dmap = await _get_pasta_dict_for(restaurant_id or cash_doc.get("restaurant_id"))
+    cash_sera = round(_compute_cash_sera_full(cash_doc, bev_docs, dmap), 2) if cash_doc else 0.0
     bev_prices = {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
     bev_names = {b["sigla"]: b["name"] for b in BEVERAGES_CATALOG}
     bev_rows = []
@@ -3889,10 +3943,12 @@ async def _build_closure_detail(date_str: str, restaurant_id: Optional[str]) -> 
     paste_unrecognized = _compute_paste_unrecognized(
         cash_doc.get("paste_text", "") if cash_doc else "",
         (cash_doc.get("manual_prices") if cash_doc else None) or {},
+        dmap,
     )
     paste_total_eur = round(_compute_paste_total_eur(
         cash_doc.get("paste_text", "") if cash_doc else "",
         (cash_doc.get("manual_prices") if cash_doc else None) or {},
+        dmap,
     ), 2)
     return {
         "date": date_str,
@@ -3934,6 +3990,14 @@ async def closures_grid_admin(
 
     bev_prices = {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
     bev_sigle_sorted = [b["sigla"] for b in sorted(BEVERAGES_CATALOG, key=lambda x: x.get("sort_order", 999))]
+    # Cache dizionario paste per ristorante
+    _dict_cache: Dict[str, Dict[str, float]] = {}
+    async def _dict_for_grid(rid_local: Optional[str]) -> Dict[str, float]:
+        if not rid_local:
+            return dict(PASTA_PRICES_MAP)
+        if rid_local not in _dict_cache:
+            _dict_cache[rid_local] = await _get_pasta_dict_for(rid_local)
+        return _dict_cache[rid_local]
 
     rows: List[Dict] = []
     for date_str in sorted(dates, reverse=True):
@@ -3945,6 +4009,7 @@ async def closures_grid_admin(
         cash_doc = await db.cash_daily_counts.find_one(cash_q, {"_id": 0}) or {}
         bev_docs = await db.beverage_daily_counts.find(bev_q, {"_id": 0}).to_list(50)
         bev_by_sigla = {b["sigla"]: b for b in bev_docs}
+        dmap_row = await _dict_for_grid(restaurant_id or cash_doc.get("restaurant_id"))
 
         cash_flat: Dict[str, float] = {}
         for f in ALL_CASH_FIELDS:
@@ -3969,13 +4034,13 @@ async def closures_grid_admin(
                 bev_total_qty += int(qty)
                 bev_total_inc += inc
 
-        cash_sera = round(_compute_cash_sera_full(cash_doc, bev_docs), 2) if cash_doc else 0.0
+        cash_sera = round(_compute_cash_sera_full(cash_doc, bev_docs, dmap_row), 2) if cash_doc else 0.0
         cash_sera_base = round(_compute_cash_sera(cash_doc), 2) if cash_doc else 0.0
         spicci_total = round(_compute_spicci_total(cash_doc), 2) if cash_doc else 0.0
         paste_text = cash_doc.get("paste_text", "") if cash_doc else ""
         manual_prices = cash_doc.get("manual_prices") or {}
         paste_count = _compute_paste_count(paste_text)
-        paste_total_eur = round(_compute_paste_total_eur(paste_text, manual_prices), 2)
+        paste_total_eur = round(_compute_paste_total_eur(paste_text, manual_prices, dmap_row), 2)
         orders_info = await _orders_aggregate_for_date(date_str, restaurant_id=restaurant_id)
 
         rows.append({
@@ -4142,6 +4207,100 @@ async def admin_delete_mock_closures(
     res_cash = await db.cash_daily_counts.delete_many(q)
     res_bev = await db.beverage_daily_counts.delete_many(q)
     return {"ok": True, "cash_deleted": res_cash.deleted_count, "bev_deleted": res_bev.deleted_count}
+
+
+# ─── DIZIONARIO PASTE PER RISTORANTE ─────────────────────────────────────────
+class PastaDictionaryUpsert(BaseModel):
+    restaurant_id: str
+    siglas: List[Dict]  # [{sigla: "CARB", price: 8}, ...]
+
+
+@api_router.get("/pasta-dictionary")
+async def get_pasta_dictionary(
+    request: Request,
+    restaurant_id: Optional[str] = None,
+    token_data: dict = Depends(verify_token),
+):
+    """Ritorna il dizionario paste per il ristorante. Se non c'è override in DB,
+    torna il default `PASTA_PRICES_MAP`. Tutti possono leggere il proprio dict;
+    Admin/Supervisor possono leggere quello di qualsiasi locale specificando `restaurant_id`."""
+    role = token_data.get("role")
+    if restaurant_id and role not in ("admin", "supervisor"):
+        # Utenti non admin/supervisor non possono leggere il dict di un altro locale
+        raise HTTPException(status_code=403, detail="Admin only per leggere dict altri locali")
+    rid = restaurant_id
+    if not rid:
+        rid = await _effective_restaurant_id(request, token_data)
+    if not rid:
+        # Nessun rid → torna il default
+        siglas = [{"sigla": k, "price": v} for k, v in PASTA_PRICES_MAP.items()]
+        return {"restaurant_id": None, "siglas": siglas, "is_default": True}
+    doc = await db.pasta_dictionary.find_one({"restaurant_id": rid}, {"_id": 0})
+    if doc and doc.get("siglas"):
+        return {
+            "restaurant_id": rid,
+            "siglas": doc["siglas"],
+            "is_default": False,
+            "updated_at": doc.get("updated_at"),
+            "updated_by": doc.get("updated_by"),
+        }
+    siglas = [{"sigla": k, "price": v} for k, v in PASTA_PRICES_MAP.items()]
+    return {"restaurant_id": rid, "siglas": siglas, "is_default": True}
+
+
+@api_router.put("/pasta-dictionary")
+async def upsert_pasta_dictionary(
+    data: PastaDictionaryUpsert,
+    request: Request,
+    token_data: dict = Depends(verify_token),
+):
+    """Sovrascrive il dizionario paste di un ristorante. Solo Admin/Supervisor."""
+    if token_data.get("role") not in ("admin", "supervisor"):
+        raise HTTPException(status_code=403, detail="Solo Admin/Supervisor possono modificare il dizionario")
+    if not data.restaurant_id or not isinstance(data.restaurant_id, str):
+        raise HTTPException(status_code=400, detail="restaurant_id mancante")
+    # Sanitizzazione: sigla maiuscola, no spazi, prezzo numerico positivo
+    clean: List[Dict] = []
+    seen = set()
+    for item in (data.siglas or []):
+        try:
+            sigla = str(item.get("sigla", "")).upper().strip()
+            price = float(item.get("price", 0))
+        except Exception:
+            continue
+        if not sigla or sigla in seen:
+            continue
+        if not re.match(r"^[A-Z0-9_-]{1,20}$", sigla):
+            raise HTTPException(status_code=400, detail=f"Sigla non valida: '{sigla}' (solo A-Z, 0-9, max 20 char)")
+        if price < 0 or price > 1000:
+            raise HTTPException(status_code=400, detail=f"Prezzo non valido per '{sigla}'")
+        seen.add(sigla)
+        clean.append({"sigla": sigla, "price": price})
+
+    username = token_data.get("name") or token_data.get("username") or token_data.get("sub") or "admin"
+    await db.pasta_dictionary.update_one(
+        {"restaurant_id": data.restaurant_id},
+        {"$set": {
+            "restaurant_id": data.restaurant_id,
+            "siglas": clean,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": username,
+        }},
+        upsert=True,
+    )
+    return {"ok": True, "count": len(clean)}
+
+
+@api_router.delete("/pasta-dictionary")
+async def reset_pasta_dictionary(
+    restaurant_id: str,
+    token_data: dict = Depends(verify_token),
+):
+    """Resetta il dizionario di un ristorante al default. Solo Admin/Supervisor."""
+    if token_data.get("role") not in ("admin", "supervisor"):
+        raise HTTPException(status_code=403, detail="Solo Admin/Supervisor")
+    res = await db.pasta_dictionary.delete_one({"restaurant_id": restaurant_id})
+    return {"ok": True, "deleted": res.deleted_count}
 
 
 @api_router.get("/admin/closures/{date_str}")

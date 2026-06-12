@@ -10,7 +10,7 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 // Listino paste (prezzi modificabili in un solo punto)
-const PASTA_PRICES = [
+const DEFAULT_PASTA_PRICES = [
   { sigla: 'CARB',    price: 8 },
   { sigla: 'AMAT',    price: 8 },
   { sigla: 'CACIO',   price: 8 },
@@ -35,13 +35,26 @@ const CASH_DENOMINATIONS = [
   { key: 'c10',    label: '0,10',      mode: 'count',   value: 0.1        },
 ];
 
-const findPasta = (line) => {
-  const upper = (line || '').toUpperCase();
-  // Se la riga contiene "XL" come parola intera → NON riconoscere (va nei manuali)
-  if (/\bXL\b/i.test(upper)) return null;
-  const ordered = [...PASTA_PRICES].sort((a, b) => b.sigla.length - a.sigla.length);
+// Riconoscimento sigla pasta — REGOLA: tra il numero d'ordine e la sigla
+// possono esserci SOLO spazi/whitespace. Qualunque altro carattere (lettere,
+// trattini, punteggiatura) tra numero e sigla → NON riconosciuta.
+// Esempi:
+//   "42 CARB - PIET"   → ✓ riconosciuta (subito CARB dopo 42)
+//   "42 CARB asporto"  → ✓ riconosciuta
+//   "42 PIETRO CARB"   → ✗ NON riconosciuta (PIETRO tra 42 e CARB)
+//   "42 - CARB"        → ✗ NON riconosciuta ('-' tra 42 e CARB)
+//   "CARB tavolo 5"    → ✓ riconosciuta (nessun numero, sigla a inizio)
+// XL: se presente come parola intera nella riga → NON riconosciuta (manuale)
+const findPasta = (line, dict) => {
+  if (!line) return null;
+  const upper = String(line).toUpperCase();
+  if (/\bXL\b/.test(upper)) return null;
+  const list = (dict && dict.length) ? dict : DEFAULT_PASTA_PRICES;
+  const ordered = [...list].sort((a, b) => b.sigla.length - a.sigla.length);
   for (const p of ordered) {
-    const re = new RegExp(`\\b${p.sigla}\\b`, 'i');
+    // ^\s*(?:\d+\s+)?SIGLA(?:\b|$)
+    const escaped = p.sigla.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`^\\s*(?:\\d+\\s+)?${escaped}(?:\\b|$)`, 'i');
     if (re.test(upper)) return p;
   }
   return null;
@@ -196,6 +209,9 @@ const ReportBetaPageInner = () => {
   const [pasteText, setPasteText] = useState('');
   const [cash, setCash] = useState({});
   const [manualPrices, setManualPrices] = useState({});
+  // Dizionario paste per il ristorante effettivo (live o storico).
+  // Caricato da `/api/pasta-dictionary`; se non c'è override torna il default.
+  const [pastaDict, setPastaDict] = useState(DEFAULT_PASTA_PRICES);
   // Vendite bevande: lette dal backend, refresh periodico
   const [beverages, setBeverages] = useState([]);   // {sigla, name, price}
   const [bevCounts, setBevCounts] = useState({});   // {sigla: {mattina, inUsc, scarti, sera}}
@@ -238,6 +254,31 @@ const ReportBetaPageInner = () => {
   const bevSaveTimers = React.useRef({});            // { sigla: timeout }
   const bevPendingSeraUntil = React.useRef({});      // { sigla: timestamp ms } — finché non scade, il poll non sovrascrive 'sera'
   const [focusedSeraSigla, setFocusedSeraSigla] = useState(null);
+
+  // Carica il dizionario paste del ristorante effettivo (live o storico).
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        // In modalità storica usa il rid dall'URL, altrimenti il backend
+        // userà l'effective_restaurant_id dell'utente loggato.
+        const url = historicalMode
+          ? `${API}/pasta-dictionary?restaurant_id=${urlRid}`
+          : `${API}/pasta-dictionary`;
+        const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
+        if (cancelled) return;
+        const list = (res.data?.siglas || []).map(s => ({
+          sigla: String(s.sigla).toUpperCase(),
+          price: Number(s.price) || 0,
+        }));
+        if (list.length > 0) setPastaDict(list);
+      } catch (e) {
+        // Fallback: resta sul default
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [token, historicalMode, urlRid]);
 
   // Carica catalogo bevande + conteggi giornata. Refresh ogni 15s così se il
   // cassiere aggiorna la pagina magazzino in un'altra tab vede subito qui.
@@ -700,12 +741,13 @@ const ReportBetaPageInner = () => {
   const pasteAnalysis = useMemo(() => {
     const lines = pasteText.split('\n').map(l => l.trim()).filter(Boolean);
     const breakdown = {};
-    PASTA_PRICES.forEach(p => { breakdown[p.sigla] = { count: 0, total: 0, price: p.price }; });
+    const dictList = (pastaDict && pastaDict.length) ? pastaDict : DEFAULT_PASTA_PRICES;
+    dictList.forEach(p => { breakdown[p.sigla] = { count: 0, total: 0, price: p.price }; });
     const unrecognized = []; // {idx, text}
     let recognizedCount = 0;
     let recognizedEuro = 0;
     lines.forEach((line, idx) => {
-      const match = findPasta(line);
+      const match = findPasta(line, dictList);
       if (match) {
         breakdown[match.sigla].count += 1;
         breakdown[match.sigla].total += match.price;
@@ -736,7 +778,7 @@ const ReportBetaPageInner = () => {
         return Number.isNaN(n) || n <= 0;
       }).length,
     };
-  }, [pasteText, manualPrices]);
+  }, [pasteText, manualPrices, pastaDict]);
 
   const cashTotal = useMemo(() => {
     let sum = 0;

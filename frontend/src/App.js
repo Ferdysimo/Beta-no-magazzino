@@ -36,6 +36,7 @@ import ReportIeriPage from './pages/ReportIeriPage';
 import AuditCassaPage from './pages/AuditCassaPage';
 import StoricoChiusurePage from './pages/StoricoChiusurePage';
 import ChiusureExcelPage from './pages/ChiusureExcelPage';
+import DizionarioPastePage from './pages/DizionarioPastePage';
 import UpdateBanner from './components/UpdateBanner';
 
 // Protected Route Component
@@ -252,6 +253,11 @@ function AppRoutes() {
       <Route path="/chiusure-excel" element={
         <ProtectedRoute>
           <ChiusureExcelPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/dizionario-paste" element={
+        <ProtectedRoute>
+          <DizionarioPastePage />
         </ProtectedRoute>
       } />
     </Routes>
