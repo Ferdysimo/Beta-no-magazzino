@@ -697,21 +697,45 @@ const ReportBetaPageInner = () => {
     setEditingValue('');
   };
 
-  // Commenti: right-click su una cella → popover
-  const openCommentPopover = (key) => {
-    setCommentPopover({ key, value: cashComments[key] || '' });
+  // Commenti: right-click su una cella → popover.
+  // Supporta 2 tipi:
+  //   - cash: key = "altro"/"sp5"/... (campo cassa) → cashComments[key]
+  //   - bev:  key = "AL"/"AG"/... e subkey = "scarti"/"inUsc" → bevCounts[sigla].comments[subkey]
+  const openCommentPopover = (key, kind = 'cash', subkey = null) => {
+    let initial = '';
+    if (kind === 'cash') {
+      initial = cashComments[key] || '';
+    } else if (kind === 'bev') {
+      const row = bevCounts[key] || {};
+      initial = (row.comments || {})[subkey] || '';
+    }
+    setCommentPopover({ key, kind, subkey, value: initial });
   };
   const closeCommentPopover = () => setCommentPopover(null);
   const saveCommentPopover = () => {
     if (!commentPopover) return;
-    const { key, value } = commentPopover;
+    const { key, kind, subkey, value } = commentPopover;
     const trimmed = (value || '').trim();
-    setCashComments(prev => {
-      const next = { ...prev };
-      if (trimmed) next[key] = trimmed;
-      else delete next[key];
-      return next;
-    });
+    if (kind === 'bev' && subkey) {
+      // Aggiorno bevCounts[sigla].comments[subkey] e salvo subito tramite scheduleBevSave
+      setBevCounts(prev => {
+        const current = prev[key] || {};
+        const oldComments = current.comments || {};
+        const newComments = { ...oldComments };
+        if (trimmed) newComments[subkey] = trimmed;
+        else delete newComments[subkey];
+        const nextRow = { ...current, comments: newComments };
+        scheduleBevSave(key, nextRow);
+        return { ...prev, [key]: nextRow };
+      });
+    } else {
+      setCashComments(prev => {
+        const next = { ...prev };
+        if (trimmed) next[key] = trimmed;
+        else delete next[key];
+        return next;
+      });
+    }
     setCommentPopover(null);
   };
 
@@ -1467,11 +1491,12 @@ const ReportBetaPageInner = () => {
                     const casseN = evaluateValue(casseRaw);
                     const total = casseEmpty ? null : casseN * PEZZI_PER_CASSA;
                     const isFormulaCasse = typeof casseRaw === 'string' && casseRaw.trim().startsWith('=');
+                    const hasComment = !!((row.comments || {}).inUsc);
                     return (
                       <div
                         key={b.sigla}
                         data-testid={`ingressi-${b.sigla}`}
-                        className="w-14 flex-none flex flex-col"
+                        className="w-14 flex-none flex flex-col relative"
                       >
                         <label className="text-[9px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
                           {b.sigla}
@@ -1482,7 +1507,8 @@ const ReportBetaPageInner = () => {
                           inputMode="decimal"
                           value={casseRaw}
                           onChange={(e) => handleInUscChange(b.sigla, e.target.value)}
-                          title={isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN} casse → ${casseN * PEZZI_PER_CASSA} unità` : `Numero casse · ×${PEZZI_PER_CASSA}`}
+                          onContextMenu={(e) => { e.preventDefault(); openCommentPopover(b.sigla, 'bev', 'inUsc'); }}
+                          title={(hasComment ? `📝 ${(row.comments || {}).inUsc}\n\n` : '') + (isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN} casse → ${casseN * PEZZI_PER_CASSA} unità` : `Numero casse · ×${PEZZI_PER_CASSA}\n(destro per commento)`)}
                           className={`w-full h-7 rounded text-center font-semibold text-[11px] border focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
                             isFormulaCasse
                               ? 'bg-rose-100 border-rose-300 text-rose-800'
@@ -1491,6 +1517,21 @@ const ReportBetaPageInner = () => {
                                 : 'bg-indigo-50 border-indigo-200 text-gray-900'
                           }`}
                         />
+                        {hasComment && (
+                          <span
+                            title={(row.comments || {}).inUsc}
+                            className="absolute top-3 right-0 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-amber-600 z-10"
+                          />
+                        )}
+                        {commentPopover?.kind === 'bev' && commentPopover?.key === b.sigla && commentPopover?.subkey === 'inUsc' && (
+                          <CommentPopover
+                            inputRef={commentInputRef}
+                            value={commentPopover.value}
+                            onChange={(v) => setCommentPopover(p => ({ ...p, value: v }))}
+                            onSave={saveCommentPopover}
+                            onCancel={closeCommentPopover}
+                          />
+                        )}
                         <span
                           data-testid={`bev-ingressi-total-${b.sigla}`}
                           className="hidden"
@@ -1531,11 +1572,12 @@ const ReportBetaPageInner = () => {
                         const scEmpty = scRaw === '' || scRaw === null || scRaw === undefined;
                         const scN = evaluateValue(scRaw);
                         const isFormulaSc = typeof scRaw === 'string' && scRaw.trim().startsWith('=');
+                        const hasComment = !!((row.comments || {}).scarti);
                         return (
                           <div
                             key={b.sigla}
                             data-testid={`scarti-${b.sigla}`}
-                            className="w-14 flex-none flex flex-col"
+                            className="w-14 flex-none flex flex-col relative"
                           >
                             <label className="text-[9px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>{b.sigla}</label>
                             <input
@@ -1544,7 +1586,8 @@ const ReportBetaPageInner = () => {
                               inputMode="decimal"
                               value={scRaw}
                               onChange={(e) => handleScartiChange(b.sigla, e.target.value)}
-                              title={isFormulaSc ? `Formula: ${scRaw} = ${scN}` : 'Unità scartate (singole)'}
+                              onContextMenu={(e) => { e.preventDefault(); openCommentPopover(b.sigla, 'bev', 'scarti'); }}
+                              title={(hasComment ? `📝 ${(row.comments || {}).scarti}\n\n` : '') + (isFormulaSc ? `Formula: ${scRaw} = ${scN}` : 'Unità scartate (singole)\n(destro per commento)')}
                               className={`w-full h-7 rounded text-center font-semibold text-[11px] border focus:outline-none focus:ring-2 focus:ring-rose-400 ${
                                 isFormulaSc
                                   ? 'bg-rose-100 border-rose-300 text-rose-800'
@@ -1553,6 +1596,21 @@ const ReportBetaPageInner = () => {
                                     : 'bg-rose-50 border-rose-200 text-gray-900'
                               }`}
                             />
+                            {hasComment && (
+                              <span
+                                title={(row.comments || {}).scarti}
+                                className="absolute top-3 right-0 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-amber-600 z-10"
+                              />
+                            )}
+                            {commentPopover?.kind === 'bev' && commentPopover?.key === b.sigla && commentPopover?.subkey === 'scarti' && (
+                              <CommentPopover
+                                inputRef={commentInputRef}
+                                value={commentPopover.value}
+                                onChange={(v) => setCommentPopover(p => ({ ...p, value: v }))}
+                                onSave={saveCommentPopover}
+                                onCancel={closeCommentPopover}
+                              />
+                            )}
                           </div>
                         );
                       })}
