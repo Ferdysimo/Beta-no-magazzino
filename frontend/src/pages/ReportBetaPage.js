@@ -1266,18 +1266,42 @@ const ReportBetaPageInner = () => {
               </div>
             </div>
 
-            {/* ============ MAGAZZINO SERA (editabile, sync live con Magazzino Bevande) ============ */}
-            <div
-              className="bg-white rounded p-1.5"
-              style={{ border: '2px solid #F5C518' }}
-            >
-              <div className="flex items-baseline justify-between mb-1">
-                <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Sera</h2>
+            {/* ============ MAGAZZINO MATTINA (casse + sfuse, in sync con Magazzino Bevande) ============ */}
+            <div className="bg-white rounded border border-gray-200 p-1.5">
+              <div className="flex items-baseline justify-between mb-1 gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Mattina</h2>
+                  <button
+                    type="button"
+                    data-testid="toggle-mag-mattina"
+                    onClick={() => setShowMagMattina(v => !v)}
+                    title={showMagMattina ? 'Nascondi Magazzino Mattina' : 'Mostra Magazzino Mattina'}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300"
+                  >
+                    {showMagMattina ? '▼ nascondi' : '▶ mostra'}
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="force-mag-mattina-toggle"
+                    onClick={() => setForceMagMattina(v => !v)}
+                    title={forceMagMattina ? 'Modifica forzata di MAGAZZINO MATTINA attiva — clicca per bloccare' : 'Sblocca MAGAZZINO MATTINA per forzare valori manuali (normalmente auto-popolato dal Magazzino Sera della sera prima)'}
+                    className={`text-[10px] font-bold px-2 py-1 rounded transition-colors ${
+                      forceMagMattina
+                        ? 'bg-rose-100 text-rose-700 border border-rose-300 hover:bg-rose-200'
+                        : 'bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200'
+                    }`}
+                  >
+                    {forceMagMattina ? '🔓 mattina sbloccato' : '🔒 forza mattina'}
+                  </button>
+                </div>
                 <span className="text-[10px] text-gray-400">
-                  Casse (×{PEZZI_PER_CASSA}) + Sfuse = totale · sync live · supporta formule "=..."
+                  {forceMagMattina
+                    ? `Modifica forzata · Casse (×${PEZZI_PER_CASSA}) + Sfuse`
+                    : `Auto da Magazzino Sera del giorno prima · Casse (×${PEZZI_PER_CASSA}) + Sfuse`}
                 </span>
               </div>
-              {beverages.length === 0 ? (
+              {showMagMattina && (
+                beverages.length === 0 ? (
                 <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
                   Nessuna bevanda configurata.
                 </div>
@@ -1285,9 +1309,8 @@ const ReportBetaPageInner = () => {
                 <div className="flex items-stretch gap-2">
                   {beverages.map(b => {
                     const row = bevCounts[b.sigla] || {};
-                    const casseRaw = row.sera_casse ?? '';
-                    const sfuseRaw = row.sera_sfuse ?? '';
-                    const isFocusedSera = focusedSeraSigla === b.sigla;
+                    const casseRaw = row.mattina_casse ?? '';
+                    const sfuseRaw = row.mattina_sfuse ?? '';
                     const casseEmpty = casseRaw === '' || casseRaw === null || casseRaw === undefined;
                     const sfuseEmpty = sfuseRaw === '' || sfuseRaw === null || sfuseRaw === undefined;
                     const casseN = evaluateValue(casseRaw);
@@ -1295,10 +1318,11 @@ const ReportBetaPageInner = () => {
                     const total = (casseEmpty && sfuseEmpty) ? null : (casseN * PEZZI_PER_CASSA + sfuseN);
                     const isFormulaCasse = typeof casseRaw === 'string' && casseRaw.trim().startsWith('=');
                     const isFormulaSfuse = typeof sfuseRaw === 'string' && sfuseRaw.trim().startsWith('=');
+                    const locked = !forceMagMattina;
                     return (
                       <div
                         key={b.sigla}
-                        data-testid={`mag-sera-${b.sigla}`}
+                        data-testid={`mag-mattina-${b.sigla}`}
                         className="flex-1 min-w-[90px] flex flex-col"
                       >
                         <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
@@ -1307,53 +1331,62 @@ const ReportBetaPageInner = () => {
                         <div className="flex gap-1">
                           {/* CASSE (× PEZZI_PER_CASSA) */}
                           <input
-                            data-testid={`bev-mag-sera-casse-${b.sigla}`}
+                            data-testid={`bev-mag-mattina-casse-${b.sigla}`}
                             type="text"
                             inputMode="decimal"
                             value={casseRaw}
-                            onChange={(e) => handleCasseSfuseChange(b.sigla, 'sera', 'casse', e.target.value)}
-                            onFocus={() => setFocusedSeraSigla(b.sigla)}
-                            onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
-                            title={isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : `Casse × ${PEZZI_PER_CASSA}`}
-                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-amber-400 ${
-                              isFormulaCasse && isFocusedSera
-                                ? 'bg-rose-100 border-rose-300 text-rose-800'
-                                : casseEmpty
-                                  ? 'bg-gray-50 border-gray-200 text-gray-700'
-                                  : 'bg-amber-50 border-amber-200 text-gray-900'
+                            onChange={(e) => handleCasseSfuseChange(b.sigla, 'mattina', 'casse', e.target.value)}
+                            readOnly={locked}
+                            tabIndex={locked ? -1 : 0}
+                            title={locked
+                              ? 'Auto-popolato da Magazzino Sera del giorno prima (clicca sul lucchetto per forzare)'
+                              : (isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : `Casse × ${PEZZI_PER_CASSA}`)}
+                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                              locked
+                                ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-not-allowed'
+                                : isFormulaCasse
+                                  ? 'bg-rose-100 border-rose-300 text-rose-800'
+                                  : casseEmpty
+                                    ? 'bg-gray-50 border-gray-200 text-gray-700'
+                                    : 'bg-emerald-50 border-emerald-200 text-gray-900'
                             }`}
                           />
                           {/* SFUSE (×1) */}
                           <input
-                            data-testid={`bev-mag-sera-sfuse-${b.sigla}`}
+                            data-testid={`bev-mag-mattina-sfuse-${b.sigla}`}
                             type="text"
                             inputMode="decimal"
                             value={sfuseRaw}
-                            onChange={(e) => handleCasseSfuseChange(b.sigla, 'sera', 'sfuse', e.target.value)}
-                            onFocus={() => setFocusedSeraSigla(b.sigla)}
-                            onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
-                            title={isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Bottiglie sfuse'}
-                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-sky-400 ${
-                              isFormulaSfuse && isFocusedSera
-                                ? 'bg-rose-100 border-rose-300 text-rose-800'
-                                : sfuseEmpty
-                                  ? 'bg-gray-50 border-gray-200 text-gray-700'
-                                  : 'bg-sky-50 border-sky-200 text-gray-900'
+                            onChange={(e) => handleCasseSfuseChange(b.sigla, 'mattina', 'sfuse', e.target.value)}
+                            readOnly={locked}
+                            tabIndex={locked ? -1 : 0}
+                            title={locked
+                              ? 'Auto-popolato da Magazzino Sera del giorno prima (clicca sul lucchetto per forzare)'
+                              : (isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Bottiglie sfuse')}
+                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-teal-400 ${
+                              locked
+                                ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-not-allowed'
+                                : isFormulaSfuse
+                                  ? 'bg-rose-100 border-rose-300 text-rose-800'
+                                  : sfuseEmpty
+                                    ? 'bg-gray-50 border-gray-200 text-gray-700'
+                                    : 'bg-teal-50 border-teal-200 text-gray-900'
                             }`}
                           />
                         </div>
                         <span
-                          data-testid={`bev-mag-sera-total-${b.sigla}`}
+                          data-testid={`bev-mag-mattina-total-${b.sigla}`}
                           className={`text-[10px] mt-0.5 text-center leading-none font-bold ${total === null ? 'text-gray-400' : 'text-gray-800'}`}
                         >
                           {total === null
-                            ? 'sera'
+                            ? 'mattina'
                             : `tot ${Number.isInteger(total) ? total : (+total.toFixed(2))}`}
                         </span>
                       </div>
                     );
                   })}
                 </div>
+              )
               )}
             </div>
 
@@ -1480,42 +1513,18 @@ const ReportBetaPageInner = () => {
               </div>
             </div>
 
-            {/* ============ MAGAZZINO MATTINA (casse + sfuse, in sync con Magazzino Bevande) ============ */}
-            <div className="bg-white rounded border border-gray-200 p-1.5">
-              <div className="flex items-baseline justify-between mb-1 gap-2 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Mattina</h2>
-                  <button
-                    type="button"
-                    data-testid="toggle-mag-mattina"
-                    onClick={() => setShowMagMattina(v => !v)}
-                    title={showMagMattina ? 'Nascondi Magazzino Mattina' : 'Mostra Magazzino Mattina'}
-                    className="text-[10px] font-bold px-2 py-0.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300"
-                  >
-                    {showMagMattina ? '▼ nascondi' : '▶ mostra'}
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="force-mag-mattina-toggle"
-                    onClick={() => setForceMagMattina(v => !v)}
-                    title={forceMagMattina ? 'Modifica forzata di MAGAZZINO MATTINA attiva — clicca per bloccare' : 'Sblocca MAGAZZINO MATTINA per forzare valori manuali (normalmente auto-popolato dal Magazzino Sera della sera prima)'}
-                    className={`text-[10px] font-bold px-2 py-1 rounded transition-colors ${
-                      forceMagMattina
-                        ? 'bg-rose-100 text-rose-700 border border-rose-300 hover:bg-rose-200'
-                        : 'bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200'
-                    }`}
-                  >
-                    {forceMagMattina ? '🔓 mattina sbloccato' : '🔒 forza mattina'}
-                  </button>
-                </div>
+            {/* ============ MAGAZZINO SERA (editabile, sync live con Magazzino Bevande) ============ */}
+            <div
+              className="bg-white rounded p-1.5"
+              style={{ border: '2px solid #F5C518' }}
+            >
+              <div className="flex items-baseline justify-between mb-1">
+                <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Sera</h2>
                 <span className="text-[10px] text-gray-400">
-                  {forceMagMattina
-                    ? `Modifica forzata · Casse (×${PEZZI_PER_CASSA}) + Sfuse`
-                    : `Auto da Magazzino Sera del giorno prima · Casse (×${PEZZI_PER_CASSA}) + Sfuse`}
+                  Casse (×{PEZZI_PER_CASSA}) + Sfuse = totale · sync live · supporta formule "=..."
                 </span>
               </div>
-              {showMagMattina && (
-                beverages.length === 0 ? (
+              {beverages.length === 0 ? (
                 <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
                   Nessuna bevanda configurata.
                 </div>
@@ -1523,8 +1532,9 @@ const ReportBetaPageInner = () => {
                 <div className="flex items-stretch gap-2">
                   {beverages.map(b => {
                     const row = bevCounts[b.sigla] || {};
-                    const casseRaw = row.mattina_casse ?? '';
-                    const sfuseRaw = row.mattina_sfuse ?? '';
+                    const casseRaw = row.sera_casse ?? '';
+                    const sfuseRaw = row.sera_sfuse ?? '';
+                    const isFocusedSera = focusedSeraSigla === b.sigla;
                     const casseEmpty = casseRaw === '' || casseRaw === null || casseRaw === undefined;
                     const sfuseEmpty = sfuseRaw === '' || sfuseRaw === null || sfuseRaw === undefined;
                     const casseN = evaluateValue(casseRaw);
@@ -1532,11 +1542,10 @@ const ReportBetaPageInner = () => {
                     const total = (casseEmpty && sfuseEmpty) ? null : (casseN * PEZZI_PER_CASSA + sfuseN);
                     const isFormulaCasse = typeof casseRaw === 'string' && casseRaw.trim().startsWith('=');
                     const isFormulaSfuse = typeof sfuseRaw === 'string' && sfuseRaw.trim().startsWith('=');
-                    const locked = !forceMagMattina;
                     return (
                       <div
                         key={b.sigla}
-                        data-testid={`mag-mattina-${b.sigla}`}
+                        data-testid={`mag-sera-${b.sigla}`}
                         className="flex-1 min-w-[90px] flex flex-col"
                       >
                         <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
@@ -1545,272 +1554,264 @@ const ReportBetaPageInner = () => {
                         <div className="flex gap-1">
                           {/* CASSE (× PEZZI_PER_CASSA) */}
                           <input
-                            data-testid={`bev-mag-mattina-casse-${b.sigla}`}
+                            data-testid={`bev-mag-sera-casse-${b.sigla}`}
                             type="text"
                             inputMode="decimal"
                             value={casseRaw}
-                            onChange={(e) => handleCasseSfuseChange(b.sigla, 'mattina', 'casse', e.target.value)}
-                            readOnly={locked}
-                            tabIndex={locked ? -1 : 0}
-                            title={locked
-                              ? 'Auto-popolato da Magazzino Sera del giorno prima (clicca sul lucchetto per forzare)'
-                              : (isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : `Casse × ${PEZZI_PER_CASSA}`)}
-                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
-                              locked
-                                ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-not-allowed'
-                                : isFormulaCasse
-                                  ? 'bg-rose-100 border-rose-300 text-rose-800'
-                                  : casseEmpty
-                                    ? 'bg-gray-50 border-gray-200 text-gray-700'
-                                    : 'bg-emerald-50 border-emerald-200 text-gray-900'
+                            onChange={(e) => handleCasseSfuseChange(b.sigla, 'sera', 'casse', e.target.value)}
+                            onFocus={() => setFocusedSeraSigla(b.sigla)}
+                            onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
+                            title={isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : `Casse × ${PEZZI_PER_CASSA}`}
+                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-amber-400 ${
+                              isFormulaCasse && isFocusedSera
+                                ? 'bg-rose-100 border-rose-300 text-rose-800'
+                                : casseEmpty
+                                  ? 'bg-gray-50 border-gray-200 text-gray-700'
+                                  : 'bg-amber-50 border-amber-200 text-gray-900'
                             }`}
                           />
                           {/* SFUSE (×1) */}
                           <input
-                            data-testid={`bev-mag-mattina-sfuse-${b.sigla}`}
+                            data-testid={`bev-mag-sera-sfuse-${b.sigla}`}
                             type="text"
                             inputMode="decimal"
                             value={sfuseRaw}
-                            onChange={(e) => handleCasseSfuseChange(b.sigla, 'mattina', 'sfuse', e.target.value)}
-                            readOnly={locked}
-                            tabIndex={locked ? -1 : 0}
-                            title={locked
-                              ? 'Auto-popolato da Magazzino Sera del giorno prima (clicca sul lucchetto per forzare)'
-                              : (isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Bottiglie sfuse')}
-                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-teal-400 ${
-                              locked
-                                ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-not-allowed'
-                                : isFormulaSfuse
-                                  ? 'bg-rose-100 border-rose-300 text-rose-800'
-                                  : sfuseEmpty
-                                    ? 'bg-gray-50 border-gray-200 text-gray-700'
-                                    : 'bg-teal-50 border-teal-200 text-gray-900'
+                            onChange={(e) => handleCasseSfuseChange(b.sigla, 'sera', 'sfuse', e.target.value)}
+                            onFocus={() => setFocusedSeraSigla(b.sigla)}
+                            onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
+                            title={isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Bottiglie sfuse'}
+                            className={`w-1/2 h-9 rounded text-center font-black text-sm border focus:outline-none focus:ring-2 focus:ring-sky-400 ${
+                              isFormulaSfuse && isFocusedSera
+                                ? 'bg-rose-100 border-rose-300 text-rose-800'
+                                : sfuseEmpty
+                                  ? 'bg-gray-50 border-gray-200 text-gray-700'
+                                  : 'bg-sky-50 border-sky-200 text-gray-900'
                             }`}
                           />
                         </div>
                         <span
-                          data-testid={`bev-mag-mattina-total-${b.sigla}`}
+                          data-testid={`bev-mag-sera-total-${b.sigla}`}
                           className={`text-[10px] mt-0.5 text-center leading-none font-bold ${total === null ? 'text-gray-400' : 'text-gray-800'}`}
                         >
                           {total === null
-                            ? 'mattina'
+                            ? 'sera'
                             : `tot ${Number.isInteger(total) ? total : (+total.toFixed(2))}`}
                         </span>
                       </div>
                     );
                   })}
                 </div>
-              )
               )}
             </div>
 
-            {/* ============ SPICCI + CASSETTO + VENDITE BEVANDE (stessa riga) ============ */}
+            {/* ============ VENDITE BEVANDE + (MOVIMENTI + CASSETTO) (stessa riga) ============ */}
             <div className="flex items-stretch gap-2">
-              <div className="flex items-stretch gap-2 w-[42%] flex-shrink-0">
-              {/* --- SPICCI (rotolini aperti) --- */}
-              <div className="bg-white rounded border border-gray-200 p-1.5 flex-[5] min-w-0">
-              <div className="flex items-baseline justify-between mb-1">
-                <h2 className="text-[11px] font-bold text-gray-800 uppercase">Spicci</h2>
-                <span className="text-[9px] text-gray-400">
-                  ap.×valore
-                </span>
-              </div>
-              <div className="flex items-stretch gap-1">
-                {spicciValues.rows.map(r => {
-                  const hasComment = !!cashComments[r.key];
-                  return (
-                  <div key={r.key} className="flex-1 min-w-[34px] flex flex-col relative">
-                    <label className="text-[9px] font-bold text-gray-800 text-center leading-none mb-0.5">
-                      {r.label}
-                    </label>
-                    <input
-                      data-testid={`spicci-aperti-${r.key}`}
-                      type="text"
-                      inputMode="decimal"
-                      value={cashRow[r.key] || ''}
-                      onChange={(e) => setCashRowValue(r.key, e.target.value)}
-                      onFocus={() => setFocusedField(r.key)}
-                      onBlur={() => setFocusedField(curr => curr === r.key ? null : curr)}
-                      onContextMenu={(e) => { e.preventDefault(); openCommentPopover(r.key); }}
-                      placeholder="ap."
-                      className="w-full h-7 border border-gray-200 rounded px-0.5 text-center font-bold text-[11px] focus:outline-none focus:border-[#F5C518]"
-                    />
-                    {hasComment && (
-                      <span
-                        title={cashComments[r.key]}
-                        className="absolute top-3 right-0 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-amber-600 z-10"
-                      />
-                    )}
-                    <div
-                      data-testid={`spicci-valore-${r.key}`}
-                      className="w-full h-7 mt-0.5 bg-yellow-50 border border-yellow-200 rounded flex items-center justify-center font-black text-[11px] text-gray-900"
-                    >
-                      €{r.value.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-                    </div>
-                    <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">×{r.mult}</span>
-                    {commentPopover?.key === r.key && (
-                      <CommentPopover
-                        inputRef={commentInputRef}
-                        value={commentPopover.value}
-                        onChange={(v) => setCommentPopover(p => ({ ...p, value: v }))}
-                        onSave={saveCommentPopover}
-                        onCancel={closeCommentPopover}
-                      />
-                    )}
-                  </div>
-                  );
-                })}
-                {/* Totale spicci */}
-                <div className="flex-1 min-w-[40px] flex flex-col">
-                  <label className="text-[9px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">TOT</label>
-                  <div className="w-full h-7 border border-transparent rounded flex items-center justify-center text-[9px] text-gray-400 italic">
-                    {/* nessun input sul totale */}
-                    —
-                  </div>
-                  <div
-                    data-testid="spicci-totale"
-                    className="w-full h-7 mt-0.5 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-[11px] text-gray-900"
-                  >
-                    €{spicciValues.total.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-                  </div>
-                  <span className="text-[9px] text-gray-700 mt-0.5 text-center leading-none font-bold">totale</span>
-                </div>
-              </div>
-              </div>
-
-
-              {/* --- CASSETTO SPICCI (stock totale, click-to-edit) --- */}
-              <div className="bg-white rounded border border-gray-200 p-1.5 flex-[4] min-w-0">
+              {/* --- VENDITE BEVANDE (a sinistra, occupa lo spazio rimanente) --- */}
+              <div className="bg-white rounded border border-gray-200 p-1.5 flex-1 min-w-0">
                 <div className="flex items-baseline justify-between mb-1">
-                  <h2 className="text-[11px] font-bold text-gray-800 uppercase">Cassetto</h2>
-                  <span className="text-[9px] text-gray-400">{isAdmin ? 'modif.' : 'lett.'}</span>
+                  <h2 className="text-xs font-bold text-gray-800 uppercase">Vendite Bevande</h2>
+                  <span className="text-[10px] text-gray-400">Q.tà · Incasso — in sync con Magazzino Bevande</span>
                 </div>
-                <div className="flex items-stretch gap-1">
-                  {CASSETTO_FIELDS.map(f => {
-                    const isEditing = editingCassetto === f.key;
-                    const hasComment = !!cashComments[f.key];
-                    const raw = cashRow[f.key];
-                    let displayValue = '—';
-                    let isNegative = false;
-                    if (raw !== '' && raw !== undefined && raw !== null) {
-                      const base = evaluateValue(raw);
-                      const aperti = evaluateValue(cashRow[f.spicciKey]);
-                      const residuo = base - aperti;
-                      isNegative = residuo < 0;
-                      displayValue = Number.isInteger(residuo)
-                        ? String(residuo)
-                        : residuo.toLocaleString('it-IT', { maximumFractionDigits: 2 });
-                    }
-                    return (
-                      <div key={f.key} className="flex-1 min-w-[34px] flex flex-col relative">
-                        <label className="text-[9px] font-bold text-gray-800 text-center leading-none mb-0.5">
-                          {f.label}
+                {bevSales.length === 0 ? (
+                  <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
+                    Nessuna bevanda configurata.
+                  </div>
+                ) : (
+                  <div className="flex items-stretch gap-1.5">
+                    {bevSales.map(b => (
+                      <div
+                        key={b.sigla}
+                        data-testid={`bev-sales-${b.sigla}`}
+                        className="flex-1 min-w-[60px] flex flex-col"
+                      >
+                        <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
+                          {b.sigla}
                         </label>
-                        {isEditing ? (
+                        <div className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-base text-gray-900">
+                          {b.qty}
+                        </div>
+                        <span className="text-[10px] font-bold text-gray-700 mt-0.5 text-center leading-none">
+                          €{b.inc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    ))}
+                    {/* Totale — solo importo € */}
+                    <div className="flex-1 min-w-[70px] flex flex-col">
+                      <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">Tot</label>
+                      <div
+                        data-testid="bev-sales-total-inc"
+                        className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-base text-gray-900"
+                      >
+                        €{bevTotalInc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                      <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">&nbsp;</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* --- MOVIMENTI + CASSETTO (sezione unica a destra) --- */}
+              <div className="bg-white rounded border border-gray-200 p-1.5 w-[42%] flex-shrink-0">
+                <div className="flex items-baseline justify-between mb-1">
+                  <h2 className="text-xs font-bold text-gray-800 uppercase">Movimenti + Cassetto</h2>
+                  <span className="text-[10px] text-gray-400">Spicci aperti (Movimenti) · stock Cassetto</span>
+                </div>
+                <div className="flex items-stretch gap-2">
+                  {/* MOVIMENTI (era "Spicci") */}
+                  <div className="flex-[5] min-w-0 rounded border border-gray-200 bg-gray-50 p-1">
+                    <div className="flex items-baseline justify-between mb-0.5 px-0.5">
+                      <h3 className="text-[10px] font-bold text-gray-700 uppercase">Movimenti</h3>
+                      <span className="text-[9px] text-gray-400">ap.×valore</span>
+                    </div>
+                    <div className="flex items-stretch gap-1">
+                      {spicciValues.rows.map(r => {
+                        const hasComment = !!cashComments[r.key];
+                        return (
+                        <div key={r.key} className="flex-1 min-w-[34px] flex flex-col relative">
+                          <label className="text-[9px] font-bold text-gray-800 text-center leading-none mb-0.5">
+                            {r.label}
+                          </label>
                           <input
-                            ref={editingInputRef}
-                            data-testid={`cassetto-input-${f.key}`}
+                            data-testid={`spicci-aperti-${r.key}`}
                             type="text"
                             inputMode="decimal"
-                            value={editingValue}
-                            onChange={(e) => setEditingValue(e.target.value)}
-                            onFocus={() => setFocusedField(f.key)}
-                            onBlur={() => { setFocusedField(curr => curr === f.key ? null : curr); commitEditCassetto(f); }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') { e.preventDefault(); commitEditCassetto(f); }
-                              else if (e.key === 'Escape') { e.preventDefault(); cancelEditCassetto(); }
-                            }}
-                            onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
-                            placeholder="stock"
-                            className="w-full h-7 border-2 border-[#F5C518] rounded px-0.5 text-center font-bold text-[11px] focus:outline-none bg-yellow-50"
+                            value={cashRow[r.key] || ''}
+                            onChange={(e) => setCashRowValue(r.key, e.target.value)}
+                            onFocus={() => setFocusedField(r.key)}
+                            onBlur={() => setFocusedField(curr => curr === r.key ? null : curr)}
+                            onContextMenu={(e) => { e.preventDefault(); openCommentPopover(r.key); }}
+                            placeholder="ap."
+                            className="w-full h-7 border border-gray-200 rounded px-0.5 text-center font-bold text-[11px] focus:outline-none focus:border-[#F5C518] bg-white"
                           />
-                        ) : (
-                          <button
-                            type="button"
-                            data-testid={`cassetto-display-${f.key}`}
-                            onClick={() => startEditCassetto(f)}
-                            onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
-                            title={isAdmin ? "Clicca per modificare · destro per commento" : "Solo lettura · destro per commento"}
-                            className={`w-full h-7 border rounded px-0.5 text-center font-black text-[11px] transition-colors ${
-                              isAdmin ? 'cursor-pointer' : 'cursor-not-allowed'
-                            } ${
-                              isNegative
-                                ? 'bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100'
-                                : isAdmin
-                                  ? 'bg-gray-50 border-gray-200 text-gray-900 hover:bg-yellow-50 hover:border-yellow-300'
-                                  : 'bg-gray-50 border-gray-200 text-gray-700'
-                            }`}
+                          {hasComment && (
+                            <span
+                              title={cashComments[r.key]}
+                              className="absolute top-3 right-0 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-amber-600 z-10"
+                            />
+                          )}
+                          <div
+                            data-testid={`spicci-valore-${r.key}`}
+                            className="w-full h-7 mt-0.5 bg-yellow-50 border border-yellow-200 rounded flex items-center justify-center font-black text-[11px] text-gray-900"
                           >
-                            {displayValue}
-                          </button>
-                        )}
-                        {hasComment && (
-                          <span
-                            title={cashComments[f.key]}
-                            className="absolute top-3 right-0 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-amber-600 z-10"
-                          />
-                        )}
-                        {commentPopover?.key === f.key && (
-                          <CommentPopover
-                            inputRef={commentInputRef}
-                            value={commentPopover.value}
-                            onChange={(v) => setCommentPopover(p => ({ ...p, value: v }))}
-                            onSave={saveCommentPopover}
-                            onCancel={closeCommentPopover}
-                          />
-                        )}
+                            €{r.value.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                          </div>
+                          <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">×{r.mult}</span>
+                          {commentPopover?.key === r.key && (
+                            <CommentPopover
+                              inputRef={commentInputRef}
+                              value={commentPopover.value}
+                              onChange={(v) => setCommentPopover(p => ({ ...p, value: v }))}
+                              onSave={saveCommentPopover}
+                              onCancel={closeCommentPopover}
+                            />
+                          )}
+                        </div>
+                        );
+                      })}
+                      {/* Totale movimenti */}
+                      <div className="flex-1 min-w-[40px] flex flex-col">
+                        <label className="text-[9px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">TOT</label>
+                        <div className="w-full h-7 border border-transparent rounded flex items-center justify-center text-[9px] text-gray-400 italic">
+                          —
+                        </div>
+                        <div
+                          data-testid="spicci-totale"
+                          className="w-full h-7 mt-0.5 bg-white border border-gray-200 rounded flex items-center justify-center font-black text-[11px] text-gray-900"
+                        >
+                          €{spicciValues.total.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                        </div>
+                        <span className="text-[9px] text-gray-700 mt-0.5 text-center leading-none font-bold">totale</span>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-              </div>
-            {/* ============ VENDITE BEVANDE ============ */}
-            <div className="bg-white rounded border border-gray-200 p-1.5 flex-1 min-w-0">
-              <div className="flex items-baseline justify-between mb-1">
-                <h2 className="text-xs font-bold text-gray-800 uppercase">Vendite Bevande</h2>
-                <span className="text-[10px] text-gray-400">Q.tà · Incasso — in sync con Magazzino Bevande</span>
-              </div>
-              {bevSales.length === 0 ? (
-                <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
-                  Nessuna bevanda configurata.
-                </div>
-              ) : (
-                <div className="flex items-stretch gap-1.5">
-                  {bevSales.map(b => (
-                    <div
-                      key={b.sigla}
-                      data-testid={`bev-sales-${b.sigla}`}
-                      className="flex-1 min-w-[60px] flex flex-col"
-                    >
-                      <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
-                        {b.sigla}
-                      </label>
-                      <div className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-base text-gray-900">
-                        {b.qty}
-                      </div>
-                      <span className="text-[10px] font-bold text-gray-700 mt-0.5 text-center leading-none">
-                        €{b.inc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
                     </div>
-                  ))}
-                  {/* Totale — solo importo € (no quantità, no sfondo nero) */}
-                  <div className="flex-1 min-w-[70px] flex flex-col">
-                    <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">Tot</label>
-                    <div
-                      data-testid="bev-sales-total-inc"
-                      className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-black text-base text-gray-900"
-                    >
-                      €{bevTotalInc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+
+                  {/* CASSETTO (stock totale, click-to-edit) */}
+                  <div className="flex-[4] min-w-0 rounded border border-gray-200 bg-gray-50 p-1">
+                    <div className="flex items-baseline justify-between mb-0.5 px-0.5">
+                      <h3 className="text-[10px] font-bold text-gray-700 uppercase">Cassetto</h3>
+                      <span className="text-[9px] text-gray-400">{isAdmin ? 'modif.' : 'lett.'}</span>
                     </div>
-                    <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
-                      &nbsp;
-                    </span>
+                    <div className="flex items-stretch gap-1">
+                      {CASSETTO_FIELDS.map(f => {
+                        const isEditing = editingCassetto === f.key;
+                        const hasComment = !!cashComments[f.key];
+                        const raw = cashRow[f.key];
+                        let displayValue = '—';
+                        let isNegative = false;
+                        if (raw !== '' && raw !== undefined && raw !== null) {
+                          const base = evaluateValue(raw);
+                          const aperti = evaluateValue(cashRow[f.spicciKey]);
+                          const residuo = base - aperti;
+                          isNegative = residuo < 0;
+                          displayValue = Number.isInteger(residuo)
+                            ? String(residuo)
+                            : residuo.toLocaleString('it-IT', { maximumFractionDigits: 2 });
+                        }
+                        return (
+                          <div key={f.key} className="flex-1 min-w-[34px] flex flex-col relative">
+                            <label className="text-[9px] font-bold text-gray-800 text-center leading-none mb-0.5">
+                              {f.label}
+                            </label>
+                            {isEditing ? (
+                              <input
+                                ref={editingInputRef}
+                                data-testid={`cassetto-input-${f.key}`}
+                                type="text"
+                                inputMode="decimal"
+                                value={editingValue}
+                                onChange={(e) => setEditingValue(e.target.value)}
+                                onFocus={() => setFocusedField(f.key)}
+                                onBlur={() => { setFocusedField(curr => curr === f.key ? null : curr); commitEditCassetto(f); }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') { e.preventDefault(); commitEditCassetto(f); }
+                                  else if (e.key === 'Escape') { e.preventDefault(); cancelEditCassetto(); }
+                                }}
+                                onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
+                                placeholder="stock"
+                                className="w-full h-7 border-2 border-[#F5C518] rounded px-0.5 text-center font-bold text-[11px] focus:outline-none bg-yellow-50"
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                data-testid={`cassetto-display-${f.key}`}
+                                onClick={() => startEditCassetto(f)}
+                                onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
+                                title={isAdmin ? "Clicca per modificare · destro per commento" : "Solo lettura · destro per commento"}
+                                className={`w-full h-7 border rounded px-0.5 text-center font-black text-[11px] transition-colors ${
+                                  isAdmin ? 'cursor-pointer' : 'cursor-not-allowed'
+                                } ${
+                                  isNegative
+                                    ? 'bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100'
+                                    : isAdmin
+                                      ? 'bg-white border-gray-200 text-gray-900 hover:bg-yellow-50 hover:border-yellow-300'
+                                      : 'bg-white border-gray-200 text-gray-700'
+                                }`}
+                              >
+                                {displayValue}
+                              </button>
+                            )}
+                            {hasComment && (
+                              <span
+                                title={cashComments[f.key]}
+                                className="absolute top-3 right-0 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-amber-600 z-10"
+                              />
+                            )}
+                            {commentPopover?.key === f.key && (
+                              <CommentPopover
+                                inputRef={commentInputRef}
+                                value={commentPopover.value}
+                                onChange={(v) => setCommentPopover(p => ({ ...p, value: v }))}
+                                onSave={saveCommentPopover}
+                                onCancel={closeCommentPopover}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              )}
-            </div>
-
+              </div>
             </div>
 
             {/* Collegamenti rapidi sotto Spicci/Cassetto — discreti, non invadenti */}
