@@ -496,13 +496,6 @@ const ChiusureExcelPage = () => {
             </table>
           )}
         </div>
-
-        {/* Legenda */}
-        <div className="mt-3 text-[11px] text-gray-500 flex flex-wrap gap-3">
-          <span>✱ riga mock (dati di test)</span>
-          <span>Clicca una riga per aprire il dettaglio chiusura</span>
-          <span>Bevande: AL=Acqua nat. · AG=Acqua friz. · C=Coca · CZ=Coca Zero · F=Fanta · S=Sprite · B=Peroni · VB=Vino B. · VR=Vino R.</span>
-        </div>
       </main>
     </div>
   );
