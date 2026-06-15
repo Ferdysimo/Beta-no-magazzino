@@ -351,17 +351,6 @@ const DizionarioPastePage = () => {
           </div>
         </div>
 
-        {/* Help text */}
-        <div className="mt-4 text-xs text-gray-600 bg-blue-50 border border-blue-200 rounded p-3">
-          <p className="font-semibold text-blue-900 mb-1">Regole di riconoscimento paste</p>
-          <ul className="list-disc ml-5 space-y-0.5">
-            <li>Una pasta è <strong>riconosciuta</strong> se la sigla appare IMMEDIATAMENTE dopo il numero d'ordine (solo spazi tra).</li>
-            <li><strong>Esempi riconosciuti</strong>: <code className="bg-white px-1 rounded">42 CARB</code>, <code className="bg-white px-1 rounded">42 CARB - PIET</code>, <code className="bg-white px-1 rounded">42 CARB asporto</code></li>
-            <li><strong>Esempi NON riconosciuti</strong>: <code className="bg-white px-1 rounded">42 PIETRO CARB</code>, <code className="bg-white px-1 rounded">42 - CARB</code></li>
-            <li>La parola <code className="bg-white px-1 rounded">XL</code> in qualsiasi posizione fa diventare la pasta NON riconosciuta (va con prezzo manuale).</li>
-            <li>Il selettore locale qui sopra ti permette di gestire un dizionario diverso per ogni ristorante (es. POM costa €7 a Flaminio ma €8 a Brazza).</li>
-          </ul>
-        </div>
       </main>
     </div>
   );
