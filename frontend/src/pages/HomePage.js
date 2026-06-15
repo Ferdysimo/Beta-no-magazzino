@@ -86,6 +86,7 @@ const HomePage = () => {
                 <span className="block text-xs text-gray-500 mt-0.5">Storico carichi, evasioni e forzature di magazzino</span>
               </button>
               )}
+              {isFederico && (
               <button
                 data-testid="admin-storico-chiusure"
                 onClick={() => navigate('/storico-chiusure')}
@@ -94,6 +95,8 @@ const HomePage = () => {
                 <span className="font-bold text-lg text-gray-800">Storico Chiusure</span>
                 <span className="block text-xs text-gray-500 mt-0.5">Archivio giornaliero di cassa, paste e bevande</span>
               </button>
+              )}
+              {isFederico && (
               <button
                 data-testid="admin-chiusure-excel"
                 onClick={() => navigate('/chiusure-excel')}
@@ -102,6 +105,8 @@ const HomePage = () => {
                 <span className="font-bold text-lg text-gray-800">Chiusure Excel</span>
                 <span className="block text-xs text-gray-500 mt-0.5">Vista a griglia: una riga per giorno, tutte le colonne cassa + bevande</span>
               </button>
+              )}
+              {isFederico && (
               <button
                 data-testid="admin-dizionario-paste"
                 onClick={() => navigate('/dizionario-paste')}
@@ -110,6 +115,8 @@ const HomePage = () => {
                 <span className="font-bold text-lg text-gray-800">Dizionario Paste</span>
                 <span className="block text-xs text-gray-500 mt-0.5">Sigle + prezzi per ogni locale (per il riconoscimento automatico)</span>
               </button>
+              )}
+              {isFederico && (
               <button
                 data-testid="admin-audit-cassa"
                 onClick={() => navigate('/audit-cassa')}
@@ -118,6 +125,7 @@ const HomePage = () => {
                 <span className="font-bold text-lg text-gray-800">Controllo Report</span>
                 <span className="block text-xs text-gray-500 mt-0.5">Audit log: ogni movimento/operazione su Cassa e Bevande</span>
               </button>
+              )}
               {!isFederico && (
               <button
                 data-testid="admin-diagnostica"
