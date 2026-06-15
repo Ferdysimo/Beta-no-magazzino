@@ -10,8 +10,14 @@ export const AuthProvider = ({ children }) => {
   const [restaurant, setRestaurant] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
+  // IMPORTANT: usiamo sessionStorage (non localStorage) per il locale selezionato
+  // dall'Admin/Federico. localStorage è condiviso tra tutti i tab del browser,
+  // quindi se l'admin apre due tab — uno su Flaminio e uno su Grazie — l'ultimo
+  // tab a fare selectRestaurant sovrascriverebbe la scelta dell'altro, e gli
+  // ordini finirebbero nel locale sbagliato (cross-tenant leak).
+  // sessionStorage è isolato per-tab: ogni tab mantiene la sua selezione.
   const [adminSelectedRestaurant, setAdminSelectedRestaurant] = useState(
-    JSON.parse(localStorage.getItem('admin_selected_restaurant') || 'null')
+    JSON.parse(sessionStorage.getItem('admin_selected_restaurant') || 'null')
   );
 
   // "Federico" è l'unico supervisore con privilegi pieni tipo admin (vede tutti
@@ -29,12 +35,12 @@ export const AuthProvider = ({ children }) => {
 
   const selectRestaurant = (rest) => {
     setAdminSelectedRestaurant(rest);
-    localStorage.setItem('admin_selected_restaurant', JSON.stringify(rest));
+    sessionStorage.setItem('admin_selected_restaurant', JSON.stringify(rest));
   };
 
   const clearSelectedRestaurant = () => {
     setAdminSelectedRestaurant(null);
-    localStorage.removeItem('admin_selected_restaurant');
+    sessionStorage.removeItem('admin_selected_restaurant');
   };
 
   // ===== Axios interceptor: per Admin/Federico invia X-Restaurant-Id del locale impersonato =====
@@ -52,7 +58,21 @@ export const AuthProvider = ({ children }) => {
       try {
         if (isAdminRef.current && adminRestRef.current?.id) {
           config.headers = config.headers || {};
-          config.headers['X-Restaurant-Id'] = adminRestRef.current.id;
+          // X-Restaurant-Id viene letto da `_effective_restaurant_id` (alcuni
+          // endpoint specifici come /orders/today-paste-list, /cash/*, ecc.).
+          // X-Admin-Restaurant-Id viene letto da `verify_token` per fare
+          // l'override del restaurant_id nel JWT (lo usano POST /orders,
+          // PATCH /orders, ecc.). DEVONO essere mandati ENTRAMBI per garantire
+          // che l'admin lavori sul locale impersonato su tutti gli endpoint.
+          //
+          // Skip impersonation header on /auth/me so the admin keeps their real
+          // identity (role='admin') after a page reload.
+          const url = config.url || '';
+          const isAuthMe = url.endsWith('/auth/me') || url.includes('/auth/me?');
+          if (!isAuthMe) {
+            config.headers['X-Restaurant-Id'] = adminRestRef.current.id;
+            config.headers['X-Admin-Restaurant-Id'] = adminRestRef.current.id;
+          }
         }
       } catch (e) { /* no-op */ }
       return config;
@@ -62,26 +82,18 @@ export const AuthProvider = ({ children }) => {
 
   const logout = useCallback(() => {
     localStorage.removeItem('token');
-    localStorage.removeItem('admin_selected_restaurant');
+    sessionStorage.removeItem('admin_selected_restaurant');
     setToken(null);
     setRestaurant(null);
     setAdminSelectedRestaurant(null);
   }, []);
 
-  // Global axios interceptor: auto-logout on 401, add admin header
+  // Global axios interceptor: auto-logout on 401.
+  // NOTA: l'header X-Admin-Restaurant-Id / X-Restaurant-Id viene aggiunto dal
+  // primo interceptor (sopra), che usa il ref React isolato per-tab. NON
+  // leggere mai più da localStorage qui: era la causa del cross-tenant leak
+  // tra tab dell'Admin.
   useEffect(() => {
-    const requestInterceptor = axios.interceptors.request.use((config) => {
-      const adminRest = JSON.parse(localStorage.getItem('admin_selected_restaurant') || 'null');
-      // Skip impersonation header on /auth/me so the admin keeps their real
-      // identity (role='admin') after a page reload.
-      const url = config.url || '';
-      const isAuthMe = url.endsWith('/auth/me') || url.includes('/auth/me?');
-      if (adminRest && !isAuthMe) {
-        config.headers['X-Admin-Restaurant-Id'] = adminRest.id;
-      }
-      return config;
-    });
-
     const responseInterceptor = axios.interceptors.response.use(
       (response) => response,
       (error) => {
@@ -93,7 +105,6 @@ export const AuthProvider = ({ children }) => {
       }
     );
     return () => {
-      axios.interceptors.request.eject(requestInterceptor);
       axios.interceptors.response.eject(responseInterceptor);
     };
   }, [logout]);

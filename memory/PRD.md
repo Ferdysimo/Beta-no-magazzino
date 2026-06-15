@@ -194,4 +194,12 @@ Applicate 7 modifiche di layout/logica richieste dall'utente su `/app/frontend/s
   - curl backend: GET storico (cash + bev) OK ✓, PUT storico salva e ricarica OK ✓, non-admin → 403 ✓.
   - screenshot E2E: navigazione Home → Chiusure Excel → click riga 10/06/2026 → ReportBetaPage si apre con banner + dati completi (44 paste €347, CASSA mattina 173/glo 34/just 62/del 90/bp 175/sat 144/pos 307/ft 67, SPICCI 1/1/3/5, VENDITE bev €395, CASH SERA €-214) ✓.
 
-
+## Sessione fork — 15/06/2026 (BUG CRITICO: cross-tenant leak tra tab Admin)
+- **Sintomo**: l'Admin apre due tab del browser, uno con Flaminio selezionato e uno con Grazie selezionato. Quando manda una pasta dal tab "Flaminio" l'ordine finiva nel locale "Grazie" (o viceversa).
+- **Root cause**: `admin_selected_restaurant` era salvato in `localStorage` (condiviso tra tutti i tab dello stesso browser). Il secondo tab sovrascriveva la scelta del primo. Un secondo axios interceptor leggeva `localStorage` al volo a ogni richiesta HTTP, mandando il `X-Admin-Restaurant-Id` del locale sbagliato.
+- **Fix** (`/app/frontend/src/contexts/AuthContext.js`):
+  - `admin_selected_restaurant` spostato da `localStorage` a `sessionStorage` (isolato per-tab).
+  - Rimosso il secondo axios interceptor che leggeva `localStorage` ad ogni request.
+  - L'unico interceptor rimasto usa `adminRestRef` (React ref, isolato per-tab) e manda sia `X-Restaurant-Id` sia `X-Admin-Restaurant-Id` per coprire entrambi i path backend (`verify_token` + `_effective_restaurant_id`).
+- **Test E2E**: aperti 2 tab nello stesso contesto browser come Admin → tab1 seleziona Flaminio, tab2 seleziona Grazie → tab1 manda "TAB1_FLAMINIO_CARB" → tab1 mostra l'ordine, tab2 mostra "Nessun ordine" ✓.
+- **Side-effect atteso**: aprendo un nuovo tab come Admin si dovrà ri-selezionare il locale (il vecchio comportamento "ricorda l'ultimo" era esattamente la fonte del bug). Comportamento corretto e sicuro.
