@@ -112,7 +112,7 @@ const HomePage = () => {
                 onClick={() => navigate('/dizionario-paste')}
                 className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
               >
-                <span className="font-bold text-lg text-gray-800">Dizionario Paste</span>
+                <span className="font-bold text-lg text-gray-800">Nomi e prezzi delle paste</span>
                 <span className="block text-xs text-gray-500 mt-0.5">Sigle + prezzi per ogni locale (per il riconoscimento automatico)</span>
               </button>
               )}
@@ -122,7 +122,7 @@ const HomePage = () => {
                 onClick={() => navigate('/audit-cassa')}
                 className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
               >
-                <span className="font-bold text-lg text-gray-800">Controllo Report</span>
+                <span className="font-bold text-lg text-gray-800">Check singoli movimenti</span>
                 <span className="block text-xs text-gray-500 mt-0.5">Audit log: ogni movimento/operazione su Cassa e Bevande</span>
               </button>
               )}
