@@ -1364,16 +1364,16 @@ const ReportBetaPageInner = () => {
             <div className="mt-1.5">
               <h2 className="text-sm font-bold text-gray-800 uppercase text-center mb-1.5">Bevande</h2>
 
-            {/* ============ BLOCCO TOP BEVANDE (Mag Mattina + Ingressi/Scarti + Mag Sera) — bordo arancione SENZA bottom ============ */}
+            {/* ============ BLOCCO TOP BEVANDE (Mag Mattina + Ingressi/Scarti + Mag Sera) — bordo arancione, termina sopra Vendite Bev (non si estende sopra Spicci) ============ */}
             <div
               className="p-2 space-y-2"
               style={{
                 border: '2px solid #F5C518',
-                borderBottom: 0,
                 borderTopLeftRadius: '0.25rem',
                 borderTopRightRadius: '0.25rem',
                 borderBottomLeftRadius: 0,
                 borderBottomRightRadius: 0,
+                marginRight: 'calc(42%)',
               }}
             >
 
@@ -1711,15 +1711,17 @@ const ReportBetaPageInner = () => {
 
             {/* ============ VENDITE BEVANDE + SPICCI (stessa riga) — Vendite Bev chiude la L arancione, Spicci è FUORI ============ */}
             <div className="flex items-stretch gap-0">
-              {/* --- VENDITE BEVANDE (a sinistra) — chiude la L con bordo top arancione (non si estende sopra Spicci) --- */}
+              {/* --- VENDITE BEVANDE (a sinistra) — sale di 8px per "incollarsi" al top wrapper, no linea separatrice --- */}
               <div
                 className="bg-white p-1.5 flex-1 min-w-0"
                 style={{
                   border: '2px solid #F5C518',
+                  borderTop: 0,
                   borderTopLeftRadius: 0,
                   borderTopRightRadius: 0,
                   borderBottomLeftRadius: '0.25rem',
                   borderBottomRightRadius: '0.25rem',
+                  marginTop: '-8px',
                 }}
               >
                 <div className="flex items-baseline justify-center mb-1">
