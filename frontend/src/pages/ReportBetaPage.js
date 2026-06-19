@@ -1709,7 +1709,7 @@ const ReportBetaPageInner = () => {
             {/* ============ FINE BLOCCO TOP BEVANDE ============ */}
 
             {/* ============ VENDITE BEVANDE + SPICCI (stessa riga) — Vendite Bev chiude la L arancione, Spicci è FUORI ============ */}
-            <div className="flex items-stretch gap-2">
+            <div className="flex items-stretch gap-0">
               {/* --- VENDITE BEVANDE (a sinistra) — sale di 8px (gap parent) per "incollarsi" al top wrapper --- */}
               <div
                 className="bg-white p-1.5 flex-1 min-w-0"
@@ -1760,8 +1760,8 @@ const ReportBetaPageInner = () => {
                 )}
               </div>
 
-              {/* --- MOVIMENTI + CASSETTO (sezione unica a destra, bordo blu, dentro al wrapper arancione) --- */}
-              <div className="bg-white rounded p-1.5 w-[42%] flex-shrink-0" style={{ border: '2px solid #2563eb', marginTop: '-8px' }}>
+              {/* --- MOVIMENTI + CASSETTO (sezione unica a destra, bordo blu) — sopra Spicci si vede solo arancione --- */}
+              <div className="bg-white rounded p-1.5 w-[42%] flex-shrink-0 ml-2" style={{ border: '2px solid #2563eb', borderTop: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0, marginTop: '-8px' }}>
                 <div className="flex items-baseline justify-center mb-1">
                   <h2 className="text-xs font-bold text-gray-800 uppercase">Spicci</h2>
                 </div>
