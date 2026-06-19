@@ -1361,8 +1361,8 @@ const ReportBetaPageInner = () => {
             </div>
 
             {/* ============ BLOCCO BEVANDE (titolo fuori + bordo arancione a L) ============ */}
-            <div>
-              <h2 className="text-sm font-bold text-gray-800 uppercase text-center mb-0.5">Bevande</h2>
+            <div className="mt-1.5">
+              <h2 className="text-sm font-bold text-gray-800 uppercase text-center mb-1.5">Bevande</h2>
 
             {/* ============ BLOCCO TOP BEVANDE (Mag Mattina + Ingressi/Scarti + Mag Sera) — bordo arancione ============ */}
             <div
@@ -1562,25 +1562,13 @@ const ReportBetaPageInner = () => {
               <div className="bg-white rounded p-1 flex-1 min-w-0">
                 <div className="relative flex items-center justify-center mb-0.5">
                   <h2 className="text-xs font-bold text-gray-800 uppercase">Scarti</h2>
-                  <div className="absolute right-0">
-                    <button
-                      type="button"
-                      data-testid="toggle-scarti"
-                      onClick={() => setShowScarti(v => !v)}
-                      title={showScarti ? 'Nascondi Scarti' : 'Mostra Scarti'}
-                      className="text-[10px] font-bold px-2 py-0.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300"
-                    >
-                      {showScarti ? '▼ nascondi' : '▶ mostra'}
-                    </button>
-                  </div>
                 </div>
-                {showScarti && (
-                  beverages.length === 0 ? (
-                    <div className="h-7 flex items-center justify-center text-xs text-gray-400 italic">
-                      Nessuna bevanda configurata.
-                    </div>
-                  ) : (
-                    <div className="flex items-stretch gap-1 justify-start">
+                {beverages.length === 0 ? (
+                  <div className="h-7 flex items-center justify-center text-xs text-gray-400 italic">
+                    Nessuna bevanda configurata.
+                  </div>
+                ) : (
+                  <div className="flex items-stretch gap-1 justify-start">
                       {beverages.map(b => {
                         const row = bevCounts[b.sigla] || {};
                         const scRaw = row.scarti ?? '';
@@ -1629,8 +1617,7 @@ const ReportBetaPageInner = () => {
                           </div>
                         );
                       })}
-                    </div>
-                  )
+                  </div>
                 )}
               </div>
             </div>
@@ -1774,7 +1761,7 @@ const ReportBetaPageInner = () => {
               </div>
 
               {/* --- MOVIMENTI + CASSETTO (sezione unica a destra, bordo blu, dentro al wrapper arancione) --- */}
-              <div className="bg-white rounded p-1.5 w-[42%] flex-shrink-0" style={{ border: '2px solid #2563eb' }}>
+              <div className="bg-white rounded p-1.5 w-[42%] flex-shrink-0" style={{ border: '2px solid #2563eb', marginTop: '-8px' }}>
                 <div className="flex items-baseline justify-center mb-1">
                   <h2 className="text-xs font-bold text-gray-800 uppercase">Spicci</h2>
                 </div>
