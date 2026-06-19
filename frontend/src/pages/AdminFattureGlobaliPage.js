@@ -78,16 +78,6 @@ const AdminFattureGlobaliPage = () => {
     return map;
   }, [restaurants]);
 
-  // Tutti i fornitori per cui esiste almeno un DDT
-  const ddtBySupplier = useMemo(() => {
-    const g = {};
-    (ddtList || []).forEach(d => {
-      const k = d.supplier || '— sconosciuto —';
-      (g[k] = g[k] || []).push(d);
-    });
-    return Object.keys(g).sort((a, b) => a.localeCompare(b)).map(k => ({ supplier: k, items: g[k] }));
-  }, [ddtList]);
-
   const handleFile = (f) => {
     if (!f) return;
     setFile(f);
@@ -161,11 +151,14 @@ const AdminFattureGlobaliPage = () => {
     } catch (e) { /* ignore */ }
   };
 
-  const orderedGlobals = useMemo(() => {
-    const active = globals.filter(g => !g.paid).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
-    const paid = globals.filter(g => g.paid).sort((a, b) => (b.paid_at || '').localeCompare(a.paid_at || ''));
-    return [...active, ...paid];
-  }, [globals]);
+  const activeGlobals = useMemo(
+    () => globals.filter(g => !g.paid).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')),
+    [globals]
+  );
+  const archivedGlobals = useMemo(
+    () => globals.filter(g => g.paid).sort((a, b) => (b.paid_at || '').localeCompare(a.paid_at || '')),
+    [globals]
+  );
 
   const accent = (st) => {
     if (st === 'paid') return 'border-amber-400 bg-amber-50';
@@ -189,13 +182,6 @@ const AdminFattureGlobaliPage = () => {
       </span>
     );
   };
-
-  // Fatture senza DDT loro (nessun fornitore) — sezione 2 mostra solo fornitori che non hanno una fattura attiva con TUTTI i DDT abbinati
-  const suppliersWithActiveFG = useMemo(() => {
-    const s = new Set();
-    globals.forEach(g => { if (!g.paid) s.add(g.supplier); });
-    return s;
-  }, [globals]);
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -275,14 +261,14 @@ const AdminFattureGlobaliPage = () => {
           {error && <div className="mt-2 text-xs text-red-700">{error}</div>}
         </form>
 
-        {/* === FATTURE CARICATE === */}
+        {/* === FATTURE CARICATE (NON PAGATE) === */}
         <div className="space-y-3 mb-6" data-testid="fg-list">
-          {orderedGlobals.length === 0 && (
+          {activeGlobals.length === 0 && (
             <div className="bg-white border border-dashed border-gray-300 rounded p-5 text-center text-gray-400 text-sm">
-              Nessuna fattura caricata. Compila il form sopra per iniziare.
+              Nessuna fattura attiva. Compila il form sopra per iniziare.
             </div>
           )}
-          {orderedGlobals.map(g => {
+          {activeGlobals.map(g => {
             const st = STATUS(g);
             const linked = g.linked_invoices || [];
             const linkedNormSet = new Set(linked.map(l => normalizeDdt(l.ddt_number)));
@@ -420,60 +406,168 @@ const AdminFattureGlobaliPage = () => {
           })}
         </div>
 
-        {/* === SEZIONE 2: DDT raggruppati per fornitore (compatta, solo fornitori senza fattura attiva in alto) === */}
-        <details className="bg-white border border-gray-200 rounded" data-testid="ddt-by-supplier-section">
-          <summary className="cursor-pointer px-3 py-2 text-sm font-bold text-gray-800 hover:bg-gray-50 flex items-center justify-between">
-            <span>Tutti i DDT dei locali ({ddtList.length}) — raggruppati per fornitore</span>
+        {/* === SEZIONE 2: TABELLA DDT DEI LOCALI === */}
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden mb-6" data-testid="ddt-table-section">
+          <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
+            <h2 className="text-sm font-bold text-gray-800">DDT dei locali</h2>
+            <span className="text-[11px] text-gray-500">{ddtList.length} totali · ordinati per fornitore</span>
+          </div>
+          {ddtList.length === 0 ? (
+            <div className="text-center text-gray-400 text-sm py-6">Nessun DDT caricato dai locali.</div>
+          ) : (
+            <div className="overflow-x-auto" data-testid="ddt-by-supplier">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-100 text-gray-700 uppercase">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold">Fornitore</th>
+                    <th className="px-3 py-2 text-left font-semibold">Locale</th>
+                    <th className="px-3 py-2 text-left font-semibold">Numero DDT</th>
+                    <th className="px-3 py-2 text-left font-semibold">Data</th>
+                    <th className="px-3 py-2 text-left font-semibold">Foto</th>
+                    <th className="px-3 py-2 text-left font-semibold">Stato</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ddtList.map((d, i) => {
+                    const prevSupplier = i > 0 ? ddtList[i - 1].supplier : null;
+                    const isFirstOfSupplier = d.supplier !== prevSupplier;
+                    return (
+                      <tr
+                        key={d.id}
+                        data-testid={`ddt-row-${d.id}`}
+                        className={`${isFirstOfSupplier ? 'border-t-2 border-gray-300' : 'border-t border-gray-100'} ${d.already_linked ? 'bg-emerald-50/40' : 'hover:bg-gray-50'}`}
+                      >
+                        <td className={`px-3 py-1.5 ${isFirstOfSupplier ? 'font-bold text-gray-900' : 'text-gray-400'}`}>
+                          {isFirstOfSupplier ? d.supplier : ''}
+                        </td>
+                        <td className="px-3 py-1.5 text-gray-700">
+                          {restaurantNameById[d.restaurant_id] || d.uploaded_by || ''}
+                        </td>
+                        <td className="px-3 py-1.5 font-mono font-bold text-gray-900">{d.ddt_number}</td>
+                        <td className="px-3 py-1.5 text-gray-600">
+                          {d.created_at ? new Date(d.created_at).toLocaleDateString('it-IT') : ''}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          {d.image_url ? (
+                            <button
+                              type="button"
+                              onClick={() => setLightboxUrl(`${BACKEND_URL}${d.image_url}`)}
+                              title="Apri foto"
+                            >
+                              <img src={`${BACKEND_URL}${d.image_url}`} alt="" className="h-8 w-8 rounded border border-gray-300 object-cover hover:ring-2 hover:ring-blue-400" />
+                            </button>
+                          ) : <span className="text-gray-400">—</span>}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          {d.already_linked ? (
+                            <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              Abbinato
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-blue-700 font-semibold">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                              In attesa
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* === SEZIONE 3: ARCHIVIO FATTURE PAGATE === */}
+        <details className="bg-white border border-gray-200 rounded-lg overflow-hidden" data-testid="fg-archive-section">
+          <summary className="cursor-pointer px-3 py-2 text-sm font-bold text-gray-800 hover:bg-gray-50 flex items-center justify-between bg-amber-50/50">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              Archivio fatture pagate ({archivedGlobals.length})
+            </span>
             <span className="text-[10px] text-gray-400 font-normal">clicca per espandere</span>
           </summary>
-          <div className="p-3 border-t border-gray-200 space-y-3" data-testid="ddt-by-supplier">
-            {ddtBySupplier.length === 0 && (
-              <div className="text-center text-gray-400 text-sm py-4">Nessun DDT caricato.</div>
-            )}
-            {ddtBySupplier.map(group => {
-              const pending = group.items.filter(d => !d.already_linked).length;
-              const matched = group.items.filter(d => d.already_linked).length;
-              const hasActiveFG = suppliersWithActiveFG.has(group.supplier);
-              return (
-                <div key={group.supplier} className="border border-gray-200 rounded overflow-hidden">
-                  <div className="px-2 py-1 bg-gray-50 border-b border-gray-200 flex items-center justify-between text-xs">
-                    <span className="font-bold text-gray-800">{group.supplier}</span>
-                    <span className="text-gray-600">
-                      <span className="text-blue-700 font-bold">{pending}</span> in attesa
-                      <span className="mx-1 text-gray-300">·</span>
-                      <span className="text-emerald-700">{matched}</span> abbinati
-                      {hasActiveFG && <span className="ml-2 text-amber-700">⚠ fattura aperta sopra</span>}
-                    </span>
-                  </div>
-                  <div className="p-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1.5">
-                    {group.items.map(d => (
-                      <div
-                        key={d.id}
-                        data-testid={`ddt-card-${d.id}`}
-                        className={`border rounded px-2 py-1 text-[11px] flex items-center justify-between gap-1 ${
-                          d.already_linked ? 'bg-emerald-50 border-emerald-200' : 'bg-blue-50 border-blue-200'
-                        }`}
-                      >
-                        <div className="flex flex-col flex-1 min-w-0">
-                          <span className="font-bold text-gray-900 truncate">DDT {d.ddt_number}</span>
-                          <span className="text-[10px] text-gray-500 truncate">
-                            {restaurantNameById[d.restaurant_id] || d.uploaded_by || ''}
-                            {d.created_at && ' · ' + new Date(d.created_at).toLocaleDateString('it-IT')}
-                          </span>
+          <div className="border-t border-gray-200 p-3 space-y-2">
+            {archivedGlobals.length === 0 ? (
+              <div className="text-center text-gray-400 text-sm py-4">Nessuna fattura pagata.</div>
+            ) : (
+              archivedGlobals.map(g => (
+                <details key={g.id} data-testid={`fg-archived-${g.id}`} className="bg-amber-50/40 border border-amber-200 rounded">
+                  <summary className="cursor-pointer px-3 py-2 hover:bg-amber-100/50 flex items-center justify-between gap-2 flex-wrap text-xs">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {g.image_url && (
+                        <img src={`${BACKEND_URL}${g.image_url}`} alt="" className="h-9 w-9 rounded border border-amber-300 object-cover flex-shrink-0" />
+                      )}
+                      <div className="min-w-0">
+                        <div className="font-bold text-gray-900 truncate">{g.supplier}</div>
+                        <div className="text-[10px] text-gray-600 truncate">
+                          DDT: <span className="font-semibold">{(g.declared_ddt || []).join(', ') || '—'}</span>
                         </div>
-                        {d.image_url && (
-                          <button
-                            type="button"
-                            onClick={() => setLightboxUrl(`${BACKEND_URL}${d.image_url}`)}
-                            className="text-blue-700 hover:text-blue-900 text-[10px] underline flex-shrink-0"
-                          >foto</button>
-                        )}
                       </div>
-                    ))}
+                    </div>
+                    <div className="flex items-center gap-3 text-[10px] text-gray-500 flex-shrink-0">
+                      <span>Pagata il <b className="text-amber-800">{g.paid_at ? new Date(g.paid_at).toLocaleDateString('it-IT') : '—'}</b></span>
+                      <span className="text-amber-700 underline">vedi dettagli</span>
+                    </div>
+                  </summary>
+                  <div className="border-t border-amber-200 p-3 bg-white">
+                    <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                      <div className="text-[11px] text-gray-700">
+                        Fattura: <b>{g.supplier}</b>
+                        {' · '}Data: {g.invoice_date ? new Date(g.invoice_date).toLocaleDateString('it-IT') : '—'}
+                        {' · '}Pagata: {g.paid_at ? new Date(g.paid_at).toLocaleString('it-IT') : '—'}
+                      </div>
+                      {g.image_url && (
+                        <button
+                          type="button"
+                          onClick={() => setLightboxUrl(`${BACKEND_URL}${g.image_url}`)}
+                          className="text-xs text-blue-700 underline"
+                        >Apri foto fattura</button>
+                      )}
+                    </div>
+                    <div className="text-[11px] font-bold text-gray-700 uppercase mb-1">DDT abbinati ({(g.linked_invoices || []).length})</div>
+                    {(g.linked_invoices || []).length === 0 ? (
+                      <div className="text-xs text-gray-400 italic">Nessun DDT.</div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead className="bg-gray-100 text-gray-700 uppercase">
+                            <tr>
+                              <th className="px-2 py-1 text-left font-semibold">Locale</th>
+                              <th className="px-2 py-1 text-left font-semibold">Numero DDT</th>
+                              <th className="px-2 py-1 text-left font-semibold">Data</th>
+                              <th className="px-2 py-1 text-left font-semibold">Foto</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {g.linked_invoices.map(inv => (
+                              <tr key={inv.id} className="border-t border-gray-100">
+                                <td className="px-2 py-1 text-gray-700">{restaurantNameById[inv.restaurant_id] || inv.uploaded_by || ''}</td>
+                                <td className="px-2 py-1 font-mono font-bold text-gray-900">{inv.ddt_number || '—'}</td>
+                                <td className="px-2 py-1 text-gray-600">{inv.created_at ? new Date(inv.created_at).toLocaleDateString('it-IT') : ''}</td>
+                                <td className="px-2 py-1">
+                                  {inv.image_url ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setLightboxUrl(`${BACKEND_URL}${inv.image_url}`)}
+                                      title="Apri foto"
+                                    >
+                                      <img src={`${BACKEND_URL}${inv.image_url}`} alt="" className="h-7 w-7 rounded border border-gray-300 object-cover hover:ring-2 hover:ring-blue-400" />
+                                    </button>
+                                  ) : <span className="text-gray-400">—</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
-                </div>
-              );
-            })}
+                </details>
+              ))
+            )}
           </div>
         </details>
       </main>
