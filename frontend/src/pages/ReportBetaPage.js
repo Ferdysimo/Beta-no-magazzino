@@ -1500,7 +1500,7 @@ const ReportBetaPageInner = () => {
                   Nessuna bevanda configurata.
                 </div>
               ) : (
-                <div className="flex items-stretch gap-1 justify-start">
+                <div className="flex items-stretch gap-1 justify-center">
                   {beverages.map(b => {
                     const row = bevCounts[b.sigla] || {};
                     const casseRaw = row.inUsc_casse ?? '';
@@ -1570,7 +1570,7 @@ const ReportBetaPageInner = () => {
                     Nessuna bevanda configurata.
                   </div>
                 ) : (
-                  <div className="flex items-stretch gap-1 justify-start">
+                  <div className="flex items-stretch gap-1 justify-center">
                       {beverages.map(b => {
                         const row = bevCounts[b.sigla] || {};
                         const scRaw = row.scarti ?? '';
