@@ -1477,6 +1477,11 @@ const ReportBetaPageInner = () => {
                             }`}
                           />
                         </div>
+                        {/* Etichette sotto i quadratini: sinistra "casse", destra "unità" */}
+                        <div className="flex gap-1 -mt-0.5">
+                          <span className="w-1/2 text-[9px] text-gray-500 text-center leading-none">casse</span>
+                          <span className="w-1/2 text-[9px] text-gray-500 text-center leading-none">unità</span>
+                        </div>
                       </div>
                     );
                   })}
@@ -1691,6 +1696,11 @@ const ReportBetaPageInner = () => {
                                   : 'bg-sky-50 border-sky-200 text-gray-900'
                             }`}
                           />
+                        </div>
+                        {/* Etichette sotto i quadratini: sinistra "casse", destra "unità" */}
+                        <div className="flex gap-1 -mt-0.5">
+                          <span className="w-1/2 text-[9px] text-gray-500 text-center leading-none">casse</span>
+                          <span className="w-1/2 text-[9px] text-gray-500 text-center leading-none">unità</span>
                         </div>
                         <span
                           data-testid={`bev-mag-sera-total-${b.sigla}`}
