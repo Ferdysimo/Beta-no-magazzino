@@ -259,6 +259,80 @@ const AdminFattureGlobaliPage = () => {
             </div>
           </div>
           {error && <div className="mt-2 text-xs text-red-700">{error}</div>}
+
+          {/* Pannello DDT del fornitore selezionato: spunta direttamente quelli da allegare */}
+          {supplier && (
+            <div className="mt-3 border-t border-gray-200 pt-3" data-testid="fg-form-ddt-picker">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-semibold text-gray-600 uppercase">
+                  DDT disponibili per «{supplier}»
+                </span>
+                {(() => {
+                  const avail = (ddtList || []).filter(d => d.supplier === supplier && !d.already_linked);
+                  return <span className="text-[10px] text-gray-500">{avail.length} in attesa di abbinamento</span>;
+                })()}
+              </div>
+              {(() => {
+                const avail = (ddtList || []).filter(d => d.supplier === supplier && !d.already_linked);
+                if (avail.length === 0) {
+                  return (
+                    <div className="text-[11px] text-gray-400 italic py-1">
+                      Nessun DDT in attesa per questo fornitore. Inserisci i numeri direttamente nel campo sopra.
+                    </div>
+                  );
+                }
+                const declaredNorm = new Set(
+                  ddtNumbers.split(',').map(p => normalizeDdt(p)).filter(Boolean)
+                );
+                const toggle = (d) => {
+                  const norm = normalizeDdt(d.ddt_number);
+                  const current = ddtNumbers.split(',').map(p => p.trim()).filter(Boolean);
+                  const has = current.some(p => normalizeDdt(p) === norm);
+                  let next;
+                  if (has) next = current.filter(p => normalizeDdt(p) !== norm);
+                  else next = [...current, d.ddt_number];
+                  setDdtNumbers(next.join(', '));
+                };
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1.5">
+                    {avail.map(d => {
+                      const checked = declaredNorm.has(normalizeDdt(d.ddt_number));
+                      return (
+                        <label
+                          key={d.id}
+                          className={`flex items-center gap-2 border rounded px-2 py-1.5 text-[11px] cursor-pointer transition-colors ${
+                            checked ? 'bg-emerald-100 border-emerald-300' : 'bg-white border-gray-200 hover:border-blue-400'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggle(d)}
+                            data-testid={`fg-form-check-${d.id}`}
+                            className="flex-shrink-0"
+                          />
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span className="font-bold text-gray-900 truncate">DDT {d.ddt_number}</span>
+                            <span className="text-[10px] text-gray-500 truncate">
+                              {restaurantNameById[d.restaurant_id] || d.uploaded_by || ''}
+                              {d.created_at && ' · ' + new Date(d.created_at).toLocaleDateString('it-IT')}
+                            </span>
+                          </div>
+                          {d.image_url && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.preventDefault(); setLightboxUrl(`${BACKEND_URL}${d.image_url}`); }}
+                              className="text-blue-700 hover:text-blue-900 text-[10px] underline flex-shrink-0"
+                            >foto</button>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </form>
 
         {/* === FATTURE CARICATE (NON PAGATE) === */}
