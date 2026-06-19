@@ -20,6 +20,7 @@ import ProdottiMagazzinoPage from './pages/ProdottiMagazzinoPage';
 import MediaLocaliPage from './pages/MediaLocaliPage';
 import DiagnosticaLivePage from './pages/DiagnosticaLivePage';
 import GeneraleHideLogPage from './pages/GeneraleHideLogPage';
+import AdminFattureGlobaliPage from './pages/AdminFattureGlobaliPage';
 import MagazzinoBevandePage from './pages/MagazzinoBevandePage';
 import StoricoBevandePage from './pages/StoricoBevandePage';
 import RichiestaMercePage from './pages/RichiestaMercePage';
@@ -233,6 +234,11 @@ function AppRoutes() {
       <Route path="/cestino-generale" element={
         <ProtectedRoute>
           <GeneraleHideLogPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/fatture-globale" element={
+        <ProtectedRoute>
+          <AdminFattureGlobaliPage />
         </ProtectedRoute>
       } />
       <Route path="/magazzino-bevande" element={

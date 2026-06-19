@@ -605,6 +605,8 @@ class InvoiceCreate(BaseModel):
     control_code: Optional[str] = ""
     image_data: str  # Base64 encoded image
     invoice_date: str = None  # Date selected by user
+    importo: Optional[float] = 0.0  # LEGACY: tenuto per i DDT vecchi già caricati
+    ddt_number: Optional[str] = ""  # NEW: numero DDT (obbligatorio per i nuovi)
 
 class InvoiceResponse(BaseModel):
     id: str
@@ -615,6 +617,8 @@ class InvoiceResponse(BaseModel):
     image_url: str
     created_at: str
     uploaded_by: str
+    importo: Optional[float] = 0.0
+    ddt_number: Optional[str] = ""
 
 class OrderResponse(BaseModel):
     id: str
@@ -1877,7 +1881,9 @@ async def create_invoice(data: InvoiceCreate, token_data: dict = Depends(verify_
         "image_file": image_filename,
         "invoice_date": data.invoice_date or datetime.now(timezone.utc).isoformat(),
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "uploaded_by": restaurant_name
+        "uploaded_by": restaurant_name,
+        "importo": float(data.importo or 0),
+        "ddt_number": (data.ddt_number or "").strip(),
     }
     
     await db.invoices.insert_one(invoice)
@@ -5025,6 +5031,335 @@ async def delete_chiusura_piatti(chiusura_id: str, token_data: dict = Depends(ve
             p.unlink()
     await db.chiusure.update_one({"id": chiusura_id}, {"$unset": {"piatti_file": ""}})
     return {"message": "Foto piatti rimossa"}
+
+
+# ==================== FATTURE GLOBALI (Admin only) ====================
+# Schema fattura_globale (collezione `fatture_globali`):
+#   id, supplier, importo (LEGACY), ddt_numbers (string), image_file, invoice_date,
+#   created_at, uploaded_by, paid (bool), paid_at (ISO or None),
+#   linked_invoice_ids: [string]   # ID delle invoices (DDT) dei locali abbinate
+# Match per NUMERO DDT (non più per importo):
+#   - paid=true → ORO
+#   - tutti i numeri DDT dichiarati sono linkati e nessun linked è "extra" → VERDE
+#   - ci sono linked ma non coincidono con i declared → ROSSO
+#   - 0 link → BLU
+
+def _normalize_ddt_number(s: str) -> str:
+    """Normalizza il numero DDT per il confronto: lowercase + rimuove spazi."""
+    if not s:
+        return ""
+    return "".join(str(s).split()).lower()
+
+
+def _parse_ddt_numbers(text: str) -> list:
+    """Parsa stringa tipo '12345, 67/abc , 999' → lista di numeri normalizzati,
+    preservando però il valore originale (trimmato) per la visualizzazione.
+    Ritorna lista di dict {raw, norm}."""
+    if not text:
+        return []
+    parts = [p.strip() for p in str(text).split(",")]
+    out = []
+    seen = set()
+    for p in parts:
+        if not p:
+            continue
+        norm = _normalize_ddt_number(p)
+        if norm in seen:
+            continue
+        seen.add(norm)
+        out.append({"raw": p, "norm": norm})
+    return out
+
+
+class FatturaGlobaleCreate(BaseModel):
+    supplier: str
+    importo: Optional[float] = 0.0  # LEGACY: non più richiesto
+    ddt_numbers: Optional[str] = ""  # NEW: testo libero con numeri separati da virgola
+    image_data: str  # base64
+    invoice_date: Optional[str] = None
+
+
+async def _enrich_global_invoice(doc: dict) -> dict:
+    """Aggiunge URL immagini, dettagli invoices linkate e stato match per numero DDT."""
+    base_url = "/api/uploads/"
+    linked_ids = doc.get("linked_invoice_ids") or []
+    linked_docs = []
+    linked_norms = set()
+    if linked_ids:
+        cursor = db.invoices.find({"id": {"$in": linked_ids}}, {"_id": 0})
+        async for inv in cursor:
+            ddt_n = (inv.get("ddt_number") or "").strip()
+            linked_norms.add(_normalize_ddt_number(ddt_n))
+            linked_docs.append({
+                "id": inv.get("id"),
+                "supplier": inv.get("supplier") or "",
+                "importo": float(inv.get("importo") or 0),
+                "ddt_number": ddt_n,
+                "image_url": base_url + inv["image_file"] if inv.get("image_file") else "",
+                "uploaded_by": inv.get("uploaded_by") or "",
+                "created_at": inv.get("created_at"),
+                "restaurant_id": inv.get("restaurant_id"),
+            })
+
+    declared = _parse_ddt_numbers(doc.get("ddt_numbers") or "")
+    declared_norms = {d["norm"] for d in declared}
+    missing = [d["raw"] for d in declared if d["norm"] not in linked_norms]
+    extra = [n for n in linked_norms if n not in declared_norms and n != ""]
+
+    return {
+        "id": doc.get("id"),
+        "supplier": doc.get("supplier") or "",
+        "importo": float(doc.get("importo") or 0),  # legacy
+        "ddt_numbers": doc.get("ddt_numbers") or "",
+        "declared_ddt": [d["raw"] for d in declared],
+        "missing_ddt": missing,
+        "extra_ddt_count": len(extra),
+        "image_url": base_url + doc["image_file"] if doc.get("image_file") else "",
+        "invoice_date": doc.get("invoice_date"),
+        "created_at": doc.get("created_at"),
+        "uploaded_by": doc.get("uploaded_by") or "",
+        "paid": bool(doc.get("paid", False)),
+        "paid_at": doc.get("paid_at"),
+        "linked_invoices": linked_docs,
+    }
+
+
+def _require_admin(token_data: dict):
+    if token_data.get("role") not in ("admin", "supervisor"):
+        raise HTTPException(status_code=403, detail="Solo admin")
+
+
+@api_router.post("/admin/fatture-globali")
+async def create_fattura_globale(
+    data: FatturaGlobaleCreate,
+    token_data: dict = Depends(verify_token),
+):
+    _require_admin(token_data)
+    if not data.supplier.strip():
+        raise HTTPException(status_code=400, detail="Fornitore obbligatorio")
+    if not (data.ddt_numbers or "").strip():
+        raise HTTPException(status_code=400, detail="Inserisci almeno un numero DDT")
+    if not data.image_data:
+        raise HTTPException(status_code=400, detail="Foto fattura obbligatoria")
+    image_filename = save_image_to_disk(data.image_data, "fattura_globale")
+    declared = _parse_ddt_numbers(data.ddt_numbers)
+    declared_norms = [d["norm"] for d in declared]
+
+    # Auto-link: cerca tra le invoices del fornitore quelli con ddt_number che
+    # combacia (normalizzato). Esclude quelli già linkati ad ALTRE globali.
+    auto_link_ids = []
+    if declared_norms:
+        candidates = db.invoices.find({
+            "supplier": data.supplier.strip(),
+            "ddt_number": {"$nin": ["", None]},
+        }, {"_id": 0, "id": 1, "ddt_number": 1})
+        # Set di invoice_id già linkate altrove
+        linked_elsewhere = set()
+        async for fg in db.fatture_globali.find({}, {"linked_invoice_ids": 1}):
+            for x in (fg.get("linked_invoice_ids") or []):
+                linked_elsewhere.add(x)
+        async for inv in candidates:
+            n = _normalize_ddt_number(inv.get("ddt_number") or "")
+            if n and n in declared_norms and inv["id"] not in linked_elsewhere:
+                auto_link_ids.append(inv["id"])
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "supplier": data.supplier.strip(),
+        "importo": float(data.importo or 0),
+        "ddt_numbers": data.ddt_numbers.strip(),
+        "image_file": image_filename,
+        "invoice_date": data.invoice_date or datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "uploaded_by": token_data.get("restaurant_name") or "admin",
+        "paid": False,
+        "paid_at": None,
+        "linked_invoice_ids": auto_link_ids,
+    }
+    await db.fatture_globali.insert_one(doc)
+    return await _enrich_global_invoice(doc)
+
+
+@api_router.get("/admin/fatture-globali")
+async def list_fatture_globali(token_data: dict = Depends(verify_token)):
+    _require_admin(token_data)
+    # Filtro legacy: mostriamo solo le fatture globali nuove (con ddt_numbers).
+    # Le vecchie (solo importo, senza ddt_numbers) restano in DB ma non vengono mostrate.
+    docs = await db.fatture_globali.find(
+        {"ddt_numbers": {"$nin": ["", None]}},
+        {"_id": 0},
+    ).sort([("paid", 1), ("created_at", -1)]).to_list(1000)
+    return [await _enrich_global_invoice(d) for d in docs]
+
+
+@api_router.get("/admin/ddt-list")
+async def list_all_ddt(token_data: dict = Depends(verify_token)):
+    """Ritorna TUTTI i DDT (invoices) dei locali con ddt_number valorizzato,
+    ordinati per fornitore e poi per data desc. Include flag `already_linked`
+    per indicare se sono già abbinati a una fattura globale."""
+    _require_admin(token_data)
+    docs = await db.invoices.find(
+        {"ddt_number": {"$nin": ["", None]}},
+        {"_id": 0},
+    ).sort([("supplier", 1), ("created_at", -1)]).to_list(5000)
+
+    linked_to_globals = set()
+    async for fg in db.fatture_globali.find({}, {"linked_invoice_ids": 1}):
+        for x in (fg.get("linked_invoice_ids") or []):
+            linked_to_globals.add(x)
+
+    out = []
+    for d in docs:
+        out.append({
+            "id": d.get("id"),
+            "supplier": d.get("supplier") or "",
+            "ddt_number": d.get("ddt_number") or "",
+            "image_url": ("/api/uploads/" + d["image_file"]) if d.get("image_file") else "",
+            "uploaded_by": d.get("uploaded_by") or "",
+            "created_at": d.get("created_at"),
+            "invoice_date": d.get("invoice_date"),
+            "restaurant_id": d.get("restaurant_id"),
+            "already_linked": d.get("id") in linked_to_globals,
+            "paid": bool(d.get("paid", False)),
+        })
+    return out
+
+
+@api_router.get("/admin/fatture-locali-by-supplier")
+async def list_locale_invoices_by_supplier(
+    supplier: str,
+    token_data: dict = Depends(verify_token),
+):
+    """Ritorna i DDT dei locali per un fornitore specifico (vista di compatibilità).
+    Mostra solo DDT con `ddt_number` valorizzato (i vecchi sono nascosti dalla pagina admin)."""
+    _require_admin(token_data)
+    if not supplier or not supplier.strip():
+        return []
+    docs = await db.invoices.find(
+        {"supplier": supplier.strip(), "ddt_number": {"$nin": ["", None]}},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(1000)
+    linked_to_others = set()
+    async for fg in db.fatture_globali.find({"supplier": supplier.strip()}, {"linked_invoice_ids": 1}):
+        for x in (fg.get("linked_invoice_ids") or []):
+            linked_to_others.add(x)
+    out = []
+    for d in docs:
+        out.append({
+            "id": d.get("id"),
+            "supplier": d.get("supplier") or "",
+            "importo": float(d.get("importo") or 0),
+            "ddt_number": d.get("ddt_number") or "",
+            "image_url": ("/api/uploads/" + d["image_file"]) if d.get("image_file") else "",
+            "uploaded_by": d.get("uploaded_by") or "",
+            "created_at": d.get("created_at"),
+            "restaurant_id": d.get("restaurant_id"),
+            "already_linked": d.get("id") in linked_to_others,
+        })
+    return out
+
+
+@api_router.post("/admin/fatture-globali/{fg_id}/link/{invoice_id}")
+async def link_invoice_to_global(
+    fg_id: str,
+    invoice_id: str,
+    token_data: dict = Depends(verify_token),
+):
+    _require_admin(token_data)
+    fg = await db.fatture_globali.find_one({"id": fg_id})
+    if not fg:
+        raise HTTPException(status_code=404, detail="Fattura globale non trovata")
+    inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Fattura locale non trovata")
+    # Evita link duplicati (anche su altre globali)
+    already = await db.fatture_globali.find_one({"linked_invoice_ids": invoice_id})
+    if already and already.get("id") != fg_id:
+        raise HTTPException(status_code=400, detail="Questa fattura locale è già abbinata a un'altra fattura globale")
+    await db.fatture_globali.update_one(
+        {"id": fg_id},
+        {"$addToSet": {"linked_invoice_ids": invoice_id}},
+    )
+    new_doc = await db.fatture_globali.find_one({"id": fg_id}, {"_id": 0})
+    return await _enrich_global_invoice(new_doc)
+
+
+@api_router.delete("/admin/fatture-globali/{fg_id}/link/{invoice_id}")
+async def unlink_invoice_from_global(
+    fg_id: str,
+    invoice_id: str,
+    token_data: dict = Depends(verify_token),
+):
+    _require_admin(token_data)
+    await db.fatture_globali.update_one(
+        {"id": fg_id},
+        {"$pull": {"linked_invoice_ids": invoice_id}},
+    )
+    new_doc = await db.fatture_globali.find_one({"id": fg_id}, {"_id": 0})
+    if not new_doc:
+        raise HTTPException(status_code=404, detail="Fattura globale non trovata")
+    return await _enrich_global_invoice(new_doc)
+
+
+@api_router.post("/admin/fatture-globali/{fg_id}/pay")
+async def mark_global_paid(
+    fg_id: str,
+    token_data: dict = Depends(verify_token),
+):
+    _require_admin(token_data)
+    doc = await db.fatture_globali.find_one({"id": fg_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Fattura globale non trovata")
+    enriched = await _enrich_global_invoice(doc)
+    # Check match per numero DDT: tutti i numeri dichiarati devono essere coperti
+    # dai DDT linkati (no missing) e niente DDT linkati "extra" (non dichiarati).
+    if enriched.get("missing_ddt"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"DDT mancanti: {', '.join(enriched['missing_ddt'])}",
+        )
+    if enriched.get("extra_ddt_count", 0) > 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Ci sono DDT abbinati che non sono dichiarati nella fattura",
+        )
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.fatture_globali.update_one(
+        {"id": fg_id},
+        {"$set": {"paid": True, "paid_at": now_iso}},
+    )
+    # Propaga il pagamento a TUTTE le fatture locali (DDT) abbinate:
+    # diventano automaticamente "PAGATO" lato pagina DDT dei vari locali.
+    linked_ids = doc.get("linked_invoice_ids") or []
+    if linked_ids:
+        await db.invoices.update_many(
+            {"id": {"$in": linked_ids}},
+            {"$set": {"paid": True, "paid_at": now_iso, "paid_via_global_id": fg_id}},
+        )
+    new_doc = await db.fatture_globali.find_one({"id": fg_id}, {"_id": 0})
+    return await _enrich_global_invoice(new_doc)
+
+
+@api_router.delete("/admin/fatture-globali/{fg_id}")
+async def delete_fattura_globale(
+    fg_id: str,
+    token_data: dict = Depends(verify_token),
+):
+    _require_admin(token_data)
+    doc = await db.fatture_globali.find_one({"id": fg_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Fattura globale non trovata")
+    img = doc.get("image_file")
+    if img:
+        p = UPLOADS_DIR / img
+        if p.exists():
+            try:
+                p.unlink()
+            except Exception:
+                pass
+    await db.fatture_globali.delete_one({"id": fg_id})
+    return {"message": "Fattura globale eliminata"}
+
 
 # Include the router in the main app
 app.include_router(api_router)

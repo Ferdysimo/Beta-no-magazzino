@@ -29,6 +29,8 @@ const FatturePage = () => {
   const [invoiceDate, setInvoiceDate] = useState('');
   const [supplier, setSupplier] = useState('');
   const [controlCode, setControlCode] = useState('');
+  const [importo, setImporto] = useState('');
+  const [ddtNumber, setDdtNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -145,6 +147,10 @@ const FatturePage = () => {
       setError('Seleziona un fornitore');
       return;
     }
+    if (!ddtNumber.trim()) {
+      setError('Inserisci il numero DDT');
+      return;
+    }
     
     setLoading(true);
     setError('');
@@ -158,7 +164,8 @@ const FatturePage = () => {
             paid: false,
             control_code: '',
             image_data: reader.result,
-            invoice_date: new Date(invoiceDate).toISOString()
+            invoice_date: new Date(invoiceDate).toISOString(),
+            ddt_number: ddtNumber.trim(),
           }, {
             headers: { Authorization: `Bearer ${token}` }
           });
@@ -168,9 +175,11 @@ const FatturePage = () => {
           setPreview(null);
           setSupplier('');
           setControlCode('');
+          setImporto('');
+          setDdtNumber('');
           const now = new Date();
           setInvoiceDate(new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
-          setSuccess('Fattura caricata con successo!');
+          setSuccess('DDT caricato con successo!');
           setTimeout(() => setSuccess(''), 3000);
           
           fetchInvoices();
@@ -233,7 +242,7 @@ const FatturePage = () => {
 
   // Delete invoice
   const deleteInvoice = async (invoiceId) => {
-    if (!window.confirm('Sei sicuro di voler eliminare questa fattura?')) return;
+    if (!window.confirm('Sei sicuro di voler eliminare questo DDT?')) return;
     
     try {
       await axios.delete(`${API}/invoices/${invoiceId}`, {
@@ -283,7 +292,7 @@ const FatturePage = () => {
       <main className="max-w-4xl mx-auto p-6">
         {/* Page Header */}
         <h1 className="font-heading text-3xl font-bold text-gray-900 mb-6">
-          Elenco fatture {restaurant?.location}
+          Elenco DDT {restaurant?.location}
         </h1>
 
         {/* Upload Form */}
@@ -291,7 +300,7 @@ const FatturePage = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* File Upload */}
             <div className="flex items-center gap-4">
-              <label className="w-32 text-gray-700 font-medium">Foto Fattura</label>
+              <label className="w-32 text-gray-700 font-medium">Foto DDT</label>
               <div className="flex-1">
                 <input
                   ref={fileInputRef}
@@ -370,18 +379,19 @@ const FatturePage = () => {
               </button>
             </div>
 
-            {/* Tipologia (fixed) */}
+            {/* Numero DDT */}
             <div className="flex items-center gap-4">
-              <label className="w-32 text-gray-700 font-medium">Tipologia</label>
-              <select
-                className="h-10 px-3 border border-gray-300 rounded-md bg-gray-100"
-                disabled
-              >
-                <option>Fatture</option>
-              </select>
+              <label className="w-32 text-gray-700 font-medium">Numero DDT</label>
+              <input
+                type="text"
+                value={ddtNumber}
+                onChange={(e) => setDdtNumber(e.target.value)}
+                placeholder="es. 12345"
+                data-testid="invoice-ddt-number-input"
+                className="flex-1 max-w-xs h-10 px-3 border border-gray-300 rounded-md focus:border-blue-500 focus:outline-none"
+              />
             </div>
 
-            {/* Control Code */}
             {/* Error/Success Messages */}
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-md">
@@ -402,7 +412,7 @@ const FatturePage = () => {
                 className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-md font-medium transition-colors disabled:opacity-50"
                 data-testid="upload-btn"
               >
-                {loading ? 'Caricamento...' : 'Carica fattura'}
+                {loading ? 'Caricamento...' : 'Carica DDT'}
               </button>
             </div>
           </form>
@@ -413,7 +423,7 @@ const FatturePage = () => {
 
         {/* Invoices List */}
         <div>
-          <h2 className="font-heading text-2xl font-bold text-gray-900 mb-4">Elenco fatture</h2>
+          <h2 className="font-heading text-2xl font-bold text-gray-900 mb-4">Elenco DDT</h2>
           
           {/* Filters */}
           <div className="flex items-center gap-4 mb-4">
@@ -457,7 +467,7 @@ const FatturePage = () => {
                   onClick={() => openLightboxFor(invoice.image_data)}
                 >
                   {invoice.image_data ? (
-                    <img src={resolveImageSrc(invoice.image_data)} alt="Fattura" className="w-full h-full object-cover" />
+                    <img src={resolveImageSrc(invoice.image_data)} alt="DDT" className="w-full h-full object-cover" />
                   ) : (
                     <FileText className="text-gray-400" size={24} />
                   )}
@@ -465,19 +475,30 @@ const FatturePage = () => {
 
                 {/* Info */}
                 <div className="flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-gray-800">{invoice.supplier}</span>
+                    {invoice.ddt_number ? (
+                      <span className="bg-orange-100 text-orange-800 text-xs px-2 py-0.5 rounded-full font-bold">
+                        DDT n. {invoice.ddt_number}
+                      </span>
+                    ) : Number(invoice.importo || 0) > 0 && (
+                      <span className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full font-bold">
+                        € {Number(invoice.importo).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    )}
                     {invoice.paid && (
                       <span className="bg-green-500 text-white text-xs px-2 py-0.5 rounded-full">
                         PAGATO
                       </span>
                     )}
                   </div>
-                  <div className="text-sm text-gray-600">
-                    Codice: <strong>{invoice.control_code}</strong>
-                  </div>
+                  {invoice.control_code ? (
+                    <div className="text-sm text-gray-600">
+                      Codice: <strong>{invoice.control_code}</strong>
+                    </div>
+                  ) : null}
                   <div className="text-sm text-gray-500">
-                    Data fattura: {formatDate(invoice.invoice_date)}
+                    Data DDT: {formatDate(invoice.invoice_date)}
                   </div>
                   <div className="text-xs text-gray-400">
                     Caricata: {formatDate(invoice.created_at)}
@@ -506,7 +527,7 @@ const FatturePage = () => {
 
             {invoices.length === 0 && (
               <div className="text-center text-gray-500 py-8">
-                Nessuna fattura trovata
+                Nessun DDT trovato
               </div>
             )}
           </div>

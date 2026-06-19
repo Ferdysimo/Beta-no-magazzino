@@ -146,6 +146,16 @@ const HomePage = () => {
                 <span className="block text-xs text-gray-500 mt-0.5">Registro silenzioso degli ordini nascosti dal Tablet Generale</span>
               </button>
               )}
+              {!isFederico && (
+              <button
+                data-testid="btn-admin-fatture-globale"
+                onClick={() => navigate('/admin/fatture-globale')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Fatture Globale</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Carica fatture globali e abbinale ai DDT dei locali tramite numero DDT</span>
+              </button>
+              )}
             </div>
           </div>
         </main>
@@ -224,7 +234,7 @@ const HomePage = () => {
                 </button>
                 <button data-testid="btn-fatture" onClick={() => navigate('/fatture')}
                   className="bg-[#60A5FA] hover:bg-[#3B82F6] text-white px-4 py-2 rounded-md font-medium text-sm transition-colors">
-                  Fatture
+                  DDT
                 </button>
               </div>
             </div>
