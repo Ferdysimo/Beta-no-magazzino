@@ -1364,16 +1364,18 @@ const ReportBetaPageInner = () => {
             <div className="mt-1.5">
               <h2 className="text-sm font-bold text-gray-800 uppercase text-center mb-1.5">Bevande</h2>
 
-            {/* ============ BLOCCO TOP BEVANDE (Mag Mattina + Ingressi/Scarti + Mag Sera) — bordo arancione, bottom resta solo sopra Spicci per chiudere la L ============ */}
+            {/* ============ BLOCCO TOP BEVANDE — bordo arancione SENZA bottom (no linea sopra Vendite Bev), ::after disegna il "tetto" arancione SOLO sopra Spicci ============ */}
             <div
-              className="p-2 space-y-2"
+              className="p-2 space-y-2 relative after:content-[''] after:absolute after:bottom-[-2px] after:right-0 after:h-[2px] after:w-[42%] after:bg-[#F5C518]"
               style={{
                 border: '2px solid #F5C518',
+                borderBottom: 0,
                 borderTopLeftRadius: '0.25rem',
                 borderTopRightRadius: '0.25rem',
                 borderBottomLeftRadius: 0,
                 borderBottomRightRadius: 0,
               }}
+              data-after-style="orange-roof"
             >
 
             {/* ============ MAGAZZINO MATTINA (casse + sfuse, in sync con Magazzino Bevande) ============ */}
@@ -1708,9 +1710,9 @@ const ReportBetaPageInner = () => {
             </div>
             {/* ============ FINE BLOCCO TOP BEVANDE ============ */}
 
-            {/* ============ VENDITE BEVANDE + SPICCI (stessa riga) — Vendite Bev senza bordo top, sale di 2px per coprire il bordo bottom del top wrapper ============ */}
-            <div className="flex items-stretch gap-2" style={{ marginTop: '-2px' }}>
-              {/* --- VENDITE BEVANDE (a sinistra, no bordo top, sale per fondersi col top wrapper) --- */}
+            {/* ============ VENDITE BEVANDE + SPICCI (stessa riga) — Spicci distanziato 8px sotto, si vede sia il "tetto" arancione che il bordo blu ============ */}
+            <div className="flex items-stretch gap-2">
+              {/* --- VENDITE BEVANDE (a sinistra, no bordo top, attaccato al top wrapper senza linea) --- */}
               <div
                 className="bg-white p-1.5 flex-1 min-w-0"
                 style={{
@@ -1759,8 +1761,8 @@ const ReportBetaPageInner = () => {
                 )}
               </div>
 
-              {/* --- SPICCI (rettangolo blu, stessa riga di Vendite Bev) --- */}
-              <div className="bg-white rounded p-1.5 w-[42%] flex-shrink-0" style={{ border: '2px solid #2563eb' }}>
+              {/* --- SPICCI (rettangolo blu, distanziato 8px sotto il "tetto" arancione) --- */}
+              <div className="bg-white rounded p-1.5 w-[42%] flex-shrink-0" style={{ border: '2px solid #2563eb', marginTop: '8px' }}>
                 <div className="flex items-baseline justify-center mb-1">
                   <h2 className="text-xs font-bold text-gray-800 uppercase">Spicci</h2>
                 </div>
