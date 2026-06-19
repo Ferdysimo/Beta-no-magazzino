@@ -1718,8 +1718,8 @@ const ReportBetaPageInner = () => {
             {/* ============ FINE BLOCCO TOP BEVANDE ============ */}
 
             {/* ============ VENDITE BEVANDE + SPICCI (stessa riga) — Vendite Bev chiude la L arancione, Spicci è FUORI ============ */}
-            <div className="flex items-stretch gap-2" style={{ marginTop: '-8px' }}>
-              {/* --- VENDITE BEVANDE (a sinistra) --- */}
+            <div className="flex items-stretch gap-2">
+              {/* --- VENDITE BEVANDE (a sinistra) — sale di 8px (gap parent) per "incollarsi" al top wrapper --- */}
               <div
                 className="bg-white p-1.5 flex-1 min-w-0"
                 style={{
@@ -1729,6 +1729,7 @@ const ReportBetaPageInner = () => {
                   borderTopRightRadius: 0,
                   borderBottomLeftRadius: '0.25rem',
                   borderBottomRightRadius: '0.25rem',
+                  marginTop: '-8px',
                 }}
               >
                 <div className="flex items-baseline justify-center mb-1">
