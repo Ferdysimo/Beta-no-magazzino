@@ -1366,7 +1366,7 @@ const ReportBetaPageInner = () => {
 
             {/* ============ BLOCCO TOP BEVANDE — bordo arancione SENZA bottom (no linea sopra Vendite Bev), ::after disegna il "tetto" arancione SOLO sopra Spicci ============ */}
             <div
-              className="p-2 space-y-2 relative after:content-[''] after:absolute after:bottom-[-2px] after:right-0 after:h-[2px] after:w-[42%] after:bg-[#F5C518]"
+              className="p-2 space-y-2 relative after:content-[''] after:absolute after:bottom-[-2px] after:right-0 after:h-[2px] after:w-[calc(42%+10px)] after:bg-[#F5C518]"
               style={{
                 border: '2px solid #F5C518',
                 borderBottom: 0,
