@@ -1445,9 +1445,7 @@ const ReportBetaPageInner = () => {
                             onChange={(e) => handleCasseSfuseChange(b.sigla, 'mattina', 'casse', e.target.value)}
                             readOnly={locked}
                             tabIndex={locked ? -1 : 0}
-                            title={locked
-                              ? 'Auto-popolato da Magazzino Sera del giorno prima (clicca sul lucchetto per forzare)'
-                              : (isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : 'Casse da 24')}
+                            title={isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : 'Casse da 24'}
                             className={`w-1/2 h-9 rounded text-center font-semibold text-sm border focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
                               locked
                                 ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-not-allowed'
@@ -1467,9 +1465,7 @@ const ReportBetaPageInner = () => {
                             onChange={(e) => handleCasseSfuseChange(b.sigla, 'mattina', 'sfuse', e.target.value)}
                             readOnly={locked}
                             tabIndex={locked ? -1 : 0}
-                            title={locked
-                              ? 'Auto-popolato da Magazzino Sera del giorno prima (clicca sul lucchetto per forzare)'
-                              : (isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Unità sfuse')}
+                            title={isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Unità sfuse'}
                             className={`w-1/2 h-9 rounded text-center font-semibold text-sm border focus:outline-none focus:ring-2 focus:ring-teal-400 ${
                               locked
                                 ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-not-allowed'
