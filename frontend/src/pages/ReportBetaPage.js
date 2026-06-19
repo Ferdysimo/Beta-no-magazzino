@@ -1364,10 +1364,16 @@ const ReportBetaPageInner = () => {
             <div className="mt-1.5">
               <h2 className="text-sm font-bold text-gray-800 uppercase text-center mb-1.5">Bevande</h2>
 
-            {/* ============ BLOCCO TOP BEVANDE (Mag Mattina + Ingressi/Scarti + Mag Sera) — rettangolo arancione completo ============ */}
+            {/* ============ BLOCCO TOP BEVANDE (Mag Mattina + Ingressi/Scarti + Mag Sera) — bordo arancione, bottom resta solo sopra Spicci per chiudere la L ============ */}
             <div
-              className="p-2 space-y-2 rounded"
-              style={{ border: '2px solid #F5C518' }}
+              className="p-2 space-y-2"
+              style={{
+                border: '2px solid #F5C518',
+                borderTopLeftRadius: '0.25rem',
+                borderTopRightRadius: '0.25rem',
+                borderBottomLeftRadius: 0,
+                borderBottomRightRadius: 0,
+              }}
             >
 
             {/* ============ MAGAZZINO MATTINA (casse + sfuse, in sync con Magazzino Bevande) ============ */}
@@ -1702,12 +1708,19 @@ const ReportBetaPageInner = () => {
             </div>
             {/* ============ FINE BLOCCO TOP BEVANDE ============ */}
 
-            {/* ============ VENDITE BEVANDE + SPICCI (stessa riga) — due rettangoli separati sotto il blocco bevande ============ */}
-            <div className="flex items-stretch gap-2 mt-1.5">
-              {/* --- VENDITE BEVANDE (a sinistra, rettangolo arancione completo) --- */}
+            {/* ============ VENDITE BEVANDE + SPICCI (stessa riga) — Vendite Bev senza bordo top, sale di 2px per coprire il bordo bottom del top wrapper ============ */}
+            <div className="flex items-stretch gap-2" style={{ marginTop: '-2px' }}>
+              {/* --- VENDITE BEVANDE (a sinistra, no bordo top, sale per fondersi col top wrapper) --- */}
               <div
-                className="bg-white p-1.5 flex-1 min-w-0 rounded"
-                style={{ border: '2px solid #F5C518' }}
+                className="bg-white p-1.5 flex-1 min-w-0"
+                style={{
+                  border: '2px solid #F5C518',
+                  borderTop: 0,
+                  borderTopLeftRadius: 0,
+                  borderTopRightRadius: 0,
+                  borderBottomLeftRadius: '0.25rem',
+                  borderBottomRightRadius: '0.25rem',
+                }}
               >
                 <div className="flex items-baseline justify-center mb-1">
                   <h2 className="text-xs font-bold text-gray-800 uppercase">Vendite Bevande</h2>
