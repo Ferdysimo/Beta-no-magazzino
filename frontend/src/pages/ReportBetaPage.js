@@ -1447,7 +1447,7 @@ const ReportBetaPageInner = () => {
                             tabIndex={locked ? -1 : 0}
                             title={locked
                               ? 'Auto-popolato da Magazzino Sera del giorno prima (clicca sul lucchetto per forzare)'
-                              : (isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : `Casse × ${PEZZI_PER_CASSA}`)}
+                              : (isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : 'Casse da 24')}
                             className={`w-1/2 h-9 rounded text-center font-semibold text-sm border focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
                               locked
                                 ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-not-allowed'
@@ -1469,7 +1469,7 @@ const ReportBetaPageInner = () => {
                             tabIndex={locked ? -1 : 0}
                             title={locked
                               ? 'Auto-popolato da Magazzino Sera del giorno prima (clicca sul lucchetto per forzare)'
-                              : (isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Bottiglie sfuse')}
+                              : (isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Unità sfuse')}
                             className={`w-1/2 h-9 rounded text-center font-semibold text-sm border focus:outline-none focus:ring-2 focus:ring-teal-400 ${
                               locked
                                 ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-not-allowed'
@@ -1668,7 +1668,7 @@ const ReportBetaPageInner = () => {
                             onChange={(e) => handleCasseSfuseChange(b.sigla, 'sera', 'casse', e.target.value)}
                             onFocus={() => setFocusedSeraSigla(b.sigla)}
                             onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
-                            title={isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : `Casse × ${PEZZI_PER_CASSA}`}
+                            title={isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : 'Casse da 24'}
                             className={`w-1/2 h-9 rounded text-center font-semibold text-sm border focus:outline-none focus:ring-2 focus:ring-amber-400 ${
                               isFormulaCasse && isFocusedSera
                                 ? 'bg-rose-100 border-rose-300 text-rose-800'
@@ -1686,7 +1686,7 @@ const ReportBetaPageInner = () => {
                             onChange={(e) => handleCasseSfuseChange(b.sigla, 'sera', 'sfuse', e.target.value)}
                             onFocus={() => setFocusedSeraSigla(b.sigla)}
                             onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
-                            title={isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Bottiglie sfuse'}
+                            title={isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Unità sfuse'}
                             className={`w-1/2 h-9 rounded text-center font-semibold text-sm border focus:outline-none focus:ring-2 focus:ring-sky-400 ${
                               isFormulaSfuse && isFocusedSera
                                 ? 'bg-rose-100 border-rose-300 text-rose-800'
