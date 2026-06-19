@@ -1360,8 +1360,17 @@ const ReportBetaPageInner = () => {
               </div>
             </div>
 
-            {/* ============ BLOCCO BEVANDE — un unico bordo arancione attorno alle 5 sezioni ============ */}
-            <div className="rounded p-2 space-y-2" style={{ border: '2px solid #F5C518' }}>
+            {/* ============ BLOCCO TOP BEVANDE (Mag Mattina + Ingressi/Scarti + Mag Sera) — bordo arancione ============ */}
+            <div
+              className="p-2 space-y-2"
+              style={{
+                border: '2px solid #F5C518',
+                borderTopLeftRadius: '0.25rem',
+                borderTopRightRadius: '0.25rem',
+                borderBottomLeftRadius: 0,
+                borderBottomRightRadius: 0,
+              }}
+            >
 
             {/* ============ MAGAZZINO MATTINA (casse + sfuse, in sync con Magazzino Bevande) ============ */}
             <div className="bg-white rounded p-1.5">
@@ -1705,10 +1714,23 @@ const ReportBetaPageInner = () => {
               )}
             </div>
 
-            {/* ============ VENDITE BEVANDE + SPICCI (stessa riga, Spicci con bordo blu sta DENTRO al wrapper bevande) ============ */}
-            <div className="flex items-stretch gap-2">
-              {/* --- VENDITE BEVANDE (a sinistra, occupa lo spazio rimanente) --- */}
-              <div className="bg-white rounded p-1.5 flex-1 min-w-0">
+            </div>
+            {/* ============ FINE BLOCCO TOP BEVANDE ============ */}
+
+            {/* ============ VENDITE BEVANDE + SPICCI (stessa riga) — Vendite Bev chiude la L arancione, Spicci è FUORI ============ */}
+            <div className="flex items-stretch gap-2" style={{ marginTop: '-8px' }}>
+              {/* --- VENDITE BEVANDE (a sinistra) --- */}
+              <div
+                className="bg-white p-1.5 flex-1 min-w-0"
+                style={{
+                  border: '2px solid #F5C518',
+                  borderTop: 0,
+                  borderTopLeftRadius: 0,
+                  borderTopRightRadius: 0,
+                  borderBottomLeftRadius: '0.25rem',
+                  borderBottomRightRadius: '0.25rem',
+                }}
+              >
                 <div className="flex items-baseline justify-center mb-1">
                   <h2 className="text-xs font-bold text-gray-800 uppercase">Vendite Bevande</h2>
                 </div>
@@ -1904,8 +1926,7 @@ const ReportBetaPageInner = () => {
                 </div>
               </div>
             </div>
-            </div>
-            {/* ============ FINE BLOCCO BEVANDE (wrapper arancione) ============ */}
+            {/* ============ FINE BLOCCO BEVANDE (L arancione) ============ */}
 
             {/* Collegamenti rapidi sotto Spicci/Cassetto — discreti, non invadenti */}
             <div className="flex justify-end gap-2 mt-1">
