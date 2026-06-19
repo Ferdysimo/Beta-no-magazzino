@@ -1102,10 +1102,9 @@ const ReportBetaPageInner = () => {
           {/* ============== DESTRA — CASSA + AREA FUTURA ============== */}
           <section className="flex flex-col gap-1.5 min-h-0">
             {/* Riga banconote */}
-            <div className="bg-white rounded p-1.5" style={{ border: '2px solid #4ade80' }}>
-              <div className="flex items-baseline justify-center mb-1">
-                <h2 className="text-xs font-bold text-gray-800 uppercase">Cassa</h2>
-              </div>
+            <div>
+              <h2 className="text-sm font-bold text-gray-800 uppercase text-center mb-0.5">Cassa</h2>
+              <div className="bg-white rounded p-1.5" style={{ border: '2px solid #4ade80' }}>
               <div className="grid grid-cols-11 gap-1.5">
                 {CASH_DENOMINATIONS.map(d => {
                   const raw = (cash[d.key] || '').replace(/,/g, '.');
@@ -1141,27 +1140,27 @@ const ReportBetaPageInner = () => {
                   </div>
                 </div>
               </div>
+              </div>
             </div>
 
             {/* ============ RIEPILOGO CASSA ============ */}
-            <div className="bg-white rounded p-1.5" style={{ border: '2px solid #4ade80' }}>
-              <div className="relative flex items-center justify-center mb-1">
-                <h2 className="text-xs font-bold text-gray-800 uppercase">Movimentazione finanziaria</h2>
-                <div className="absolute right-0 flex items-center gap-2">
-                  <button
-                    type="button"
-                    data-testid="toggle-force-mattina"
-                    onClick={() => setForceMattina(v => !v)}
-                    title={forceMattina ? 'Modifica forzata di CASH MATTINA attiva — clicca per bloccare' : 'Sblocca CASH MATTINA per forzare un valore manuale'}
-                    className={`text-[10px] px-2 py-0.5 rounded border font-bold uppercase transition-colors ${
-                      forceMattina
-                        ? 'bg-amber-400 border-amber-500 text-amber-900 hover:bg-amber-500'
-                        : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    {forceMattina ? '🔓 mattina sbloccato' : '🔒 forza mattina'}
-                  </button>
-                </div>
+            <div>
+              <h2 className="text-sm font-bold text-gray-800 uppercase text-center mb-0.5">Movimentazione finanziaria</h2>
+              <div className="bg-white rounded p-1.5 relative" style={{ border: '2px solid #4ade80' }}>
+              <div className="absolute right-1.5 top-1.5 flex items-center gap-2 z-10">
+                <button
+                  type="button"
+                  data-testid="toggle-force-mattina"
+                  onClick={() => setForceMattina(v => !v)}
+                  title={forceMattina ? 'Modifica forzata di CASH MATTINA attiva — clicca per bloccare' : 'Sblocca CASH MATTINA per forzare un valore manuale'}
+                  className={`text-[10px] px-2 py-0.5 rounded border font-bold uppercase transition-colors ${
+                    forceMattina
+                      ? 'bg-amber-400 border-amber-500 text-amber-900 hover:bg-amber-500'
+                      : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {forceMattina ? '🔓 mattina sbloccato' : '🔒 forza mattina'}
+                </button>
               </div>
               <div className="flex items-stretch gap-1.5">
                 {/* Tutti i campi tranne VERS: VERS viene renderizzato come ULTIMO box DOPO CASH SERA */}
@@ -1359,6 +1358,11 @@ const ReportBetaPageInner = () => {
                 })()}
               </div>
             </div>
+            </div>
+
+            {/* ============ BLOCCO BEVANDE (titolo fuori + bordo arancione a L) ============ */}
+            <div>
+              <h2 className="text-sm font-bold text-gray-800 uppercase text-center mb-0.5">Bevande</h2>
 
             {/* ============ BLOCCO TOP BEVANDE (Mag Mattina + Ingressi/Scarti + Mag Sera) — bordo arancione ============ */}
             <div
@@ -1928,6 +1932,7 @@ const ReportBetaPageInner = () => {
               </div>
             </div>
             {/* ============ FINE BLOCCO BEVANDE (L arancione) ============ */}
+            </div>
 
             {/* Collegamenti rapidi sotto Spicci/Cassetto — discreti, non invadenti */}
             <div className="flex justify-end gap-2 mt-1">
