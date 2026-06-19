@@ -30,6 +30,7 @@ const FatturePage = () => {
   const [supplier, setSupplier] = useState('');
   const [controlCode, setControlCode] = useState('');
   const [importo, setImporto] = useState('');
+  const [ddtNumber, setDdtNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -146,6 +147,10 @@ const FatturePage = () => {
       setError('Seleziona un fornitore');
       return;
     }
+    if (!ddtNumber.trim()) {
+      setError('Inserisci il numero DDT');
+      return;
+    }
     
     setLoading(true);
     setError('');
@@ -160,7 +165,7 @@ const FatturePage = () => {
             control_code: '',
             image_data: reader.result,
             invoice_date: new Date(invoiceDate).toISOString(),
-            importo: parseFloat((importo || '0').toString().replace(',', '.')) || 0,
+            ddt_number: ddtNumber.trim(),
           }, {
             headers: { Authorization: `Bearer ${token}` }
           });
@@ -171,6 +176,7 @@ const FatturePage = () => {
           setSupplier('');
           setControlCode('');
           setImporto('');
+          setDdtNumber('');
           const now = new Date();
           setInvoiceDate(new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
           setSuccess('DDT caricato con successo!');
@@ -373,29 +379,17 @@ const FatturePage = () => {
               </button>
             </div>
 
-            {/* Importo */}
+            {/* Numero DDT */}
             <div className="flex items-center gap-4">
-              <label className="w-32 text-gray-700 font-medium">Importo (€)</label>
+              <label className="w-32 text-gray-700 font-medium">Numero DDT</label>
               <input
                 type="text"
-                inputMode="decimal"
-                value={importo}
-                onChange={(e) => setImporto(e.target.value)}
-                placeholder="es. 1250,00"
-                data-testid="invoice-importo-input"
+                value={ddtNumber}
+                onChange={(e) => setDdtNumber(e.target.value)}
+                placeholder="es. 12345"
+                data-testid="invoice-ddt-number-input"
                 className="flex-1 max-w-xs h-10 px-3 border border-gray-300 rounded-md focus:border-blue-500 focus:outline-none"
               />
-            </div>
-
-            {/* Tipologia (fixed) */}
-            <div className="flex items-center gap-4">
-              <label className="w-32 text-gray-700 font-medium">Tipologia</label>
-              <select
-                className="h-10 px-3 border border-gray-300 rounded-md bg-gray-100"
-                disabled
-              >
-                <option>DDT</option>
-              </select>
             </div>
 
             {/* Error/Success Messages */}
@@ -483,7 +477,11 @@ const FatturePage = () => {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-gray-800">{invoice.supplier}</span>
-                    {Number(invoice.importo || 0) > 0 && (
+                    {invoice.ddt_number ? (
+                      <span className="bg-orange-100 text-orange-800 text-xs px-2 py-0.5 rounded-full font-bold">
+                        DDT n. {invoice.ddt_number}
+                      </span>
+                    ) : Number(invoice.importo || 0) > 0 && (
                       <span className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full font-bold">
                         € {Number(invoice.importo).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
