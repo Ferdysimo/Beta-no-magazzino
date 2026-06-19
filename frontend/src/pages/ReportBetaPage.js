@@ -1760,8 +1760,8 @@ const ReportBetaPageInner = () => {
                 )}
               </div>
 
-              {/* --- MOVIMENTI + CASSETTO (sezione unica a destra, bordo blu) — sopra Spicci si vede solo arancione --- */}
-              <div className="bg-white rounded p-1.5 w-[42%] flex-shrink-0 ml-2" style={{ border: '2px solid #2563eb', borderTop: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0, marginTop: '-8px' }}>
+              {/* --- SPICCI (bordo blu chiuso, distanziato sotto dal bordo arancione delle bevande) --- */}
+              <div className="bg-white rounded p-1.5 w-[42%] flex-shrink-0 ml-2" style={{ border: '2px solid #2563eb', marginTop: '6px' }}>
                 <div className="flex items-baseline justify-center mb-1">
                   <h2 className="text-xs font-bold text-gray-800 uppercase">Spicci</h2>
                 </div>
