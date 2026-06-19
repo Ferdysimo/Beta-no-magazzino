@@ -1360,8 +1360,11 @@ const ReportBetaPageInner = () => {
               </div>
             </div>
 
+            {/* ============ BLOCCO BEVANDE — un unico bordo arancione ============ */}
+            <div className="rounded p-2 space-y-2" style={{ border: '2px solid #F5C518' }}>
+
             {/* ============ MAGAZZINO MATTINA (casse + sfuse, in sync con Magazzino Bevande) ============ */}
-            <div className="bg-white rounded p-1.5" style={{ border: '2px solid #F5C518' }}>
+            <div className="bg-white rounded p-1.5">
               <div className="relative flex items-center justify-center mb-1">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Mattina</h2>
                 <div className="absolute right-0 flex items-center gap-2">
@@ -1473,7 +1476,7 @@ const ReportBetaPageInner = () => {
 
             {/* ============ INGRESSI / USCITE + SCARTI (stessa riga) ============ */}
             <div className="flex items-stretch gap-2">
-              <div className="bg-white rounded p-1 flex-1 min-w-0" style={{ border: '2px solid #F5C518' }}>
+              <div className="bg-white rounded p-1 flex-1 min-w-0">
               <div className="flex items-baseline justify-center mb-0.5">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Ingressi / Uscite</h2>
               </div>
@@ -1543,7 +1546,7 @@ const ReportBetaPageInner = () => {
               </div>
 
               {/* --- SCARTI --- */}
-              <div className="bg-white rounded p-1 flex-1 min-w-0" style={{ border: '2px solid #F5C518' }}>
+              <div className="bg-white rounded p-1 flex-1 min-w-0">
                 <div className="relative flex items-center justify-center mb-0.5">
                   <h2 className="text-xs font-bold text-gray-800 uppercase">Scarti</h2>
                   <div className="absolute right-0">
@@ -1622,7 +1625,6 @@ const ReportBetaPageInner = () => {
             {/* ============ MAGAZZINO SERA (editabile, sync live con Magazzino Bevande) ============ */}
             <div
               className="bg-white rounded p-1.5"
-              style={{ border: '2px solid #F5C518' }}
             >
               <div className="flex items-baseline justify-center mb-1">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Sera</h2>
@@ -1703,49 +1705,52 @@ const ReportBetaPageInner = () => {
               )}
             </div>
 
-            {/* ============ VENDITE BEVANDE + (MOVIMENTI + CASSETTO) (stessa riga) ============ */}
-            <div className="flex items-stretch gap-2">
-              {/* --- VENDITE BEVANDE (a sinistra, occupa lo spazio rimanente) --- */}
-              <div className="bg-white rounded p-1.5 flex-1 min-w-0" style={{ border: '2px solid #F5C518' }}>
-                <div className="flex items-baseline justify-center mb-1">
-                  <h2 className="text-xs font-bold text-gray-800 uppercase">Vendite Bevande</h2>
+            {/* ============ VENDITE BEVANDE (ultima sezione del blocco bevande) ============ */}
+            <div className="bg-white rounded p-1.5">
+              <div className="flex items-baseline justify-center mb-1">
+                <h2 className="text-xs font-bold text-gray-800 uppercase">Vendite Bevande</h2>
+              </div>
+              {bevSales.length === 0 ? (
+                <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
+                  Nessuna bevanda configurata.
                 </div>
-                {bevSales.length === 0 ? (
-                  <div className="h-11 flex items-center justify-center text-xs text-gray-400 italic">
-                    Nessuna bevanda configurata.
-                  </div>
-                ) : (
-                  <div className="flex items-stretch gap-1.5">
-                    {bevSales.map(b => (
-                      <div
-                        key={b.sigla}
-                        data-testid={`bev-sales-${b.sigla}`}
-                        className="flex-1 min-w-[60px] flex flex-col"
-                      >
-                        <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
-                          {b.sigla}
-                        </label>
-                        <div className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-semibold text-base text-gray-900">
-                          {b.qty}
-                        </div>
-                      </div>
-                    ))}
-                    {/* Totale — solo importo € */}
-                    <div className="flex-1 min-w-[70px] flex flex-col">
-                      <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">Tot</label>
-                      <div
-                        data-testid="bev-sales-total-inc"
-                        className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-semibold text-base text-gray-900"
-                      >
-                        €{bevTotalInc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ) : (
+                <div className="flex items-stretch gap-1.5">
+                  {bevSales.map(b => (
+                    <div
+                      key={b.sigla}
+                      data-testid={`bev-sales-${b.sigla}`}
+                      className="flex-1 min-w-[60px] flex flex-col"
+                    >
+                      <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
+                        {b.sigla}
+                      </label>
+                      <div className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-semibold text-base text-gray-900">
+                        {b.qty}
                       </div>
                     </div>
+                  ))}
+                  {/* Totale — solo importo € */}
+                  <div className="flex-1 min-w-[70px] flex flex-col">
+                    <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">Tot</label>
+                    <div
+                      data-testid="bev-sales-total-inc"
+                      className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-semibold text-base text-gray-900"
+                    >
+                      €{bevTotalInc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+            </div>
 
+            </div>
+            {/* ============ FINE BLOCCO BEVANDE ============ */}
+
+            {/* ============ MOVIMENTI + CASSETTO (sezione separata, bordo blu) ============ */}
+            <div className="flex items-stretch gap-2">
               {/* --- MOVIMENTI + CASSETTO (sezione unica a destra) --- */}
-              <div className="bg-white rounded p-1.5 w-[42%] flex-shrink-0" style={{ border: '2px solid #2563eb' }}>
+              <div className="bg-white rounded p-1.5 w-[42%] flex-shrink-0 ml-auto" style={{ border: '2px solid #2563eb' }}>
                 <div className="flex items-baseline justify-center mb-1">
                   <h2 className="text-xs font-bold text-gray-800 uppercase">Spicci</h2>
                 </div>
