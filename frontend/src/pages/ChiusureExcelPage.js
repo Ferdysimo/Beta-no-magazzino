@@ -246,15 +246,13 @@ const ChiusureExcelPage = () => {
   }
 
   // Posizioni sticky a sinistra
-  const DATE_W = 100;
-  const DAY_W = 50;
-
-  // Larghezza colonne (px) — uniformi per gruppo
-  const BEV_W = 38;       // bevande: piccola, numero
-  const PASTE_W = 60;
-  const EUR_W = 78;       // colonne €
-  const SPICCI_W = 56;
-  const SERA_W = 92;
+  const DATE_W = 82;
+  const DAY_W = 42;
+  const BEV_W = 30;       // bevande: piccola, numero
+  const PASTE_W = 50;
+  const EUR_W = 64;       // colonne €
+  const SPICCI_W = 46;
+  const SERA_W = 76;
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -362,8 +360,15 @@ const ChiusureExcelPage = () => {
                   <Th sticky top={0} colSpan={CASH_EUR_FIELDS.length} bg="#bfdbfe" color="#111827">
                     MOVIMENTAZIONE FINANZIARIA
                   </Th>
-                  <Th sticky top={0} bg="#a7f3d0" color="#111827" title="Numero totale di paste mandate quel giorno">
+                  <Th sticky top={0} colSpan={SPICCI_FIELDS.length} bg="#fde68a" color="#111827"
+                      title="Spicci: iniziali (a inizio giornata) + aperti (durante la giornata)">
+                    SPICCI
+                  </Th>
+                  <Th sticky top={0} bg="#facc15" color="#111827" title="Numero totale di paste mandate quel giorno">
                     TOT PIATTI
+                  </Th>
+                  <Th sticky top={0} bg="#facc15" color="#111827" title="Cash in cassa sera (cassa + paste + bevande)">
+                    CASH SERA
                   </Th>
                   {BEV_GROUPS.map(g => (
                     <Th key={g.key} sticky top={0} colSpan={bevSigle.length}
@@ -371,13 +376,6 @@ const ChiusureExcelPage = () => {
                       {g.label}
                     </Th>
                   ))}
-                  <Th sticky top={0} colSpan={SPICCI_FIELDS.length} bg="#fde68a" color="#111827"
-                      title="Spicci: iniziali (a inizio giornata) + aperti (durante la giornata)">
-                    SPICCI
-                  </Th>
-                  <Th sticky top={0} bg="#facc15" color="#111827" title="Cash in cassa sera (cassa + paste + bevande)">
-                    CASH SERA
-                  </Th>
                 </tr>
 
                 {/* Riga 2: header colonna */}
@@ -389,7 +387,13 @@ const ChiusureExcelPage = () => {
                       {f.label}
                     </Th>
                   ))}
-                  <Th sticky top={28} bg="#a7f3d0" color="#111827" width={PASTE_W}>N°</Th>
+                  {SPICCI_FIELDS.map(f => (
+                    <Th key={f.key} sticky top={28} bg="#fde68a" color="#111827" width={SPICCI_W}>
+                      {f.label}
+                    </Th>
+                  ))}
+                  <Th sticky top={28} bg="#facc15" color="#111827" width={PASTE_W}>N°</Th>
+                  <Th sticky top={28} bg="#facc15" color="#111827" width={SERA_W}>€</Th>
                   {BEV_GROUPS.map(g => (
                     bevSigle.map(sigla => (
                       <Th key={`${g.key}-${sigla}`} sticky top={28} bg={g.headerBg} color="#111827"
@@ -398,12 +402,6 @@ const ChiusureExcelPage = () => {
                       </Th>
                     ))
                   ))}
-                  {SPICCI_FIELDS.map(f => (
-                    <Th key={f.key} sticky top={28} bg="#fde68a" color="#111827" width={SPICCI_W}>
-                      {f.label}
-                    </Th>
-                  ))}
-                  <Th sticky top={28} bg="#facc15" color="#111827" width={SERA_W}>€</Th>
                 </tr>
               </thead>
 
@@ -435,8 +433,27 @@ const ChiusureExcelPage = () => {
                         </Td>
                       ))}
 
+                      {SPICCI_FIELDS.map(f => {
+                        // sp_init: iniziali — non ancora tracciato dal backend, placeholder
+                        // sp_open: aperti durante la giornata = sp5+sp2+sp1+sp05 (somma mazzette)
+                        let val;
+                        if (f.key === 'sp_init') {
+                          val = '—';
+                        } else {
+                          const open = (Number(r.cash?.sp5) || 0) + (Number(r.cash?.sp2) || 0) + (Number(r.cash?.sp1) || 0) + (Number(r.cash?.sp05) || 0);
+                          val = open === 0 ? '' : String(open);
+                        }
+                        return (
+                          <Td key={f.key} bg={baseBg} mono align="center">{val}</Td>
+                        );
+                      })}
+
                       <Td bg={baseBg} mono align="center" bold>
                         {r.paste_count > 0 ? r.paste_count : ''}
+                      </Td>
+
+                      <Td bg={baseBg} mono bold color="#854d0e">
+                        {fmtEur(r.cash_sera)}
                       </Td>
 
                       {BEV_GROUPS.map(g => (
@@ -454,25 +471,6 @@ const ChiusureExcelPage = () => {
                           );
                         })
                       ))}
-
-                      {SPICCI_FIELDS.map(f => {
-                        // sp_init: iniziali — non ancora tracciato dal backend, placeholder
-                        // sp_open: aperti durante la giornata = sp5+sp2+sp1+sp05 (somma mazzette)
-                        let val;
-                        if (f.key === 'sp_init') {
-                          val = '—';
-                        } else {
-                          const open = (Number(r.cash?.sp5) || 0) + (Number(r.cash?.sp2) || 0) + (Number(r.cash?.sp1) || 0) + (Number(r.cash?.sp05) || 0);
-                          val = open === 0 ? '' : String(open);
-                        }
-                        return (
-                          <Td key={f.key} bg={baseBg} mono align="center">{val}</Td>
-                        );
-                      })}
-
-                      <Td bg={baseBg} mono bold color="#854d0e">
-                        {fmtEur(r.cash_sera)}
-                      </Td>
                     </tr>
                   );
                 })}
@@ -487,7 +485,15 @@ const ChiusureExcelPage = () => {
                     <Td key={f.key} bg="#0f172a" color="#fff" mono bold>{fmtEur(totals.cash[f.key])}</Td>
                   ))}
 
+                  {SPICCI_FIELDS.map(f => (
+                    <Td key={f.key} bg="#0f172a" color="#fff" mono bold align="center">
+                      {f.key === 'sp_init' ? '—' : (totals.spicci.sp_open || '')}
+                    </Td>
+                  ))}
+
                   <Td bg="#0f172a" color="#a7f3d0" mono bold align="center">{totals.paste_count}</Td>
+
+                  <Td bg="#0f172a" color="#facc15" mono bold>{fmtEur(totals.cash_sera)}</Td>
 
                   {BEV_GROUPS.map(g => (
                     bevSigle.map(sigla => (
@@ -498,13 +504,6 @@ const ChiusureExcelPage = () => {
                       </Td>
                     ))
                   ))}
-
-                  {SPICCI_FIELDS.map(f => (
-                    <Td key={f.key} bg="#0f172a" color="#fff" mono bold align="center">
-                      {f.key === 'sp_init' ? '—' : (totals.spicci.sp_open || '')}
-                    </Td>
-                  ))}
-                  <Td bg="#0f172a" color="#facc15" mono bold>{fmtEur(totals.cash_sera)}</Td>
                 </tr>
               </tfoot>
             </table>
