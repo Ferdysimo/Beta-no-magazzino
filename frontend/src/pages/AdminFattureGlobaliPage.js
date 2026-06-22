@@ -160,6 +160,21 @@ const AdminFattureGlobaliPage = () => {
     [globals]
   );
 
+  // DDT id già abbinati a una fattura globale PAGATA → vanno nascosti dalla tabella "DDT dei locali"
+  // (restano visibili solo dentro l'archivio fatture pagate).
+  const paidLinkedDdtIds = useMemo(() => {
+    const set = new Set();
+    globals.forEach(g => {
+      if (g.paid) (g.linked_invoices || []).forEach(inv => { if (inv?.id) set.add(inv.id); });
+    });
+    return set;
+  }, [globals]);
+
+  const visibleDdtList = useMemo(
+    () => (ddtList || []).filter(d => !paidLinkedDdtIds.has(d.id)),
+    [ddtList, paidLinkedDdtIds]
+  );
+
   const accent = (st) => {
     if (st === 'paid') return 'border-amber-400 bg-amber-50';
     if (st === 'ready') return 'border-emerald-400 bg-emerald-50';
@@ -484,9 +499,9 @@ const AdminFattureGlobaliPage = () => {
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden mb-6" data-testid="ddt-table-section">
           <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-sm font-bold text-gray-800">DDT dei locali</h2>
-            <span className="text-[11px] text-gray-500">{ddtList.length} totali · ordinati per fornitore</span>
+            <span className="text-[11px] text-gray-500">{visibleDdtList.length} totali · ordinati per fornitore</span>
           </div>
-          {ddtList.length === 0 ? (
+          {visibleDdtList.length === 0 ? (
             <div className="text-center text-gray-400 text-sm py-6">Nessun DDT caricato dai locali.</div>
           ) : (
             <div className="overflow-x-auto" data-testid="ddt-by-supplier">
@@ -502,8 +517,8 @@ const AdminFattureGlobaliPage = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {ddtList.map((d, i) => {
-                    const prevSupplier = i > 0 ? ddtList[i - 1].supplier : null;
+                  {visibleDdtList.map((d, i) => {
+                    const prevSupplier = i > 0 ? visibleDdtList[i - 1].supplier : null;
                     const isFirstOfSupplier = d.supplier !== prevSupplier;
                     return (
                       <tr
