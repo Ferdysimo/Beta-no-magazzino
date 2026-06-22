@@ -270,7 +270,7 @@ const ChiusureExcelPage = () => {
         </div>
 
         <h1 className="font-heading text-xl sm:text-2xl font-bold text-gray-900 uppercase mb-3">
-          Chiusure Excel
+          Storico chiusure
         </h1>
 
         {/* Toolbar */}

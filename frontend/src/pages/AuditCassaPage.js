@@ -148,7 +148,7 @@ const AuditCassaPage = () => {
         </div>
 
         <h1 className="font-heading text-xl sm:text-2xl font-bold text-gray-900 uppercase mb-4">
-          Controllo Report — Audit
+          Check singoli movimenti
         </h1>
 
         {/* Filtri principali (lista chiusure) */}
