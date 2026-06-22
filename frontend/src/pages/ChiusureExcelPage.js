@@ -14,12 +14,14 @@ const BEV_NAMES = {
   F: 'Fanta', S: 'Sprite', B: 'Peroni', VB: 'Vino B.', VR: 'Vino R.',
 };
 
-// Gruppi macro per le bevande con i loro colori. Le 4 metriche sono:
+// Gruppi macro per le bevande — TUTTI stesso colore (verde tenue), come da richiesta
+const BEV_COLOR_HEADER = '#d1fae5';
+const BEV_COLOR_CELL   = '#f0fdf4';
 const BEV_GROUPS = [
-  { key: 'inUsc',  label: 'INGRESSI / USCITE', headerBg: '#bbf7d0', cellBg: '#f0fdf4' }, // verde
-  { key: 'scarti', label: 'SCARTI',            headerBg: '#fecaca', cellBg: '#fef2f2' }, // rosso chiaro
-  { key: 'sera',   label: 'MAGAZZINO SERA',    headerBg: '#bfdbfe', cellBg: '#eff6ff' }, // blu chiaro
-  { key: 'qty',    label: 'VENDITE',           headerBg: '#fde68a', cellBg: '#fffbeb' }, // giallo
+  { key: 'inUsc',  label: 'INGRESSI / USCITE', headerBg: BEV_COLOR_HEADER, cellBg: BEV_COLOR_CELL },
+  { key: 'scarti', label: 'SCARTI',            headerBg: BEV_COLOR_HEADER, cellBg: BEV_COLOR_CELL },
+  { key: 'sera',   label: 'MAGAZZINO SERA',    headerBg: BEV_COLOR_HEADER, cellBg: BEV_COLOR_CELL },
+  { key: 'qty',    label: 'VENDITE',           headerBg: BEV_COLOR_HEADER, cellBg: BEV_COLOR_CELL },
 ];
 
 // Cassa: campi €
@@ -35,11 +37,12 @@ const CASH_EUR_FIELDS = [
   { key: 'pos',     label: 'POS',   hint: 'Cassa POS' },
   { key: 'ft',      label: 'FT',    hint: 'Fatture' },
 ];
+// Spicci: 2 colonne compatte
+// - "Iniziali": numero di mazzette presenti in cassa all'inizio della giornata (NON ancora tracciato dal backend → mostriamo '—')
+// - "Aperti":   somma totale delle mazzette aperte durante la giornata (sp5+sp2+sp1+sp05)
 const SPICCI_FIELDS = [
-  { key: 'sp5',  label: 'Sp.5€'   },
-  { key: 'sp2',  label: 'Sp.2€'   },
-  { key: 'sp1',  label: 'Sp.1€'   },
-  { key: 'sp05', label: 'Sp.0,5€' },
+  { key: 'sp_init',  label: 'Iniziali' },
+  { key: 'sp_open',  label: 'Aperti'   },
 ];
 
 const fmtEur = (n) => (Number(n) || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -220,7 +223,10 @@ const ChiusureExcelPage = () => {
       });
       t.paste_count += Number(r.paste_count || 0);
       CASH_EUR_FIELDS.forEach(f => { t.cash[f.key] += Number(r.cash?.[f.key] || 0); });
-      SPICCI_FIELDS.forEach(f => { t.spicci[f.key] += Number(r.cash?.[f.key] || 0); });
+      // SPICCI: 2 colonne aggregate
+      // sp_init: 0 (placeholder finché non tracciato dal backend)
+      // sp_open: somma di sp5+sp2+sp1+sp05 del giorno
+      t.spicci.sp_open += (Number(r.cash?.sp5) || 0) + (Number(r.cash?.sp2) || 0) + (Number(r.cash?.sp1) || 0) + (Number(r.cash?.sp05) || 0);
       t.cash_sera += Number(r.cash_sera || 0);
     });
     return t;
@@ -330,10 +336,7 @@ const ChiusureExcelPage = () => {
             </button>
           </div>
 
-          <div className="w-full text-[11px] text-gray-500 mt-1">
-            {items.length} {items.length === 1 ? 'riga' : 'righe'} • somma totale in fondo
-            {msg && <span className="ml-3 text-blue-700 font-medium">• {msg}</span>}
-          </div>
+          <div className="w-full text-[11px] text-gray-500 mt-1" />
         </div>
 
         {/* Grid */}
@@ -356,21 +359,21 @@ const ChiusureExcelPage = () => {
                 <tr>
                   <Th sticky top={0} left={0} width={DATE_W} bg="#0f172a">Data</Th>
                   <Th sticky top={0} left={DATE_W} width={DAY_W} bg="#0f172a">Giorno</Th>
+                  <Th sticky top={0} colSpan={CASH_EUR_FIELDS.length} bg="#bfdbfe" color="#111827">
+                    MOVIMENTAZIONE FINANZIARIA
+                  </Th>
+                  <Th sticky top={0} bg="#a7f3d0" color="#111827" title="Numero totale di paste mandate quel giorno">
+                    TOT PIATTI
+                  </Th>
                   {BEV_GROUPS.map(g => (
                     <Th key={g.key} sticky top={0} colSpan={bevSigle.length}
                         bg={g.headerBg} color="#111827" title={`${g.label} per sigla bevanda`}>
                       {g.label}
                     </Th>
                   ))}
-                  <Th sticky top={0} bg="#a7f3d0" color="#111827" title="Numero totale di paste mandate quel giorno">
-                    TOT PIATTI
-                  </Th>
-                  <Th sticky top={0} colSpan={CASH_EUR_FIELDS.length} bg="#bfdbfe" color="#111827">
-                    CASSA — voci €
-                  </Th>
                   <Th sticky top={0} colSpan={SPICCI_FIELDS.length} bg="#fde68a" color="#111827"
-                      title="Numero di mazzette di spicci aperte">
-                    SPICCI (aperti)
+                      title="Spicci: iniziali (a inizio giornata) + aperti (durante la giornata)">
+                    SPICCI
                   </Th>
                   <Th sticky top={0} bg="#facc15" color="#111827" title="Cash in cassa sera (cassa + paste + bevande)">
                     CASH SERA
@@ -381,6 +384,12 @@ const ChiusureExcelPage = () => {
                 <tr>
                   <Th sticky top={28} left={0} width={DATE_W} bg="#334155">YYYY-MM-DD</Th>
                   <Th sticky top={28} left={DATE_W} width={DAY_W} bg="#334155">d.s.</Th>
+                  {CASH_EUR_FIELDS.map(f => (
+                    <Th key={f.key} sticky top={28} bg="#bfdbfe" color="#111827" width={EUR_W} title={f.hint}>
+                      {f.label}
+                    </Th>
+                  ))}
+                  <Th sticky top={28} bg="#a7f3d0" color="#111827" width={PASTE_W}>N°</Th>
                   {BEV_GROUPS.map(g => (
                     bevSigle.map(sigla => (
                       <Th key={`${g.key}-${sigla}`} sticky top={28} bg={g.headerBg} color="#111827"
@@ -388,12 +397,6 @@ const ChiusureExcelPage = () => {
                         {sigla}
                       </Th>
                     ))
-                  ))}
-                  <Th sticky top={28} bg="#a7f3d0" color="#111827" width={PASTE_W}>N°</Th>
-                  {CASH_EUR_FIELDS.map(f => (
-                    <Th key={f.key} sticky top={28} bg="#bfdbfe" color="#111827" width={EUR_W} title={f.hint}>
-                      {f.label}
-                    </Th>
                   ))}
                   {SPICCI_FIELDS.map(f => (
                     <Th key={f.key} sticky top={28} bg="#fde68a" color="#111827" width={SPICCI_W}>
@@ -426,6 +429,16 @@ const ChiusureExcelPage = () => {
                         {dayName(r.date)}
                       </Td>
 
+                      {CASH_EUR_FIELDS.map(f => (
+                        <Td key={f.key} bg={baseBg} mono>
+                          {fmtEur(r.cash?.[f.key] || 0)}
+                        </Td>
+                      ))}
+
+                      <Td bg={baseBg} mono align="center" bold>
+                        {r.paste_count > 0 ? r.paste_count : ''}
+                      </Td>
+
                       {BEV_GROUPS.map(g => (
                         bevSigle.map(sigla => {
                           const b = r.beverages?.[sigla] || {};
@@ -442,21 +455,20 @@ const ChiusureExcelPage = () => {
                         })
                       ))}
 
-                      <Td bg={baseBg} mono align="center" bold>
-                        {r.paste_count > 0 ? r.paste_count : ''}
-                      </Td>
-
-                      {CASH_EUR_FIELDS.map(f => (
-                        <Td key={f.key} bg={baseBg} mono>
-                          {fmtEur(r.cash?.[f.key] || 0)}
-                        </Td>
-                      ))}
-
-                      {SPICCI_FIELDS.map(f => (
-                        <Td key={f.key} bg={baseBg} mono align="center">
-                          {fmtInt(r.cash?.[f.key])}
-                        </Td>
-                      ))}
+                      {SPICCI_FIELDS.map(f => {
+                        // sp_init: iniziali — non ancora tracciato dal backend, placeholder
+                        // sp_open: aperti durante la giornata = sp5+sp2+sp1+sp05 (somma mazzette)
+                        let val;
+                        if (f.key === 'sp_init') {
+                          val = '—';
+                        } else {
+                          const open = (Number(r.cash?.sp5) || 0) + (Number(r.cash?.sp2) || 0) + (Number(r.cash?.sp1) || 0) + (Number(r.cash?.sp05) || 0);
+                          val = open === 0 ? '' : String(open);
+                        }
+                        return (
+                          <Td key={f.key} bg={baseBg} mono align="center">{val}</Td>
+                        );
+                      })}
 
                       <Td bg={baseBg} mono bold color="#854d0e">
                         {fmtEur(r.cash_sera)}
@@ -471,6 +483,12 @@ const ChiusureExcelPage = () => {
                   <Td sticky left={0} bg="#0f172a" color="#fff" bold align="center">TOTALE</Td>
                   <Td sticky left={DATE_W} bg="#0f172a" color="#cbd5e1" align="center">{items.length}gg</Td>
 
+                  {CASH_EUR_FIELDS.map(f => (
+                    <Td key={f.key} bg="#0f172a" color="#fff" mono bold>{fmtEur(totals.cash[f.key])}</Td>
+                  ))}
+
+                  <Td bg="#0f172a" color="#a7f3d0" mono bold align="center">{totals.paste_count}</Td>
+
                   {BEV_GROUPS.map(g => (
                     bevSigle.map(sigla => (
                       <Td key={`${g.key}-${sigla}`} bg="#0f172a"
@@ -481,13 +499,9 @@ const ChiusureExcelPage = () => {
                     ))
                   ))}
 
-                  <Td bg="#0f172a" color="#a7f3d0" mono bold align="center">{totals.paste_count}</Td>
-                  {CASH_EUR_FIELDS.map(f => (
-                    <Td key={f.key} bg="#0f172a" color="#fff" mono bold>{fmtEur(totals.cash[f.key])}</Td>
-                  ))}
                   {SPICCI_FIELDS.map(f => (
                     <Td key={f.key} bg="#0f172a" color="#fff" mono bold align="center">
-                      {fmtInt(totals.spicci[f.key])}
+                      {f.key === 'sp_init' ? '—' : (totals.spicci.sp_open || '')}
                     </Td>
                   ))}
                   <Td bg="#0f172a" color="#facc15" mono bold>{fmtEur(totals.cash_sera)}</Td>
