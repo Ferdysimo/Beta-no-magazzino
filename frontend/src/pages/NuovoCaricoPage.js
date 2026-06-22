@@ -238,7 +238,10 @@ const NuovoCaricoPage = () => {
               )}
               <button
                 type="button"
-                onClick={() => fileRef.current?.click()}
+                onClick={() => {
+                  if (fileRef.current) fileRef.current.value = '';
+                  fileRef.current?.click();
+                }}
                 disabled={photoProcessing}
                 data-testid="carico-photo-btn"
                 className="flex items-center gap-2 px-4 py-3 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 disabled:opacity-60 disabled:cursor-wait"

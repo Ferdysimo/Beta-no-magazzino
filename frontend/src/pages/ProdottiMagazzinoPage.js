@@ -251,7 +251,10 @@ const ProdottiMagazzinoPage = () => {
                   )}
                   <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => {
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                      fileInputRef.current?.click();
+                    }}
                     className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 transition-colors"
                   >
                     <Upload size={16} /> {formImagePreview ? 'Cambia foto' : 'Carica foto'}

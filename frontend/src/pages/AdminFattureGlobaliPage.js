@@ -210,7 +210,7 @@ const AdminFattureGlobaliPage = () => {
                   type="file"
                   accept="image/*"
                   capture="environment"
-                  onChange={(e) => handleFile(e.target.files[0])}
+                  onChange={(e) => { handleFile(e.target.files[0]); e.target.value = ''; }}
                   data-testid="fg-file-input"
                   className="text-xs flex-1"
                 />
