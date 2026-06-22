@@ -183,7 +183,7 @@ const StoricoChiusurePage = () => {
                     >
                       <div className="font-bold text-sm">{fmtDate(it.date)}</div>
                       <div className="text-[11px] text-gray-600 mt-0.5 flex gap-2">
-                        <span title="Paste totali (incluse non riconosciute)">📦 {it.paste_count ?? it.orders_total ?? 0}</span>
+                        <span title="Paste totali (incluse non riconosciute)">🍝 {it.paste_count ?? it.orders_total ?? 0}</span>
                         <span>🥤 {it.bev_total_qty}</span>
                         <span>💶 €{fmtEur(it.cash_sera)}</span>
                       </div>
