@@ -652,8 +652,24 @@ const ReportBetaPageInner = () => {
 
   const setCashRowValue = (key, v) => setCashRow(p => ({ ...p, [key]: v }));
 
-  // Auto-dismiss della preview: quando l'utente sposta il focus su un altro
-  // quadratino della MOVIMENTAZIONE FINANZIARIA, la lente attiva si spegne.
+  // Auto-dismiss della preview: si chiude se l'utente clicca QUALSIASI punto
+  // fuori dalla cella attualmente in preview (input/label/padding inclusi).
+  // Eccezione: i pulsantini lente di altre celle non chiudono — lasciano che
+  // il toggle apra direttamente la nuova preview.
+  useEffect(() => {
+    if (!previewKey) return;
+    const onMouseDown = (e) => {
+      const t = e.target;
+      const cell = t.closest && t.closest('[data-preview-cell]');
+      if (cell && cell.getAttribute('data-preview-cell') === previewKey) return;
+      if (t.closest && t.closest('[data-testid^="preview-toggle-"]')) return;
+      setPreviewKey(null);
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [previewKey]);
+
+  // Tastiera: se l'utente tab-keya su un altro campo MOVIMENTAZIONE, dismiss.
   useEffect(() => {
     if (focusedField && focusedField !== previewKey) {
       setPreviewKey(null);
@@ -1239,6 +1255,7 @@ const ReportBetaPageInner = () => {
                   return (
                     <div
                       key={f.key}
+                      data-preview-cell={f.key}
                       className="flex-1 min-w-[60px] flex flex-col relative rounded p-1"
                       style={{ backgroundColor: boxStyle.bg }}
                     >
@@ -1289,31 +1306,32 @@ const ReportBetaPageInner = () => {
                           className="absolute top-3 right-0 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-amber-600 z-10"
                         />
                       )}
-                      <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
-                        {computed !== 0 ? `${sign}€${Math.abs(effective).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
-                      </span>
-                      {/* Pulsantino lente: assoluto sul bordo inferiore, non aumenta lo spazio.
-                          Non viene mostrato per CASH MATTINA (è solo informativa, no preview). */}
-                      {f.key !== 'mattina' && (
-                        <button
-                          type="button"
-                          data-testid={`preview-toggle-${f.key}`}
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => setPreviewKey(curr => curr === f.key ? null : f.key)}
-                          title="Mostra dettaglio in basso"
-                          aria-label="Apri preview"
-                          className={`absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-4 h-4 flex items-center justify-center rounded-full transition-colors z-10 ${
-                            previewKey === f.key
-                              ? 'bg-amber-400 text-white ring-2 ring-amber-200'
-                              : 'bg-white border border-gray-400 text-gray-500 hover:bg-gray-100'
-                          }`}
-                        >
-                          <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                            <circle cx="7" cy="7" r="4.5"/>
-                            <path d="M10.5 10.5l3.5 3.5"/>
-                          </svg>
-                        </button>
-                      )}
+                      {/* Riga di chiusura: caption del calcolo + pulsantino lente, entrambi centrati */}
+                      <div className="flex items-center justify-center gap-1 mt-0.5 leading-none">
+                        <span className="text-[9px] text-gray-500">
+                          {computed !== 0 ? `${sign}€${Math.abs(effective).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
+                        </span>
+                        {f.key !== 'mattina' && (
+                          <button
+                            type="button"
+                            data-testid={`preview-toggle-${f.key}`}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => setPreviewKey(curr => curr === f.key ? null : f.key)}
+                            title="Mostra dettaglio in basso"
+                            aria-label="Apri preview"
+                            className={`w-3 h-3 flex-none flex items-center justify-center rounded-full transition-colors ${
+                              previewKey === f.key
+                                ? 'bg-amber-400 text-white ring-1 ring-amber-300'
+                                : 'bg-white border border-gray-400 text-gray-500 hover:bg-gray-100'
+                            }`}
+                          >
+                            <svg width="7" height="7" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                              <circle cx="7" cy="7" r="4.5"/>
+                              <path d="M10.5 10.5l3.5 3.5"/>
+                            </svg>
+                          </button>
+                        )}
+                      </div>
                       {commentPopover?.key === f.key && (
                         <CommentPopover
                           inputRef={commentInputRef}
@@ -1354,6 +1372,7 @@ const ReportBetaPageInner = () => {
                   const boxStyle = CASH_BOX_STYLE.vers;
                   return (
                     <div
+                      data-preview-cell={f.key}
                       className="flex-1 min-w-[60px] flex flex-col relative rounded p-1"
                       style={{ backgroundColor: boxStyle.bg }}
                     >
@@ -1382,28 +1401,30 @@ const ReportBetaPageInner = () => {
                           className="absolute top-3 right-0 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-amber-600 z-10"
                         />
                       )}
-                      <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
-                        {computed !== 0 ? `${sign}€${Math.abs(effective).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
-                      </span>
-                      {/* Pulsantino lente: assoluto sul bordo inferiore (anche per VERS) */}
-                      <button
-                        type="button"
-                        data-testid={`preview-toggle-${f.key}`}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => setPreviewKey(curr => curr === f.key ? null : f.key)}
-                        title="Mostra dettaglio in basso"
-                        aria-label="Apri preview"
-                        className={`absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-4 h-4 flex items-center justify-center rounded-full transition-colors z-10 ${
-                          previewKey === f.key
-                            ? 'bg-amber-400 text-white ring-2 ring-amber-200'
-                            : 'bg-white border border-gray-400 text-gray-500 hover:bg-gray-100'
-                        }`}
-                      >
-                        <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                          <circle cx="7" cy="7" r="4.5"/>
-                          <path d="M10.5 10.5l3.5 3.5"/>
-                        </svg>
-                      </button>
+                      {/* Riga di chiusura: caption del calcolo + pulsantino lente */}
+                      <div className="flex items-center justify-center gap-1 mt-0.5 leading-none">
+                        <span className="text-[9px] text-gray-500">
+                          {computed !== 0 ? `${sign}€${Math.abs(effective).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
+                        </span>
+                        <button
+                          type="button"
+                          data-testid={`preview-toggle-${f.key}`}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => setPreviewKey(curr => curr === f.key ? null : f.key)}
+                          title="Mostra dettaglio in basso"
+                          aria-label="Apri preview"
+                          className={`w-3 h-3 flex-none flex items-center justify-center rounded-full transition-colors ${
+                            previewKey === f.key
+                              ? 'bg-amber-400 text-white ring-1 ring-amber-300'
+                              : 'bg-white border border-gray-400 text-gray-500 hover:bg-gray-100'
+                          }`}
+                        >
+                          <svg width="7" height="7" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                            <circle cx="7" cy="7" r="4.5"/>
+                            <path d="M10.5 10.5l3.5 3.5"/>
+                          </svg>
+                        </button>
+                      </div>
                       {/* Palette colori — applica il colore SOLO alla selezione corrente dentro l'editor */}
                       {!isEmpty && (
                         <div className="flex items-center justify-center gap-0.5 mt-0.5">
