@@ -652,6 +652,15 @@ const ReportBetaPageInner = () => {
 
   const setCashRowValue = (key, v) => setCashRow(p => ({ ...p, [key]: v }));
 
+  // Auto-dismiss della preview: quando l'utente sposta il focus su un altro
+  // quadratino della MOVIMENTAZIONE FINANZIARIA, la lente attiva si spegne.
+  useEffect(() => {
+    if (focusedField && focusedField !== previewKey) {
+      setPreviewKey(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedField]);
+
   // === VERS rich-text editor: sync con cashRow.vers + helper colore ===
   // Quando lo state esterno cambia (es. caricamento iniziale dal server) e
   // l'editor NON è il focus attivo, allineiamo il suo innerHTML al valore.
@@ -673,16 +682,32 @@ const ReportBetaPageInner = () => {
   };
 
   // Applica un colore alla porzione di testo selezionata dentro l'editor VERS.
-  // Se non c'è selezione, non fa nulla (l'utente deve evidenziare prima).
+  // Implementazione manuale (no execCommand deprecato): wrap della selezione in
+  // un <span style="color:hex">…</span> e sposto il cursore SUBITO DOPO lo span,
+  // così l'utente può continuare a digitare in colore default ("normale").
   const applyVersColor = (hex) => {
     const el = versEditorRef.current;
     if (!el) return;
-    // L'editor deve essere il focus per execCommand. Lo manteniamo
-    // attraverso onMouseDown preventDefault sui bottoni della palette.
-    try {
-      document.execCommand('styleWithCSS', false, true);
-      document.execCommand('foreColor', false, hex);
-    } catch { /* noop */ }
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    if (range.collapsed) return; // nessuna selezione: ignora
+    if (!el.contains(range.commonAncestorContainer)) return; // selezione fuori dall'editor
+
+    // Estraggo il contenuto selezionato e lo avvolgo in uno <span> colorato
+    const fragment = range.extractContents();
+    const span = document.createElement('span');
+    span.style.color = hex;
+    span.appendChild(fragment);
+    range.insertNode(span);
+
+    // Cursore SUBITO DOPO lo span → il prossimo testo digitato sarà in default
+    const afterRange = document.createRange();
+    afterRange.setStartAfter(span);
+    afterRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(afterRange);
+
     setCashRow(p => ({ ...p, vers: el.innerHTML }));
   };
 
@@ -1267,21 +1292,28 @@ const ReportBetaPageInner = () => {
                       <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
                         {computed !== 0 ? `${sign}€${Math.abs(effective).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
                       </span>
-                      {/* Pulsantino 🔍: apre la barra preview in basso (solo MOVIMENTAZIONE) */}
-                      <button
-                        type="button"
-                        data-testid={`preview-toggle-${f.key}`}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => setPreviewKey(curr => curr === f.key ? null : f.key)}
-                        title="Mostra dettaglio in basso"
-                        className={`mt-0.5 mx-auto w-4 h-4 flex items-center justify-center rounded-full text-[9px] leading-none transition-colors ${
-                          previewKey === f.key
-                            ? 'bg-amber-300 text-amber-900 ring-1 ring-amber-500'
-                            : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
-                        }`}
-                      >
-                        🔍
-                      </button>
+                      {/* Pulsantino lente: assoluto sul bordo inferiore, non aumenta lo spazio.
+                          Non viene mostrato per CASH MATTINA (è solo informativa, no preview). */}
+                      {f.key !== 'mattina' && (
+                        <button
+                          type="button"
+                          data-testid={`preview-toggle-${f.key}`}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => setPreviewKey(curr => curr === f.key ? null : f.key)}
+                          title="Mostra dettaglio in basso"
+                          aria-label="Apri preview"
+                          className={`absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-4 h-4 flex items-center justify-center rounded-full transition-colors z-10 ${
+                            previewKey === f.key
+                              ? 'bg-amber-400 text-white ring-2 ring-amber-200'
+                              : 'bg-white border border-gray-400 text-gray-500 hover:bg-gray-100'
+                          }`}
+                        >
+                          <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                            <circle cx="7" cy="7" r="4.5"/>
+                            <path d="M10.5 10.5l3.5 3.5"/>
+                          </svg>
+                        </button>
+                      )}
                       {commentPopover?.key === f.key && (
                         <CommentPopover
                           inputRef={commentInputRef}
@@ -1353,20 +1385,24 @@ const ReportBetaPageInner = () => {
                       <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
                         {computed !== 0 ? `${sign}€${Math.abs(effective).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
                       </span>
-                      {/* Pulsantino 🔍: apre la barra preview in basso (solo MOVIMENTAZIONE) */}
+                      {/* Pulsantino lente: assoluto sul bordo inferiore (anche per VERS) */}
                       <button
                         type="button"
                         data-testid={`preview-toggle-${f.key}`}
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => setPreviewKey(curr => curr === f.key ? null : f.key)}
                         title="Mostra dettaglio in basso"
-                        className={`mt-0.5 mx-auto w-4 h-4 flex items-center justify-center rounded-full text-[9px] leading-none transition-colors ${
+                        aria-label="Apri preview"
+                        className={`absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-4 h-4 flex items-center justify-center rounded-full transition-colors z-10 ${
                           previewKey === f.key
-                            ? 'bg-amber-300 text-amber-900 ring-1 ring-amber-500'
-                            : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                            ? 'bg-amber-400 text-white ring-2 ring-amber-200'
+                            : 'bg-white border border-gray-400 text-gray-500 hover:bg-gray-100'
                         }`}
                       >
-                        🔍
+                        <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <circle cx="7" cy="7" r="4.5"/>
+                          <path d="M10.5 10.5l3.5 3.5"/>
+                        </svg>
                       </button>
                       {/* Palette colori — applica il colore SOLO alla selezione corrente dentro l'editor */}
                       {!isEmpty && (
