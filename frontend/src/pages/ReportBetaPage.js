@@ -60,23 +60,35 @@ const findPasta = (line, dict) => {
   return null;
 };
 
-// Valuta una formula "=…" (stessa logica della pagina Magazzino Bevande)
+// Valuta un'espressione aritmetica.
+// Il "=" iniziale è opzionale: anche scrivendo "10+5" il calcolo viene eseguito.
 const evaluateValue = (v) => {
   if (v === '' || v === null || v === undefined) return 0;
   // Sostituisco TUTTE le virgole con punti (non solo la prima): scrivere
-  // "=10,50+3,20" deve funzionare allo stesso modo di "=10.50+3.20".
-  const s = String(v).trim().replace(/,/g, '.');
-  if (s.startsWith('=')) {
-    const expr = s.slice(1).trim();
-    if (!expr || !/^[\d+\-*/.() \s]*$/.test(expr)) return 0;
-    try {
-      // eslint-disable-next-line no-new-func
-      const v2 = Function(`"use strict"; return (${expr})`)();
-      return Number.isFinite(v2) ? v2 : 0;
-    } catch { return 0; }
-  }
-  const n = parseFloat(s);
-  return Number.isNaN(n) ? 0 : n;
+  // "10,50+3,20" deve funzionare allo stesso modo di "10.50+3.20".
+  let s = String(v).trim().replace(/,/g, '.');
+  if (s.startsWith('=')) s = s.slice(1).trim();
+  if (s === '') return 0;
+  // Whitelist: solo cifre, operatori, parentesi, punto e spazio
+  if (!/^[\d+\-*/.() \s]*$/.test(s)) return 0;
+  try {
+    // eslint-disable-next-line no-new-func
+    const v2 = Function(`"use strict"; return (${s})`)();
+    return Number.isFinite(v2) ? v2 : 0;
+  } catch { return 0; }
+};
+
+// Considera "formula" qualsiasi stringa che contenga un operatore aritmetico
+// (esclude il semplice numero negativo "-5"). Il "=" iniziale è opzionale.
+const isFormulaExpr = (v) => {
+  if (v === '' || v === null || v === undefined) return false;
+  const s = String(v).trim();
+  if (s.startsWith('=')) return true;
+  // operatori binari: +, *, /, ( ) oppure un "-" che non sia il segno iniziale
+  if (/[+*/()]/.test(s)) return true;
+  // "-" presente in posizione interna (es. "10-5") → formula; "-5" → numero
+  if (/[\d.]-/.test(s)) return true;
+  return false;
 };
 
 // Definizione del riepilogo cassa Flaminio (Report)
@@ -114,10 +126,10 @@ export const CASH_BOX_STYLE = {
 
 // Definizione del box SPICCI (rotolini / mazzette aperte)
 const SPICCI_FIELDS = [
-  { key: 'sp5',  label: '5',   mult: 50 },
-  { key: 'sp2',  label: '2',   mult: 50 },
-  { key: 'sp1',  label: '1',   mult: 25 },
-  { key: 'sp05', label: '0,5', mult: 20 },
+  { key: 'sp5',  label: '5€',   mult: 50 },
+  { key: 'sp2',  label: '2€',   mult: 50 },
+  { key: 'sp1',  label: '1€',   mult: 25 },
+  { key: 'sp05', label: '0,5€', mult: 20 },
 ];
 
 // Cassetto spicci — stock totale disponibile per ciascun taglio.
@@ -745,7 +757,7 @@ const ReportBetaPageInner = () => {
       commentInputRef.current.focus();
       // posiziono il cursore alla fine senza selezionare il testo
       const len = (commentPopover.value || '').length;
-      try { commentInputRef.current.setSelectionRange(len, len); } catch (e) {}
+      try { commentInputRef.current.setSelectionRange(len, len); } catch { /* noop */ }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commentPopover?.key]);
@@ -1146,7 +1158,7 @@ const ReportBetaPageInner = () => {
             {/* ============ RIEPILOGO CASSA ============ */}
             <div>
               <h2 className="text-sm font-bold text-gray-800 uppercase text-center mb-0.5">Movimentazione finanziaria</h2>
-              <div className="bg-white rounded p-1.5 relative" style={{ border: '2px solid #4ade80' }}>
+              <div className="bg-white rounded p-1.5 relative" style={{ border: '2px solid #374151' }}>
               <div className="absolute right-1.5 top-1.5 flex items-center gap-2 z-10">
                 <button
                   type="button"
@@ -1171,7 +1183,7 @@ const ReportBetaPageInner = () => {
                   // VERS special: rosso quando è una formula "=", oppure colore personalizzato sul numero
                   const isVers = f.key === 'vers';
                   const rawVal = cashRow[f.key] || '';
-                  const isFormula = isVers && rawVal.trim().startsWith('=');
+                  const isFormula = isVers && isFormulaExpr(rawVal);
                   const versTextColor = isVers && !isFormula && versColor ? COLOR_MAP[versColor] : null;
                   const boxStyle = CASH_BOX_STYLE[f.key] || { bg: '#ffffff', text: '#111827' };
                   // CASH MATTINA è read-only se non sbloccato esplicitamente
@@ -1280,7 +1292,7 @@ const ReportBetaPageInner = () => {
                   const sign = '−';
                   const hasComment = !!cashComments[f.key];
                   const rawVal = cashRow[f.key] || '';
-                  const isFormula = rawVal.trim().startsWith('=');
+                  const isFormula = isFormulaExpr(rawVal);
                   const versTextColor = !isFormula && versColor ? COLOR_MAP[versColor] : null;
                   const boxStyle = CASH_BOX_STYLE.vers;
                   return (
@@ -1423,8 +1435,8 @@ const ReportBetaPageInner = () => {
                     const casseN = evaluateValue(casseRaw);
                     const sfuseN = evaluateValue(sfuseRaw);
                     const total = (casseEmpty && sfuseEmpty) ? null : (casseN * PEZZI_PER_CASSA + sfuseN);
-                    const isFormulaCasse = typeof casseRaw === 'string' && casseRaw.trim().startsWith('=');
-                    const isFormulaSfuse = typeof sfuseRaw === 'string' && sfuseRaw.trim().startsWith('=');
+                    const isFormulaCasse = isFormulaExpr(casseRaw);
+                    const isFormulaSfuse = isFormulaExpr(sfuseRaw);
                     const locked = !forceMagMattina;
                     return (
                       <div
@@ -1508,7 +1520,7 @@ const ReportBetaPageInner = () => {
                     const casseEmpty = casseRaw === '' || casseRaw === null || casseRaw === undefined;
                     const casseN = evaluateValue(casseRaw);
                     const total = casseEmpty ? null : casseN * PEZZI_PER_CASSA;
-                    const isFormulaCasse = typeof casseRaw === 'string' && casseRaw.trim().startsWith('=');
+                    const isFormulaCasse = isFormulaExpr(casseRaw);
                     const hasComment = !!((row.comments || {}).inUsc);
                     return (
                       <div
@@ -1550,6 +1562,7 @@ const ReportBetaPageInner = () => {
                             onCancel={closeCommentPopover}
                           />
                         )}
+                        <span className="text-[8px] text-gray-500 text-center leading-none mt-0.5 italic">casse</span>
                         <span
                           data-testid={`bev-ingressi-total-${b.sigla}`}
                           className="hidden"
@@ -1577,7 +1590,7 @@ const ReportBetaPageInner = () => {
                         const scRaw = row.scarti ?? '';
                         const scEmpty = scRaw === '' || scRaw === null || scRaw === undefined;
                         const scN = evaluateValue(scRaw);
-                        const isFormulaSc = typeof scRaw === 'string' && scRaw.trim().startsWith('=');
+                        const isFormulaSc = isFormulaExpr(scRaw);
                         const hasComment = !!((row.comments || {}).scarti);
                         return (
                           <div
@@ -1617,6 +1630,7 @@ const ReportBetaPageInner = () => {
                                 onCancel={closeCommentPopover}
                               />
                             )}
+                            <span className="text-[8px] text-gray-500 text-center leading-none mt-0.5 italic">unità</span>
                           </div>
                         );
                       })}
@@ -1648,8 +1662,8 @@ const ReportBetaPageInner = () => {
                     const casseN = evaluateValue(casseRaw);
                     const sfuseN = evaluateValue(sfuseRaw);
                     const total = (casseEmpty && sfuseEmpty) ? null : (casseN * PEZZI_PER_CASSA + sfuseN);
-                    const isFormulaCasse = typeof casseRaw === 'string' && casseRaw.trim().startsWith('=');
-                    const isFormulaSfuse = typeof sfuseRaw === 'string' && sfuseRaw.trim().startsWith('=');
+                    const isFormulaCasse = isFormulaExpr(casseRaw);
+                    const isFormulaSfuse = isFormulaExpr(sfuseRaw);
                     return (
                       <div
                         key={b.sigla}
@@ -1751,6 +1765,7 @@ const ReportBetaPageInner = () => {
                         <div className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-semibold text-base text-gray-900">
                           {b.qty}
                         </div>
+                        <span className="text-[8px] text-gray-500 text-center leading-none mt-0.5 italic">unità</span>
                       </div>
                     ))}
                     {/* Totale — solo importo € */}
@@ -1776,7 +1791,7 @@ const ReportBetaPageInner = () => {
                   {/* MOVIMENTI (era "Spicci") */}
                   <div className="flex-[5] min-w-0 rounded border border-gray-200 bg-gray-50 p-1">
                     <div className="flex items-baseline justify-between mb-0.5 px-0.5">
-                      <h3 className="text-[10px] font-bold text-gray-700 uppercase">Movimenti</h3>
+                      <h3 className="text-[10px] font-bold text-gray-700 uppercase">Rotolini aperti</h3>
                     </div>
                     <div className="flex items-stretch gap-1">
                       {spicciValues.rows.map(r => {
@@ -1795,7 +1810,7 @@ const ReportBetaPageInner = () => {
                             onFocus={() => setFocusedField(r.key)}
                             onBlur={() => setFocusedField(curr => curr === r.key ? null : curr)}
                             onContextMenu={(e) => { e.preventDefault(); openCommentPopover(r.key); }}
-                            placeholder="ap."
+                            placeholder=""
                             className="w-full h-7 border border-gray-200 rounded px-0.5 text-center font-bold text-[11px] focus:outline-none focus:border-[#F5C518] bg-white"
                           />
                           {hasComment && (
@@ -1841,7 +1856,7 @@ const ReportBetaPageInner = () => {
                   {/* CASSETTO (stock totale, click-to-edit) */}
                   <div className="flex-[4] min-w-0 rounded border border-gray-200 bg-gray-50 p-1">
                     <div className="flex items-baseline justify-between mb-0.5 px-0.5">
-                      <h3 className="text-[10px] font-bold text-gray-700 uppercase">Cassetto</h3>
+                      <h3 className="text-[10px] font-bold text-gray-700 uppercase">Rotolini nel cassetto</h3>
                     </div>
                     <div className="flex items-stretch gap-1">
                       {CASSETTO_FIELDS.map(f => {
