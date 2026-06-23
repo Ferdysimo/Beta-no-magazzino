@@ -62,11 +62,16 @@ const findPasta = (line, dict) => {
 
 // Valuta un'espressione aritmetica.
 // Il "=" iniziale è opzionale: anche scrivendo "10+5" il calcolo viene eseguito.
+// Per il campo VERS rich-text, lo storage può contenere HTML (span colorati):
+// in quel caso strippiamo tutti i tag prima di valutare.
 const evaluateValue = (v) => {
   if (v === '' || v === null || v === undefined) return 0;
+  let s = String(v);
+  // Strip HTML tags (per il VERS rich-text)
+  if (s.includes('<')) s = s.replace(/<[^>]*>/g, '');
   // Sostituisco TUTTE le virgole con punti (non solo la prima): scrivere
   // "10,50+3,20" deve funzionare allo stesso modo di "10.50+3.20".
-  let s = String(v).trim().replace(/,/g, '.');
+  s = s.trim().replace(/,/g, '.');
   if (s.startsWith('=')) s = s.slice(1).trim();
   if (s === '') return 0;
   // Whitelist: solo cifre, operatori, parentesi, punto e spazio
@@ -82,7 +87,9 @@ const evaluateValue = (v) => {
 // (esclude il semplice numero negativo "-5"). Il "=" iniziale è opzionale.
 const isFormulaExpr = (v) => {
   if (v === '' || v === null || v === undefined) return false;
-  const s = String(v).trim();
+  let s = String(v);
+  if (s.includes('<')) s = s.replace(/<[^>]*>/g, '');
+  s = s.trim();
   if (s.startsWith('=')) return true;
   // operatori binari: +, *, /, ( ) oppure un "-" che non sia il segno iniziale
   if (/[+*/()]/.test(s)) return true;
@@ -253,6 +260,9 @@ const ReportBetaPageInner = () => {
   const [autoPasteText, setAutoPasteText] = useState('');
   const [autoPasteCount, setAutoPasteCount] = useState(0);
   const [focusedField, setFocusedField] = useState(null); // key | null (preview bar)
+  const [previewKey, setPreviewKey] = useState(null); // key del campo MOVIMENTAZIONE da mostrare nella barra preview (toggle col pulsantino 🔍)
+  // VERS rich-text editor (contentEditable) — supporta colorazione per-selezione.
+  const versEditorRef = React.useRef(null);
   const [commentPopover, setCommentPopover] = useState(null); // { key, value }
   const commentInputRef = React.useRef(null);
   const [cashLoaded, setCashLoaded] = useState(false);
@@ -618,50 +628,63 @@ const ReportBetaPageInner = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderTrigger, historicalMode]);
 
-  // Info del quadratino attualmente selezionato (per la barra preview in basso)
+  // Info del quadratino MOVIMENTAZIONE FINANZIARIA attualmente selezionato per la preview
+  // (si apre solo se l'utente clicca il pulsantino 🔍 sotto la cella).
   const previewInfo = useMemo(() => {
-    if (!focusedField) return null;
-    // Cerca tra CASH_FIELDS
-    const cf = CASH_FIELDS.find(x => x.key === focusedField);
-    if (cf) {
-      const raw = cashRow[cf.key] || '';
-      const computed = evaluateValue(raw);
-      const sign = cf.op === 'minus' ? '−' : (cf.op === 'plus' ? '+' : '');
-      return {
-        label: cf.label,
-        raw,
-        formatted: `${sign}€${computed.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        comment: cashComments[cf.key] || '',
-      };
-    }
-    const sf = SPICCI_FIELDS.find(x => x.key === focusedField);
-    if (sf) {
-      const raw = cashRow[sf.key] || '';
-      const aperti = evaluateValue(raw);
-      return {
-        label: `Spicci ${sf.label} — aperti`,
-        raw,
-        formatted: `${aperti} × ${sf.mult} = €${(aperti * sf.mult).toLocaleString('it-IT', { maximumFractionDigits: 2 })}`,
-        comment: cashComments[sf.key] || '',
-      };
-    }
-    const cdf = CASSETTO_FIELDS.find(x => x.key === focusedField);
-    if (cdf) {
-      const raw = cashRow[cdf.key] || '';
-      const base = evaluateValue(raw);
-      const aperti = evaluateValue(cashRow[cdf.spicciKey]);
-      const residuo = base - aperti;
-      return {
-        label: `Cassetto ${cdf.label}`,
-        raw,
-        formatted: `stock ${base} − aperti ${aperti} = ${residuo}`,
-        comment: cashComments[cdf.key] || '',
-      };
-    }
-    return null;
-  }, [focusedField, cashRow, cashComments]);
+    if (!previewKey) return null;
+    const cf = CASH_FIELDS.find(x => x.key === previewKey);
+    if (!cf) return null;
+    const raw = cashRow[cf.key] || '';
+    // Per VERS lo storage è HTML rich-text: strippo i tag per la visualizzazione
+    const rawText = typeof raw === 'string' && raw.includes('<')
+      ? raw.replace(/<[^>]*>/g, '')
+      : raw;
+    const computed = evaluateValue(raw);
+    const sign = cf.op === 'minus' ? '−' : (cf.op === 'plus' ? '+' : '');
+    return {
+      label: cf.label,
+      raw: rawText,
+      rawHtml: typeof raw === 'string' && raw.includes('<') ? raw : null,
+      formatted: `${sign}€${computed.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      comment: cashComments[cf.key] || '',
+    };
+  }, [previewKey, cashRow, cashComments]);
 
   const setCashRowValue = (key, v) => setCashRow(p => ({ ...p, [key]: v }));
+
+  // === VERS rich-text editor: sync con cashRow.vers + helper colore ===
+  // Quando lo state esterno cambia (es. caricamento iniziale dal server) e
+  // l'editor NON è il focus attivo, allineiamo il suo innerHTML al valore.
+  // Non riallineiamo mentre l'utente sta digitando per non perdere il cursore.
+  useEffect(() => {
+    const el = versEditorRef.current;
+    if (!el) return;
+    const target = cashRow.vers || '';
+    if (el.innerHTML !== target && document.activeElement !== el) {
+      el.innerHTML = target;
+    }
+  }, [cashRow.vers]);
+
+  // Cattura l'HTML corrente dell'editor e lo scrive nello stato.
+  const handleVersInput = () => {
+    const el = versEditorRef.current;
+    if (!el) return;
+    setCashRow(p => ({ ...p, vers: el.innerHTML }));
+  };
+
+  // Applica un colore alla porzione di testo selezionata dentro l'editor VERS.
+  // Se non c'è selezione, non fa nulla (l'utente deve evidenziare prima).
+  const applyVersColor = (hex) => {
+    const el = versEditorRef.current;
+    if (!el) return;
+    // L'editor deve essere il focus per execCommand. Lo manteniamo
+    // attraverso onMouseDown preventDefault sui bottoni della palette.
+    try {
+      document.execCommand('styleWithCSS', false, true);
+      document.execCommand('foreColor', false, hex);
+    } catch { /* noop */ }
+    setCashRow(p => ({ ...p, vers: el.innerHTML }));
+  };
 
   // Autofocus quando si entra in edit mode su un quadratino del cassetto
   useEffect(() => {
@@ -1183,11 +1206,8 @@ const ReportBetaPageInner = () => {
                   const effective = f.op === 'minus' ? -computed : computed;
                   const sign = f.op === 'base' ? '=' : (effective >= 0 ? '+' : '−');
                   const hasComment = !!cashComments[f.key];
-                  // VERS special: rosso quando è una formula "=", oppure colore personalizzato sul numero
-                  const isVers = f.key === 'vers';
                   const rawVal = cashRow[f.key] || '';
                   const isFormula = isFormulaExpr(rawVal);
-                  const versTextColor = isVers && !isFormula && versColor ? COLOR_MAP[versColor] : null;
                   const boxStyle = CASH_BOX_STYLE[f.key] || { bg: '#ffffff', text: '#111827' };
                   // CASH MATTINA è read-only se non sbloccato esplicitamente
                   const isReadOnly = f.readonly && !(f.key === 'mattina' && forceMattina);
@@ -1226,10 +1246,8 @@ const ReportBetaPageInner = () => {
                         onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
                         placeholder={f.op === 'base' ? '€' : (f.op === 'minus' ? '−' : '+')}
                         readOnly={isReadOnly}
-                        style={versTextColor ? { color: versTextColor } : undefined}
                         className={`w-full h-11 border rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] border-gray-200 ${
-                          isFormula && focusedField === f.key ? 'bg-rose-100 text-rose-800 border-rose-300'
-                          : isReadOnly ? 'bg-gray-100 text-gray-700 cursor-not-allowed'
+                          isReadOnly ? 'bg-gray-100 text-gray-700 cursor-not-allowed'
                           : (f.key === 'mattina' && forceMattina ? 'bg-yellow-50 ring-2 ring-amber-400' : 'bg-white')
                         }`}
                         title={
@@ -1249,22 +1267,21 @@ const ReportBetaPageInner = () => {
                       <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
                         {computed !== 0 ? `${sign}€${Math.abs(effective).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
                       </span>
-                      {/* Palette colori — solo VERS, solo se NON formula e non vuoto */}
-                      {isVers && !isFormula && rawVal.trim() !== '' && (
-                        <div className="flex items-center justify-center gap-0.5 mt-0.5">
-                          {COLOR_PALETTE.map(c => (
-                            <button
-                              key={c.key}
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => setVersColor(c.key === versColor ? '' : c.key)}
-                              title={c.label}
-                              className={`w-3 h-3 rounded-full border ${versColor === c.key ? 'ring-2 ring-offset-1 ring-gray-700' : ''}`}
-                              style={{ backgroundColor: c.css, borderColor: c.css === '#FFFFFF' ? '#9ca3af' : c.css }}
-                            />
-                          ))}
-                        </div>
-                      )}
+                      {/* Pulsantino 🔍: apre la barra preview in basso (solo MOVIMENTAZIONE) */}
+                      <button
+                        type="button"
+                        data-testid={`preview-toggle-${f.key}`}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => setPreviewKey(curr => curr === f.key ? null : f.key)}
+                        title="Mostra dettaglio in basso"
+                        className={`mt-0.5 mx-auto w-4 h-4 flex items-center justify-center rounded-full text-[9px] leading-none transition-colors ${
+                          previewKey === f.key
+                            ? 'bg-amber-300 text-amber-900 ring-1 ring-amber-500'
+                            : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                        }`}
+                      >
+                        🔍
+                      </button>
                       {commentPopover?.key === f.key && (
                         <CommentPopover
                           inputRef={commentInputRef}
@@ -1297,8 +1314,11 @@ const ReportBetaPageInner = () => {
                   const sign = effective >= 0 ? '+' : '−';
                   const hasComment = !!cashComments[f.key];
                   const rawVal = cashRow[f.key] || '';
-                  const isFormula = isFormulaExpr(rawVal);
-                  const versTextColor = !isFormula && versColor ? COLOR_MAP[versColor] : null;
+                  // Strippa HTML per check vuoto / formula
+                  const plainText = typeof rawVal === 'string' && rawVal.includes('<')
+                    ? rawVal.replace(/<[^>]*>/g, '')
+                    : rawVal;
+                  const isEmpty = !plainText || !plainText.trim();
                   const boxStyle = CASH_BOX_STYLE.vers;
                   return (
                     <div
@@ -1312,29 +1332,17 @@ const ReportBetaPageInner = () => {
                       >
                         {f.label}
                       </label>
-                      <input
+                      <div
+                        ref={versEditorRef}
                         data-testid={`cash-row-${f.key}`}
-                        type="text"
-                        inputMode="decimal"
-                        value={(() => {
-                          const isFocused = focusedField === f.key;
-                          if (isFocused) return rawVal;
-                          if (!rawVal) return '';
-                          const abs = Math.abs(computed);
-                          return Number.isInteger(abs)
-                            ? String(abs)
-                            : abs.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                        })()}
-                        onChange={(e) => setCashRowValue(f.key, e.target.value)}
+                        contentEditable
+                        suppressContentEditableWarning
+                        onInput={handleVersInput}
                         onFocus={() => setFocusedField(f.key)}
                         onBlur={() => setFocusedField(curr => curr === f.key ? null : curr)}
                         onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
-                        placeholder="−"
-                        style={versTextColor ? { color: versTextColor } : undefined}
-                        className={`w-full h-11 border rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] border-gray-200 ${
-                          isFormula && focusedField === f.key ? 'bg-rose-100 text-rose-800 border-rose-300' : 'bg-white'
-                        }`}
-                        title={isFormula ? `Formula: ${rawVal} = ${computed.toLocaleString('it-IT', { maximumFractionDigits: 2 })}` : 'Clicca per modificare'}
+                        className="w-full h-11 border rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] border-gray-200 bg-white overflow-hidden whitespace-nowrap flex items-center justify-center"
+                        title="Evidenzia il testo e clicca un colore della palette qui sotto per colorarlo"
                       />
                       {hasComment && (
                         <span
@@ -1345,17 +1353,32 @@ const ReportBetaPageInner = () => {
                       <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
                         {computed !== 0 ? `${sign}€${Math.abs(effective).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
                       </span>
-                      {/* Palette colori — solo se NON formula e non vuoto */}
-                      {!isFormula && rawVal.trim() !== '' && (
+                      {/* Pulsantino 🔍: apre la barra preview in basso (solo MOVIMENTAZIONE) */}
+                      <button
+                        type="button"
+                        data-testid={`preview-toggle-${f.key}`}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => setPreviewKey(curr => curr === f.key ? null : f.key)}
+                        title="Mostra dettaglio in basso"
+                        className={`mt-0.5 mx-auto w-4 h-4 flex items-center justify-center rounded-full text-[9px] leading-none transition-colors ${
+                          previewKey === f.key
+                            ? 'bg-amber-300 text-amber-900 ring-1 ring-amber-500'
+                            : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                        }`}
+                      >
+                        🔍
+                      </button>
+                      {/* Palette colori — applica il colore SOLO alla selezione corrente dentro l'editor */}
+                      {!isEmpty && (
                         <div className="flex items-center justify-center gap-0.5 mt-0.5">
                           {COLOR_PALETTE.map(c => (
                             <button
                               key={c.key}
                               type="button"
                               onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => setVersColor(c.key === versColor ? '' : c.key)}
-                              title={c.label}
-                              className={`w-3 h-3 rounded-full border ${versColor === c.key ? 'ring-2 ring-offset-1 ring-gray-700' : ''}`}
+                              onClick={() => applyVersColor(c.css)}
+                              title={`${c.label} (evidenzia il testo prima di cliccare)`}
+                              className="w-3 h-3 rounded-full border hover:scale-110 transition-transform"
                               style={{ backgroundColor: c.css, borderColor: c.css === '#FFFFFF' ? '#9ca3af' : c.css }}
                             />
                           ))}
@@ -1466,11 +1489,9 @@ const ReportBetaPageInner = () => {
                             className={`w-1/2 h-9 rounded text-center font-semibold text-sm border focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
                               locked
                                 ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-not-allowed'
-                                : isFormulaCasse
-                                  ? 'bg-rose-100 border-rose-300 text-rose-800'
-                                  : casseEmpty
-                                    ? 'bg-gray-50 border-gray-200 text-gray-700'
-                                    : 'bg-emerald-50 border-emerald-200 text-gray-900'
+                                : casseEmpty
+                                  ? 'bg-gray-50 border-gray-200 text-gray-700'
+                                  : 'bg-emerald-50 border-emerald-200 text-gray-900'
                             }`}
                           />
                           {/* SFUSE (×1) */}
@@ -1486,11 +1507,9 @@ const ReportBetaPageInner = () => {
                             className={`w-1/2 h-9 rounded text-center font-semibold text-sm border focus:outline-none focus:ring-2 focus:ring-teal-400 ${
                               locked
                                 ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-not-allowed'
-                                : isFormulaSfuse
-                                  ? 'bg-rose-100 border-rose-300 text-rose-800'
-                                  : sfuseEmpty
-                                    ? 'bg-gray-50 border-gray-200 text-gray-700'
-                                    : 'bg-teal-50 border-teal-200 text-gray-900'
+                                : sfuseEmpty
+                                  ? 'bg-gray-50 border-gray-200 text-gray-700'
+                                  : 'bg-teal-50 border-teal-200 text-gray-900'
                             }`}
                           />
                         </div>
@@ -1545,11 +1564,9 @@ const ReportBetaPageInner = () => {
                           onContextMenu={(e) => { e.preventDefault(); openCommentPopover(b.sigla, 'bev', 'inUsc'); }}
                           title={(hasComment ? `📝 ${(row.comments || {}).inUsc}\n\n` : '') + (isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN} casse → ${casseN * PEZZI_PER_CASSA} unità` : `Numero casse · ×${PEZZI_PER_CASSA}\n(destro per commento)`)}
                           className={`w-full h-7 rounded text-center font-semibold text-[11px] border focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
-                            isFormulaCasse
-                              ? 'bg-rose-100 border-rose-300 text-rose-800'
-                              : casseEmpty
-                                ? 'bg-gray-50 border-gray-200 text-gray-700'
-                                : 'bg-indigo-50 border-indigo-200 text-gray-900'
+                            casseEmpty
+                              ? 'bg-gray-50 border-gray-200 text-gray-700'
+                              : 'bg-indigo-50 border-indigo-200 text-gray-900'
                           }`}
                         />
                         {hasComment && (
@@ -1613,11 +1630,9 @@ const ReportBetaPageInner = () => {
                               onContextMenu={(e) => { e.preventDefault(); openCommentPopover(b.sigla, 'bev', 'scarti'); }}
                               title={(hasComment ? `📝 ${(row.comments || {}).scarti}\n\n` : '') + (isFormulaSc ? `Formula: ${scRaw} = ${scN}` : 'Unità scartate (singole)\n(destro per commento)')}
                               className={`w-full h-7 rounded text-center font-semibold text-[11px] border focus:outline-none focus:ring-2 focus:ring-rose-400 ${
-                                isFormulaSc
-                                  ? 'bg-rose-100 border-rose-300 text-rose-800'
-                                  : scEmpty
-                                    ? 'bg-gray-50 border-gray-200 text-gray-700'
-                                    : 'bg-rose-50 border-rose-200 text-gray-900'
+                                scEmpty
+                                  ? 'bg-gray-50 border-gray-200 text-gray-700'
+                                  : 'bg-rose-50 border-rose-200 text-gray-900'
                               }`}
                             />
                             {hasComment && (
@@ -1690,11 +1705,9 @@ const ReportBetaPageInner = () => {
                             onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
                             title={isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : 'Casse da 24'}
                             className={`w-1/2 h-9 rounded text-center font-semibold text-sm border focus:outline-none focus:ring-2 focus:ring-amber-400 ${
-                              isFormulaCasse && isFocusedSera
-                                ? 'bg-rose-100 border-rose-300 text-rose-800'
-                                : casseEmpty
-                                  ? 'bg-gray-50 border-gray-200 text-gray-700'
-                                  : 'bg-amber-50 border-amber-200 text-gray-900'
+                              casseEmpty
+                                ? 'bg-gray-50 border-gray-200 text-gray-700'
+                                : 'bg-amber-50 border-amber-200 text-gray-900'
                             }`}
                           />
                           {/* SFUSE (×1) */}
@@ -1708,11 +1721,9 @@ const ReportBetaPageInner = () => {
                             onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
                             title={isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Unità sfuse'}
                             className={`w-1/2 h-9 rounded text-center font-semibold text-sm border focus:outline-none focus:ring-2 focus:ring-sky-400 ${
-                              isFormulaSfuse && isFocusedSera
-                                ? 'bg-rose-100 border-rose-300 text-rose-800'
-                                : sfuseEmpty
-                                  ? 'bg-gray-50 border-gray-200 text-gray-700'
-                                  : 'bg-sky-50 border-sky-200 text-gray-900'
+                              sfuseEmpty
+                                ? 'bg-gray-50 border-gray-200 text-gray-700'
+                                : 'bg-sky-50 border-sky-200 text-gray-900'
                             }`}
                           />
                         </div>
@@ -1812,8 +1823,6 @@ const ReportBetaPageInner = () => {
                             inputMode="decimal"
                             value={cashRow[r.key] || ''}
                             onChange={(e) => setCashRowValue(r.key, e.target.value)}
-                            onFocus={() => setFocusedField(r.key)}
-                            onBlur={() => setFocusedField(curr => curr === r.key ? null : curr)}
                             onContextMenu={(e) => { e.preventDefault(); openCommentPopover(r.key); }}
                             placeholder=""
                             className="w-full h-7 border border-gray-200 rounded px-0.5 text-center font-bold text-[11px] focus:outline-none focus:border-[#F5C518] bg-white"
@@ -1892,8 +1901,7 @@ const ReportBetaPageInner = () => {
                                 inputMode="decimal"
                                 value={editingValue}
                                 onChange={(e) => setEditingValue(e.target.value)}
-                                onFocus={() => setFocusedField(f.key)}
-                                onBlur={() => { setFocusedField(curr => curr === f.key ? null : curr); commitEditCassetto(f); }}
+                                onBlur={() => { commitEditCassetto(f); }}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter') { e.preventDefault(); commitEditCassetto(f); }
                                   else if (e.key === 'Escape') { e.preventDefault(); cancelEditCassetto(); }

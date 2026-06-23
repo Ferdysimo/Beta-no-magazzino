@@ -35,7 +35,6 @@ import CronologiaMovimentiPage from './pages/CronologiaMovimentiPage';
 import ReportBetaPage from './pages/ReportBetaPage';
 import ReportIeriPage from './pages/ReportIeriPage';
 import AuditCassaPage from './pages/AuditCassaPage';
-import StoricoChiusurePage from './pages/StoricoChiusurePage';
 import ChiusureExcelPage from './pages/ChiusureExcelPage';
 import DizionarioPastePage from './pages/DizionarioPastePage';
 import UpdateBanner from './components/UpdateBanner';
@@ -249,11 +248,6 @@ function AppRoutes() {
       <Route path="/magazzino-bevande/storico" element={
         <ProtectedRoute>
           <StoricoBevandePage />
-        </ProtectedRoute>
-      } />
-      <Route path="/storico-chiusure" element={
-        <ProtectedRoute>
-          <StoricoChiusurePage />
         </ProtectedRoute>
       } />
       <Route path="/chiusure-excel" element={
