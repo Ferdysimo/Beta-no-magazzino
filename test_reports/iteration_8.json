@@ -1,0 +1,57 @@
+{
+  "summary": "Frontend bug-check of ReportBetaPage.js (Flaminio Report Cassa). Logged in as Flaminio/Pastasciutt4!, navigated /report-beta, entered PIN 0123. Verified all 15 requested checks. Page renders with no runtime errors. Most changes verified OK; one important regression found: rose-100 'formula' highlight does NOT activate on non-VERS cash inputs (ALTRO, GLO, JUST, DEL, BP, SAT, POS, FT, ARR) — the gate `isFormula = isVers && isFormulaExpr(rawVal)` at line 1186 still requires isVers.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "ReportBetaPage – MOVIMENTAZIONE FINANZIARIA non-VERS cash inputs (ALTRO/GLO/JUST/DEL/BP/SAT/POS/FT/ARR)",
+        "issue": "Rose/red 'formula' visual highlight does NOT appear when the input contains an arithmetic expression. Root cause at line 1186: `const isFormula = isVers && isFormulaExpr(rawVal)` — the `isVers &&` makes isFormula always false for every cash field except VERS, so the className branch `isFormula && focusedField === f.key ? 'bg-rose-100 ...'` (line 1228) never fires. Calculation itself works correctly (evaluateValue computes the value, CASH SERA total updates), but the user-requested visual hint is missing. Should be `const isFormula = isFormulaExpr(rawVal);` (drop the `isVers &&`).",
+        "selector": "[data-testid='cash-row-altro'] (also glo/just/delv/bp/sat/pos/ft/arr)",
+        "priority": "HIGH"
+      },
+      {
+        "component": "ReportBetaPage – cash row computed-value caption",
+        "issue": "When the user types a NEGATIVE plain number (e.g. '-3') on an op=plus field like ALTRO, the small caption below the input shows '+€3,00' (line 1247 uses field's static sign + Math.abs(computed)). The CASH SERA total IS computed correctly (subtracts 3) so the math is fine, but the caption text is misleading — it should reflect the effective sign (e.g. '−€3,00' on a plus-field when the value is negative).",
+        "selector": "[data-testid='cash-row-altro'] small caption",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_OK_checks": [
+    "Page renders without runtime/console errors (no PAGEERROR, no console error)",
+    "Border around MOVIMENTAZIONE FINANZIARIA wrapper = inline 'border: 2px solid rgb(156, 163, 175)' (#9ca3af / gray-400) — CONFIRMED",
+    "Spicci LEFT sub-section header reads 'Rotolini aperti' (not 'Movimenti') — CONFIRMED",
+    "Spicci RIGHT sub-section header reads 'Rotolini nel cassetto' (not 'Cassetto') — CONFIRMED",
+    "Spicci Rotolini aperti labels above inputs: '5€', '2€', '1€', '0,5€' — CONFIRMED",
+    "Spicci Rotolini aperti inputs have EMPTY placeholder (no 'ap.') — CONFIRMED (placeholder='' on spicci-aperti-sp5/sp2/sp1/sp05)",
+    "Italic 'casse' sub-labels under Ingressi/Uscite beverage inputs — CONFIRMED (9 italic 'casse' elements detected)",
+    "Italic 'unità' sub-labels under Scarti and Vendite Bevande inputs — CONFIRMED (18 italic 'unità' elements detected)",
+    "Arithmetic WITHOUT '=': typed '10+5' on ALTRO → caption '+€15,00', CASH SERA went from €3346,80 to €3361,80 (delta +15)",
+    "Arithmetic WITH '=': typed '=20+5' on ALTRO → caption '+€25,00', CASH SERA = €3371,80 (delta +25)",
+    "Plain number with comma: typed '7,5' on ALTRO → caption '+€7,50', CASH SERA = €3354,30 (delta +7,5)",
+    "Negative number '-3' on ALTRO: CASH SERA = €3343,80 (delta -3, math correct) — but caption shows '+€3,00' (see MEDIUM bug above)",
+    "Spicci Rotolini aperti arithmetic: typed '3+2' in spicci-aperti-sp5 → spicci-valore-sp5 box shows '€250' (5 × mult 50). Works without '='",
+    "Beverage casse arithmetic: typed '2+1' in bev-ingressi-AL → input keeps '2+1' raw and the field RENDERS with rose/pink background (formula highlight DOES work for beverage inputs, just not for non-VERS cash inputs)",
+    "All sections render: CASSA (banknote counter), MOVIMENTAZIONE FINANZIARIA, MAGAZZINO MATTINA (Ingressi/Uscite + Scarti), MAGAZZINO SERA, VENDITE BEVANDE, SPICCI (Rotolini aperti + Rotolini nel cassetto) — no missing sections"
+  ],
+  "critical_code_review_comments": [
+    "Line 1186: `const isFormula = isVers && isFormulaExpr(rawVal);` should be `const isFormula = isFormulaExpr(rawVal);` so all editable cash fields get the rose-100 'formula' highlight (the comment at line 81-92 says isFormulaExpr is supposed to detect any formula on any field).",
+    "Line 1247 (small caption): consider using the EFFECTIVE sign of (op * computed) instead of `${sign}€${Math.abs(computed)}` so that a negative typed value on a plus-field is rendered as '−€3,00' to avoid user confusion. Same fix likely needed for VERS branch line 1341.",
+    "Persistence behaviour (not deeply tested but observed): the cash-row input stores the RAW expression while focused (e.g. '10+5') and displays the formatted absolute on blur. After a hard refresh I did not have time to fully confirm whether the raw string or the computed value is persisted, but no crash occurred and the page reloaded fine."
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "Fix line 1186 in /app/frontend/src/pages/ReportBetaPage.js: drop the `isVers &&` so non-VERS cash inputs (ALTRO, GLO, JUST, DEL, BP, SAT, POS, FT, ARR) also receive the rose-100/border-rose-300 visual highlight when their content is a formula (with or without leading '='). This is the most important regression vs the user's request: 'Visual formula highlight: When the field contains 10+5 (without =), the input background should be rose/red highlighted'.",
+    "(Optional, lower priority) Update small caption rendering (lines 1247 & 1341) so the displayed sign reflects (op * computed) instead of the field's static op sign, to avoid '-3 on plus-field shows +€3' confusion."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only)", "frontend": "13/15 checks fully pass; 1 visual-highlight regression on non-VERS cash inputs; 1 caption sign cosmetic issue"},
+  "test_credentials": "Flaminio / Pastasciutt4! ; Report PIN 0123",
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Use Flaminio / Pastasciutt4! → click data-testid='btn-report-beta' OR navigate to /report-beta → PIN 0123 in input[type=password] → click button:has-text('Sblocca'). Useful data-testids: cash-row-{key} (mattina/altro/glo/just/delv/bp/sat/pos/ft/arr/vers), cash-total, spicci-aperti-{sp5|sp2|sp1|sp05}, spicci-valore-{sp5..}, bev-ingressi-{AL|AG|C|CZ|F|S|B|VB|VR}, bev-ingressi-total-{...}, toggle-force-mattina. The MOVIMENTAZIONE wrapper is the next sibling of the h2 with text 'Movimentazione finanziaria' — its inline style is `border: 2px solid rgb(156, 163, 175)`. evaluateValue() in lines 65-79 correctly handles '=expr', 'expr' (no =), comma decimals and negatives. isFormulaExpr() at lines 83-92 correctly returns true for '10+5' and false for '7,5'. The bug is purely in the gate `isVers && isFormulaExpr` on line 1186 — beverage inputs and Spicci inputs use isFormulaExpr directly so they DO highlight correctly.",
+  "rca of the issue": "Visual highlight regression RCA: developer added isFormulaExpr() helper and updated bev/spicci sections to use it directly, but the legacy line 1186 inside the non-VERS cash render still gates on `isVers && isFormulaExpr(rawVal)`. As a consequence, every non-VERS editable cash cell evaluates isFormula=false, so the conditional className at line 1228 always falls through to the readonly/mattina branches and ends with 'bg-white' instead of 'bg-rose-100 text-rose-800 border-rose-300'. Reproduction: focus ALTRO, type '10+5' → input bg stays rgb(255,255,255). Fix: change line 1186 to `const isFormula = isFormulaExpr(rawVal);` (the VERS-specific palette logic at lines 1250+ already guards with `isVers && !isFormula`, so changing this does not break VERS behaviour)."
+}
