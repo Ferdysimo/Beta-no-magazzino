@@ -5,6 +5,7 @@ Password comune: `Pastasciutt4!`
 | Ruolo        | Username       | Password        |
 |--------------|----------------|-----------------|
 | Admin        | `Admin`        | `Pastasciutt4!` |
+| Federico     | `Federico`     | `Pastasciutt4!` |
 | Flaminio     | `Flaminio`     | `Pastasciutt4!` |
 | Grazie       | `Grazie`       | `Pastasciutt4!` |
 | Brazza       | `Brazza`       | `Pastasciutt4!` |
