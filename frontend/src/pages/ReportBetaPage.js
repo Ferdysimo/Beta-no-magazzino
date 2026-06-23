@@ -1224,6 +1224,7 @@ const ReportBetaPageInner = () => {
               <h2 className="text-sm font-bold text-gray-800 uppercase text-center mb-0.5">Movimentazione finanziaria</h2>
               <div className="bg-white rounded p-1.5 relative" style={{ border: '2px solid #9ca3af' }}>
               <div className="absolute right-1.5 top-1.5 flex items-center gap-2 z-10">
+                {isAdmin && (
                 <button
                   type="button"
                   data-testid="toggle-force-mattina"
@@ -1237,6 +1238,7 @@ const ReportBetaPageInner = () => {
                 >
                   {forceMattina ? '🔓 mattina sbloccato' : '🔒 forza mattina'}
                 </button>
+                )}
               </div>
               <div className="flex items-stretch gap-1.5">
                 {/* Tutti i campi tranne VERS: VERS viene renderizzato come ULTIMO box DOPO CASH SERA */}
@@ -1489,6 +1491,7 @@ const ReportBetaPageInner = () => {
                   >
                     {showMagMattina ? '▼ nascondi' : '▶ mostra'}
                   </button>
+                  {isAdmin && (
                   <button
                     type="button"
                     data-testid="force-mag-mattina-toggle"
@@ -1502,6 +1505,7 @@ const ReportBetaPageInner = () => {
                   >
                     {forceMagMattina ? '🔓 mattina sbloccato' : '🔒 forza mattina'}
                   </button>
+                  )}
                 </div>
               </div>
               {showMagMattina && (
