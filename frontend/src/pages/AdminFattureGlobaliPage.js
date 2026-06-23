@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Header from '../components/Header';
@@ -30,6 +30,7 @@ const AdminFattureGlobaliPage = () => {
   const [ddtList, setDdtList] = useState([]);
 
   // Form
+  const fileInputRef = useRef(null);
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [supplier, setSupplier] = useState('');
@@ -220,22 +221,49 @@ const AdminFattureGlobaliPage = () => {
           <div className="grid grid-cols-12 gap-3 items-end">
             <div className="col-span-12 md:col-span-3">
               <label className="block text-[11px] font-semibold text-gray-600 uppercase mb-1">Foto</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={(e) => { handleFile(e.target.files[0]); e.target.value = ''; }}
-                  data-testid="fg-file-input"
-                  className="text-xs flex-1"
-                />
-                {preview && (
-                  <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-300 rounded px-1.5 py-0.5">
-                    <img src={preview} alt="" className="h-9 w-9 rounded border border-emerald-300 object-cover" />
-                    <span className="text-[11px] font-bold text-emerald-700" data-testid="fg-file-uploaded-badge">✓ caricata</span>
-                  </div>
-                )}
-              </div>
+              {/* Input nativo nascosto: viene aperto via ref dal bottone qui sotto */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(e) => { handleFile(e.target.files[0]); e.target.value = ''; }}
+                data-testid="fg-file-input"
+                className="hidden"
+              />
+              {!preview ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                    fileInputRef.current?.click();
+                  }}
+                  data-testid="fg-pick-file-btn"
+                  className="w-full h-9 px-2 text-xs border border-gray-300 rounded bg-white hover:bg-gray-50 text-gray-700 font-semibold uppercase flex items-center justify-center gap-1 truncate"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-none">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                  Scegli foto
+                </button>
+              ) : (
+                <div
+                  className="w-full h-9 px-1.5 bg-emerald-50 border border-emerald-300 rounded flex items-center gap-1.5"
+                  data-testid="fg-file-uploaded-badge"
+                >
+                  <img src={preview} alt="" className="h-7 w-7 rounded border border-emerald-300 object-cover flex-none" />
+                  <span className="text-[11px] font-bold text-emerald-700 truncate flex-1">✓ caricata</span>
+                  <button
+                    type="button"
+                    onClick={() => { setFile(null); setPreview(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                    data-testid="fg-clear-file-btn"
+                    title="Rimuovi foto"
+                    className="flex-none w-5 h-5 rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-700 flex items-center justify-center text-xs font-bold"
+                  >×</button>
+                </div>
+              )}
             </div>
             <div className="col-span-12 md:col-span-3">
               <label className="block text-[11px] font-semibold text-gray-600 uppercase mb-1">Fornitore</label>
