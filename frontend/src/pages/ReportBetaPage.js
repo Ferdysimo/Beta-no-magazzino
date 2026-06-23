@@ -1158,7 +1158,7 @@ const ReportBetaPageInner = () => {
             {/* ============ RIEPILOGO CASSA ============ */}
             <div>
               <h2 className="text-sm font-bold text-gray-800 uppercase text-center mb-0.5">Movimentazione finanziaria</h2>
-              <div className="bg-white rounded p-1.5 relative" style={{ border: '2px solid #374151' }}>
+              <div className="bg-white rounded p-1.5 relative" style={{ border: '2px solid #9ca3af' }}>
               <div className="absolute right-1.5 top-1.5 flex items-center gap-2 z-10">
                 <button
                   type="button"

@@ -229,7 +229,12 @@ const AdminFattureGlobaliPage = () => {
                   data-testid="fg-file-input"
                   className="text-xs flex-1"
                 />
-                {preview && <img src={preview} alt="" className="h-9 w-9 rounded border border-gray-300 object-cover" />}
+                {preview && (
+                  <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-300 rounded px-1.5 py-0.5">
+                    <img src={preview} alt="" className="h-9 w-9 rounded border border-emerald-300 object-cover" />
+                    <span className="text-[11px] font-bold text-emerald-700" data-testid="fg-file-uploaded-badge">✓ caricata</span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="col-span-12 md:col-span-3">
@@ -245,7 +250,7 @@ const AdminFattureGlobaliPage = () => {
               </select>
             </div>
             <div className="col-span-12 md:col-span-3">
-              <label className="block text-[11px] font-semibold text-gray-600 uppercase mb-1">Numeri DDT (virgola)</label>
+              <label className="block text-[11px] font-semibold text-gray-600 uppercase mb-1">Cerca DDT (inserire numero)</label>
               <input
                 type="text"
                 value={ddtNumbers}
@@ -256,7 +261,7 @@ const AdminFattureGlobaliPage = () => {
               />
             </div>
             <div className="col-span-6 md:col-span-2">
-              <label className="block text-[11px] font-semibold text-gray-600 uppercase mb-1">Data</label>
+              <label className="block text-[11px] font-semibold text-gray-600 uppercase mb-1">Data abbinamento FT/DDT</label>
               <input
                 type="date"
                 value={invoiceDate}
@@ -354,7 +359,7 @@ const AdminFattureGlobaliPage = () => {
         <div className="space-y-3 mb-6" data-testid="fg-list">
           {activeGlobals.length === 0 && (
             <div className="bg-white border border-dashed border-gray-300 rounded p-5 text-center text-gray-400 text-sm">
-              Nessuna fattura attiva. Compila il form sopra per iniziare.
+              Nessuna fattura abbinata ai DDT
             </div>
           )}
           {activeGlobals.map(g => {
@@ -602,20 +607,15 @@ const AdminFattureGlobaliPage = () => {
                     </div>
                   </summary>
                   <div className="border-t border-amber-200 p-3 bg-white">
-                    <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-                      <div className="text-[11px] text-gray-700">
-                        Fattura: <b>{g.supplier}</b>
-                        {' · '}Data: {g.invoice_date ? new Date(g.invoice_date).toLocaleDateString('it-IT') : '—'}
-                        {' · '}Pagata: {g.paid_at ? new Date(g.paid_at).toLocaleString('it-IT') : '—'}
-                      </div>
-                      {g.image_url && (
+                    {g.image_url && (
+                      <div className="flex items-center justify-end mb-2">
                         <button
                           type="button"
                           onClick={() => setLightboxUrl(`${BACKEND_URL}${g.image_url}`)}
                           className="text-xs text-blue-700 underline"
                         >Apri foto fattura</button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                     <div className="text-[11px] font-bold text-gray-700 uppercase mb-1">DDT abbinati ({(g.linked_invoices || []).length})</div>
                     {(g.linked_invoices || []).length === 0 ? (
                       <div className="text-xs text-gray-400 italic">Nessun DDT.</div>
