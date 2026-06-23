@@ -1178,12 +1178,15 @@ const ReportBetaPageInner = () => {
                 {/* Tutti i campi tranne VERS: VERS viene renderizzato come ULTIMO box DOPO CASH SERA */}
                 {CASH_FIELDS.filter(f => f.key !== 'vers').map(f => {
                   const computed = evaluateValue(cashRow[f.key]);
-                  const sign = f.op === 'minus' ? '−' : (f.op === 'plus' ? '+' : '=');
+                  // Sign EFFETTIVO: tiene conto del valore digitato (un negativo su un campo +
+                  // diventa "−" e viceversa). 'base' resta '=' per CASH MATTINA.
+                  const effective = f.op === 'minus' ? -computed : computed;
+                  const sign = f.op === 'base' ? '=' : (effective >= 0 ? '+' : '−');
                   const hasComment = !!cashComments[f.key];
                   // VERS special: rosso quando è una formula "=", oppure colore personalizzato sul numero
                   const isVers = f.key === 'vers';
                   const rawVal = cashRow[f.key] || '';
-                  const isFormula = isVers && isFormulaExpr(rawVal);
+                  const isFormula = isFormulaExpr(rawVal);
                   const versTextColor = isVers && !isFormula && versColor ? COLOR_MAP[versColor] : null;
                   const boxStyle = CASH_BOX_STYLE[f.key] || { bg: '#ffffff', text: '#111827' };
                   // CASH MATTINA è read-only se non sbloccato esplicitamente
@@ -1244,7 +1247,7 @@ const ReportBetaPageInner = () => {
                         />
                       )}
                       <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
-                        {computed !== 0 ? `${sign}€${Math.abs(computed).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
+                        {computed !== 0 ? `${sign}€${Math.abs(effective).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
                       </span>
                       {/* Palette colori — solo VERS, solo se NON formula e non vuoto */}
                       {isVers && !isFormula && rawVal.trim() !== '' && (
@@ -1289,7 +1292,9 @@ const ReportBetaPageInner = () => {
                   const f = CASH_FIELDS.find(x => x.key === 'vers');
                   if (!f) return null;
                   const computed = evaluateValue(cashRow[f.key]);
-                  const sign = '−';
+                  // VERS è sempre sottratto: effective = -computed (un negativo digitato diventa "+").
+                  const effective = -computed;
+                  const sign = effective >= 0 ? '+' : '−';
                   const hasComment = !!cashComments[f.key];
                   const rawVal = cashRow[f.key] || '';
                   const isFormula = isFormulaExpr(rawVal);
@@ -1338,7 +1343,7 @@ const ReportBetaPageInner = () => {
                         />
                       )}
                       <span className="text-[9px] text-gray-500 mt-0.5 text-center leading-none">
-                        {computed !== 0 ? `${sign}€${Math.abs(computed).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
+                        {computed !== 0 ? `${sign}€${Math.abs(effective).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
                       </span>
                       {/* Palette colori — solo se NON formula e non vuoto */}
                       {!isFormula && rawVal.trim() !== '' && (
