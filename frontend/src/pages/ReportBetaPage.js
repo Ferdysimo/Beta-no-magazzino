@@ -1401,17 +1401,21 @@ const ReportBetaPageInner = () => {
                     ? rawVal.replace(/<[^>]*>/g, '')
                     : rawVal;
                   const isEmpty = !plainText || !plainText.trim();
+                  const mixedColors = versHasMixedColors(rawVal);
                   const boxStyle = CASH_BOX_STYLE.vers;
+                  // Highlight giallo/rosso su TUTTO il quadratino quando coesistono numeri neri e rossi
+                  const cellBg = mixedColors ? '#fef08a' /* yellow-200 */ : boxStyle.bg;
+                  const cellTextColor = mixedColors ? '#b91c1c' /* red-700 */ : boxStyle.text;
                   return (
                     <div
                       data-preview-cell={f.key}
-                      className="flex-1 min-w-[60px] flex flex-col relative rounded p-1"
-                      style={{ backgroundColor: boxStyle.bg }}
+                      className="flex-1 min-w-[60px] flex flex-col relative rounded p-1 transition-colors"
+                      style={{ backgroundColor: cellBg }}
                     >
                       <label
                         className="text-[10px] font-semibold text-center leading-none mb-0.5 truncate uppercase"
                         title={f.label}
-                        style={{ color: boxStyle.text }}
+                        style={{ color: cellTextColor }}
                       >
                         {f.label}
                       </label>
@@ -1434,20 +1438,15 @@ const ReportBetaPageInner = () => {
                         />
                       )}
                       {/* Riga di chiusura: caption del calcolo + pulsantino lente.
-                          Highlight speciale (sfondo giallo, testo rosso) quando dentro VERS
-                          coesistono numeri NERI e numeri ROSSI. */}
+                          Quando il quadratino è in stato "misto" (numeri neri + rossi)
+                          tutto il box è giallo, quindi la caption usa solo testo rosso. */}
                       <div className="flex items-center justify-center gap-1 mt-0.5 leading-none">
-                        {(() => {
-                          const mixed = versHasMixedColors(rawVal);
-                          const captionCls = mixed
-                            ? 'text-[9px] font-bold text-red-700 bg-yellow-200 rounded px-1 py-px'
-                            : 'text-[9px] text-gray-500';
-                          return (
-                            <span className={captionCls} data-testid={`cash-caption-${f.key}`}>
-                              {computed !== 0 ? `${sign}€${Math.abs(effective).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
-                            </span>
-                          );
-                        })()}
+                        <span
+                          className={mixedColors ? 'text-[9px] font-bold text-red-700' : 'text-[9px] text-gray-500'}
+                          data-testid={`cash-caption-${f.key}`}
+                        >
+                          {computed !== 0 ? `${sign}€${Math.abs(effective).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
+                        </span>
                         <button
                           type="button"
                           data-testid={`preview-toggle-${f.key}`}
