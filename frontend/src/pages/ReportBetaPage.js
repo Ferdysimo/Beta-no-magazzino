@@ -148,21 +148,51 @@ const CASSETTO_FIELDS = [
   { key: 'cd05', label: '0,5€', spicciKey: 'sp05' },
 ];
 
-// Palette colore per il testo del campo VERS quando NON è una formula
+// Palette colore per il testo del campo VERS: ora solo Nero + Rosso.
+// Quando nella cella VERS coesistono entrambi i colori sui numeri,
+// la riga caption sotto il box riceve un highlight giallo+rosso.
 const COLOR_MAP = {
   black:  '#111827',
   red:    '#dc2626',
-  green:  '#15803d',
-  blue:   '#1d4ed8',
-  orange: '#ea580c',
 };
 const COLOR_PALETTE = [
-  { key: 'black',  label: 'Nero',     css: COLOR_MAP.black  },
-  { key: 'red',    label: 'Rosso',    css: COLOR_MAP.red    },
-  { key: 'green',  label: 'Verde',    css: COLOR_MAP.green  },
-  { key: 'blue',   label: 'Blu',      css: COLOR_MAP.blue   },
-  { key: 'orange', label: 'Arancio',  css: COLOR_MAP.orange },
+  { key: 'black',  label: 'Nero',  css: COLOR_MAP.black },
+  { key: 'red',    label: 'Rosso', css: COLOR_MAP.red   },
 ];
+
+// Heuristica che rileva se l'HTML del VERS contiene sia almeno una cifra
+// in ROSSO che almeno una cifra NON ROSSA (= nero/default). Cammina sull'albero
+// DOM mantenendo il colore ereditato e classifica ogni testo numerico.
+const isRedCssColor = (c) => {
+  if (!c) return false;
+  const n = String(c).toLowerCase().replace(/\s+/g, '');
+  return n === '#dc2626' || n === 'rgb(220,38,38)' || n === 'red';
+};
+const versHasMixedColors = (html) => {
+  if (!html || typeof html !== 'string') return false;
+  if (typeof document === 'undefined') return false;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  let hasRed = false;
+  let hasNonRed = false;
+  const walk = (node, inheritedIsRed) => {
+    if (node.nodeType === 3 /* TEXT_NODE */) {
+      if (/\d/.test(node.textContent || '')) {
+        if (inheritedIsRed) hasRed = true;
+        else hasNonRed = true;
+      }
+      return;
+    }
+    if (node.nodeType !== 1 /* ELEMENT_NODE */) return;
+    let isRedHere = inheritedIsRed;
+    if (node.style && node.style.color) {
+      isRedHere = isRedCssColor(node.style.color);
+    }
+    for (const child of node.childNodes) walk(child, isRedHere);
+  };
+  walk(tmp, false);
+  return hasRed && hasNonRed;
+};
 
 // Popover commento (right-click su un quadratino)
 const CommentPopover = ({ inputRef, value, onChange, onSave, onCancel }) => {
@@ -1403,11 +1433,21 @@ const ReportBetaPageInner = () => {
                           className="absolute top-3 right-0 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-amber-600 z-10"
                         />
                       )}
-                      {/* Riga di chiusura: caption del calcolo + pulsantino lente */}
+                      {/* Riga di chiusura: caption del calcolo + pulsantino lente.
+                          Highlight speciale (sfondo giallo, testo rosso) quando dentro VERS
+                          coesistono numeri NERI e numeri ROSSI. */}
                       <div className="flex items-center justify-center gap-1 mt-0.5 leading-none">
-                        <span className="text-[9px] text-gray-500">
-                          {computed !== 0 ? `${sign}€${Math.abs(effective).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
-                        </span>
+                        {(() => {
+                          const mixed = versHasMixedColors(rawVal);
+                          const captionCls = mixed
+                            ? 'text-[9px] font-bold text-red-700 bg-yellow-200 rounded px-1 py-px'
+                            : 'text-[9px] text-gray-500';
+                          return (
+                            <span className={captionCls} data-testid={`cash-caption-${f.key}`}>
+                              {computed !== 0 ? `${sign}€${Math.abs(effective).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
+                            </span>
+                          );
+                        })()}
                         <button
                           type="button"
                           data-testid={`preview-toggle-${f.key}`}

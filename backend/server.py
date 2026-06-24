@@ -3076,10 +3076,17 @@ async def upsert_beverage_daily(
                 clean[k] = v.strip()[:500]
         set_body["comments"] = clean
     # Audit-log: registro diff per ogni colonna della riga bevanda
+    old_doc = await db.beverage_daily_counts.find_one(
+        {"restaurant_id": rid, "date_rome": target_date, "sigla": data.sigla}, {"_id": 0}
+    ) or {}
+    # Sicurezza: i campi MATTINA (mattina + mattina_casse + mattina_sfuse) della
+    # bevanda — coperti dal toggle "Forza Magazzino Mattina" — possono essere
+    # modificati SOLO da admin/Federico. Per gli altri utenti preserviamo il
+    # valore esistente nel DB ignorando ciò che è stato inviato.
+    if token_data.get("role") != "admin":
+        for k in ("mattina", "mattina_casse", "mattina_sfuse"):
+            set_body[k] = old_doc.get(k, "")
     try:
-        old_doc = await db.beverage_daily_counts.find_one(
-            {"restaurant_id": rid, "date_rome": target_date, "sigla": data.sigla}, {"_id": 0}
-        ) or {}
         ui = _audit_user_info(request, token_data)
         if historical:
             ui = {**ui, "mode": "historical"}
@@ -3574,6 +3581,11 @@ async def upsert_cash_daily(
     old_doc = await db.cash_daily_counts.find_one(
         {"restaurant_id": rid, "date_rome": target_date}, {"_id": 0}
     ) or {}
+    # Sicurezza: il campo `mattina` (CASH MATTINA "Forza Mattina") può essere
+    # modificato SOLO da admin/Federico. Per gli altri utenti preserviamo il
+    # valore esistente nel DB ignorando ciò che è stato inviato lato client.
+    if token_data.get("role") != "admin":
+        set_payload["mattina"] = old_doc.get("mattina", "")
     try:
         ui = _audit_user_info(request, token_data)
         if historical:
