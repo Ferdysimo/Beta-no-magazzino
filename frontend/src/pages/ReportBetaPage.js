@@ -1428,7 +1428,9 @@ const ReportBetaPageInner = () => {
                         onFocus={() => setFocusedField(f.key)}
                         onBlur={() => setFocusedField(curr => curr === f.key ? null : curr)}
                         onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
-                        className="w-full h-11 border rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] border-gray-200 bg-white overflow-hidden whitespace-nowrap flex items-center justify-center"
+                        className={`w-full h-11 border rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] overflow-hidden whitespace-nowrap flex items-center justify-center transition-colors ${
+                          mixedColors ? 'bg-yellow-200 border-yellow-400' : 'bg-white border-gray-200'
+                        }`}
                         title="Evidenzia il testo e clicca un colore della palette qui sotto per colorarlo"
                       />
                       {hasComment && (
