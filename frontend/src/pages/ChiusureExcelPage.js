@@ -62,7 +62,7 @@ const dayName = (s) => {
 };
 
 // ─── Cell helpers ──────────────────────────────────────────────────────────
-const Th = ({ children, bg, color, sticky, top, left, width, title, colSpan, borderTop }) => (
+const Th = ({ children, bg, color, sticky, top, left, width, title, colSpan, borderTop, isGroupEnd }) => (
   <th
     title={title || ''}
     colSpan={colSpan}
@@ -75,7 +75,7 @@ const Th = ({ children, bg, color, sticky, top, left, width, title, colSpan, bor
       zIndex: sticky ? (left !== undefined ? 40 : 30) : undefined,
       width: width || undefined,
       minWidth: width || undefined,
-      borderRight: '1px solid #94a3b8',
+      borderRight: isGroupEnd ? '3px solid #334155' : '1px solid #94a3b8',
       borderBottom: '1px solid #94a3b8',
       borderTop: borderTop || undefined,
       padding: '4px 6px',
@@ -90,7 +90,7 @@ const Th = ({ children, bg, color, sticky, top, left, width, title, colSpan, bor
   </th>
 );
 
-const Td = ({ children, bg, sticky, left, mono, align = 'right', bold, color, title }) => (
+const Td = ({ children, bg, sticky, left, mono, align = 'right', bold, color, title, isGroupEnd }) => (
   <td
     title={title || ''}
     style={{
@@ -99,7 +99,7 @@ const Td = ({ children, bg, sticky, left, mono, align = 'right', bold, color, ti
       position: sticky ? 'sticky' : undefined,
       left: left !== undefined ? left : undefined,
       zIndex: sticky ? 10 : undefined,
-      borderRight: '1px solid #e5e7eb',
+      borderRight: isGroupEnd ? '3px solid #334155' : '1px solid #e5e7eb',
       borderBottom: '1px solid #e5e7eb',
       padding: '3px 6px',
       fontFamily: mono ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : undefined,
@@ -372,7 +372,8 @@ const ChiusureExcelPage = () => {
                   </Th>
                   {BEV_GROUPS.map(g => (
                     <Th key={g.key} sticky top={0} colSpan={bevSigle.length}
-                        bg={g.headerBg} color="#111827" title={`${g.label} per sigla bevanda`}>
+                        bg={g.headerBg} color="#111827" title={`${g.label} per sigla bevanda`}
+                        isGroupEnd>
                       {g.label}
                     </Th>
                   ))}
@@ -395,9 +396,10 @@ const ChiusureExcelPage = () => {
                   <Th sticky top={28} bg="#facc15" color="#111827" width={PASTE_W}>N°</Th>
                   <Th sticky top={28} bg="#facc15" color="#111827" width={SERA_W}>€</Th>
                   {BEV_GROUPS.map(g => (
-                    bevSigle.map(sigla => (
+                    bevSigle.map((sigla, si) => (
                       <Th key={`${g.key}-${sigla}`} sticky top={28} bg={g.headerBg} color="#111827"
-                          width={BEV_W} title={`${BEV_NAMES[sigla] || sigla} — ${g.label}`}>
+                          width={BEV_W} title={`${BEV_NAMES[sigla] || sigla} — ${g.label}`}
+                          isGroupEnd={si === bevSigle.length - 1}>
                         {sigla}
                       </Th>
                     ))
@@ -457,7 +459,7 @@ const ChiusureExcelPage = () => {
                       </Td>
 
                       {BEV_GROUPS.map(g => (
-                        bevSigle.map(sigla => {
+                        bevSigle.map((sigla, si) => {
                           const b = r.beverages?.[sigla] || {};
                           const v = b[g.key];
                           const cellBg = r.is_mock ? baseBg : g.cellBg;
@@ -465,6 +467,7 @@ const ChiusureExcelPage = () => {
                           return (
                             <Td key={`${g.key}-${sigla}`} bg={cellBg} mono align="center"
                                 bold={isVendita}
+                                isGroupEnd={si === bevSigle.length - 1}
                                 color={isVendita ? (Number(v) > 0 ? '#15803d' : '#cbd5e1') : '#374151'}>
                               {fmtInt(v)}
                             </Td>
@@ -496,10 +499,11 @@ const ChiusureExcelPage = () => {
                   <Td bg="#0f172a" color="#facc15" mono bold>{fmtEur(totals.cash_sera)}</Td>
 
                   {BEV_GROUPS.map(g => (
-                    bevSigle.map(sigla => (
+                    bevSigle.map((sigla, si) => (
                       <Td key={`${g.key}-${sigla}`} bg="#0f172a"
                           color={g.key === 'qty' ? '#fde68a' : '#fff'} mono align="center"
-                          bold={g.key === 'qty'}>
+                          bold={g.key === 'qty'}
+                          isGroupEnd={si === bevSigle.length - 1}>
                         {fmtInt(totals.bev[g.key][sigla])}
                       </Td>
                     ))
