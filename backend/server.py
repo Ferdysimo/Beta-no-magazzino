@@ -3143,24 +3143,33 @@ async def get_beverage_daily_history(
 
 # Helper: evaluate "=..." expressions safely; mirror of the JS evaluateValue
 def _eval_cash_value(v) -> float:
+    """Valuta un'espressione aritmetica come fa il frontend (evaluateValue):
+    - "=" iniziale è OPZIONALE → anche "10+5" viene calcolato come 15.
+    - Strippa eventuali tag HTML (campo VERS rich-text con span colorati).
+    - Whitelist di caratteri: solo cifre, operatori, parentesi, spazi.
+    Importante: questa funzione deve restare allineata bit-per-bit con la
+    `evaluateValue` del frontend, altrimenti i numeri nelle viste aggregate
+    (Storico chiusure / Excel grid / cash_sera) divergono da quelli mostrati
+    nella pagina Report.
+    """
     if v is None:
         return 0.0
-    s = str(v).strip().replace(",", ".")
+    s = str(v)
+    # Strip HTML tags — il VERS può contenere <span style="color:...">…</span>
+    if "<" in s:
+        s = re.sub(r"<[^>]*>", "", s)
+    s = s.strip().replace(",", ".")
     if not s:
         return 0.0
     if s.startswith("="):
-        expr = s[1:].strip()
-        if not expr:
-            return 0.0
-        if not re.match(r"^[\d+\-*/.() \s]*$", expr):
-            return 0.0
-        try:
-            # Safe: regex above only allows digits/operators
-            return float(eval(expr, {"__builtins__": {}}, {}))  # noqa: S307
-        except Exception:
-            return 0.0
+        s = s[1:].strip()
+    if not s:
+        return 0.0
+    if not re.match(r"^[\d+\-*/.() \s]*$", s):
+        return 0.0
     try:
-        return float(s)
+        # Safe: il regex sopra ammette solo cifre/operatori/parentesi/spazi.
+        return float(eval(s, {"__builtins__": {}}, {}))  # noqa: S307
     except Exception:
         return 0.0
 
