@@ -370,6 +370,7 @@ const ReportBetaPageInner = () => {
                 inUsc_casse: remote.inUsc_casse || '',
                 sera_casse: seraLocked ? (local?.sera_casse ?? '') : (remote.sera_casse || ''),
                 sera_sfuse: seraLocked ? (local?.sera_sfuse ?? '') : (remote.sera_sfuse || ''),
+                comments: remote.comments || local?.comments || {},
               };
             } else if (prev[b.sigla] !== undefined && prev[b.sigla] !== '') {
               // Auto-fill mattina dal sera del giorno prima.
@@ -388,6 +389,7 @@ const ReportBetaPageInner = () => {
                 inUsc_casse: '',
                 sera_casse: seraLocked ? (local?.sera_casse ?? '') : '',
                 sera_sfuse: seraLocked ? (local?.sera_sfuse ?? '') : '',
+                comments: local?.comments || {},
               };
             } else {
               merged[b.sigla] = {
@@ -400,6 +402,7 @@ const ReportBetaPageInner = () => {
                 inUsc_casse: '',
                 sera_casse: seraLocked ? (local?.sera_casse ?? '') : '',
                 sera_sfuse: seraLocked ? (local?.sera_sfuse ?? '') : '',
+                comments: local?.comments || {},
               };
             }
           });
