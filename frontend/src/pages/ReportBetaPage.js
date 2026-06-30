@@ -4,7 +4,6 @@ import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrders } from '../contexts/OrderContext';
 import Header from '../components/Header';
-import PasswordGate from '../components/PasswordGate';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -1075,44 +1074,6 @@ const ReportBetaPageInner = () => {
           </button>
         </div>
       )}
-      {!historicalMode && isAdmin && (
-        <div
-          data-testid="test-snapshot-banner"
-          className="bg-indigo-50 border-y border-indigo-300 text-indigo-900 px-4 py-1.5 flex items-center justify-between gap-3 flex-wrap"
-          style={{ fontSize: 12 }}
-        >
-          <div className="font-semibold">
-            🧪 STRUMENTO TEST (solo Admin/Supervisor) — Archivia il report di OGGI come chiusura passata per testare la Vista Excel
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              data-testid="test-snapshot-button"
-              onClick={async () => {
-                const todayStr = new Date().toISOString().slice(0, 10);
-                const yest = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-                const target = window.prompt(
-                  `Su che data vuoi archiviare il report di oggi (${todayStr})?\nDeve essere precedente a oggi. Default: ieri (${yest})`,
-                  yest,
-                );
-                if (!target) return;
-                try {
-                  const eid = effectiveRestaurant?.id || restaurant?.id;
-                  const res = await axios.post(`${API}/admin/closures/snapshot-today`, {
-                    restaurant_id: eid, target_date: target,
-                  }, { headers: { Authorization: `Bearer ${token}` } });
-                  alert(`✓ Archiviato come ${res.data.target_date} (cash:${res.data.cash_copied} · bev:${res.data.bev_copied}).\nApro la Vista Excel...`);
-                  navigate('/chiusure-excel');
-                } catch (e) {
-                  alert('Errore: ' + (e.response?.data?.detail || e.message));
-                }
-              }}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1 rounded text-xs"
-            >
-              📦 Archivia ora come chiusura passata
-            </button>
-          </div>
-        </div>
-      )}
       {readOnlyHistorical && (
         <div className="bg-amber-100 border-y border-amber-300 text-amber-900 text-sm font-semibold px-4 py-2 text-center">
           📖 Sola lettura — chiusura del {urlDate.split('-').reverse().join('/')}, non è possibile modificare
@@ -1170,11 +1131,12 @@ const ReportBetaPageInner = () => {
               data-testid="paste-textarea"
               value={pasteText}
               onChange={(e) => { if (manualPasteOverride) setPasteText(e.target.value); }}
-              readOnly={!manualPasteOverride}
+              readOnly={!manualPasteOverride || readOnlyHistorical}
               spellCheck={false}
               title={manualPasteOverride
                 ? 'Modifica manuale attiva'
                 : 'Auto-popolato dalle paste mandate dal Cassa (live)'}
+              style={readOnlyHistorical ? { pointerEvents: 'auto' } : undefined}
               className={`w-full flex-1 min-h-[120px] p-2 border rounded text-[13px] leading-snug tracking-wide font-semibold text-gray-800 focus:outline-none resize-none ${
                 manualPasteOverride
                   ? 'border-rose-300 focus:border-rose-500 bg-white'
@@ -2152,23 +2114,7 @@ const ReportBetaPageInner = () => {
   );
 };
 
-// Wrapper con password gate "0123" (sblocco condiviso con Magazzino Bevande nella stessa sessione).
-// In MODALITÀ STORICA (?date=...&rid=...) l'Admin bypassa la password.
-const ReportBetaPage = () => {
-  const [searchParams] = useSearchParams();
-  const { isAdmin } = useAuth();
-  const isHistorical = !!(searchParams.get('date') && searchParams.get('rid') && isAdmin);
-  if (isHistorical) return <ReportBetaPageInner />;
-  return (
-    <PasswordGate
-      password="0123"
-      storageKey="flaminio-section-unlocked"
-      title="Report Cassa"
-      subtitle="Inserisci la password per accedere"
-    >
-      <ReportBetaPageInner />
-    </PasswordGate>
-  );
-};
+// Niente password gate sul Report: l'accesso è già protetto dal login utente.
+const ReportBetaPage = () => <ReportBetaPageInner />;
 
 export default ReportBetaPage;
