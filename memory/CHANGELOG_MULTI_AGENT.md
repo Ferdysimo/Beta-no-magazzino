@@ -51,8 +51,110 @@ Before making any code change:
   - `/app/backend/.env` — `JWT_SECRET` obbligatorio in produzione
 - **Credenziali test** → `/app/memory/test_credentials.md`
 - **Ruoli**: `admin` (Admin), `supervisor` (Federico), `restaurant`, `magazzino`
-- **Comando deploy VPS utente**:
-  `cd /root/pasta-app && git pull && cd frontend && npm run build && sudo systemctl restart pastasciutta-backend`
+
+---
+
+## 🖥️ AMBIENTE PRODUZIONE — VPS UTENTE / USER'S VPS ENVIRONMENT
+
+> ⚠️ **IMPORTANTE**: L'app gira su una VPS self-hosted dell'utente, NON su Emergent cloud. Lo script `/app/setup.sh` è la fonte di verità per la configurazione.
+
+### 📍 Percorsi sul VPS / VPS paths
+| Risorsa | Percorso |
+|---|---|
+| Root app (su VPS) | `/opt/pastasciutta` |
+| Repo git clone alt. | `/root/pasta-app` (path alternativo usato in deploy) |
+| Backend code | `/opt/pastasciutta/backend/` |
+| Frontend build statico | `/opt/pastasciutta/frontend/build/` |
+| Python virtualenv | `/opt/pastasciutta/backend/venv/` |
+| Pip eseguibile | `/opt/pastasciutta/backend/venv/bin/pip` |
+| Uploads (foto DDT/fatture) | `/opt/pastasciutta/uploads/` |
+| Google Sheets creds | `/opt/pastasciutta/backend/google_credentials.json` |
+| Backend `.env` | `/opt/pastasciutta/backend/.env` |
+| Frontend `.env` | `/opt/pastasciutta/frontend/.env` |
+
+### 🐧 Sistema operativo & stack
+- **OS**: Ubuntu (Debian-based)
+- **Python**: 3.x in virtualenv
+- **Node.js**: v20+ (`yarn` come package manager)
+- **MongoDB**: 8.0 (servizio `mongod`, locale su `mongodb://localhost:27017`)
+- **Web server**: Nginx (reverse proxy + serve build React statico)
+- **Process manager**: systemd (NON supervisor come su Emergent)
+- **HTTPS / Cert**: certbot installato (configurabile a parte)
+
+### ⚙️ Servizi systemd / systemd services
+| Servizio | Funzione |
+|---|---|
+| `pastasciutta-backend.service` | FastAPI via uvicorn su `0.0.0.0:8001` |
+| `mongod.service` | MongoDB |
+| `nginx.service` | Reverse proxy `:80` → frontend + `/api/` → backend |
+
+Definizione service backend (`/etc/systemd/system/pastasciutta-backend.service`):
+```ini
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/pastasciutta/backend
+Environment=PATH=/opt/pastasciutta/backend/venv/bin:/usr/bin
+ExecStart=/opt/pastasciutta/backend/venv/bin/uvicorn server:app --host 0.0.0.0 --port 8001
+Restart=always
+RestartSec=3
+```
+
+### 🌐 Configurazione Nginx (sintesi)
+File: `/etc/nginx/sites-available/pastasciutta`
+- `listen 80` → root su `/opt/pastasciutta/frontend/build`
+- `location /api/` → proxy a `http://127.0.0.1:8001/api/`
+- WebSocket upgrade headers attivi (`Upgrade`, `Connection`)
+- `client_max_body_size 20M` per upload foto fatture/DDT
+- `proxy_read_timeout 86400` (WS long-lived)
+- React SPA fallback: `try_files $uri $uri/ /index.html`
+
+### 🔑 Variabili `.env`
+**Backend** (`/opt/pastasciutta/backend/.env`):
+```env
+MONGO_URL=mongodb://localhost:27017
+DB_NAME=pastasciutta
+JWT_SECRET=<openssl rand -hex 32 — OBBLIGATORIO, no fallback>
+```
+**Frontend** (`/opt/pastasciutta/frontend/.env`):
+```env
+REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
+```
+
+### 🚀 Comandi utili per il VPS / Useful VPS commands
+| Operazione | Comando |
+|---|---|
+| **Deploy completo** | `cd /root/pasta-app && git pull && cd frontend && npm run build && sudo systemctl restart pastasciutta-backend` |
+| Riavvio backend | `sudo systemctl restart pastasciutta-backend` |
+| Log backend live | `sudo journalctl -u pastasciutta-backend -f` |
+| Stato backend | `sudo systemctl status pastasciutta-backend` |
+| Riavvio Nginx | `sudo systemctl restart nginx` |
+| Stato MongoDB | `sudo systemctl status mongod` |
+| Mongo shell | `mongosh pastasciutta` |
+| Installare pacchetto Python sul VPS | `/opt/pastasciutta/backend/venv/bin/pip install <pkg>` |
+| Build frontend | `cd /opt/pastasciutta/frontend && yarn build` |
+| Re-seed account | `curl -X POST http://localhost:8001/api/seed` |
+
+### 🛡️ Note di sicurezza specifiche VPS
+- `JWT_SECRET` **non ha fallback** nel codice → se manca, il backend non parte. Generare con `openssl rand -hex 32`.
+- CORS: whitelist esplicita nel `server.py`, deve includere il dominio/IP reale del VPS.
+- Rate limiting su `/api/auth/login` (10/min via `slowapi`).
+- Path traversal in `/api/uploads/{filename}` mitigato.
+- Le foto caricate finiscono in `/opt/pastasciutta/uploads/` → assicurarsi che la cartella sia scrivibile dall'user del service (`root` di default).
+- Backup: **manuale al momento** (P2: backup cloud automatico in roadmap). Cose da salvare in backup: dump MongoDB (`mongodump --db pastasciutta`) + intera cartella `/opt/pastasciutta/uploads/` + `google_credentials.json`.
+
+### 🆚 Differenze ambiente Emergent (questo) vs VPS produzione
+| Aspetto | Emergent (qui) | VPS utente |
+|---|---|---|
+| Process manager | `supervisorctl` | `systemctl` |
+| Frontend dev | `yarn start` (hot reload) | `yarn build` + Nginx statico |
+| Backend reload | hot reload uvicorn | manual `systemctl restart` |
+| Mongo | URL da env | `mongodb://localhost:27017` locale |
+| `REACT_APP_BACKEND_URL` | preview emergentagent.com | IP/dominio VPS |
+| Uploads | `/app/uploads/` | `/opt/pastasciutta/uploads/` |
+| Google creds | non presenti / mock | `/opt/pastasciutta/backend/google_credentials.json` |
+
+> **➡️ Quando suggerisci comandi all'utente, usa SEMPRE i path VPS (`/opt/pastasciutta/...`) e `systemctl`, NON i path di Emergent (`/app/...`) né `supervisorctl`.**
 
 ---
 
