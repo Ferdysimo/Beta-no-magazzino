@@ -5439,21 +5439,23 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    # Origini esplicitamente autorizzate. La preview Emergent + i 2 endpoint
-    # di produzione VPS (IP e dominio). Quando aggiungerai HTTPS, includi
-    # qui anche la versione `https://...` corrispondente.
+    # Origini esplicitamente autorizzate. Preview Emergent + VPS prod (IP e dominio,
+    # http+https) + localhost per sviluppo. Quando aggiungerai un nuovo dominio,
+    # includi qui entrambe le varianti http:// e https://.
     allow_origins=[
-        # Preview Emergent (sviluppo)
+        # Preview Emergent
         "https://real-time-orders-3.preview.emergentagent.com",
         # Produzione VPS — HTTP
         "http://51.91.125.232",
         "http://pasta-app.it",
         "http://www.pasta-app.it",
-        # Produzione VPS — HTTPS (pronti per il futuro switch a HTTPS)
+        # Produzione VPS — HTTPS (già pronti per il futuro switch)
         "https://51.91.125.232",
         "https://pasta-app.it",
         "https://www.pasta-app.it",
     ],
+    # Sviluppo locale: localhost / 127.0.0.1 su qualsiasi porta (CRA 3000, Vite 5173, ecc.)
+    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_methods=["*"],
     allow_headers=["*"],
 )
