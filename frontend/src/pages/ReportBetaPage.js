@@ -167,6 +167,48 @@ const isRedCssColor = (c) => {
   const n = String(c).toLowerCase().replace(/\s+/g, '');
   return n === '#dc2626' || n === 'rgb(220,38,38)' || n === 'red';
 };
+
+// Sanitize HTML del VERS contro XSS.
+// Whitelist: solo testo + <span style="color:..."> (l'unico tag generato dal
+// nostro applyVersColor). Qualsiasi altro tag/attributo/handler viene strippato
+// PRIMA di essere iniettato come innerHTML.
+const HEX_RE = /^#[0-9a-fA-F]{3,6}$/;
+const RGB_RE = /^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/;
+const NAMED_COLORS = new Set(['red', 'black', 'inherit']);
+const sanitizeVersHtml = (html) => {
+  if (!html || typeof html !== 'string') return '';
+  if (typeof document === 'undefined') return '';
+  const tmp = document.createElement('div');
+  // setHTML+innerHTML è "safe" qui perché poi rimuoviamo tutto ciò che non è
+  // in whitelist; gli `onerror=...` non vengono mai inseriti nel documento attivo.
+  tmp.innerHTML = html;
+  const walk = (node) => {
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === 3 /* TEXT_NODE */) continue;
+      if (child.nodeType !== 1 /* ELEMENT_NODE */) {
+        child.remove();
+        continue;
+      }
+      if (child.tagName !== 'SPAN') {
+        // Sostituisco il tag non consentito col suo testo
+        const text = document.createTextNode(child.textContent || '');
+        child.replaceWith(text);
+        continue;
+      }
+      // Tag <span>: tengo SOLO style.color se sembra un colore valido,
+      // rimuovo tutti gli altri attributi (id/class/onclick/onerror/...)
+      const rawColor = (child.style && child.style.color) || '';
+      const color = String(rawColor).trim().toLowerCase();
+      const colorOk = color && (HEX_RE.test(color) || RGB_RE.test(color) || NAMED_COLORS.has(color));
+      while (child.attributes.length) child.removeAttribute(child.attributes[0].name);
+      if (colorOk) child.style.color = color;
+      walk(child);
+    }
+  };
+  walk(tmp);
+  return tmp.innerHTML;
+};
+
 const versHasMixedColors = (html) => {
   if (!html || typeof html !== 'string') return false;
   if (typeof document === 'undefined') return false;
@@ -354,23 +396,26 @@ const ReportBetaPageInner = () => {
           (invRes.data || []).forEach(b => {
             const remote = today[b.sigla];
             const local = prevState[b.sigla];
-            // Protezione: se l'utente sta editando 'sera' (focus) o ha appena
-            // salvato (<3s), mantieni il valore locale di 'sera' per evitare flicker.
-            const seraLocked = (
+            // Protezione anti-overwrite: durante 4s dopo l'ultima modifica
+            // utente su questa sigla (o mentre 'sera' è focusato), il polling
+            // non sovrascrive NESSUN campo locale per quella sigla. Evita che
+            // un fetch parta tra il keystroke e il save debounce e perda dati.
+            const userLock = (
               focusedSeraSigla === b.sigla
               || (bevPendingSeraUntil.current[b.sigla] && bevPendingSeraUntil.current[b.sigla] > now)
             );
+            const pick = (field, fallback) => (userLock && local && local[field] !== undefined ? local[field] : fallback);
             if (remote) {
               merged[b.sigla] = {
-                mattina: remote.mattina || '',
-                inUsc: remote.inUsc || '',
-                scarti: remote.scarti || '',
-                sera: seraLocked ? (local?.sera ?? '') : (remote.sera || ''),
-                mattina_casse: remote.mattina_casse || '',
-                mattina_sfuse: remote.mattina_sfuse || '',
-                inUsc_casse: remote.inUsc_casse || '',
-                sera_casse: seraLocked ? (local?.sera_casse ?? '') : (remote.sera_casse || ''),
-                sera_sfuse: seraLocked ? (local?.sera_sfuse ?? '') : (remote.sera_sfuse || ''),
+                mattina:       pick('mattina',       remote.mattina       || ''),
+                inUsc:         pick('inUsc',         remote.inUsc         || ''),
+                scarti:        pick('scarti',        remote.scarti        || ''),
+                sera:          pick('sera',          remote.sera          || ''),
+                mattina_casse: pick('mattina_casse', remote.mattina_casse || ''),
+                mattina_sfuse: pick('mattina_sfuse', remote.mattina_sfuse || ''),
+                inUsc_casse:   pick('inUsc_casse',   remote.inUsc_casse   || ''),
+                sera_casse:    pick('sera_casse',    remote.sera_casse    || ''),
+                sera_sfuse:    pick('sera_sfuse',    remote.sera_sfuse    || ''),
                 comments: remote.comments || local?.comments || {},
               };
             } else if (prev[b.sigla] !== undefined && prev[b.sigla] !== '') {
@@ -381,28 +426,28 @@ const ReportBetaPageInner = () => {
               const prevCasse = prevTot > 0 ? Math.floor(prevTot / 24) : 0;
               const prevSfuse = prevTot - prevCasse * 24;
               merged[b.sigla] = {
-                mattina: String(prev[b.sigla]),
-                inUsc: '',
-                scarti: '',
-                sera: seraLocked ? (local?.sera ?? '') : '',
-                mattina_casse: prevCasse > 0 ? String(prevCasse) : '',
-                mattina_sfuse: prevSfuse > 0 ? String(prevSfuse) : '',
-                inUsc_casse: '',
-                sera_casse: seraLocked ? (local?.sera_casse ?? '') : '',
-                sera_sfuse: seraLocked ? (local?.sera_sfuse ?? '') : '',
+                mattina:       pick('mattina',       String(prev[b.sigla])),
+                inUsc:         pick('inUsc',         ''),
+                scarti:        pick('scarti',        ''),
+                sera:          pick('sera',          ''),
+                mattina_casse: pick('mattina_casse', prevCasse > 0 ? String(prevCasse) : ''),
+                mattina_sfuse: pick('mattina_sfuse', prevSfuse > 0 ? String(prevSfuse) : ''),
+                inUsc_casse:   pick('inUsc_casse',   ''),
+                sera_casse:    pick('sera_casse',    ''),
+                sera_sfuse:    pick('sera_sfuse',    ''),
                 comments: local?.comments || {},
               };
             } else {
               merged[b.sigla] = {
-                mattina: '',
-                inUsc: '',
-                scarti: '',
-                sera: seraLocked ? (local?.sera ?? '') : '',
-                mattina_casse: '',
-                mattina_sfuse: '',
-                inUsc_casse: '',
-                sera_casse: seraLocked ? (local?.sera_casse ?? '') : '',
-                sera_sfuse: seraLocked ? (local?.sera_sfuse ?? '') : '',
+                mattina:       pick('mattina',       ''),
+                inUsc:         pick('inUsc',         ''),
+                scarti:        pick('scarti',        ''),
+                sera:          pick('sera',          ''),
+                mattina_casse: pick('mattina_casse', ''),
+                mattina_sfuse: pick('mattina_sfuse', ''),
+                inUsc_casse:   pick('inUsc_casse',   ''),
+                sera_casse:    pick('sera_casse',    ''),
+                sera_sfuse:    pick('sera_sfuse',    ''),
                 comments: local?.comments || {},
               };
             }
@@ -724,20 +769,24 @@ const ReportBetaPageInner = () => {
   // Quando lo state esterno cambia (es. caricamento iniziale dal server) e
   // l'editor NON è il focus attivo, allineiamo il suo innerHTML al valore.
   // Non riallineiamo mentre l'utente sta digitando per non perdere il cursore.
+  // SANITIZE: passiamo SEMPRE il valore attraverso sanitizeVersHtml prima di
+  // iniettarlo come innerHTML, così script/img/onerror dal server non possono
+  // essere eseguiti (difesa XSS in profondità).
   useEffect(() => {
     const el = versEditorRef.current;
     if (!el) return;
-    const target = cashRow.vers || '';
+    const target = sanitizeVersHtml(cashRow.vers || '');
     if (el.innerHTML !== target && document.activeElement !== el) {
       el.innerHTML = target;
     }
   }, [cashRow.vers]);
 
-  // Cattura l'HTML corrente dell'editor e lo scrive nello stato.
+  // Cattura l'HTML corrente dell'editor e lo scrive nello stato dopo sanitize.
   const handleVersInput = () => {
     const el = versEditorRef.current;
     if (!el) return;
-    setCashRow(p => ({ ...p, vers: el.innerHTML }));
+    const clean = sanitizeVersHtml(el.innerHTML);
+    setCashRow(p => ({ ...p, vers: clean }));
   };
 
   // Applica un colore alla porzione di testo selezionata dentro l'editor VERS.
@@ -767,7 +816,7 @@ const ReportBetaPageInner = () => {
     sel.removeAllRanges();
     sel.addRange(afterRange);
 
-    setCashRow(p => ({ ...p, vers: el.innerHTML }));
+    setCashRow(p => ({ ...p, vers: sanitizeVersHtml(el.innerHTML) }));
   };
 
   // Autofocus quando si entra in edit mode su un quadratino del cassetto
