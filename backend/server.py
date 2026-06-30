@@ -4,6 +4,9 @@ from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import DuplicateKeyError
 import os
@@ -31,15 +34,24 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# JWT Settings
-SECRET_KEY = os.environ.get('JWT_SECRET', 'pastasciutta-roma-secret-key-2024')
+# JWT Settings — il secret DEVE essere fornito via env, niente fallback per evitare
+# che in caso di .env mancante l'app parta con un secret hard-coded (forgiabile).
+SECRET_KEY = os.environ.get('JWT_SECRET')
+if not SECRET_KEY:
+    raise RuntimeError("JWT_SECRET env var is required; refuse to start with insecure fallback")
 ALGORITHM = "HS256"
+
+# Rate limiter (slowapi). Usa l'IP del client come chiave; per scopi auth è sufficiente.
+limiter = Limiter(key_func=get_remote_address)
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Create the main app
 app = FastAPI()
+# Wire up rate limiter (slowapi) — handler restituisce 429 quando lo si supera.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Gzip compression - responses > 500 bytes get compressed
 app.add_middleware(GZipMiddleware, minimum_size=500)
@@ -775,7 +787,28 @@ async def version_check():
 
 @api_router.get("/uploads/{filename}")
 async def serve_upload(filename: str):
-    filepath = UPLOADS_DIR / filename
+    """Serve un file caricato. Protetto da:
+    - rifiuta filename con separatori path o ".." (path traversal),
+    - verifica che il path risolto sia effettivamente dentro UPLOADS_DIR (anti symlink escape).
+
+    Note di sicurezza: per ora l'endpoint è pubblico (no JWT). Il filename è un
+    UUID 12-hex (~5e28 combinazioni) quindi enumerare a forza bruta è impraticabile,
+    ma per difesa in profondità sarebbe meglio firmare l'URL o servire via blob.
+    TODO(security): convertire in signed-URL temporanea o blob fetch con auth.
+    """
+    if (
+        not filename
+        or "/" in filename
+        or "\\" in filename
+        or filename.startswith(".")
+        or ".." in filename
+    ):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    filepath = (UPLOADS_DIR / filename).resolve()
+    try:
+        filepath.relative_to(UPLOADS_DIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid filename")
     if not filepath.exists() or not filepath.is_file():
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(filepath)
@@ -817,7 +850,8 @@ async def get_restaurants():
 
 # Auth Routes
 @api_router.post("/auth/login", response_model=LoginResponse)
-async def login(data: LoginRequest):
+@limiter.limit("10/minute")
+async def login(request: Request, data: LoginRequest):
     restaurant = await db.restaurants.find_one({"username": data.username})
     
     if not restaurant or not pwd_context.verify(data.password, restaurant["password"]):
