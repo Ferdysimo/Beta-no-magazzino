@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
-import { ArrowLeft, Plus, Trash2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, RefreshCw } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -116,18 +116,19 @@ const Td = ({ children, bg, sticky, left, mono, align = 'right', bold, color, ti
 
 const ChiusureExcelPage = () => {
   const navigate = useNavigate();
-  const { token, isAdmin } = useAuth();
+  const { token, isAdmin, restaurant, effectiveRestaurant } = useAuth();
   const [restaurants, setRestaurants] = useState([]);
   const [selectedRestId, setSelectedRestId] = useState(() => localStorage.getItem('closures_excel_rest_id') || '');
   const [days, setDays] = useState(() => Number(localStorage.getItem('closures_excel_days')) || 30);
   const [items, setItems] = useState([]);
   const [bevSigle, setBevSigle] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
-  const effectiveRestId = selectedRestId || restaurants[0]?.id || '';
+  // Utenti non-admin: forzo il rid sul proprio locale, ignoro selector e localStorage
+  const ownRid = effectiveRestaurant?.id || restaurant?.id || '';
+  const effectiveRestId = isAdmin ? (selectedRestId || restaurants[0]?.id || '') : ownRid;
 
   useEffect(() => {
     if (!isAdmin || !token) return;
@@ -142,7 +143,7 @@ const ChiusureExcelPage = () => {
   }, [isAdmin, token]);
 
   const loadGrid = useCallback(async () => {
-    if (!isAdmin || !token || !effectiveRestId) {
+    if (!token || !effectiveRestId) {
       setItems([]); setBevSigle([]); return;
     }
     setLoading(true);
@@ -159,7 +160,7 @@ const ChiusureExcelPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [isAdmin, token, effectiveRestId, days, headers]);
+  }, [token, effectiveRestId, days, headers]);
 
   useEffect(() => { loadGrid(); }, [loadGrid]);
 
@@ -169,32 +170,6 @@ const ChiusureExcelPage = () => {
   useEffect(() => {
     localStorage.setItem('closures_excel_days', String(days));
   }, [days]);
-
-  const onGenerateMock = async () => {
-    if (!effectiveRestId) return;
-    const ok = window.confirm('Genero 7 chiusure mock per il locale selezionato? (Le righe mock esistenti vengono sovrascritte; le chiusure reali NON vengono toccate.)');
-    if (!ok) return;
-    setBusy(true); setMsg('');
-    try {
-      const res = await axios.post(`${API}/admin/closures/generate-mock`, {
-        restaurant_id: effectiveRestId, days: 7, overwrite: true,
-      }, { headers });
-      setMsg(`Generate ${res.data.cash_rows_written} chiusure mock (${res.data.bev_rows_written} righe bevande)`);
-      await loadGrid();
-    } catch (e) { console.error(e); setMsg('Errore generazione mock'); } finally { setBusy(false); }
-  };
-
-  const onDeleteMock = async () => {
-    if (!effectiveRestId) return;
-    const ok = window.confirm('Cancellare TUTTE le chiusure mock per il locale selezionato?');
-    if (!ok) return;
-    setBusy(true); setMsg('');
-    try {
-      const res = await axios.delete(`${API}/admin/closures/mock?restaurant_id=${effectiveRestId}`, { headers });
-      setMsg(`Cancellate ${res.data.cash_deleted} chiusure mock (${res.data.bev_deleted} righe bevande)`);
-      await loadGrid();
-    } catch (e) { console.error(e); setMsg('Errore cancellazione mock'); } finally { setBusy(false); }
-  };
 
   const onRowClick = (date) => {
     if (!effectiveRestId || !date) return;
@@ -232,19 +207,6 @@ const ChiusureExcelPage = () => {
     return t;
   }, [items, bevSigle]);
 
-  if (!isAdmin) {
-    return (
-      <div className="min-h-screen bg-[#F5F5F5]">
-        <Header />
-        <main className="max-w-3xl mx-auto p-6">
-          <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg p-4">
-            Accesso riservato all&apos;Admin.
-          </div>
-        </main>
-      </div>
-    );
-  }
-
   // Posizioni sticky a sinistra
   const DATE_W = 82;
   const DAY_W = 42;
@@ -275,18 +237,27 @@ const ChiusureExcelPage = () => {
 
         {/* Toolbar */}
         <div className="mb-3 bg-white border border-gray-200 rounded-lg p-3 flex items-center gap-3 flex-wrap">
-          <label className="text-sm font-bold text-gray-700">Locale:</label>
-          <select
-            data-testid="closures-excel-restaurant-select"
-            value={effectiveRestId}
-            onChange={(e) => setSelectedRestId(e.target.value)}
-            className="min-w-[180px] border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-[#F5C518] bg-white"
-          >
-            {restaurants.length === 0 && <option value="">Caricamento…</option>}
-            {restaurants.map(r => (
-              <option key={r.id} value={r.id}>{r.location || r.username}</option>
-            ))}
-          </select>
+          {isAdmin ? (
+            <>
+              <label className="text-sm font-bold text-gray-700">Locale:</label>
+              <select
+                data-testid="closures-excel-restaurant-select"
+                value={effectiveRestId}
+                onChange={(e) => setSelectedRestId(e.target.value)}
+                className="min-w-[180px] border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-[#F5C518] bg-white"
+              >
+                {restaurants.length === 0 && <option value="">Caricamento…</option>}
+                {restaurants.map(r => (
+                  <option key={r.id} value={r.id}>{r.location || r.username}</option>
+                ))}
+              </select>
+            </>
+          ) : (
+            <div className="text-sm font-bold text-gray-700">
+              Locale: <span className="text-gray-900">{effectiveRestaurant?.location || restaurant?.location || '—'}</span>
+              <span className="ml-2 text-[11px] font-normal text-gray-500">(sola lettura)</span>
+            </div>
+          )}
 
           <label className="text-sm font-bold text-gray-700 ml-2">Periodo:</label>
           <select
@@ -312,27 +283,6 @@ const ChiusureExcelPage = () => {
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Aggiorna
           </button>
-
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              data-testid="closures-excel-generate-mock"
-              onClick={onGenerateMock}
-              disabled={busy || !effectiveRestId}
-              className="flex items-center gap-1 bg-yellow-100 hover:bg-yellow-200 border border-yellow-400 text-yellow-900 px-3 py-1.5 rounded text-sm font-bold disabled:opacity-50"
-              title="Genera 7 chiusure fittizie per testare la vista"
-            >
-              <Plus size={14} /> Genera 7 mock
-            </button>
-            <button
-              data-testid="closures-excel-delete-mock"
-              onClick={onDeleteMock}
-              disabled={busy || !effectiveRestId}
-              className="flex items-center gap-1 bg-red-50 hover:bg-red-100 border border-red-300 text-red-700 px-3 py-1.5 rounded text-sm font-medium disabled:opacity-50"
-              title="Cancella tutte le chiusure mock di questo locale"
-            >
-              <Trash2 size={14} /> Cancella mock
-            </button>
-          </div>
 
           <div className="w-full text-[11px] text-gray-500 mt-1" />
         </div>

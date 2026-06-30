@@ -2943,18 +2943,28 @@ def _today_rome_str() -> str:
 
 
 def _resolve_historical_mode(
-    date_param: Optional[str], rid_param: Optional[str], token_data: dict
+    date_param: Optional[str], rid_param: Optional[str], token_data: dict,
+    allow_self: bool = False,
 ) -> Optional[tuple]:
     """Se l'utente è admin/supervisor E vengono passati sia `date` che `restaurant_id`,
     ritorna `(date_str, rid)` per operare in MODALITÀ STORICA. Altrimenti `None`
-    (caller userà today + effective rid). Solleva 400 su date malformata."""
+    (caller userà today + effective rid). Solleva 400 su date malformata.
+
+    `allow_self=True` consente anche agli utenti normali di accedere in modalità
+    storica SOLO per il proprio locale (usato dai GET di sola lettura, mai dai PUT).
+    """
     if not date_param and not rid_param:
         return None
     if not date_param or not rid_param:
         # Entrambi devono essere presenti per attivare la modalità storica
         return None
-    if token_data.get("role") not in ("admin",):
-        raise HTTPException(status_code=403, detail="Modalità storica riservata ad Admin")
+    is_admin = token_data.get("role") in ("admin",)
+    if not is_admin:
+        if not allow_self:
+            raise HTTPException(status_code=403, detail="Modalità storica scrittura riservata ad Admin")
+        own_rid = token_data.get("restaurant_id")
+        if rid_param != own_rid:
+            raise HTTPException(status_code=403, detail="Modalità storica consentita solo per il proprio locale")
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_param):
         raise HTTPException(status_code=400, detail="Data non valida (formato YYYY-MM-DD)")
     today = _today_rome_str()
@@ -2996,7 +3006,7 @@ async def get_beverage_daily_counts(
     Modalità storica (Admin/Supervisor): se `date` + `restaurant_id` sono
     presenti, restituisce i counts di QUEL giorno per QUEL locale.
     """
-    historical = _resolve_historical_mode(date, restaurant_id, token_data)
+    historical = _resolve_historical_mode(date, restaurant_id, token_data, allow_self=True)
     if historical:
         target_date, rid = historical
     else:
@@ -3482,7 +3492,7 @@ async def get_cash_daily(
     Modalità storica (Admin/Supervisor): se `date` + `restaurant_id` sono
     presenti, ritorna i dati di QUEL giorno per QUEL locale.
     """
-    historical = _resolve_historical_mode(date, restaurant_id, token_data)
+    historical = _resolve_historical_mode(date, restaurant_id, token_data, allow_self=True)
     if historical:
         target_date, rid = historical
     else:
@@ -4000,9 +4010,16 @@ async def closures_grid_admin(
 ):
     """Vista Excel-like: una riga per giorno con TUTTI i campi cash + bevande
     (mattina/inUsc/scarti/sera + qty + incasso per ogni sigla) + totali calcolati.
-    Filtrabile per restaurant_id (richiesto per la vista per-locale)."""
-    if token_data.get("role") not in ("admin",):
-        raise HTTPException(status_code=403, detail="Admin only")
+    Filtrabile per restaurant_id (richiesto per la vista per-locale).
+
+    Accessibile anche da utenti normali (in sola lettura, forzati sul proprio locale).
+    """
+    is_admin = token_data.get("role") in ("admin",)
+    if not is_admin:
+        # Utente normale: forziamo il restaurant_id sul proprio
+        restaurant_id = token_data.get("restaurant_id")
+        if not restaurant_id:
+            raise HTTPException(status_code=403, detail="Restaurant_id assente nel token")
     days = max(1, min(int(days or 30), 365))
     cutoff = (datetime.now(ROME_TZ) - timedelta(days=days)).strftime("%Y-%m-%d")
     today = _today_rome_str()

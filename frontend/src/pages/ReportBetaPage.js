@@ -243,11 +243,13 @@ const ReportBetaPageInner = () => {
   const [searchParams] = useSearchParams();
   const { token, isAdmin, restaurant, effectiveRestaurant } = useAuth();
   // ───── Modalità storica: ?date=YYYY-MM-DD&rid=<restaurantId> ─────
-  // Solo Admin/Supervisor possono usare: carica la chiusura archiviata di
-  // quel giorno e permette correzioni. Il backend rifiuta per ruoli normali.
+  // - Admin/Supervisor: carica e PUÒ correggere la chiusura archiviata.
+  // - Utenti normali (cassieri): carica SOLO IL PROPRIO locale in SOLA LETTURA
+  //   (cliccando una riga di "Storico chiusure").
   const urlDate = searchParams.get('date') || '';
   const urlRid = searchParams.get('rid') || '';
-  const historicalMode = !!(urlDate && urlRid && isAdmin);
+  const historicalMode = !!(urlDate && urlRid);
+  const readOnlyHistorical = historicalMode && !isAdmin;
   // Suffisso querystring da appendere alle chiamate fetch in modalità storica
   const histQS = historicalMode ? `?date=${urlDate}&restaurant_id=${urlRid}` : '';
   // Oggetto da fondere nel body PUT (cash/daily, beverages/daily) in modalità storica
@@ -419,6 +421,7 @@ const ReportBetaPageInner = () => {
 
   // Auto-save debounced di una bevanda (intera riga, come MagazzinoBevandePage)
   const scheduleBevSave = React.useCallback((sigla, row) => {
+    if (readOnlyHistorical) return; // sola lettura
     if (bevSaveTimers.current[sigla]) clearTimeout(bevSaveTimers.current[sigla]);
     bevSaveTimers.current[sigla] = setTimeout(async () => {
       try {
@@ -442,13 +445,14 @@ const ReportBetaPageInner = () => {
         console.error('save beverage sera (report)', e);
       }
     }, 600);
-  }, [token, histBody]);
+  }, [token, histBody, readOnlyHistorical]);
 
   // Magazzino (Mattina o Sera): l'utente inserisce CASSE (×24) e SFUSE separatamente.
   // Il totale (mattina o sera) memorizzato a DB è la somma calcolata casse*24 + sfuse.
   const PEZZI_PER_CASSA = 24;
   const handleCasseSfuseChange = (sigla, slot /* 'mattina'|'sera' */, kind /* 'casse'|'sfuse' */, value) => {
     bevPendingSeraUntil.current[sigla] = Date.now() + 4000;
+    value = sanitizeNum(value);
     const fieldKey = `${slot}_${kind}`; // es. 'sera_casse' | 'mattina_sfuse'
     setBevCounts(prev => {
       const current = prev[sigla] || {
@@ -490,6 +494,7 @@ const ReportBetaPageInner = () => {
   // Scarti (unità, in sync con MagazzinoBevandePage)
   const handleScartiChange = (sigla, value) => {
     bevPendingSeraUntil.current[sigla] = Date.now() + 4000;
+    value = sanitizeNum(value);
     setBevCounts(prev => {
       const current = prev[sigla] || { mattina: '', inUsc: '', scarti: '', sera: '', sera_casse: '', sera_sfuse: '' };
       const nextRow = { ...current, scarti: value };
@@ -504,6 +509,7 @@ const ReportBetaPageInner = () => {
   // Manteniamo `inUsc_casse` separato così a refresh mostriamo il numero di casse digitato (anche con virgola).
   const handleInUscChange = (sigla, value) => {
     bevPendingSeraUntil.current[sigla] = Date.now() + 4000;
+    value = sanitizeNum(value);
     setBevCounts(prev => {
       const current = prev[sigla] || {
         mattina: '', inUsc: '', scarti: '', sera: '',
@@ -567,6 +573,7 @@ const ReportBetaPageInner = () => {
   // Debounced save del riepilogo cassa
   useEffect(() => {
     if (!cashLoaded || !token) return;
+    if (readOnlyHistorical) return; // sola lettura: nessuna scrittura
     if (cashSaveTimer.current) clearTimeout(cashSaveTimer.current);
     cashSaveTimer.current = setTimeout(() => {
       axios.put(`${API}/cash/daily`, {
@@ -683,7 +690,11 @@ const ReportBetaPageInner = () => {
     };
   }, [previewKey, cashRow, cashComments]);
 
-  const setCashRowValue = (key, v) => setCashRow(p => ({ ...p, [key]: v }));
+  // Sanitize input: ammessi solo cifre, operatori, parentesi, spazi, virgole e "="
+  // (lettere e altri caratteri vengono strippati). Usato da tutti gli input
+  // della pagina Report (Movimentazione, Spicci, Cassetto, bevande, scarti).
+  const sanitizeNum = (v) => String(v ?? '').replace(/[^0-9+\-*/.()\s,=]/g, '');
+  const setCashRowValue = (key, v) => setCashRow(p => ({ ...p, [key]: sanitizeNum(v) }));
 
   // Auto-dismiss della preview: si chiude se l'utente clicca QUALSIASI punto
   // fuori dalla cella attualmente in preview (input/label/padding inclusi).
@@ -1102,7 +1113,14 @@ const ReportBetaPageInner = () => {
           </div>
         </div>
       )}
-      <main className="flex-1 max-w-[1600px] w-full mx-auto px-3 py-2 flex flex-col min-h-0">
+      {readOnlyHistorical && (
+        <div className="bg-amber-100 border-y border-amber-300 text-amber-900 text-sm font-semibold px-4 py-2 text-center">
+          📖 Sola lettura — chiusura del {urlDate.split('-').reverse().join('/')}, non è possibile modificare
+        </div>
+      )}
+      <main
+        className={`flex-1 max-w-[1600px] w-full mx-auto px-3 py-2 flex flex-col min-h-0 ${readOnlyHistorical ? 'pointer-events-none select-text' : ''}`}
+      >
         {/* Titolo compatto */}
         <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
           <h1 className="font-heading text-base sm:text-xl font-bold text-gray-900 uppercase tracking-wide">
@@ -1341,10 +1359,21 @@ const ReportBetaPageInner = () => {
                           className="absolute top-3 right-0 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-amber-600 z-10"
                         />
                       )}
-                      {/* Riga di chiusura: caption del calcolo + pulsantino lente, entrambi centrati */}
+                      {/* Riga di chiusura: caption del calcolo + pulsantino lente, entrambi centrati.
+                          Per GLO / JUST / DELV mostro #N (numero di operandi) invece dell'importo. */}
                       <div className="flex items-center justify-center gap-1 mt-0.5 leading-none">
                         <span className="text-[9px] text-gray-500">
-                          {computed !== 0 ? `${sign}€${Math.abs(effective).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0'}
+                          {(() => {
+                            const useCount = ['glo', 'just', 'delv'].includes(f.key);
+                            if (useCount) {
+                              // Conta gli operandi: spezzo su operatori e parentesi, scarto i pezzi vuoti
+                              const t = String(rawVal || '').trim();
+                              const stripped = t.startsWith('=') ? t.slice(1) : t;
+                              const parts = stripped.split(/[+\-*/()]+/).filter(p => p.trim() !== '');
+                              return parts.length > 0 ? `#${parts.length}` : '\u00A0';
+                            }
+                            return computed !== 0 ? `${sign}€${Math.abs(effective).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '\u00A0';
+                          })()}
                         </span>
                         {f.key !== 'mattina' && (
                           <button
@@ -1427,6 +1456,12 @@ const ReportBetaPageInner = () => {
                         data-testid={`cash-row-${f.key}`}
                         contentEditable
                         suppressContentEditableWarning
+                        onBeforeInput={(e) => {
+                          // Whitelist: cifre, operatori, parentesi, spazi, virgole, "="
+                          if (e.data != null && !/^[0-9+\-*/.()\s,=]*$/.test(e.data)) {
+                            e.preventDefault();
+                          }
+                        }}
                         onInput={handleVersInput}
                         onFocus={() => setFocusedField(f.key)}
                         onBlur={() => setFocusedField(curr => curr === f.key ? null : curr)}
@@ -2005,7 +2040,7 @@ const ReportBetaPageInner = () => {
                                 type="text"
                                 inputMode="decimal"
                                 value={editingValue}
-                                onChange={(e) => setEditingValue(e.target.value)}
+                                onChange={(e) => setEditingValue(sanitizeNum(e.target.value))}
                                 onBlur={() => { commitEditCassetto(f); }}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter') { e.preventDefault(); commitEditCassetto(f); }
@@ -2061,27 +2096,16 @@ const ReportBetaPageInner = () => {
             {/* ============ FINE BLOCCO BEVANDE (L arancione) ============ */}
             </div>
 
-            {/* Collegamenti rapidi sotto Spicci/Cassetto — discreti, non invadenti */}
+            {/* Collegamento rapido sotto Spicci/Cassetto — accesso a Storico chiusure */}
             <div className="flex justify-end gap-2 mt-1">
-              {((effectiveRestaurant?.location || restaurant?.location) === 'Flaminio') && (
-                <button
-                  type="button"
-                  data-testid="report-quicklink-magazzino-bevande"
-                  onClick={() => navigate('/magazzino-bevande')}
-                  className="text-[11px] text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2.5 py-1 rounded border border-gray-300 bg-white transition-colors"
-                  title="Apri Magazzino Bevande"
-                >
-                  Magazzino Bevande →
-                </button>
-              )}
               <button
                 type="button"
-                data-testid="report-quicklink-report-ieri"
-                onClick={() => navigate('/report-ieri')}
+                data-testid="report-quicklink-storico-chiusure"
+                onClick={() => navigate('/chiusure-excel')}
                 className="text-[11px] text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2.5 py-1 rounded border border-gray-300 bg-white transition-colors"
-                title="Apri Report di ieri"
+                title="Apri Storico chiusure"
               >
-                Report di ieri →
+                Storico chiusure →
               </button>
             </div>
           </section>
