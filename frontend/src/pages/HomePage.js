@@ -112,7 +112,7 @@ const HomePage = () => {
               <img src="/logo-icon.png" alt="Pastasciutta Roma" className="h-16 object-contain" />
               <div>
                 <h1 className="font-heading text-3xl font-bold text-gray-800 uppercase">
-                  {isSupervisor ? 'Supervisione' : 'Amministratore'}
+                  {isFederico ? 'Federico' : isSupervisor ? 'Supervisione' : 'Amministratore'}
                 </h1>
                 <p className="text-gray-600">Seleziona un locale</p>
               </div>
@@ -315,18 +315,6 @@ const HomePage = () => {
               className="border border-gray-400 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-md font-medium text-sm transition-colors">
               Richiesta / Check merce dal magazzino
             </button>
-            {(showLocation === 'Flaminio') && (
-              <>
-                <button data-testid="btn-magazzino-bevande" onClick={() => navigate('/magazzino-bevande')}
-                  className="border border-gray-400 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-md font-medium text-sm transition-colors">
-                  Magazzino Bevande
-                </button>
-                <button data-testid="btn-report-ieri" onClick={() => navigate('/report-ieri')}
-                  className="border border-gray-400 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-md font-medium text-sm transition-colors">
-                  Report Ieri
-                </button>
-              </>
-            )}
             {isAdmin && (
               <button data-testid="btn-media-locali" onClick={() => navigate('/media-locali')}
                 className="border border-gray-400 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-md font-medium text-sm transition-colors">

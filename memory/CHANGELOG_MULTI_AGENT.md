@@ -161,6 +161,24 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-03 20:55 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: config
+**File toccati**:
+- `/app/frontend/src/pages/HomePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Rimossi dalla Home operativa del locale Flaminio i collegamenti in basso "Magazzino Bevande" e "Report Ieri". Restano invariati gli altri pulsanti della Home locale.
+**Testato**: si (metodo: controllo sorgente e `yarn build`)
+**Note per il prossimo agente**: Non fare commit/push senza conferma esplicita dell'utente.
+
+### [2026-07-03 20:24 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: config
+**File toccati**:
+- `/app/frontend/src/pages/HomePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Cambiata l'intestazione della dashboard dell'account Federico da "Supervisione" a "Federico", lasciando invariato il fallback "Supervisione" per eventuali altri supervisor. Allineata anche la password seed di Federico alla credenziale documentata `Pastasciutt4!`.
+**Testato**: si (metodo: login Federico API, `python -m py_compile`, `yarn build`)
+**Note per il prossimo agente**: Non fare commit/push senza conferma esplicita dell'utente.
+
 ### [2026-07-03 20:02 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: config
 **File toccati**:
