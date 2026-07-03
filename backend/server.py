@@ -5723,19 +5723,26 @@ async def startup_scheduler():
     # Seed Federico (role "supervisor"): has access to Storico Chiusure,
     # Controllo Report (audit-cassa) and Diagnostica Live — nothing else.
     try:
+        federico_password = "Pastasciutt4!"
         federico = await db.restaurants.find_one({"username": "Federico"})
         if not federico:
             await db.restaurants.insert_one({
                 "id": str(uuid.uuid4()),
                 "name": "Supervisore",
                 "username": "Federico",
-                "password": pwd_context.hash("Pastasciutta@32"),
+                "password": pwd_context.hash(federico_password),
                 "location": "Supervisione",
                 "role": "supervisor",
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "order_counter": 0,
             })
             logger.info("[SEED] Created Federico (role=supervisor)")
+        elif not pwd_context.verify(federico_password, federico.get("password", "")):
+            await db.restaurants.update_one(
+                {"username": "Federico"},
+                {"$set": {"password": pwd_context.hash(federico_password)}}
+            )
+            logger.info("[SEED] Updated Federico password to documented test credential")
     except Exception as e:
         logger.warning(f"[SEED] Could not ensure Federico account: {e}")
 
