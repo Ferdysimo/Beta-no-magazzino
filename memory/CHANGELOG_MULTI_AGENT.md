@@ -161,6 +161,15 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-03 23:35 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Corretto il calcolo della pagina Numeri e dell export Excel annuale: ora usa il conteggio reale degli ordini del giorno sommando `orders`, `archived_orders` e `deletion_logs`, invece del massimo `order_number` giornaliero. Questo evita numeri storici gonfiati quando i vecchi progressivi non erano giornalieri o erano sporchi.
+**Testato**: si (metodo: `python -m py_compile Beta-no-magazzino/backend/server.py`)
+**Note per il prossimo agente**: La voce del 2026-07-03 15:44 descriveva il vecchio criterio basato sul massimo `order_number`; da questa modifica in poi il criterio corretto e il conteggio documentale reale.
+
 ### [2026-07-03 20:55 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: config
 **File toccati**:
