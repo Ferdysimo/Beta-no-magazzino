@@ -161,6 +161,17 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-03 19:48 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: config
+**File toccati**:
+- `/app/.gitignore`
+- `/app/LOCAL_NATIVE.md`
+- `/app/scripts/start-local-native.ps1`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Aggiunto ambiente locale nativo Windows senza Docker, il piu fedele possibile alla VPS: MongoDB 8 portable, backend FastAPI su 8001, frontend React su 3000, Python 3.12 e Yarn 1.22.22. Lo script avvia i servizi e mantiene file locali, log e database fuori da Git.
+**Testato**: si (metodo: MongoDB 8.0.26 portable, backend `/api/`, frontend `localhost:3000`, seed, login Admin, `python -m py_compile`, `yarn build`)
+**Note per il prossimo agente**: Docker non e disponibile su questo PC. Usare `.\scripts\start-local-native.ps1`; le cartelle `.local-tools/`, `.local-data/`, `logs/`, `backend/.venv`, `frontend/node_modules` e i `.env` locali restano ignorati.
+
 ### [2026-07-03 17:36 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: fix
 **File toccati**:
