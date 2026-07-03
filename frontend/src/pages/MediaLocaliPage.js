@@ -10,6 +10,7 @@ const MediaLocaliPage = () => {
   const { token } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [downloadingExcel, setDownloadingExcel] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -25,6 +26,31 @@ const MediaLocaliPage = () => {
     };
     fetchData();
   }, [token]);
+
+  const downloadExcel = async () => {
+    const year = new Date().getFullYear();
+    setDownloadingExcel(true);
+    try {
+      const res = await axios.get(`${API}/admin/media-locali/export?year=${year}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob'
+      });
+
+      const blobUrl = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', `numeri_locali_${year}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Error downloading media locali excel:', error);
+      window.alert('Errore nello scaricare il file Excel');
+    } finally {
+      setDownloadingExcel(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -52,9 +78,19 @@ const MediaLocaliPage = () => {
     <div className="min-h-screen bg-[#F5F5F5]">
       <Header />
       <main className="max-w-3xl mx-auto p-2 sm:p-6">
-        <h1 className="font-heading text-xl sm:text-3xl font-bold text-gray-800 mb-3 sm:mb-6 px-1">
-          Numeri - report totali di giornata
-        </h1>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3 sm:mb-6 px-1">
+          <h1 className="font-heading text-xl sm:text-3xl font-bold text-gray-800">
+            Numeri - report totali di giornata
+          </h1>
+          <button
+            type="button"
+            onClick={downloadExcel}
+            disabled={downloadingExcel}
+            className="bg-[#F5C518] hover:bg-[#e0b315] disabled:bg-gray-300 disabled:cursor-not-allowed text-gray-900 font-bold px-4 py-2 rounded shadow-sm border border-yellow-500 text-sm"
+          >
+            {downloadingExcel ? 'SCARICO...' : 'SCARICA EXCEL'}
+          </button>
+        </div>
 
         {(() => {
           const displayName = (loc) => (loc === 'Largo di Brazzà' ? 'Brazzà' : loc);

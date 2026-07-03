@@ -71,6 +71,7 @@ mypy_extensions==1.1.0
 numpy==2.4.2
 oauthlib==3.3.1
 openai==1.99.9
+openpyxl==3.1.5
 orjson==3.11.8
 packaging==26.0
 pandas==3.0.1

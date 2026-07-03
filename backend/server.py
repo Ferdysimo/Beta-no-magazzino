@@ -1,6 +1,6 @@
 from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
@@ -21,8 +21,12 @@ from datetime import datetime, timezone, timedelta
 import json
 import jwt
 import asyncio
+from io import BytesIO
 from zoneinfo import ZoneInfo
 from passlib.context import CryptContext
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 
 ROOT_DIR = Path(__file__).parent
 UPLOADS_DIR = ROOT_DIR.parent / "uploads"
@@ -1068,6 +1072,162 @@ async def get_media_locali(token_data: dict = Depends(verify_token)):
         "averages": averages,
         "days": result
     }
+
+async def _get_daily_max_order_number(restaurant_id: str, day_start: str, day_end: str) -> int:
+    max_order = 0
+
+    active = await db.orders.find(
+        {"restaurant_id": restaurant_id, "created_at": {"$gte": day_start, "$lte": day_end}},
+        {"_id": 0, "order_number": 1}
+    ).sort("order_number", -1).limit(1).to_list(1)
+    if active:
+        max_order = max(max_order, active[0].get("order_number", 0))
+
+    archived = await db.archived_orders.find(
+        {"restaurant_id": restaurant_id, "created_at": {"$gte": day_start, "$lte": day_end}},
+        {"_id": 0, "order_number": 1}
+    ).sort("order_number", -1).limit(1).to_list(1)
+    if archived:
+        max_order = max(max_order, archived[0].get("order_number", 0))
+
+    deleted = await db.deletion_logs.find(
+        {"restaurant_id": restaurant_id, "deleted_at": {"$gte": day_start, "$lte": day_end}},
+        {"_id": 0, "order_number": 1}
+    ).sort("order_number", -1).limit(1).to_list(1)
+    if deleted:
+        max_order = max(max_order, deleted[0].get("order_number", 0))
+
+    return max_order
+
+
+def _format_italian_long_date(day: datetime) -> str:
+    weekdays = [
+        "lunedi", "martedi", "mercoledi", "giovedi", "venerdi", "sabato", "domenica"
+    ]
+    months = [
+        "gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
+        "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"
+    ]
+    return f"{weekdays[day.weekday()]} {day.day} {months[day.month - 1]} {day.year}"
+
+
+def _display_media_location(location: str) -> str:
+    lowered = (location or "").lower()
+    if "brazz" in lowered:
+        return "BRAZZA"
+    return (location or "").upper()
+
+
+@api_router.get("/admin/media-locali/export")
+async def export_media_locali_excel(year: int = None, token_data: dict = Depends(verify_token)):
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    selected_year = year or datetime.now(ROME_TZ).year
+    if selected_year < 2020 or selected_year > 2100:
+        raise HTTPException(status_code=400, detail="Anno non valido")
+
+    restaurants = await db.restaurants.find(
+        {"role": "restaurant"},
+        {"_id": 0, "password": 0}
+    ).to_list(100)
+
+    restaurants = sorted(restaurants, key=lambda r: (r.get("location") or "").lower())
+    start = datetime(selected_year, 1, 1, tzinfo=ROME_TZ)
+    end = datetime(selected_year, 12, 31, tzinfo=ROME_TZ)
+
+    rows = []
+    current = start
+    while current <= end:
+        day_start = current.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc).isoformat()
+        day_end = current.replace(hour=23, minute=59, second=59, microsecond=0).astimezone(timezone.utc).isoformat()
+        location_values = {}
+
+        for rest in restaurants:
+            location_values[rest["location"]] = await _get_daily_max_order_number(rest["id"], day_start, day_end)
+
+        rows.append({
+            "date": current,
+            "locations": location_values,
+        })
+        current += timedelta(days=1)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Numeri {selected_year}"
+
+    location_headers = [_display_media_location(r["location"]) for r in restaurants]
+    media_headers = [f"MEDIA {header[0]}" for header in location_headers]
+    headers = ["DATA", *location_headers, "TOTALI", *media_headers, "MEDIA T"]
+    ws.append(headers)
+
+    thin = Side(style="thin", color="000000")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    header_fill = PatternFill("solid", fgColor="F2F2F2")
+    red_font = Font(color="D00000", name="Times New Roman", size=12)
+    black_font = Font(color="000000", name="Times New Roman", size=12)
+    header_font = Font(color="D00000", name="Times New Roman", size=12)
+
+    for cell in ws[1]:
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws["A1"].font = Font(color="000000", name="Times New Roman", size=12)
+
+    month_values = {r["location"]: [] for r in restaurants}
+
+    for row in rows:
+        excel_row = [_format_italian_long_date(row["date"])]
+        daily_total = 0
+        for rest in restaurants:
+            value = int(row["locations"].get(rest["location"]) or 0)
+            excel_row.append(value if value > 0 else None)
+            daily_total += value
+            if value > 0:
+                month_values[rest["location"]].append(value)
+        excel_row.append(daily_total if daily_total > 0 else None)
+
+        is_month_end = (row["date"] + timedelta(days=1)).month != row["date"].month
+        monthly_averages = []
+        if is_month_end:
+            for rest in restaurants:
+                values = month_values[rest["location"]]
+                monthly_averages.append(round(sum(values) / len(values), 1) if values else None)
+            valid_monthly_averages = [v for v in monthly_averages if v is not None]
+            total_avg = round(sum(valid_monthly_averages), 1) if valid_monthly_averages else None
+            excel_row.extend(monthly_averages)
+            excel_row.append(total_avg)
+            month_values = {r["location"]: [] for r in restaurants}
+        else:
+            excel_row.extend([None] * (len(restaurants) + 1))
+
+        ws.append(excel_row)
+
+    max_col = len(headers)
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row, max_col=max_col):
+        for idx, cell in enumerate(row, start=1):
+            cell.border = border
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.font = red_font if 2 <= idx <= (1 + len(restaurants)) else black_font
+            if idx >= len(restaurants) + 3 and cell.value is not None:
+                cell.number_format = "0.0"
+
+    ws.column_dimensions["A"].width = 34
+    for col_idx in range(2, max_col + 1):
+        ws.column_dimensions[get_column_letter(col_idx)].width = 14
+    ws.freeze_panes = "A2"
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = f"numeri_locali_{selected_year}.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
 
 # Order Routes
 class OrderCreate(BaseModel):
