@@ -161,6 +161,18 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-03 20:02 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: config
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/frontend/src/App.js`
+- `/app/frontend/src/pages/CreaLocaliPage.js`
+- `/app/frontend/src/pages/HomePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Aggiunto l'account privilegiato `Simone` con ruolo `admin`, password dedicata e creazione automatica sia da `/api/seed` sia allo startup backend. La dashboard iniziale di Simone mostra selettore locali e solo i pulsanti richiesti: Diagnostica live, Cestino Generale - Audit, Fatture Globale e Crea nuovi locali; quando Simone seleziona un locale entra nella normale Home ristorante, come Admin quando clicca Flaminio. La nuova pagina crea locali `restaurant` con username, nome locale, password e numero bollitori; la Home mostra il secondo bollitore quando `boiler_count >= 2`. Gli stessi pulsanti riservati a Simone sono stati rimossi dalla Home Admin.
+**Testato**: si (metodo: login API Simone, `/api/admin/restaurants`, `/api/admin/diagnostics`, `/api/admin/generale-hide-log`, `/api/admin/fatture-globali`, creazione locale API, login nuovo locale, `python -m py_compile`, `yarn build`)
+**Note per il prossimo agente**: Account creato anche nel DB locale `pastasciutta_local` per test immediato. Non fare commit/push senza conferma esplicita dell'utente.
+
 ### [2026-07-03 19:48 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: config
 **File toccati**:

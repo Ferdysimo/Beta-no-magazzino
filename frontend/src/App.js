@@ -37,6 +37,7 @@ import ReportIeriPage from './pages/ReportIeriPage';
 import AuditCassaPage from './pages/AuditCassaPage';
 import ChiusureExcelPage from './pages/ChiusureExcelPage';
 import DizionarioPastePage from './pages/DizionarioPastePage';
+import CreaLocaliPage from './pages/CreaLocaliPage';
 import UpdateBanner from './components/UpdateBanner';
 
 // Protected Route Component
@@ -258,6 +259,11 @@ function AppRoutes() {
       <Route path="/dizionario-paste" element={
         <ProtectedRoute>
           <DizionarioPastePage />
+        </ProtectedRoute>
+      } />
+      <Route path="/simone/crea-locali" element={
+        <ProtectedRoute>
+          <CreaLocaliPage />
         </ProtectedRoute>
       } />
     </Routes>

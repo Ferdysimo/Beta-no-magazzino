@@ -504,6 +504,12 @@ class RestaurantCreate(BaseModel):
     password: str
     location: str
 
+class LocalRestaurantCreate(BaseModel):
+    username: str
+    location: str
+    password: str
+    boiler_count: int = 1
+
 class RestaurantResponse(BaseModel):
     id: str
     name: str
@@ -511,6 +517,7 @@ class RestaurantResponse(BaseModel):
     location: str
     created_at: str
     role: str = "restaurant"
+    boiler_count: int = 1
 
 class LoginRequest(BaseModel):
     username: str
@@ -871,7 +878,8 @@ async def login(request: Request, data: LoginRequest):
             username=restaurant["username"],
             location=restaurant["location"],
             created_at=restaurant["created_at"],
-            role=restaurant.get("role", "restaurant")
+            role=restaurant.get("role", "restaurant"),
+            boiler_count=restaurant.get("boiler_count", 1)
         )
     )
 
@@ -894,6 +902,44 @@ async def get_admin_restaurants(token_data: dict = Depends(verify_token)):
         {"_id": 0, "password": 0}
     ).to_list(100)
     return restaurants
+
+
+@api_router.post("/admin/locali", response_model=RestaurantResponse)
+async def create_local_restaurant(
+    data: LocalRestaurantCreate,
+    token_data: dict = Depends(verify_token)
+):
+    if token_data.get("username") != "Simone" or token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo Simone puo creare nuovi locali")
+
+    username = data.username.strip()
+    location = data.location.strip()
+    password = data.password.strip()
+    if not username or not location or not password:
+        raise HTTPException(status_code=400, detail="Compila nome utente, nome locale e password")
+
+    boiler_count = int(data.boiler_count or 1)
+    if boiler_count < 1 or boiler_count > 2:
+        raise HTTPException(status_code=400, detail="Numero bollitori supportato: 1 o 2")
+
+    existing = await db.restaurants.find_one({"username": username})
+    if existing:
+        raise HTTPException(status_code=400, detail="Username gia esistente")
+
+    restaurant = {
+        "id": str(uuid.uuid4()),
+        "name": "Pastasciutta Roma",
+        "username": username,
+        "password": pwd_context.hash(password),
+        "location": location,
+        "role": "restaurant",
+        "boiler_count": boiler_count,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "order_counter": 0
+    }
+    await db.restaurants.insert_one(restaurant)
+
+    return RestaurantResponse(**{k: v for k, v in restaurant.items() if k != "password"})
 
 
 @api_router.get("/admin/system-alerts")
@@ -1930,6 +1976,43 @@ async def get_daily_report(date: str = None, token_data: dict = Depends(verify_t
     }
 
 # Seed data endpoint for initial setup
+PRIVILEGED_SEED_ACCOUNTS = [
+    {
+        "name": "Amministratore",
+        "username": "Admin",
+        "password": "Pastasciutt4!",
+        "location": "Amministrazione",
+        "role": "admin",
+    },
+    {
+        "name": "Simone",
+        "username": "Simone",
+        "password": "aothj7nejx",
+        "location": "Amministrazione",
+        "role": "admin",
+    },
+]
+
+
+async def ensure_seed_account(account: dict) -> bool:
+    existing = await db.restaurants.find_one({"username": account["username"]})
+    if existing:
+        return False
+
+    await db.restaurants.insert_one({
+        "id": str(uuid.uuid4()),
+        "name": account["name"],
+        "username": account["username"],
+        "password": pwd_context.hash(account["password"]),
+        "location": account["location"],
+        "role": account["role"],
+        "boiler_count": account.get("boiler_count", 1),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "order_counter": 0
+    })
+    return True
+
+
 @api_router.post("/seed")
 async def seed_data():
     # Only create restaurants if they don't exist
@@ -1945,37 +2028,29 @@ async def seed_data():
                 "password": pwd_context.hash("Pastasciutt4!"),
                 "location": "Magazzino",
                 "role": "magazzino",
+                "boiler_count": 1,
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "order_counter": 0
             })
-        # Check if Admin exists, add if not
-        admin = await db.restaurants.find_one({"username": "Admin"})
-        if not admin:
-            await db.restaurants.insert_one({
-                "id": str(uuid.uuid4()),
-                "name": "Amministratore",
-                "username": "Admin",
-                "password": pwd_context.hash("Pastasciutt4!"),
-                "location": "Amministrazione",
-                "role": "admin",
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "order_counter": 0
-            })
+        for account in PRIVILEGED_SEED_ACCOUNTS:
+            await ensure_seed_account(account)
         return {"message": "Database già configurato", "accounts": [
             {"username": "Flaminio", "location": "Flaminio"},
             {"username": "Grazie", "location": "Grazie"},
             {"username": "Brazza", "location": "Largo di Brazzà"},
             {"username": "Magazziniere", "location": "Magazzino"},
             {"username": "Admin", "location": "Amministrazione"},
+            {"username": "Simone", "location": "Amministrazione"},
         ]}
     
     # Create the 3 restaurants + magazziniere
     restaurants = [
-        {"name": "Pastasciutta Roma", "username": "Flaminio", "password": "Pastasciutt4!", "location": "Flaminio", "role": "restaurant"},
-        {"name": "Pastasciutta Roma", "username": "Grazie", "password": "Pastasciutt4!", "location": "Grazie", "role": "restaurant"},
-        {"name": "Pastasciutta Roma", "username": "Brazza", "password": "Pastasciutt4!", "location": "Largo di Brazzà", "role": "restaurant"},
-        {"name": "Pastasciutta Roma", "username": "Magazziniere", "password": "Pastasciutt4!", "location": "Magazzino", "role": "magazzino"},
-        {"name": "Amministratore", "username": "Admin", "password": "Pastasciutt4!", "location": "Amministrazione", "role": "admin"},
+        {"name": "Pastasciutta Roma", "username": "Flaminio", "password": "Pastasciutt4!", "location": "Flaminio", "role": "restaurant", "boiler_count": 2},
+        {"name": "Pastasciutta Roma", "username": "Grazie", "password": "Pastasciutt4!", "location": "Grazie", "role": "restaurant", "boiler_count": 1},
+        {"name": "Pastasciutta Roma", "username": "Brazza", "password": "Pastasciutt4!", "location": "Largo di Brazzà", "role": "restaurant", "boiler_count": 1},
+        {"name": "Pastasciutta Roma", "username": "Magazziniere", "password": "Pastasciutt4!", "location": "Magazzino", "role": "magazzino", "boiler_count": 1},
+        {"name": "Amministratore", "username": "Admin", "password": "Pastasciutt4!", "location": "Amministrazione", "role": "admin", "boiler_count": 1},
+        {"name": "Simone", "username": "Simone", "password": "aothj7nejx", "location": "Amministrazione", "role": "admin", "boiler_count": 1},
     ]
     
     for r in restaurants:
@@ -1987,6 +2062,7 @@ async def seed_data():
             "password": pwd_context.hash(r["password"]),
             "location": r["location"],
             "role": r.get("role", "restaurant"),
+            "boiler_count": r.get("boiler_count", 1),
             "created_at": datetime.now(timezone.utc).isoformat(),
             "order_counter": 0
         })
@@ -1996,6 +2072,8 @@ async def seed_data():
         {"username": "Grazie", "password": "Pastasciutt4!", "location": "Grazie"},
         {"username": "Brazza", "password": "Pastasciutt4!", "location": "Largo di Brazzà"},
         {"username": "Magazziniere", "password": "Pastasciutt4!", "location": "Magazzino"},
+        {"username": "Admin", "password": "Pastasciutt4!", "location": "Amministrazione"},
+        {"username": "Simone", "password": "aothj7nejx", "location": "Amministrazione"},
     ]}
 
 # WebSocket endpoint
@@ -5660,6 +5738,26 @@ async def startup_scheduler():
             logger.info("[SEED] Created Federico (role=supervisor)")
     except Exception as e:
         logger.warning(f"[SEED] Could not ensure Federico account: {e}")
+
+    try:
+        for account in PRIVILEGED_SEED_ACCOUNTS:
+            created = await ensure_seed_account(account)
+            if created:
+                logger.info(f"[SEED] Created {account['username']} (role={account['role']})")
+    except Exception as e:
+        logger.warning(f"[SEED] Could not ensure privileged accounts: {e}")
+
+    try:
+        await db.restaurants.update_many(
+            {"boiler_count": {"$exists": False}},
+            {"$set": {"boiler_count": 1}}
+        )
+        await db.restaurants.update_one(
+            {"username": "Flaminio", "role": "restaurant"},
+            {"$set": {"boiler_count": 2}}
+        )
+    except Exception as e:
+        logger.warning(f"[SEED] Could not normalize boiler_count: {e}")
     
     # Create MongoDB indexes for faster queries
     await db.orders.create_index([("restaurant_id", 1), ("status", 1)])

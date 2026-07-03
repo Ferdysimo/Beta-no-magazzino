@@ -12,6 +12,7 @@ const HomePage = () => {
   const { restaurant, token, isAdmin, isSupervisor, isFederico, canImpersonate, effectiveRestaurant, selectRestaurant, clearSelectedRestaurant } = useAuth();
   const navigate = useNavigate();
   const [restaurants, setRestaurants] = useState([]);
+  const isSimone = restaurant?.username === 'Simone';
 
   // Magazziniere goes straight to magazzino
   useEffect(() => {
@@ -28,6 +29,76 @@ const HomePage = () => {
       }).then(res => setRestaurants(res.data)).catch(console.error);
     }
   }, [canImpersonate, token]);
+
+  if (isSimone && !effectiveRestaurant) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5]">
+        <Header />
+        <SystemAlertsBanner />
+        <main className="max-w-3xl mx-auto p-6">
+          <div className="bg-[#ECECEC] border border-gray-300 rounded-lg p-8">
+            <div className="flex items-center gap-4 mb-6">
+              <img src="/logo-icon.png" alt="Pastasciutta Roma" className="h-16 object-contain" />
+              <div>
+                <h1 className="font-heading text-3xl font-bold text-gray-800 uppercase">
+                  Simone
+                </h1>
+                <p className="text-gray-600">Selettore locali</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              {restaurants.map(r => (
+                <button
+                  key={r.id}
+                  data-testid={`simone-select-${r.location}`}
+                  onClick={() => selectRestaurant(r)}
+                  className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+                >
+                  <span className="font-bold text-lg text-gray-800">{r.location}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="pt-6 border-t border-gray-300 space-y-3">
+              <button
+                data-testid="simone-diagnostica"
+                onClick={() => navigate('/diagnostica')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Diagnostica live</span>
+                <span className="block text-xs text-gray-500 mt-0.5">WebSocket, latenze e errori in tempo reale</span>
+              </button>
+              <button
+                data-testid="simone-cestino-generale"
+                onClick={() => navigate('/cestino-generale')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Cestino Generale — Audit</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Registro silenzioso degli ordini nascosti dal Tablet Generale</span>
+              </button>
+              <button
+                data-testid="simone-fatture-globale"
+                onClick={() => navigate('/admin/fatture-globale')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Fatture Globale</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Carica fatture globali e abbinale ai DDT dei locali tramite numero DDT</span>
+              </button>
+              <button
+                data-testid="simone-crea-locali"
+                onClick={() => navigate('/simone/crea-locali')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Crea nuovi locali</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Crea locale ristorante per nuove aperture</span>
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   // Admin/Supervisor without selected restaurant: show selector
   if (canImpersonate && !effectiveRestaurant) {
@@ -116,36 +187,6 @@ const HomePage = () => {
                 <span className="block text-xs text-gray-500 mt-0.5">Audit log: ogni movimento/operazione su Cassa e Bevande</span>
               </button>
               )}
-              {!isFederico && (
-              <button
-                data-testid="admin-diagnostica"
-                onClick={() => navigate('/diagnostica')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <span className="font-bold text-lg text-gray-800">Diagnostica live</span>
-                <span className="block text-xs text-gray-500 mt-0.5">WebSocket, latenze e errori in tempo reale</span>
-              </button>
-              )}
-              {!isFederico && (
-              <button
-                data-testid="admin-cestino-generale"
-                onClick={() => navigate('/cestino-generale')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <span className="font-bold text-lg text-gray-800">Cestino Generale — Audit</span>
-                <span className="block text-xs text-gray-500 mt-0.5">Registro silenzioso degli ordini nascosti dal Tablet Generale</span>
-              </button>
-              )}
-              {!isFederico && (
-              <button
-                data-testid="btn-admin-fatture-globale"
-                onClick={() => navigate('/admin/fatture-globale')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <span className="font-bold text-lg text-gray-800">Fatture Globale</span>
-                <span className="block text-xs text-gray-500 mt-0.5">Carica fatture globali e abbinale ai DDT dei locali tramite numero DDT</span>
-              </button>
-              )}
             </div>
           </div>
         </main>
@@ -154,6 +195,8 @@ const HomePage = () => {
   }
 
   const showLocation = effectiveRestaurant?.location || restaurant?.location;
+  const activeBoilerCount = Number(effectiveRestaurant?.boiler_count ?? restaurant?.boiler_count ?? (showLocation === 'Flaminio' ? 2 : 1));
+  const hasSecondBoiler = activeBoilerCount >= 2;
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -237,8 +280,8 @@ const HomePage = () => {
                 <span className="text-gray-600 text-sm">ordini scritti normalmente</span>
               </div>
 
-              {/* Tablet Bollitore 2 - Flaminio or Admin viewing Flaminio */}
-              {(showLocation === 'Flaminio') && (
+              {/* Tablet Bollitore 2 */}
+              {hasSecondBoiler && (
                 <div className="flex items-center gap-4">
                   <button data-testid="btn-tablet-bollitore-2" onClick={() => navigate('/bollitore2')} className="action-button">
                     Tablet bollitore 2
