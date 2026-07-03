@@ -1075,7 +1075,7 @@ const ReportBetaPageInner = () => {
     };
   }, [cashRow, pasteAnalysis.totalEuro, pasteAnalysis.totalCount, bevTotalInc, bevSales, spicciValues.total, spicciValues.rows]);
 
-  const setCashValue = (key, v) => setCash(p => ({ ...p, [key]: v }));
+  const setCashValue = (key, v) => setCash(p => ({ ...p, [key]: sanitizeNum(v) }));
   const setManualPrice = (idx, v) => {
     // Cap manuale: massimo 15€ per una pasta sconosciuta (vale per
     // qualsiasi cifra numerica digitata; le formule "=" non sono ammesse qui).

@@ -161,18 +161,27 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
-### [2026-07-03 15:44 CEST] — Codex (GPT-5 / OpenAI)
+### [2026-07-03 17:36 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: fix
+**File toccati**:
+- `/app/frontend/src/pages/ReportBetaPage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Esteso anche alla riga "Cassa" della pagina Report il filtro che rimuove lettere e caratteri non numerici dagli input. Ora i campi banconote usano lo stesso `sanitizeNum` gia adottato da movimentazione, spicci e cassetto.
+**Testato**: si (metodo: `yarn build`, riuscito con warning ESLint preesistenti)
+**Note per il prossimo agente**: Il build rigenera `frontend/public/version.json`; non includerlo nel commit se non richiesto.
+
+### [2026-07-03 15:44 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: feature
 **File toccati**:
 - `/app/backend/server.py`
 - `/app/backend/requirements.txt`
 - `/app/frontend/src/pages/MediaLocaliPage.js`
 - `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Aggiunto bottone "SCARICA EXCEL" nella pagina Numeri (`/media-locali`). Il download chiama il nuovo endpoint admin `/api/admin/media-locali/export?year=YYYY`, che genera un file `.xlsx` annuale dal 1 gennaio al 31 dicembre con colonne DATA, locali, TOTALI e medie mensili compilate solo sull'ultimo giorno di ogni mese.
-**Testato**: ✅ sì (metodo: build backend Docker con `openpyxl`, `python -m py_compile`, export autenticato Admin su `localhost:8002`, controllo intestazioni workbook, simulazione ordini/log con medie mensili attese per gennaio/febbraio, `yarn build`)
-**Note per il prossimo agente**: L'export usa gli stessi criteri della pagina Numeri: per ogni locale prende il massimo `order_number` giornaliero da ordini attivi, archiviati e cancellati. Nel DB locale Docker sono stati inseriti record fittizi dei tre locali solo per verificare le intestazioni complete del file.
+**Descrizione**: Aggiunto bottone "SCARICA EXCEL" nella pagina Numeri (`/media-locali`). Il download chiama il nuovo endpoint admin `/api/admin/media-locali/export?year=YYYY`, che genera un file `.xlsx` annuale dal 1 gennaio al 31 dicembre con colonne DATA, locali, TOTALI e medie mensili compilate solo sull ultimo giorno di ogni mese.
+**Testato**: si (metodo: build backend Docker con `openpyxl`, `python -m py_compile`, export autenticato Admin su `localhost:8002`, controllo intestazioni workbook, simulazione ordini/log con medie mensili attese per gennaio/febbraio, `yarn build`)
+**Note per il prossimo agente**: L export usa gli stessi criteri della pagina Numeri: per ogni locale prende il massimo `order_number` giornaliero da ordini attivi, archiviati e cancellati. Nel DB locale Docker sono stati inseriti record fittizi dei tre locali solo per verificare le intestazioni complete del file.
 
-### [2026-07-03 14:38 CEST] — Codex (GPT-5 / OpenAI)
+### [2026-07-03 14:38 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: config
 **File toccati**:
 - `/app/docker-compose.local.yml`
@@ -181,9 +190,10 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 - `/app/.dockerignore`
 - `/app/LOCAL_DOCKER.md`
 - `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Aggiunto ambiente locale Docker per testare l'app con versioni vicine alla VPS: Python 3.12, Node.js 20 e MongoDB 8.0. Documentati avvio standard, fallback porta backend 8002 su Windows, seed account e comandi operativi.
-**Testato**: ✅ sì (metodo: `docker compose build`, `docker compose up -d`, health backend `/api/`, frontend `localhost:3000`, seed e login Admin)
-**Note per il prossimo agente**: Su questo PC la porta host 8001 risultava bloccata da un socket Windows orfano; lo stack Docker è stato validato con `BACKEND_HOST_PORT=8002` e `REACT_APP_BACKEND_URL=http://localhost:8002`. Dentro Docker il backend resta su 8001.
+**Descrizione**: Aggiunto ambiente locale Docker per testare l app con versioni vicine alla VPS: Python 3.12, Node.js 20 e MongoDB 8.0. Documentati avvio standard, fallback porta backend 8002 su Windows, seed account e comandi operativi.
+**Testato**: si (metodo: `docker compose build`, `docker compose up -d`, health backend `/api/`, frontend `localhost:3000`, seed e login Admin)
+**Note per il prossimo agente**: Su questo PC la porta host 8001 risultava bloccata da un socket Windows orfano; lo stack Docker e stato validato con `BACKEND_HOST_PORT=8002` e `REACT_APP_BACKEND_URL=http://localhost:8002`. Dentro Docker il backend resta su 8001.
+
 
 ### [2026-02-XX] — Emergent E1 (Claude Sonnet 4.5)
 **Tipo**: docs
