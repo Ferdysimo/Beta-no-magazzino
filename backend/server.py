@@ -1065,34 +1065,9 @@ async def get_media_locali(token_data: dict = Depends(verify_token)):
         day_data = {"date": current.strftime("%d/%m/%Y"), "locations": {}}
         
         for rest in restaurants:
-            # Check both orders and archived_orders for the highest order number
-            max_order = 0
-            
-            # Active orders
-            active = await db.orders.find(
-                {"restaurant_id": rest["id"], "created_at": {"$gte": day_start, "$lte": day_end}},
-                {"_id": 0, "order_number": 1}
-            ).sort("order_number", -1).limit(1).to_list(1)
-            if active:
-                max_order = max(max_order, active[0]["order_number"])
-            
-            # Archived orders
-            archived = await db.archived_orders.find(
-                {"restaurant_id": rest["id"], "created_at": {"$gte": day_start, "$lte": day_end}},
-                {"_id": 0, "order_number": 1}
-            ).sort("order_number", -1).limit(1).to_list(1)
-            if archived:
-                max_order = max(max_order, archived[0]["order_number"])
-            
-            # Deletion logs (orders that were deleted)
-            deleted = await db.deletion_logs.find(
-                {"restaurant_id": rest["id"], "deleted_at": {"$gte": day_start, "$lte": day_end}},
-                {"_id": 0, "order_number": 1}
-            ).sort("order_number", -1).limit(1).to_list(1)
-            if deleted:
-                max_order = max(max_order, deleted[0].get("order_number", 0))
-            
-            day_data["locations"][rest["location"]] = max_order
+            day_data["locations"][rest["location"]] = await _get_daily_order_count(
+                rest["id"], day_start, day_end
+            )
         
         result.append(day_data)
         current -= timedelta(days=1)
@@ -1119,31 +1094,18 @@ async def get_media_locali(token_data: dict = Depends(verify_token)):
         "days": result
     }
 
-async def _get_daily_max_order_number(restaurant_id: str, day_start: str, day_end: str) -> int:
-    max_order = 0
+async def _get_daily_order_count(restaurant_id: str, day_start: str, day_end: str) -> int:
+    active_count = await db.orders.count_documents(
+        {"restaurant_id": restaurant_id, "created_at": {"$gte": day_start, "$lte": day_end}}
+    )
+    archived_count = await db.archived_orders.count_documents(
+        {"restaurant_id": restaurant_id, "created_at": {"$gte": day_start, "$lte": day_end}}
+    )
+    deleted_count = await db.deletion_logs.count_documents(
+        {"restaurant_id": restaurant_id, "deleted_at": {"$gte": day_start, "$lte": day_end}}
+    )
 
-    active = await db.orders.find(
-        {"restaurant_id": restaurant_id, "created_at": {"$gte": day_start, "$lte": day_end}},
-        {"_id": 0, "order_number": 1}
-    ).sort("order_number", -1).limit(1).to_list(1)
-    if active:
-        max_order = max(max_order, active[0].get("order_number", 0))
-
-    archived = await db.archived_orders.find(
-        {"restaurant_id": restaurant_id, "created_at": {"$gte": day_start, "$lte": day_end}},
-        {"_id": 0, "order_number": 1}
-    ).sort("order_number", -1).limit(1).to_list(1)
-    if archived:
-        max_order = max(max_order, archived[0].get("order_number", 0))
-
-    deleted = await db.deletion_logs.find(
-        {"restaurant_id": restaurant_id, "deleted_at": {"$gte": day_start, "$lte": day_end}},
-        {"_id": 0, "order_number": 1}
-    ).sort("order_number", -1).limit(1).to_list(1)
-    if deleted:
-        max_order = max(max_order, deleted[0].get("order_number", 0))
-
-    return max_order
+    return active_count + archived_count + deleted_count
 
 
 def _format_italian_long_date(day: datetime) -> str:
@@ -1190,7 +1152,7 @@ async def export_media_locali_excel(year: int = None, token_data: dict = Depends
         location_values = {}
 
         for rest in restaurants:
-            location_values[rest["location"]] = await _get_daily_max_order_number(rest["id"], day_start, day_end)
+            location_values[rest["location"]] = await _get_daily_order_count(rest["id"], day_start, day_end)
 
         rows.append({
             "date": current,
