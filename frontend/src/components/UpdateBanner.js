@@ -1,18 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
-// Checks once at app mount + once a day at 03:00 local time (restaurant closed).
-// If the deployed version changed, shows a banner asking the cashier to reload
-// when convenient — no forced reload.
-
-const CHECK_HOUR = 3; // 03:00 local
-
-const msUntilNextCheck = () => {
-  const now = new Date();
-  const next = new Date(now);
-  next.setHours(CHECK_HOUR, 0, 0, 0);
-  if (next <= now) next.setDate(next.getDate() + 1);
-  return next - now;
-};
+const CHECK_MS = 60000;
+const BUNDLE_VERSION = process.env.REACT_APP_BUILD_VERSION || '';
 
 const fetchVersion = async () => {
   try {
@@ -26,37 +15,53 @@ const fetchVersion = async () => {
 };
 
 const UpdateBanner = () => {
-  const [initialVersion, setInitialVersion] = useState(null);
   const [newVersionAvailable, setNewVersionAvailable] = useState(false);
+  const [deployedVersion, setDeployedVersion] = useState('');
 
   useEffect(() => {
     let cancelled = false;
-    let timeoutId;
+    let intervalId;
 
-    const scheduleNext = () => {
-      timeoutId = setTimeout(async () => {
-        if (cancelled) return;
-        const v = await fetchVersion();
-        if (!cancelled && v && initialVersion && v !== initialVersion) {
-          setNewVersionAvailable(true);
-        }
-        if (!cancelled) scheduleNext();
-      }, msUntilNextCheck());
+    const reloadOnce = (version) => {
+      const key = `pastasciutta_reload_${BUNDLE_VERSION || 'unknown'}_to_${version}`;
+      const lastAttempt = Number(sessionStorage.getItem(key) || 0);
+      if (Date.now() - lastAttempt < 10000) {
+        setNewVersionAvailable(true);
+        return;
+      }
+      sessionStorage.setItem(key, String(Date.now()));
+      window.location.reload();
     };
 
-    (async () => {
-      // Initial fetch at mount (so on first open the reference version is set)
-      const v = await fetchVersion();
-      if (cancelled) return;
-      if (v) setInitialVersion(v);
-      scheduleNext();
-    })();
+    const checkVersion = async () => {
+      const version = await fetchVersion();
+      if (cancelled || !version) return;
+      setDeployedVersion(version);
+      if (BUNDLE_VERSION && version !== BUNDLE_VERSION) {
+        reloadOnce(version);
+      }
+    };
+
+    checkVersion();
+    intervalId = setInterval(checkVersion, CHECK_MS);
+
+    const onFocus = () => checkVersion();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') checkVersion();
+    };
+
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('pageshow', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
       cancelled = true;
-      if (timeoutId) clearTimeout(timeoutId);
+      if (intervalId) clearInterval(intervalId);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('pageshow', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [initialVersion]);
+  }, []);
 
   if (!newVersionAvailable) return null;
 
@@ -65,7 +70,7 @@ const UpdateBanner = () => {
       data-testid="update-banner"
       className="fixed top-2 left-1/2 -translate-x-1/2 z-[200] bg-emerald-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-3 text-sm"
     >
-      <span>È disponibile un aggiornamento</span>
+      <span>Aggiornamento disponibile {deployedVersion ? `(${deployedVersion})` : ''}</span>
       <button
         onClick={() => window.location.reload()}
         data-testid="update-reload-btn"

@@ -1,5 +1,7 @@
 // craco.config.js
+const fs = require("fs");
 const path = require("path");
+const webpack = require("webpack");
 require("dotenv").config();
 
 // Check if we're in development/preview mode (not production build)
@@ -9,6 +11,16 @@ const isDevServer = process.env.NODE_ENV !== "production";
 // Environment variable overrides
 const config = {
   enableHealthCheck: process.env.ENABLE_HEALTH_CHECK === "true",
+};
+
+const readBuildVersion = () => {
+  try {
+    const versionFile = path.resolve(__dirname, "public", "version.json");
+    const data = JSON.parse(fs.readFileSync(versionFile, "utf8"));
+    return data.version || "";
+  } catch {
+    return "";
+  }
 };
 
 // Conditionally load health check modules only if enabled
@@ -55,6 +67,11 @@ let webpackConfig = {
       if (config.enableHealthCheck && healthPluginInstance) {
         webpackConfig.plugins.push(healthPluginInstance);
       }
+      webpackConfig.plugins.push(
+        new webpack.DefinePlugin({
+          "process.env.REACT_APP_BUILD_VERSION": JSON.stringify(readBuildVersion()),
+        })
+      );
       return webpackConfig;
     },
   },
