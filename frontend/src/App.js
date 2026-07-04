@@ -39,6 +39,7 @@ import ChiusureExcelPage from './pages/ChiusureExcelPage';
 import DizionarioPastePage from './pages/DizionarioPastePage';
 import CreaLocaliPage from './pages/CreaLocaliPage';
 import UpdateBanner from './components/UpdateBanner';
+import FrontendDiagnostics from './components/FrontendDiagnostics';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -276,6 +277,7 @@ function App() {
       <UpdateBanner />
       <BrowserRouter>
         <AuthProvider>
+          <FrontendDiagnostics />
           <AppRoutes />
         </AuthProvider>
       </BrowserRouter>

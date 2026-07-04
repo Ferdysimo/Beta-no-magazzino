@@ -115,6 +115,25 @@ server {
     root $APP_DIR/frontend/build;
     index index.html;
 
+    # React SPA cache policy:
+    # - index.html e version.json devono essere sempre freschi, altrimenti i
+    #   tablet possono ricaricare una shell React vecchia dopo un deploy.
+    # - /static contiene asset con hash nel nome, quindi puo essere cachato forte.
+    location = /index.html {
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+        try_files /index.html =404;
+    }
+
+    location = /version.json {
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+        try_files /version.json =404;
+    }
+
+    location /static/ {
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        try_files \$uri =404;
+    }
+
     # Backend API proxy
     location /api/ {
         proxy_pass http://127.0.0.1:8001/api/;
@@ -129,6 +148,7 @@ server {
 
     # React SPA fallback
     location / {
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
         try_files \$uri \$uri/ /index.html;
     }
 }
