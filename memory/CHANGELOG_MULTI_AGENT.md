@@ -163,6 +163,17 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-05 00:18 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix
+**File toccati**:
+- `/app/frontend/craco.config.js`
+- `/app/frontend/src/components/UpdateBanner.js`
+- `/app/frontend/src/components/FrontendDiagnostics.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Fix anti-cache definitivo: il bundle React ora incorpora la versione di build via Webpack, confronta periodicamente quella versione con `/version.json` e forza un reload quando la tab sta eseguendo codice vecchio. La diagnostica frontend ora invia la versione reale del bundle in memoria, non la versione letta dal server.
+**Testato**: ✅ sì (metodo: `npm run build`, verifica che la build version venga incorporata nel bundle compilato; soli warning ESLint preesistenti)
+**Note per il prossimo agente**: Il fix Nginx da solo non aggiorna tab gia aperte con vecchio JS in memoria; questo controllo lato app serve proprio a intercettare quei casi.
+
 ### [2026-07-04 18:42 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: feature
 **File toccati**:

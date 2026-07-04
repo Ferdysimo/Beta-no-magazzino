@@ -7,6 +7,7 @@ const API = `${BACKEND_URL}/api`;
 const DEVICE_KEY = 'pastasciutta_device_id';
 const TAB_KEY = 'pastasciutta_tab_id';
 const HEARTBEAT_MS = 30000;
+const BUNDLE_VERSION = process.env.REACT_APP_BUILD_VERSION || '';
 
 const getDeviceId = () => {
   try {
@@ -68,7 +69,7 @@ const loadFrontendVersion = async () => {
 
 const FrontendDiagnostics = () => {
   const { token, restaurant, effectiveRestaurant } = useAuth();
-  const [frontendVersion, setFrontendVersion] = useState('');
+  const [frontendVersion, setFrontendVersion] = useState(BUNDLE_VERSION);
   const tokenRef = useRef(token);
   const restaurantRef = useRef(restaurant);
   const effectiveRestaurantRef = useRef(effectiveRestaurant);
@@ -116,6 +117,10 @@ const FrontendDiagnostics = () => {
   };
 
   useEffect(() => {
+    if (BUNDLE_VERSION) {
+      setFrontendVersion(BUNDLE_VERSION);
+      return undefined;
+    }
     let cancelled = false;
     loadFrontendVersion().then(version => {
       if (!cancelled) setFrontendVersion(version);
