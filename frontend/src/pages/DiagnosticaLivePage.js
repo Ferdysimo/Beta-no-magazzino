@@ -7,9 +7,7 @@ import {
   CheckCircle2,
   Clock,
   Database,
-  GitBranch,
   HardDrive,
-  MonitorSmartphone,
   RefreshCw,
   Server,
   Wifi,
@@ -164,7 +162,7 @@ const DiagnosticaLivePage = () => {
   const [deviceLocationFilter, setDeviceLocationFilter] = useState('all');
   const [deviceStatusFilter, setDeviceStatusFilter] = useState('all');
   const [deviceSearch, setDeviceSearch] = useState('');
-  const [activeTab, setActiveTab] = useState('backend');
+  const [activeTab, setActiveTab] = useState('devices');
 
   const fetchData = async () => {
     if (!token) return;
@@ -241,7 +239,9 @@ const DiagnosticaLivePage = () => {
 
   const systemHealth = useMemo(() => {
     if (!data) return { level: 'neutral', label: 'Caricamento' };
-    const backendReasons = data.health_reasons || [];
+    const backendReasons = (data.health_reasons || []).filter(reason => (
+      !String(reason.title || '').toLowerCase().includes('errori frontend')
+    ));
     const diskUsed = data.system?.disk?.used_percent;
     if (backendReasons.some(reason => reason.level === 'critical') || !data.system?.mongo_ok || stats.serverErrors > 0) {
       return { level: 'critical', label: 'Errore critico' };
@@ -253,32 +253,32 @@ const DiagnosticaLivePage = () => {
   }, [data, stats, websocketSummary]);
 
   const healthReasons = useMemo(() => {
-    if (!data?.health_reasons?.length) {
+    const visibleReasons = (data?.health_reasons || []).filter(reason => (
+      !String(reason.title || '').toLowerCase().includes('errori frontend')
+    ));
+    if (!visibleReasons.length) {
       return [{
         level: systemHealth.level,
         title: systemHealth.level === 'ok' ? 'Nessuna anomalia evidente' : systemHealth.label,
         detail: 'Dati diagnostici in aggiornamento.',
       }];
     }
-    return data.health_reasons;
+    return visibleReasons;
   }, [data, systemHealth]);
-
-  const healthHistory = data?.health_history || [];
-  const persistedHealth = data?.persisted_health || [];
 
   const frontendSummary = useMemo(() => {
     const devices = data?.frontend?.devices || [];
-    const errors = data?.frontend?.recent_errors || [];
     const versions = data?.deployment?.frontend_versions || [];
     const locations = data?.frontend?.locations || [];
+    const sortedVersions = versions.slice().sort((a, b) => Number(a) - Number(b));
+    const latestVersion = sortedVersions[sortedVersions.length - 1] || '';
     return {
       devices,
       locations,
-      errors,
       online: data?.frontend?.online_count || 0,
       offline: data?.frontend?.offline_count || 0,
       versions,
-      latestVersion: versions[versions.length - 1] || '',
+      latestVersion,
       visible: devices.filter(d => d.visibility === 'visible').length,
     };
   }, [data]);
@@ -312,6 +312,39 @@ const DiagnosticaLivePage = () => {
     });
   }, [frontendSummary.devices, deviceLocationFilter, deviceStatusFilter, deviceSearch]);
 
+  const deviceStats = useMemo(() => {
+    const expectedVersion = frontendSummary.latestVersion;
+    const stale = frontendSummary.devices.filter(device => (
+      expectedVersion && device.frontend_version && device.frontend_version !== expectedVersion
+    )).length;
+    const withErrors = frontendSummary.devices.filter(device => (device.recent_errors_count || 0) > 0).length;
+    const locationsWithIssues = frontendSummary.locations.filter(loc => (
+      loc.offline > 0 || loc.errors > 0 || (loc.versions?.length || 0) > 1
+    )).length;
+    return {
+      expectedVersion,
+      stale,
+      withErrors,
+      locationsWithIssues,
+    };
+  }, [frontendSummary]);
+
+  const getDeviceAction = (device) => {
+    if (device.status !== 'online') return 'Controlla connessione o tablet spento';
+    if (deviceStats.expectedVersion && device.frontend_version && device.frontend_version !== deviceStats.expectedVersion) {
+      return 'Chiudi e riapri il browser sul dispositivo';
+    }
+    if ((device.recent_errors_count || 0) > 0) return 'Se ricapita, fai refresh del dispositivo';
+    return 'Nessuna azione';
+  };
+
+  const getDeviceLevel = (device) => {
+    if (device.status !== 'online') return 'warning';
+    if (deviceStats.expectedVersion && device.frontend_version && device.frontend_version !== deviceStats.expectedVersion) return 'warning';
+    if ((device.recent_errors_count || 0) > 0) return 'warning';
+    return 'ok';
+  };
+
   if (!isAdmin) {
     return (
       <div className="min-h-screen bg-[#F5F5F5]">
@@ -328,7 +361,7 @@ const DiagnosticaLivePage = () => {
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
       <Header />
-      <main className="max-w-[1500px] mx-auto p-4 sm:p-6 xl:px-10">
+      <main className="max-w-[1440px] mx-auto px-5 py-4 sm:px-8 sm:py-6 lg:px-10 xl:px-14 2xl:px-16">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div>
             <h1 className="font-heading text-2xl sm:text-3xl font-bold text-gray-900 uppercase">
@@ -369,27 +402,28 @@ const DiagnosticaLivePage = () => {
           <div className="text-center text-gray-400 py-10">Caricamento...</div>
         ) : data ? (
           <>
-            <section className="mb-6">
-              <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-5">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-11 h-11 rounded-lg flex items-center justify-center ${
+            <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr] gap-4 items-start">
+              <aside className="xl:sticky xl:top-4">
+                <div className="bg-white border border-gray-200 rounded-lg p-4">
+                  <div className="flex xl:flex-col gap-4">
+                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center shrink-0 ${
                       systemHealth.level === 'ok' ? 'bg-green-100 text-green-700' :
                       systemHealth.level === 'warning' ? 'bg-amber-100 text-amber-700' :
                       systemHealth.level === 'critical' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
                     }`}>
-                      {systemHealth.level === 'ok' ? <CheckCircle2 size={24} /> : <AlertTriangle size={24} />}
+                      {systemHealth.level === 'ok' ? <CheckCircle2 size={25} /> : <AlertTriangle size={25} />}
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-xs font-semibold text-gray-500 uppercase">Stato generale</div>
-                      <div className="text-2xl font-bold text-gray-900" data-testid="diag-health-label">
+                      <div className="text-2xl xl:text-3xl font-bold text-gray-900 mt-1" data-testid="diag-health-label">
                         {systemHealth.label}
+                      </div>
+                      <div className="mt-3">
+                        <HealthPill level={systemHealth.level}>{systemHealth.label}</HealthPill>
                       </div>
                     </div>
                   </div>
-                  <HealthPill level={systemHealth.level}>{systemHealth.label}</HealthPill>
-                </div>
-                <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  <div className="mt-4 space-y-2">
                   {healthReasons.slice(0, 4).map((reason, index) => (
                     <div
                       key={`${reason.title}-${index}`}
@@ -399,56 +433,25 @@ const DiagnosticaLivePage = () => {
                       <div className="text-xs mt-0.5 opacity-80">{reason.detail}</div>
                     </div>
                   ))}
+                  </div>
                 </div>
-              </div>
-            </section>
+              </aside>
+
+              <div className="min-w-0">
 
             <nav className="mb-6 bg-white border border-gray-200 rounded-lg px-2 overflow-x-auto">
               <div className="flex items-center gap-1 min-w-max">
-                <TabButton active={activeTab === 'backend'} onClick={() => setActiveTab('backend')}>
-                  Backend
-                </TabButton>
-                <TabButton active={activeTab === 'frontend'} onClick={() => setActiveTab('frontend')}>
-                  Frontend
-                </TabButton>
                 <TabButton active={activeTab === 'devices'} onClick={() => setActiveTab('devices')}>
                   Dispositivi locali
+                </TabButton>
+                <TabButton active={activeTab === 'backend'} onClick={() => setActiveTab('backend')}>
+                  Backend
                 </TabButton>
               </div>
             </nav>
 
             {activeTab === 'backend' && (
             <>
-            <section className="mb-8">
-              <SectionTitle>Versioni e deploy</SectionTitle>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                <MetricTile
-                  icon={Server}
-                  label="Backend version"
-                  value={data.deployment?.backend_version || '-'}
-                  detail={`Avvio: ${data.deployment?.backend_started_at ? formatDateTime(data.deployment.backend_started_at) : '-'}`}
-                  level="neutral"
-                  testId="diag-backend-version"
-                />
-                <MetricTile
-                  icon={GitBranch}
-                  label="Commit backend"
-                  value={data.deployment?.backend_git_commit || '-'}
-                  detail="Commit Git letto dal server locale/VPS"
-                  level="neutral"
-                  testId="diag-backend-commit"
-                />
-                <MetricTile
-                  icon={Activity}
-                  label="Snapshot salute"
-                  value={persistedHealth.length}
-                  detail="Campioni salvati su Mongo nelle ultime 24 ore"
-                  level="neutral"
-                  testId="diag-health-snapshots"
-                />
-              </div>
-            </section>
-
             <section className="mb-8">
               <SectionTitle>Backend - stato sistema</SectionTitle>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -552,145 +555,47 @@ const DiagnosticaLivePage = () => {
               </div>
             </section>
 
-            <section className="mb-8">
-                <SectionTitle>Storico salute</SectionTitle>
-                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 text-gray-700">
-                      <tr>
-                        <th className="text-left px-3 py-2 font-semibold">Finestra</th>
-                        <th className="text-right px-3 py-2 font-semibold">API</th>
-                        <th className="text-right px-3 py-2 font-semibold">Errori</th>
-                        <th className="text-right px-3 py-2 font-semibold">Lente</th>
-                        <th className="text-right px-3 py-2 font-semibold hidden sm:table-cell">WS disc.</th>
-                        <th className="text-right px-3 py-2 font-semibold">Max</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {healthHistory.length === 0 ? (
-                        <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">Storico non disponibile</td></tr>
-                      ) : healthHistory.map(item => {
-                        const level = item.server_errors > 0 ? 'critical' : item.errors > 0 || item.slow_calls > 0 || item.ws_disconnects > 5 ? 'warning' : 'ok';
-                        return (
-                          <tr key={item.label} className={`border-t border-gray-100 ${level === 'critical' ? 'bg-red-50' : level === 'warning' ? 'bg-yellow-50' : ''}`}>
-                            <td className="px-3 py-2 font-bold text-gray-900">{item.label}</td>
-                            <td className="px-3 py-2 text-right text-gray-700">{item.calls}</td>
-                            <td className={`px-3 py-2 text-right font-semibold ${item.errors > 0 ? 'text-red-700' : 'text-green-700'}`}>{item.errors}</td>
-                            <td className={`px-3 py-2 text-right font-semibold ${item.slow_calls > 0 ? 'text-orange-700' : 'text-gray-700'}`}>{item.slow_calls}</td>
-                            <td className="px-3 py-2 text-right text-gray-700 hidden sm:table-cell">{item.ws_disconnects}</td>
-                            <td className={`px-3 py-2 text-right font-semibold ${item.max_ms > 1000 ? 'text-orange-700' : 'text-gray-700'}`}>{item.max_ms} ms</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="mt-3 bg-white border border-gray-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-xs">
-                    <thead className="bg-gray-50 text-gray-700">
-                      <tr>
-                        <th className="text-left px-3 py-2 font-semibold">Campione Mongo</th>
-                        <th className="text-left px-3 py-2 font-semibold">Stato</th>
-                        <th className="text-right px-3 py-2 font-semibold">API err.</th>
-                        <th className="text-right px-3 py-2 font-semibold">FE err.</th>
-                        <th className="text-right px-3 py-2 font-semibold hidden sm:table-cell">Tablet off</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {persistedHealth.length === 0 ? (
-                        <tr><td colSpan={5} className="px-3 py-5 text-center text-gray-400">Nessuno snapshot persistito ancora</td></tr>
-                      ) : persistedHealth.slice(0, 8).map(item => (
-                        <tr key={item.id || item.ts} className="border-t border-gray-100">
-                          <td className="px-3 py-2 text-gray-700">{formatAgo(item.ts)}</td>
-                          <td className={`px-3 py-2 font-bold ${
-                            item.level === 'critical' ? 'text-red-700' : item.level === 'warning' ? 'text-orange-700' : 'text-green-700'
-                          }`}>{item.level}</td>
-                          <td className="px-3 py-2 text-right text-gray-700">{item.api_errors_buffer}</td>
-                          <td className="px-3 py-2 text-right text-gray-700">{item.frontend_errors_buffer}</td>
-                          <td className="px-3 py-2 text-right text-gray-700 hidden sm:table-cell">{item.frontend_devices_offline}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-            </section>
-
             </>
-            )}
-
-            {activeTab === 'frontend' && (
-            <section className="mb-8">
-              <SectionTitle>Frontend</SectionTitle>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-                <MetricTile
-                  icon={MonitorSmartphone}
-                  label="Dispositivi online"
-                  value={`${frontendSummary.online}/${frontendSummary.devices.length}`}
-                  detail={`${frontendSummary.visible} tab visibili, ${frontendSummary.offline} offline`}
-                  level={frontendSummary.offline > 0 ? 'warning' : 'ok'}
-                  testId="diag-frontend-devices"
-                />
-                <MetricTile
-                  icon={AlertCircle}
-                  label="Errori frontend"
-                  value={frontendSummary.errors.length}
-                  detail="Errori JS/API catturati dai browser"
-                  level={frontendSummary.errors.length > 0 ? 'warning' : 'ok'}
-                  testId="diag-frontend-errors"
-                />
-                <MetricTile
-                  icon={Activity}
-                  label="Tab attive"
-                  value={frontendSummary.visible}
-                  detail="Dispositivi con app visibile"
-                  level="neutral"
-                  testId="diag-visible-tabs"
-                />
-                <MetricTile
-                  icon={GitBranch}
-                  label="Versioni tablet"
-                  value={frontendSummary.versions.length || 0}
-                  detail={frontendSummary.versions.length > 1 ? 'Alcuni tablet non hanno ricaricato' : 'Versione frontend uniforme'}
-                  level={frontendSummary.versions.length > 1 ? 'warning' : 'ok'}
-                  testId="diag-tablet-versions"
-                />
-              </div>
-
-              {frontendSummary.errors.length > 0 ? (
-                <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-xs">
-                    <thead className="bg-amber-100 text-amber-900">
-                      <tr>
-                        <th className="text-left px-3 py-2 font-semibold">Quando</th>
-                        <th className="text-left px-3 py-2 font-semibold">Dispositivo</th>
-                        <th className="text-left px-3 py-2 font-semibold">Tipo</th>
-                        <th className="text-left px-3 py-2 font-semibold">Messaggio</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {frontendSummary.errors.slice(0, 12).map((err, index) => (
-                        <tr key={`${err.ts}-${index}`} className="border-t border-amber-200">
-                          <td className="px-3 py-2 text-amber-900">{formatAgo(err.ts)}</td>
-                          <td className="px-3 py-2 text-amber-900 font-semibold">{err.restaurant_location || err.username || err.device_id?.slice(0, 10) || '-'}</td>
-                          <td className="px-3 py-2 font-mono text-amber-900">{err.kind}</td>
-                          <td className="px-3 py-2 text-amber-900 break-words">{err.message}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="bg-white border border-gray-200 rounded-lg px-4 py-8 text-center text-sm text-gray-400">
-                  Nessun errore frontend recente.
-                </div>
-              )}
-            </section>
             )}
 
             {activeTab === 'devices' && (
             <section className="mb-8">
               <SectionTitle>Dispositivi locali</SectionTitle>
-              <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
+                <MetricTile
+                  icon={CheckCircle2}
+                  label="Build webapp attesa"
+                  value={deviceStats.expectedVersion || '-'}
+                  detail="La versione che devono usare i dispositivi"
+                  level={deviceStats.stale > 0 ? 'warning' : 'ok'}
+                  testId="diag-expected-webapp-build"
+                />
+                <MetricTile
+                  icon={Activity}
+                  label="Dispositivi online"
+                  value={`${frontendSummary.online}/${frontendSummary.devices.length}`}
+                  detail={frontendSummary.offline > 0 ? `${frontendSummary.offline} dispositivi non rispondono` : 'Tutti i dispositivi stanno inviando heartbeat'}
+                  level={frontendSummary.offline > 0 ? 'warning' : 'ok'}
+                  testId="diag-devices-online"
+                />
+                <MetricTile
+                  icon={AlertTriangle}
+                  label="Build vecchie"
+                  value={deviceStats.stale}
+                  detail={deviceStats.stale > 0 ? 'Almeno un dispositivo non ha ancora aggiornato' : 'Versione uniforme'}
+                  level={deviceStats.stale > 0 ? 'warning' : 'ok'}
+                  testId="diag-stale-builds"
+                />
+                <MetricTile
+                  icon={WifiOff}
+                  label="Locali da guardare"
+                  value={deviceStats.locationsWithIssues}
+                  detail="Offline, build diverse o errori ripetuti"
+                  level={deviceStats.locationsWithIssues > 0 ? 'warning' : 'ok'}
+                  testId="diag-location-issues"
+                />
+              </div>
+              <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-4">
                 <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                   <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 text-sm font-bold text-gray-800">
                     Locali monitorati
@@ -723,10 +628,10 @@ const DiagnosticaLivePage = () => {
                           <span className="font-bold text-gray-900 truncate">{loc.location}</span>
                           <HealthPill level={hasIssue ? 'warning' : 'ok'}>{loc.online}/{loc.devices_total}</HealthPill>
                         </div>
-                        <div className="mt-1 grid grid-cols-3 gap-1 text-[11px] text-gray-600">
-                          <span>off {loc.offline}</span>
-                          <span>err {loc.errors}</span>
-                          <span>ver {loc.versions?.length || 0}</span>
+                        <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] text-gray-600">
+                          <span className={loc.offline > 0 ? 'font-bold text-orange-700' : ''}>offline {loc.offline}</span>
+                          <span className={(loc.versions?.length || 0) > 1 ? 'font-bold text-orange-700' : ''}>build {loc.versions?.length || 0}</span>
+                          <span className={loc.errors > 0 ? 'font-bold text-orange-700' : ''}>segnali {loc.errors}</span>
                         </div>
                         <div className="text-[11px] text-gray-400 mt-1">Ultimo: {formatAgo(loc.last_seen)}</div>
                       </button>
@@ -766,14 +671,18 @@ const DiagnosticaLivePage = () => {
                       <div className="px-3 py-8 text-center text-gray-400 text-sm">Nessun dispositivo ristorante per questi filtri</div>
                     ) : filteredDevices.map(device => {
                       const versionDate = formatVersionDate(device.frontend_version);
+                      const deviceLevel = getDeviceLevel(device);
+                      const isStale = deviceStats.expectedVersion && device.frontend_version && device.frontend_version !== deviceStats.expectedVersion;
                       return (
                         <div
                           key={device.device_id}
-                          className={`px-3 py-3 ${device.status !== 'online' ? 'bg-yellow-50' : device.recent_errors_count > 0 ? 'bg-amber-50' : 'bg-white'}`}
+                          className={`px-3 py-3 ${deviceLevel === 'warning' ? 'bg-amber-50' : 'bg-white'}`}
                         >
-                          <div className="grid grid-cols-1 xl:grid-cols-[110px_minmax(150px,1fr)_minmax(230px,1.25fr)_minmax(160px,0.9fr)_minmax(190px,1fr)_70px_92px] gap-3 items-center text-sm">
+                          <div className="grid grid-cols-1 2xl:grid-cols-[120px_minmax(170px,1fr)_minmax(220px,1.2fr)_minmax(150px,0.8fr)_minmax(210px,1fr)_minmax(210px,1fr)_95px] gap-3 items-center text-sm">
                             <div>
-                              <HealthPill level={device.status === 'online' ? 'ok' : 'warning'}>{device.status}</HealthPill>
+                              <HealthPill level={deviceLevel}>
+                                {device.status !== 'online' ? 'offline' : isStale ? 'build vecchia' : 'ok'}
+                              </HealthPill>
                             </div>
                             <div className="min-w-0">
                               <div className="font-bold text-gray-900 truncate">
@@ -797,10 +706,10 @@ const DiagnosticaLivePage = () => {
                               <div className="font-mono text-sm font-bold text-gray-950 truncate">{formatVersion(device.frontend_version)}</div>
                               {versionDate ? <div className="text-[11px] text-gray-400">build {versionDate}</div> : null}
                             </div>
-                            <div className="xl:text-right">
-                              <div className="text-[11px] font-semibold text-gray-500 uppercase">Err.</div>
-                              <div className={`font-bold ${device.recent_errors_count > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                                {device.recent_errors_count || 0}
+                            <div className="min-w-0">
+                              <div className="text-[11px] font-semibold text-gray-500 uppercase">Cosa fare</div>
+                              <div className={`font-semibold truncate ${deviceLevel === 'warning' ? 'text-orange-800' : 'text-green-700'}`}>
+                                {getDeviceAction(device)}
                               </div>
                             </div>
                             <div>
@@ -809,8 +718,11 @@ const DiagnosticaLivePage = () => {
                               <div className="text-xs text-gray-500">{device.visibility || '-'}</div>
                             </div>
                           </div>
-                          <div className="mt-1 text-[11px] text-gray-400 font-mono truncate">
-                            ID {(device.device_id || '').slice(0, 24)}
+                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-400">
+                            <span className="font-mono truncate">ID {(device.device_id || '').slice(0, 24)}</span>
+                            {(device.recent_errors_count || 0) > 0 ? (
+                              <span className="text-orange-700 font-semibold">{device.recent_errors_count} segnali browser recenti</span>
+                            ) : null}
                           </div>
                         </div>
                       );
@@ -966,6 +878,8 @@ const DiagnosticaLivePage = () => {
             )}
             </>
             )}
+              </div>
+            </div>
           </>
         ) : null}
       </main>

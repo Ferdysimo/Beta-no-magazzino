@@ -163,6 +163,33 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-05 01:22 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature
+**File toccati**:
+- `/app/frontend/src/pages/DiagnosticaLivePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Aumentato il respiro laterale della Diagnostica Live: contenitore leggermente piu stretto e padding orizzontale maggiore su desktop, per evitare che la pagina sembri appiccicata ai bordi.
+**Testato**: ✅ sì (metodo: `npm run build`, riuscito con soli warning ESLint preesistenti)
+**Note per il prossimo agente**: Mantenere margini laterali generosi nelle viste admin dense; non allargare tutto fino ai bordi viewport.
+
+### [2026-07-05 01:16 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature
+**File toccati**:
+- `/app/frontend/src/pages/DiagnosticaLivePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Spostato il semaforo "Stato generale" in una colonna verticale a sinistra della Diagnostica Live, sticky su desktop. La colonna principale resta dedicata a tab e contenuti, migliorando la scansione della pagina.
+**Testato**: ✅ sì (metodo: `npm run build`, riuscito con soli warning ESLint preesistenti)
+**Note per il prossimo agente**: Il semaforo laterale deve restare sintetico; non trasformarlo in un secondo pannello tecnico.
+
+### [2026-07-05 00:54 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature
+**File toccati**:
+- `/app/frontend/src/pages/DiagnosticaLivePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Sgravata la Diagnostica Live: rimossi dalla vista principale errori frontend grezzi, commit backend, snapshot/campioni Mongo e storico salute. La pagina ora apre sui dispositivi locali, mostra build attesa, dispositivi online/offline, build vecchie e locali da guardare; ogni dispositivo ha stato leggibile e azione consigliata. Rollback applicato alla potatura successiva di Mongo/disco/endpoint, quindi il tab Backend mantiene stato sistema e prestazioni live.
+**Testato**: ✅ sì (metodo: `npm run build`, riuscito con soli warning ESLint preesistenti)
+**Note per il prossimo agente**: La diagnostica deve restare operativa per l'utente: priorita a locali/dispositivi/build, dettagli tecnici solo se servono davvero.
+
 ### [2026-07-05 00:18 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix
 **File toccati**:
