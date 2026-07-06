@@ -516,7 +516,6 @@ api_call_log: deque = deque(maxlen=200)
 api_error_log: deque = deque(maxlen=100)
 frontend_device_state: Dict[str, dict] = {}
 frontend_error_log: deque = deque(maxlen=100)
-last_health_snapshot_at: Optional[datetime] = None
 
 # Pydantic Models
 class RestaurantCreate(BaseModel):
@@ -1116,14 +1115,12 @@ async def get_diagnostics(token_data: dict = Depends(verify_token)):
     """Live system diagnostics for the Admin dashboard.
     Reports per-restaurant WebSocket state, recent disconnect events,
     last 50 API calls and last 50 errors."""
-    global last_health_snapshot_at
     if token_data.get("role") not in ("admin",):
         raise HTTPException(status_code=403, detail="Admin only")
 
     now = datetime.now(timezone.utc)
     cutoff_15m_dt = now - timedelta(minutes=15)
     cutoff_1h_dt = now - timedelta(hours=1)
-    cutoff_24h_dt = now - timedelta(hours=24)
     cutoff_1h = cutoff_1h_dt.isoformat()
     today_rome = datetime.now(ROME_TZ)
     today_start_utc = today_rome.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc).isoformat()
@@ -1491,37 +1488,6 @@ async def get_diagnostics(token_data: dict = Depends(verify_token)):
         reverse=True,
     )[:30]
 
-    health_level = "critical" if any(r.get("level") == "critical" for r in health_reasons) else "warning" if any(r.get("level") == "warning" for r in health_reasons) else "ok"
-    if last_health_snapshot_at is None or (now - last_health_snapshot_at).total_seconds() >= 60:
-        try:
-            await db.diagnostics_health_snapshots.insert_one({
-                "id": str(uuid.uuid4()),
-                "ts": now.isoformat(),
-                "level": health_level,
-                "api_calls_buffer": len(all_calls),
-                "api_errors_buffer": len([c for c in all_calls if c.get("status", 0) >= 400]),
-                "api_server_errors_buffer": len(api_server_errors),
-                "slow_calls_buffer": len(slow_calls),
-                "ws_disconnects_1h": ws_disconnects_since(cutoff_1h_dt),
-                "frontend_devices_online": frontend_online,
-                "frontend_devices_offline": frontend_offline,
-                "frontend_errors_buffer": len(frontend_recent_errors),
-                "disk_used_percent": disk_state.get("used_percent"),
-                "mongo_ok": mongo_ok,
-            })
-            last_health_snapshot_at = now
-        except Exception as exc:
-            logger.warning(f"Could not persist diagnostics snapshot: {exc}")
-
-    persisted_health = []
-    try:
-        persisted_health = await db.diagnostics_health_snapshots.find(
-            {"ts": {"$gte": cutoff_24h_dt.isoformat()}},
-            {"_id": 0},
-        ).sort("ts", -1).limit(120).to_list(120)
-    except Exception:
-        persisted_health = []
-
     frontend_versions = sorted({
         d.get("frontend_version")
         for d in frontend_devices
@@ -1546,7 +1512,6 @@ async def get_diagnostics(token_data: dict = Depends(verify_token)):
         "health_reasons": health_reasons,
         "timeline_events": timeline_events,
         "health_history": health_history,
-        "persisted_health": persisted_health,
         "frontend": {
             "devices": frontend_devices,
             "locations": frontend_locations_summary,
@@ -6240,7 +6205,7 @@ async def startup_scheduler():
     # Seed Federico (role "supervisor"): has access to Storico Chiusure,
     # Controllo Report (audit-cassa) and Diagnostica Live — nothing else.
     try:
-        federico_password = "Pastasciutt4!"
+        federico_password = "Pastasciutta@32"
         federico = await db.restaurants.find_one({"username": "Federico"})
         if not federico:
             await db.restaurants.insert_one({
