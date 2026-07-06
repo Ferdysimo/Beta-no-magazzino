@@ -19,6 +19,7 @@ Sistema di gestione ordini pasta per multi-ristorante (Flaminio, Grazie, Largo d
 | Brazza | Pastasciutt4! | restaurant |
 | Magazziniere | Pastasciutt4! | magazzino |
 | Admin | Pastasciutt4! | admin |
+| Federico | Pastasciutta@32 | supervisor |
 
 ## Funzionalità Implementate
 

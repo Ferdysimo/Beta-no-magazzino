@@ -163,6 +163,27 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-06 12:15 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: config
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/memory/test_credentials.md`
+- `/app/memory/PRD.md`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Ripristinata la password dedicata di Federico a `Pastasciutta@32`. Il seed/startup non forza piu Federico a `Pastasciutt4!`; aggiornata anche la documentazione credenziali.
+**Testato**: si (metodo: aggiornato DB locale Docker, restart backend, login Federico OK con `Pastasciutta@32`, KO con `Pastasciutt4!`)
+**Note per il prossimo agente**: Federico e l'unica eccezione alla password comune dei locali/test account.
+
+### [2026-07-06 12:00 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: cleanup
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/frontend/src/pages/DiagnosticaLivePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Rimossa la persistenza degli `health_snapshot` dalla Diagnostica Live: il backend non scrive/legge piu `diagnostics_health_snapshots` e il frontend non mostra piu il box/tabella Snapshot salute. La diagnostica live corrente resta invariata.
+**Testato**: si (metodo: `python -m py_compile backend/server.py`, `yarn build`, riuscito con warning ESLint preesistenti)
+**Note per il prossimo agente**: La collection storica eventualmente gia presente in Mongo non viene cancellata da questa modifica; semplicemente non viene piu alimentata ne mostrata.
+
 ### [2026-07-05 01:22 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: feature
 **File toccati**:

@@ -2,10 +2,12 @@
 
 Password comune: `Pastasciutt4!`
 
+Eccezione Federico: `Pastasciutta@32`
+
 | Ruolo        | Username       | Password        |
 |--------------|----------------|-----------------|
 | Admin        | `Admin`        | `Pastasciutt4!` |
-| Federico     | `Federico`     | `Pastasciutt4!` |
+| Federico     | `Federico`     | `Pastasciutta@32` |
 | Flaminio     | `Flaminio`     | `Pastasciutt4!` |
 | Grazie       | `Grazie`       | `Pastasciutt4!` |
 | Brazza       | `Brazza`       | `Pastasciutt4!` |
