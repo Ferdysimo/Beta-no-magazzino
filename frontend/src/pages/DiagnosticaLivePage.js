@@ -361,7 +361,7 @@ const DiagnosticaLivePage = () => {
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
       <Header />
-      <main className="max-w-[1440px] mx-auto px-5 py-4 sm:px-8 sm:py-6 lg:px-10 xl:px-14 2xl:px-16">
+      <main className="max-w-[1920px] mx-auto px-3 py-4 sm:px-5 sm:py-6 lg:px-6 xl:px-8 2xl:px-10">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div>
             <h1 className="font-heading text-2xl sm:text-3xl font-bold text-gray-900 uppercase">
@@ -402,8 +402,8 @@ const DiagnosticaLivePage = () => {
           <div className="text-center text-gray-400 py-10">Caricamento...</div>
         ) : data ? (
           <>
-            <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr] gap-4 items-start">
-              <aside className="xl:sticky xl:top-4">
+            <div className={`grid grid-cols-1 gap-4 items-start ${activeTab === 'backend' ? 'xl:grid-cols-[280px_1fr]' : ''}`}>
+              <aside className={activeTab === 'devices' ? 'hidden' : 'xl:sticky xl:top-4'}>
                 <div className="bg-white border border-gray-200 rounded-lg p-4">
                   <div className="flex xl:flex-col gap-4">
                     <div className={`w-12 h-12 rounded-lg flex items-center justify-center shrink-0 ${
@@ -560,7 +560,33 @@ const DiagnosticaLivePage = () => {
 
             {activeTab === 'devices' && (
             <section className="mb-8">
-              <SectionTitle>Dispositivi locali</SectionTitle>
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between mb-4">
+                <div>
+                  <SectionTitle>Dispositivi locali</SectionTitle>
+                  <div className="text-sm text-gray-500">
+                    Lettura operativa per locale: stato, build webapp, pagina aperta e azione consigliata.
+                  </div>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <select
+                    value={deviceStatusFilter}
+                    onChange={e => setDeviceStatusFilter(e.target.value)}
+                    className="h-10 px-3 border border-gray-300 rounded-md text-sm bg-white"
+                  >
+                    <option value="all">Tutti gli stati</option>
+                    <option value="online">Solo online</option>
+                    <option value="offline">Solo offline</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={deviceSearch}
+                    onChange={e => setDeviceSearch(e.target.value)}
+                    placeholder="Cerca locale, IP, versione, pagina"
+                    className="h-10 px-3 border border-gray-300 rounded-md text-sm w-full sm:w-80 xl:w-96"
+                  />
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
                 <MetricTile
                   icon={CheckCircle2}
@@ -595,23 +621,47 @@ const DiagnosticaLivePage = () => {
                   testId="diag-location-issues"
                 />
               </div>
-              <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-4">
-                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 text-sm font-bold text-gray-800">
-                    Locali monitorati
-                  </div>
+
+              <div className="mb-4">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="text-sm font-bold text-gray-900 uppercase">Locali monitorati</div>
                   <button
                     type="button"
                     onClick={() => setDeviceLocationFilter('all')}
-                    className={`w-full text-left px-3 py-3 border-b border-gray-100 hover:bg-gray-50 ${deviceLocationFilter === 'all' ? 'bg-gray-100' : ''}`}
+                    className="text-sm font-semibold text-gray-700 hover:text-gray-950"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-bold text-gray-900">Tutti i locali</span>
-                      <span className="text-xs text-gray-500">{frontendSummary.devices.length} dispositivi</span>
+                    Mostra tutti
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setDeviceLocationFilter('all')}
+                    className={`text-left border rounded-lg p-4 min-h-[128px] transition-colors ${
+                      deviceLocationFilter === 'all' ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-900'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-lg font-bold">Tutti i locali</div>
+                        <div className={`text-xs mt-1 ${deviceLocationFilter === 'all' ? 'text-gray-300' : 'text-gray-500'}`}>
+                          Vista completa
+                        </div>
+                      </div>
+                      <div className={`text-2xl font-bold ${deviceLocationFilter === 'all' ? 'text-white' : 'text-gray-950'}`}>
+                        {frontendSummary.devices.length}
+                      </div>
+                    </div>
+                    <div className={`mt-4 grid grid-cols-3 gap-2 text-xs ${deviceLocationFilter === 'all' ? 'text-gray-200' : 'text-gray-600'}`}>
+                      <span>online {frontendSummary.online}</span>
+                      <span>offline {frontendSummary.offline}</span>
+                      <span>problemi {deviceStats.locationsWithIssues}</span>
                     </div>
                   </button>
                   {frontendSummary.locations.length === 0 ? (
-                    <div className="px-3 py-8 text-sm text-center text-gray-400">Nessun locale con heartbeat</div>
+                    <div className="bg-white border border-gray-200 rounded-lg p-6 text-sm text-center text-gray-400">
+                      Nessun locale con heartbeat
+                    </div>
                   ) : frontendSummary.locations.map(loc => {
                     const key = loc.restaurant_id || loc.location;
                     const hasIssue = loc.offline > 0 || loc.errors > 0 || loc.versions?.length > 1;
@@ -620,114 +670,126 @@ const DiagnosticaLivePage = () => {
                         type="button"
                         key={key}
                         onClick={() => setDeviceLocationFilter(key)}
-                        className={`w-full text-left px-3 py-3 border-b border-gray-100 hover:bg-gray-50 ${
-                          deviceLocationFilter === key ? 'bg-gray-100' : hasIssue ? 'bg-amber-50' : ''
+                        className={`text-left border rounded-lg p-4 min-h-[128px] transition-colors ${
+                          deviceLocationFilter === key
+                            ? 'bg-gray-900 border-gray-900 text-white'
+                            : hasIssue
+                              ? 'bg-amber-50 border-amber-200 hover:bg-amber-100 text-gray-900'
+                              : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-900'
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-bold text-gray-900 truncate">{loc.location}</span>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-lg font-bold truncate">{loc.location}</div>
+                            <div className={`text-xs mt-1 ${deviceLocationFilter === key ? 'text-gray-300' : 'text-gray-500'}`}>
+                              Ultimo heartbeat {formatAgo(loc.last_seen)}
+                            </div>
+                          </div>
                           <HealthPill level={hasIssue ? 'warning' : 'ok'}>{loc.online}/{loc.devices_total}</HealthPill>
                         </div>
-                        <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] text-gray-600">
+                        <div className={`mt-4 grid grid-cols-3 gap-2 text-xs ${deviceLocationFilter === key ? 'text-gray-200' : 'text-gray-600'}`}>
                           <span className={loc.offline > 0 ? 'font-bold text-orange-700' : ''}>offline {loc.offline}</span>
                           <span className={(loc.versions?.length || 0) > 1 ? 'font-bold text-orange-700' : ''}>build {loc.versions?.length || 0}</span>
                           <span className={loc.errors > 0 ? 'font-bold text-orange-700' : ''}>segnali {loc.errors}</span>
                         </div>
-                        <div className="text-[11px] text-gray-400 mt-1">Ultimo: {formatAgo(loc.last_seen)}</div>
                       </button>
                     );
                   })}
                 </div>
+              </div>
 
-                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="p-3 border-b border-gray-200 bg-gray-50">
-                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
-                      <div>
-                        <div className="text-sm font-bold text-gray-900">Dispositivi del locale</div>
-                        <div className="text-xs text-gray-500">{filteredDevices.length} risultati filtrati</div>
-                      </div>
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <select
-                          value={deviceStatusFilter}
-                          onChange={e => setDeviceStatusFilter(e.target.value)}
-                          className="px-2 py-1.5 border border-gray-300 rounded text-sm bg-white"
-                        >
-                          <option value="all">Tutti gli stati</option>
-                          <option value="online">Solo online</option>
-                          <option value="offline">Solo offline</option>
-                        </select>
-                        <input
-                          type="text"
-                          value={deviceSearch}
-                          onChange={e => setDeviceSearch(e.target.value)}
-                          placeholder="Cerca locale, IP, versione, pagina"
-                          className="px-3 py-1.5 border border-gray-300 rounded text-sm w-full sm:w-64"
-                        />
-                      </div>
+              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="text-sm font-bold text-gray-900 uppercase">Dispositivi</div>
+                    <div className="text-xs text-gray-500">
+                      {filteredDevices.length} risultati filtrati su {frontendSummary.devices.length} dispositivi
                     </div>
                   </div>
-                  <div className="divide-y divide-gray-100">
-                    {filteredDevices.length === 0 ? (
-                      <div className="px-3 py-8 text-center text-gray-400 text-sm">Nessun dispositivo ristorante per questi filtri</div>
-                    ) : filteredDevices.map(device => {
-                      const versionDate = formatVersionDate(device.frontend_version);
-                      const deviceLevel = getDeviceLevel(device);
-                      const isStale = deviceStats.expectedVersion && device.frontend_version && device.frontend_version !== deviceStats.expectedVersion;
-                      return (
-                        <div
-                          key={device.device_id}
-                          className={`px-3 py-3 ${deviceLevel === 'warning' ? 'bg-amber-50' : 'bg-white'}`}
-                        >
-                          <div className="grid grid-cols-1 2xl:grid-cols-[120px_minmax(170px,1fr)_minmax(220px,1.2fr)_minmax(150px,0.8fr)_minmax(210px,1fr)_minmax(210px,1fr)_95px] gap-3 items-center text-sm">
-                            <div>
+                  <div className="text-xs text-gray-500">
+                    Locale: <span className="font-semibold text-gray-800">
+                      {deviceLocationFilter === 'all'
+                        ? 'tutti'
+                        : (frontendSummary.locations.find(loc => (loc.restaurant_id || loc.location) === deviceLocationFilter)?.location || deviceLocationFilter)}
+                    </span>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1360px] text-sm">
+                    <thead className="bg-white text-gray-600 border-b border-gray-200">
+                      <tr>
+                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px] w-[130px]">Stato</th>
+                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px] w-[210px]">Locale</th>
+                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px] w-[290px]">Dispositivo</th>
+                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px] w-[220px]">Pagina</th>
+                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px] w-[230px]">Versione webapp</th>
+                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px] w-[250px]">Cosa fare</th>
+                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px] w-[120px]">Ultimo</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {filteredDevices.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-10 text-center text-gray-400">
+                            Nessun dispositivo ristorante per questi filtri
+                          </td>
+                        </tr>
+                      ) : filteredDevices.map(device => {
+                        const versionDate = formatVersionDate(device.frontend_version);
+                        const deviceLevel = getDeviceLevel(device);
+                        const isStale = deviceStats.expectedVersion && device.frontend_version && device.frontend_version !== deviceStats.expectedVersion;
+                        return (
+                          <tr
+                            key={device.device_id}
+                            className={deviceLevel === 'warning' ? 'bg-amber-50' : 'bg-white'}
+                          >
+                            <td className="px-4 py-3 align-top">
                               <HealthPill level={deviceLevel}>
                                 {device.status !== 'online' ? 'offline' : isStale ? 'build vecchia' : 'ok'}
                               </HealthPill>
-                            </div>
-                            <div className="min-w-0">
-                              <div className="font-bold text-gray-900 truncate">
+                              {(device.recent_errors_count || 0) > 0 ? (
+                                <div className="mt-2 text-xs text-orange-700 font-semibold">
+                                  {device.recent_errors_count} segnali
+                                </div>
+                              ) : null}
+                            </td>
+                            <td className="px-4 py-3 align-top">
+                              <div className="font-bold text-gray-950 truncate">
                                 {device.restaurant_location || device.username || device.device_id.slice(0, 10)}
                               </div>
-                              <div className="text-[11px] text-gray-400 uppercase">{device.role || '-'}</div>
-                            </div>
-                            <div className="min-w-0">
+                              <div className="text-[11px] text-gray-400 uppercase mt-1">{device.role || '-'}</div>
+                            </td>
+                            <td className="px-4 py-3 align-top">
                               <div className="font-semibold text-gray-800 truncate">{device.browser || 'Browser'} / {device.os || 'OS'}</div>
-                              <div className="text-xs text-gray-500 truncate">
-                                {device.device_type || '-'} · {device.viewport || device.screen || '-'}
+                              <div className="text-xs text-gray-500 truncate mt-1">
+                                {device.device_type || '-'} / {device.viewport || device.screen || '-'}
                               </div>
-                              <div className="text-xs text-gray-700 font-mono truncate">IP {device.ip || '-'}</div>
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-[11px] font-semibold text-gray-500 uppercase xl:hidden">Pagina</div>
+                              <div className="text-xs text-gray-700 font-mono truncate mt-1">IP {device.ip || '-'}</div>
+                              <div className="text-[11px] text-gray-400 font-mono truncate mt-1">ID {(device.device_id || '').slice(0, 24)}</div>
+                            </td>
+                            <td className="px-4 py-3 align-top">
                               <div className="font-mono text-xs text-gray-800 truncate">{device.path || '-'}</div>
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-[11px] font-semibold text-gray-500 uppercase">Versione webapp</div>
+                              <div className="text-xs text-gray-500 mt-1">{device.visibility || '-'}</div>
+                            </td>
+                            <td className="px-4 py-3 align-top">
                               <div className="font-mono text-sm font-bold text-gray-950 truncate">{formatVersion(device.frontend_version)}</div>
-                              {versionDate ? <div className="text-[11px] text-gray-400">build {versionDate}</div> : null}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-[11px] font-semibold text-gray-500 uppercase">Cosa fare</div>
-                              <div className={`font-semibold truncate ${deviceLevel === 'warning' ? 'text-orange-800' : 'text-green-700'}`}>
+                              {versionDate ? <div className="text-xs text-gray-500 mt-1">build {versionDate}</div> : null}
+                              {isStale ? <div className="text-xs text-orange-700 font-semibold mt-1">attesa {formatVersion(deviceStats.expectedVersion)}</div> : null}
+                            </td>
+                            <td className="px-4 py-3 align-top">
+                              <div className={`font-semibold ${deviceLevel === 'warning' ? 'text-orange-800' : 'text-green-700'}`}>
                                 {getDeviceAction(device)}
                               </div>
-                            </div>
-                            <div>
-                              <div className="text-[11px] font-semibold text-gray-500 uppercase">Ultimo</div>
-                              <div className="text-sm font-semibold text-gray-800">{formatAgo(device.last_seen)}</div>
-                              <div className="text-xs text-gray-500">{device.visibility || '-'}</div>
-                            </div>
-                          </div>
-                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-400">
-                            <span className="font-mono truncate">ID {(device.device_id || '').slice(0, 24)}</span>
-                            {(device.recent_errors_count || 0) > 0 ? (
-                              <span className="text-orange-700 font-semibold">{device.recent_errors_count} segnali browser recenti</span>
-                            ) : null}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                            </td>
+                            <td className="px-4 py-3 align-top">
+                              <div className="font-semibold text-gray-800">{formatAgo(device.last_seen)}</div>
+                              <div className="text-xs text-gray-500 mt-1">{device.last_seen ? formatTime(device.last_seen) : '-'}</div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 

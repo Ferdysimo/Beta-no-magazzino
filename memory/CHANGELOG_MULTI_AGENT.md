@@ -163,6 +163,24 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-07 15:25 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: security
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Aggiunta revoca mirata dei token gia emessi per l'account `Simone`: i vecchi token senza `token_version >= 2` vengono rifiutati con 401 al prossimo deploy/restart, mentre i nuovi login Simone ricevono token validi con `token_version=2`.
+**Testato**: si (metodo: `python -m py_compile backend/server.py`, compile nel container Docker, test API locale: token vecchio Simone -> 401 `Token revoked`, login nuovo Simone -> 200 e `/auth/me` -> 200)
+**Note per il prossimo agente**: Meccanismo intenzionalmente limitato a Simone; non invalida Admin, Federico, locali o Magazziniere.
+
+### [2026-07-07 09:45 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: ux
+**File toccati**:
+- `/app/frontend/src/pages/DiagnosticaLivePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Ridisegnata la tab "Dispositivi locali" della Diagnostica Live per usare tutta la larghezza disponibile: rimossa la sidebar in questa tab, portato il contenitore a 1920px, trasformati i locali in griglia larga cliccabile e sostituita la lista dispositivi con una tabella operativa a colonne stabili.
+**Testato**: si (metodo: `npm run build`, riuscito con warning ESLint preesistenti; server locale non raggiungibile per screenshot live)
+**Note per il prossimo agente**: Su Diagnostica > Dispositivi locali privilegiare scansione di molti locali/dispositivi su schermi grandi; la sidebar stato generale resta solo nella tab Backend.
+
 ### [2026-07-07 09:20 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix
 **File toccati**:

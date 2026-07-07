@@ -60,6 +60,7 @@ SECRET_KEY = os.environ.get('JWT_SECRET')
 if not SECRET_KEY:
     raise RuntimeError("JWT_SECRET env var is required; refuse to start with insecure fallback")
 ALGORITHM = "HS256"
+SIMONE_MIN_TOKEN_VERSION = 2
 
 # Rate limiter (slowapi). Usa l'IP del client come chiave; per scopi auth è sufficiente.
 limiter = Limiter(key_func=get_remote_address)
@@ -805,12 +806,19 @@ def save_image_to_disk(base64_data: str, prefix: str) -> str:
     filepath.write_bytes(base64.b64decode(data))
     return filename
 
-def create_token(restaurant_id: str, restaurant_name: str, role: str = "restaurant", username: str = "") -> str:
+def create_token(
+    restaurant_id: str,
+    restaurant_name: str,
+    role: str = "restaurant",
+    username: str = "",
+    token_version: int = 1,
+) -> str:
     payload = {
         "restaurant_id": restaurant_id,
         "restaurant_name": restaurant_name,
         "username": username or restaurant_name,
         "role": role,
+        "token_version": token_version,
         "exp": datetime.now(timezone.utc).timestamp() + 86400 * 7
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
@@ -818,6 +826,8 @@ def create_token(restaurant_id: str, restaurant_name: str, role: str = "restaura
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security), request: Request = None) -> dict:
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("username") == "Simone" and int(payload.get("token_version") or 0) < SIMONE_MIN_TOKEN_VERSION:
+            raise HTTPException(status_code=401, detail="Token revoked")
         # Solo "Federico" (supervisor) ha gli stessi privilegi operativi dell'Admin.
         # Altri supervisori restano col loro ruolo limitato.
         if payload.get("role") == "supervisor":
@@ -1011,7 +1021,13 @@ async def login(request: Request, data: LoginRequest):
     if not restaurant or not pwd_context.verify(data.password, restaurant["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    token = create_token(restaurant["id"], restaurant["name"], restaurant.get("role", "restaurant"), restaurant.get("username", ""))
+    token = create_token(
+        restaurant["id"],
+        restaurant["name"],
+        restaurant.get("role", "restaurant"),
+        restaurant.get("username", ""),
+        int(restaurant.get("token_version") or 1),
+    )
     
     return LoginResponse(
         token=token,
@@ -2473,6 +2489,7 @@ PRIVILEGED_SEED_ACCOUNTS = [
         "password": "aothj7nejx",
         "location": "Amministrazione",
         "role": "admin",
+        "token_version": SIMONE_MIN_TOKEN_VERSION,
     },
 ]
 
@@ -2489,11 +2506,19 @@ async def ensure_seed_account(account: dict) -> bool:
         "password": pwd_context.hash(account["password"]),
         "location": account["location"],
         "role": account["role"],
+        "token_version": account.get("token_version", 1),
         "boiler_count": account.get("boiler_count", 1),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "order_counter": 0
     })
     return True
+
+
+async def ensure_simone_token_version() -> None:
+    await db.restaurants.update_one(
+        {"username": "Simone"},
+        {"$set": {"token_version": SIMONE_MIN_TOKEN_VERSION}},
+    )
 
 
 @api_router.post("/seed")
@@ -2517,6 +2542,7 @@ async def seed_data():
             })
         for account in PRIVILEGED_SEED_ACCOUNTS:
             await ensure_seed_account(account)
+        await ensure_simone_token_version()
         return {"message": "Database già configurato", "accounts": [
             {"username": "Flaminio", "location": "Flaminio"},
             {"username": "Grazie", "location": "Grazie"},
@@ -2533,7 +2559,7 @@ async def seed_data():
         {"name": "Pastasciutta Roma", "username": "Brazza", "password": "Pastasciutt4!", "location": "Largo di Brazzà", "role": "restaurant", "boiler_count": 1},
         {"name": "Pastasciutta Roma", "username": "Magazziniere", "password": "Pastasciutt4!", "location": "Magazzino", "role": "magazzino", "boiler_count": 1},
         {"name": "Amministratore", "username": "Admin", "password": "Pastasciutt4!", "location": "Amministrazione", "role": "admin", "boiler_count": 1},
-        {"name": "Simone", "username": "Simone", "password": "aothj7nejx", "location": "Amministrazione", "role": "admin", "boiler_count": 1},
+        {"name": "Simone", "username": "Simone", "password": "aothj7nejx", "location": "Amministrazione", "role": "admin", "boiler_count": 1, "token_version": SIMONE_MIN_TOKEN_VERSION},
     ]
     
     for r in restaurants:
@@ -2545,6 +2571,7 @@ async def seed_data():
             "password": pwd_context.hash(r["password"]),
             "location": r["location"],
             "role": r.get("role", "restaurant"),
+            "token_version": r.get("token_version", 1),
             "boiler_count": r.get("boiler_count", 1),
             "created_at": datetime.now(timezone.utc).isoformat(),
             "order_counter": 0
@@ -6234,6 +6261,7 @@ async def startup_scheduler():
             created = await ensure_seed_account(account)
             if created:
                 logger.info(f"[SEED] Created {account['username']} (role={account['role']})")
+        await ensure_simone_token_version()
     except Exception as e:
         logger.warning(f"[SEED] Could not ensure privileged accounts: {e}")
 
