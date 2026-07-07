@@ -492,7 +492,7 @@ const DiagnosticaLivePage = () => {
 
             <section className="mb-8">
               <SectionTitle>Backend - prestazioni live</SectionTitle>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
                 <MetricTile
                   icon={Activity}
                   label="Latenza media"
@@ -516,14 +516,6 @@ const DiagnosticaLivePage = () => {
                   detail={`${stats.errors} errori HTTP totali recenti`}
                   level={stats.serverErrors > 0 ? 'critical' : stats.errors > 0 ? 'warning' : 'ok'}
                   testId="diag-server-errors"
-                />
-                <MetricTile
-                  icon={AlertTriangle}
-                  label="Chiamate lente"
-                  value={data.slow_calls_count || 0}
-                  detail="Richieste sopra la soglia di lentezza"
-                  level={(data.slow_calls_count || 0) > 0 ? 'warning' : 'ok'}
-                  testId="diag-slow-calls"
                 />
               </div>
 

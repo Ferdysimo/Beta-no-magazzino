@@ -163,6 +163,33 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-07 16:05 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: ux
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Rimosso il banner/health reason "Locali senza WebSocket attivo" dalla Diagnostica Live. I locali offline restano visibili nella tabella WebSocket, ma non alzano piu un avviso nel semaforo principale.
+**Testato**: si (metodo: `python -m py_compile backend/server.py`)
+**Note per il prossimo agente**: Non reintrodurre l'offline WebSocket come banner principale: l'utente lo considera rumore operativo.
+
+### [2026-07-07 15:55 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: ux
+**File toccati**:
+- `/app/frontend/src/pages/DiagnosticaLivePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Rimosso il quadrato "Chiamate lente" dalla sezione Backend - prestazioni live della Diagnostica. La griglia ora usa tre metriche principali: latenza media, picco latenza ed errori server.
+**Testato**: si (metodo: `npm run build`, riuscito con warning ESLint preesistenti)
+**Note per il prossimo agente**: Il conteggio slow calls resta disponibile nel footer dei dettagli tecnici API, ma non deve tornare come tile principale.
+
+### [2026-07-07 15:45 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Corretto il nome mostrato nella colonna "Utente" del Check singoli movimenti: i nuovi audit-log salvano `Admin` per modifiche admin e lo username reale del locale (`Flaminio`, `Grazie`, `Brazza`, ecc.) per modifiche dei locali. Le API normalizzano anche i vecchi log che mostravano `Pastasciutta Roma`, `Simone` o `Amministratore`.
+**Testato**: si (metodo: `python -m py_compile backend/server.py`)
+**Note per il prossimo agente**: Non usare `restaurant_name` per la colonna utente: per i locali e spesso il nome generico "Pastasciutta Roma"; usare `username` o normalizzazione API.
+
 ### [2026-07-07 15:25 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: security
 **File toccati**:

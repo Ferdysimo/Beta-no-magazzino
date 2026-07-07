@@ -1409,13 +1409,6 @@ async def get_diagnostics(token_data: dict = Depends(verify_token)):
             "title": "WebSocket instabili",
             "detail": f"Disconnessioni elevate: {names}",
         })
-    if ws_offline:
-        names = ", ".join([w.get("location") or w.get("username") or w.get("restaurant_id", "")[:8] for w in ws_offline[:3]])
-        health_reasons.append({
-            "level": "warning",
-            "title": "Locali senza WebSocket attivo",
-            "detail": names,
-        })
     if api_client_errors and not api_server_errors:
         latest = api_client_errors[-1]
         health_reasons.append({
@@ -4147,12 +4140,23 @@ def _audit_user_info(request: Request, token_data: dict) -> dict:
     role = token_data.get("role")
     is_admin = role == "admin"
     impersonated = bool(request.headers.get("X-Restaurant-Id") or request.headers.get("x-restaurant-id")) if is_admin else False
+    username = token_data.get("username") or token_data.get("restaurant_name") or "unknown"
     return {
         "by_role": role or "unknown",
-        "by_user": token_data.get("restaurant_name") or "unknown",
+        "by_user": "Admin" if is_admin else username,
         "by_user_id": token_data.get("restaurant_id") or "",
         "is_impersonating": impersonated,
     }
+
+
+def _normalize_audit_user_label(entry: dict, user_map: Dict[str, str]) -> str:
+    """Display name for audit UI: real locale username, or Admin for admin edits."""
+    raw_user = (entry.get("by_user") or "").strip()
+    if entry.get("by_role") == "admin" or entry.get("is_impersonating") or raw_user in ("Admin", "Amministratore", "Simone"):
+        return "Admin"
+    if raw_user == "Pastasciutta Roma" or not raw_user:
+        return user_map.get(entry.get("by_user_id")) or user_map.get(entry.get("restaurant_id")) or raw_user or "?"
+    return raw_user
 
 
 async def _audit_log_change(
@@ -4655,15 +4659,26 @@ async def admin_audit_log_groups(
     rows = await db.cash_audit_log.aggregate(pipeline).to_list(500)
     rids = list({r["_id"]["rid"] for r in rows if r["_id"].get("rid")})
     rest_map: Dict[str, str] = {}
+    user_map: Dict[str, str] = {}
     if rids:
         async for r in db.restaurants.find({"id": {"$in": rids}}, {"_id": 0, "id": 1, "username": 1, "location": 1}):
             rest_map[r["id"]] = r.get("location") or r.get("username") or r["id"][:8]
+            user_map[r["id"]] = r.get("username") or r.get("location") or r["id"][:8]
     items = []
     for r in rows:
         rid = r["_id"]["rid"]
+        restaurant_label = rest_map.get(rid, "?")
+        users = set(r.get("users") or [])
+        if r.get("admin_count", 0) > 0:
+            users.discard("Simone")
+            users.discard("Amministratore")
+            users.add("Admin")
+        if "Pastasciutta Roma" in users:
+            users.discard("Pastasciutta Roma")
+            users.add(user_map.get(rid, restaurant_label))
         items.append({
             "restaurant_id": rid,
-            "restaurant_label": rest_map.get(rid, "?"),
+            "restaurant_label": restaurant_label,
             "date_rome": r["_id"]["date"],
             "count": r["count"],
             "total_changes": r["total_changes"],
@@ -4672,7 +4687,7 @@ async def admin_audit_log_groups(
             "admin_count": r["admin_count"],
             "first_at": r["first_at"],
             "last_at": r["last_at"],
-            "users": r.get("users") or [],
+            "users": sorted(users),
         })
     return {"items": items, "count": len(items)}
 
@@ -4711,12 +4726,20 @@ async def admin_audit_log(
     docs = await db.cash_audit_log.find(q, {"_id": 0}).sort("last_at", -1).to_list(limit)
     # Arricchisco con nome locale (cache map già presente _locations_cache: skip — uso restaurants live)
     rest_map = {}
-    rids = list({d.get("restaurant_id") for d in docs if d.get("restaurant_id")})
+    user_map = {}
+    rids = list({
+        rid
+        for d in docs
+        for rid in (d.get("restaurant_id"), d.get("by_user_id"))
+        if rid
+    })
     if rids:
         async for r in db.restaurants.find({"id": {"$in": rids}}, {"_id": 0, "id": 1, "username": 1, "location": 1}):
             rest_map[r["id"]] = r.get("location") or r.get("username") or r["id"][:8]
+            user_map[r["id"]] = r.get("username") or r.get("location") or r["id"][:8]
     for d in docs:
         d["restaurant_label"] = rest_map.get(d.get("restaurant_id"), "?")
+        d["by_user"] = _normalize_audit_user_label(d, user_map)
     return {"items": docs, "count": len(docs)}
 
 
