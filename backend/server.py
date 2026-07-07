@@ -1121,6 +1121,7 @@ async def get_diagnostics(token_data: dict = Depends(verify_token)):
     now = datetime.now(timezone.utc)
     cutoff_15m_dt = now - timedelta(minutes=15)
     cutoff_1h_dt = now - timedelta(hours=1)
+    cutoff_24h_dt = now - timedelta(hours=24)
     cutoff_1h = cutoff_1h_dt.isoformat()
     today_rome = datetime.now(ROME_TZ)
     today_start_utc = today_rome.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc).isoformat()

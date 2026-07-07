@@ -163,6 +163,15 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-07 09:20 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Corretto errore della Diagnostica Live dopo la rimozione degli health snapshot: ripristinata la variabile `cutoff_24h_dt`, ancora necessaria per calcolare lo storico salute "24 ore" live.
+**Testato**: si (metodo: `python -m py_compile backend/server.py`)
+**Note per il prossimo agente**: La rimozione degli snapshot Mongo resta valida; `cutoff_24h_dt` serve solo per aggregare il buffer diagnostico in memoria.
+
 ### [2026-07-06 12:15 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: config
 **File toccati**:
