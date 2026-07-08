@@ -4677,74 +4677,6 @@ async def get_generale_hide_log(
     return {"items": rows, "count": len(rows)}
 
 
-@api_router.post("/admin/_simulate-midnight-reset")
-async def admin_simulate_midnight_reset(token_data: dict = Depends(verify_token)):
-    """Admin-only: simula completamente lo scatto di mezzanotte.
-    - Esegue `midnight_reset` (archive orders/logs, reset counters, broadcast WS).
-    - Inoltre **risposta le righe di oggi** di `cash_daily_counts` e `beverage_daily_counts`
-      al giorno precedente, così la chiusura corrente diventa "storico" e il Report
-      ricomincia da zero (con carry-over della sera di ieri sulla mattina di oggi).
-    Utile per testing e simulazioni controllate.
-    """
-    if token_data.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-    logger.info("[ADMIN] Manual midnight reset triggered")
-    await midnight_reset()
-
-    today = _today_rome_str()
-    yesterday = (datetime.now(ROME_TZ) - timedelta(days=1)).strftime("%Y-%m-%d")
-    # Sposta le righe di oggi → ieri (collisioni risolte sovrascrivendo: ieri non esisteva
-    # per definizione "ripartiamo da zero").
-    moved_cash = 0
-    moved_bev = 0
-    # cash_daily_counts: chiave logica (restaurant_id, date_rome)
-    async for d in db.cash_daily_counts.find({"date_rome": today}, {"_id": 0}):
-        rid = d.get("restaurant_id")
-        if not rid:
-            continue
-        new_doc = {**d, "date_rome": yesterday}
-        await db.cash_daily_counts.update_one(
-            {"restaurant_id": rid, "date_rome": yesterday},
-            {"$set": new_doc},
-            upsert=True,
-        )
-        await db.cash_daily_counts.delete_one({"restaurant_id": rid, "date_rome": today})
-        moved_cash += 1
-    # beverage_daily_counts: chiave logica (restaurant_id, date_rome, sigla)
-    async for d in db.beverage_daily_counts.find({"date_rome": today}, {"_id": 0}):
-        rid = d.get("restaurant_id")
-        sigla = d.get("sigla")
-        if not rid or not sigla:
-            continue
-        new_doc = {**d, "date_rome": yesterday}
-        await db.beverage_daily_counts.update_one(
-            {"restaurant_id": rid, "date_rome": yesterday, "sigla": sigla},
-            {"$set": new_doc},
-            upsert=True,
-        )
-        await db.beverage_daily_counts.delete_one(
-            {"restaurant_id": rid, "date_rome": today, "sigla": sigla}
-        )
-        moved_bev += 1
-    logger.info(
-        f"[ADMIN] Spostate {moved_cash} righe cash + {moved_bev} righe beverage "
-        f"da {today} → {yesterday} per simulare il rollover di giornata"
-    )
-    # Broadcast a tutti i client connessi così Report/Bevande si ricaricano
-    for rid in list(manager.active_connections.keys()):
-        await manager.broadcast_to_restaurant(rid, {"type": "daily_reset"})
-
-    return {
-        "ok": True,
-        "message": "Midnight reset eseguito",
-        "moved_cash_rows": moved_cash,
-        "moved_beverage_rows": moved_bev,
-        "from_date": today,
-        "to_date": yesterday,
-    }
-
-
-
 @api_router.get("/admin/closures")
 async def list_closures(
     days: int = 60,
@@ -4903,7 +4835,7 @@ async def admin_audit_log(
     restaurant_id: Optional[str] = None,
     category: Optional[str] = None,         # 'cash' | 'beverage'
     field_q: Optional[str] = None,          # full-text regex su 'field'
-    user_q: Optional[str] = None,           # full-text regex su 'by_user'
+    user_q: Optional[str] = None,           # full-text sul nome utente normalizzato
     limit: int = 500,
     token_data: dict = Depends(verify_token),
 ):
@@ -4924,10 +4856,10 @@ async def admin_audit_log(
         q["category"] = category
     if field_q:
         q["field"] = {"$regex": re.escape(field_q), "$options": "i"}
-    if user_q:
-        q["by_user"] = {"$regex": re.escape(user_q), "$options": "i"}
     limit = max(1, min(int(limit or 500), 2000))
-    docs = await db.cash_audit_log.find(q, {"_id": 0}).sort("last_at", -1).to_list(limit)
+    normalized_user_q = (user_q or "").strip().casefold()
+    fetch_limit = 10000 if normalized_user_q else limit
+    docs = await db.cash_audit_log.find(q, {"_id": 0}).sort("last_at", -1).to_list(fetch_limit)
     # Arricchisco con nome locale (cache map già presente _locations_cache: skip — uso restaurants live)
     rest_map = {}
     user_map = {}
@@ -4943,7 +4875,16 @@ async def admin_audit_log(
             user_map[r["id"]] = r.get("username") or r.get("location") or r["id"][:8]
     for d in docs:
         d["restaurant_label"] = rest_map.get(d.get("restaurant_id"), "?")
+        d["_raw_by_user"] = d.get("by_user", "")
         d["by_user"] = _normalize_audit_user_label(d, user_map)
+    if normalized_user_q:
+        docs = [
+            d for d in docs
+            if normalized_user_q in str(d.get("by_user", "")).casefold()
+            or normalized_user_q in str(d.get("_raw_by_user", "")).casefold()
+        ][:limit]
+    for d in docs:
+        d.pop("_raw_by_user", None)
     return {"items": docs, "count": len(docs)}
 
 

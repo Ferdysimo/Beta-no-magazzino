@@ -163,6 +163,16 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-08 11:10 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/frontend/src/pages/AuditCassaPage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Rimossa la simulazione manuale del reset mezzanotte e corretto il Check singoli movimenti: il filtro utente ora cerca sul nome normalizzato mostrato in tabella e i filtri data usano Europe/Rome invece della data UTC del browser.
+**Testato**: si (metodo: `python -m py_compile backend/server.py`, `npm run build`)
+**Note per il prossimo agente**: Non reintrodurre endpoint manuali che spostano righe Report tra giorni; il rollover deve restare automatico/server-side.
+
 ### [2026-07-08 10:30 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix
 **File toccati**:

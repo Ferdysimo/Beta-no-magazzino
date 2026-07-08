@@ -32,6 +32,18 @@ const fmtDate = (s) => {
   if (!s) return '';
   try { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; } catch (e) { return s; }
 };
+const fmtRomeISODate = (date = new Date()) => {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Rome',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date).reduce((acc, p) => {
+    acc[p.type] = p.value;
+    return acc;
+  }, {});
+  return `${parts.year}-${parts.month}-${parts.day}`;
+};
 const fmtTime = (iso) => {
   if (!iso) return '';
   try {
@@ -50,10 +62,10 @@ const AuditCassaPage = () => {
   const navigate = useNavigate();
   const { token, isAdmin } = useAuth();
 
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const today = useMemo(() => fmtRomeISODate(), []);
   const thirtyDaysAgo = useMemo(() => {
     const d = new Date(); d.setDate(d.getDate() - 30);
-    return d.toISOString().slice(0, 10);
+    return fmtRomeISODate(d);
   }, []);
 
   // Filtri principali (per la lista chiusure)
