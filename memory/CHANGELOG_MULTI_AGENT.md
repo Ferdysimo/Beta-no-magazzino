@@ -163,6 +163,17 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-08 23:15 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/backend/tests/test_multi_tenancy.py`
+- `/app/frontend/src/pages/ReportBetaPage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Revisione chirurgica del flow Report: gli autosave cash/bevande ora usano patch parziali invece di riscrivere interi documenti, backend espone/controlla una `revision` per bloccare salvataggi stale da altre tab/dispositivi e i prezzi manuali delle paste non riconosciute sono agganciati al testo normalizzato della riga, non piu all'indice.
+**Testato**: si (metodo: `python -m py_compile backend/server.py`, `npm run build`, backend/frontend/Mongo locali avviati con `scripts/start-local-native.ps1`, `pytest backend/tests/test_multi_tenancy.py -q` -> 12 passed)
+**Note per il prossimo agente**: Non reintrodurre autosave globali su `ReportBetaPage.js`: ogni handler deve salvare solo i campi modificati. Il blocco "BLOCCA AGGIORNAMENTI" paste resta volutamente non persistente su richiesta utente.
+
 ### [2026-07-08 11:10 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix
 **File toccati**:

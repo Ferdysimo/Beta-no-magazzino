@@ -97,6 +97,14 @@ const isFormulaExpr = (v) => {
   return false;
 };
 
+const manualPriceKeyForLine = (line) => (
+  String(line || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+    .slice(0, 200)
+);
+
 // Definizione del riepilogo cassa Flaminio (Report)
 // NB: VERS è in fondo perché nel render viene SPOSTATO fuori dal map ed
 // emesso dopo CASH SERA come ultimo box bianco a destra.
@@ -316,7 +324,6 @@ const ReportBetaPageInner = () => {
     return init;
   });
   const [cashComments, setCashComments] = useState({}); // { key: "testo commento" }
-  const [versColor, setVersColor] = useState('');         // '' | 'black' | 'red' | 'green' | 'blue' | 'orange'
   // Forza modifica CASH MATTINA (normalmente è read-only perché auto-popolato
   // dal CASH SERA di ieri). L'utente può sbloccarlo esplicitamente per correzioni.
   const [forceMattina, setForceMattina] = useState(false);
@@ -340,12 +347,18 @@ const ReportBetaPageInner = () => {
   const commentInputRef = React.useRef(null);
   const [cashLoaded, setCashLoaded] = useState(false);
   const cashSaveTimer = React.useRef(null);
+  const cashPatchRef = React.useRef({});
+  const cashRevisionRef = React.useRef('');
+  const [, setCashRevision] = useState('');
+  const [reportConflict, setReportConflict] = useState('');
   // Cassetto spicci — edit mode (click-to-edit, conferma su Enter/blur, annulla su Esc)
   const [editingCassetto, setEditingCassetto] = useState(null); // key | null
   const [editingValue, setEditingValue] = useState('');         // valore digitato durante edit
   const editingInputRef = React.useRef(null);
   // Magazzino Sera editabile (debounce per sigla + protezione anti-override del polling)
   const bevSaveTimers = React.useRef({});            // { sigla: timeout }
+  const bevPatchRef = React.useRef({});
+  const bevRevisionRef = React.useRef({});
   const bevPendingSeraUntil = React.useRef({});      // { sigla: timestamp ms } — finché non scade, il poll non sovrascrive 'sera'
   const [focusedSeraSigla, setFocusedSeraSigla] = useState(null);
 
@@ -390,12 +403,14 @@ const ReportBetaPageInner = () => {
         setBeverages(invRes.data || []);
         const today = dailyRes.data?.counts || {};
         const prev = dailyRes.data?.prev_sera || {};
+        const nextBevRevisions = {};
         const now = Date.now();
         setBevCounts(prevState => {
           const merged = {};
           (invRes.data || []).forEach(b => {
             const remote = today[b.sigla];
             const local = prevState[b.sigla];
+            if (remote?.revision !== undefined) nextBevRevisions[b.sigla] = remote.revision || '';
             // Protezione anti-overwrite: durante 4s dopo l'ultima modifica
             // utente su questa sigla (o mentre 'sera' è focusato), il polling
             // non sovrascrive NESSUN campo locale per quella sigla. Evita che
@@ -454,6 +469,7 @@ const ReportBetaPageInner = () => {
           });
           return merged;
         });
+        bevRevisionRef.current = { ...bevRevisionRef.current, ...nextBevRevisions };
       } catch (e) {
         // 403 se non Flaminio/Admin: ignora silenziosamente
       }
@@ -463,30 +479,62 @@ const ReportBetaPageInner = () => {
     return () => { cancelled = true; clearInterval(id); };
   }, [token, focusedSeraSigla, histQS]);
 
-  // Auto-save debounced di una bevanda (intera riga, come MagazzinoBevandePage)
-  const scheduleBevSave = React.useCallback((sigla, row) => {
+  const queueCashPatch = React.useCallback((patch) => {
+    if (!cashLoaded || !token || readOnlyHistorical) return;
+    cashPatchRef.current = { ...cashPatchRef.current, ...patch };
+    if (cashSaveTimer.current) clearTimeout(cashSaveTimer.current);
+    cashSaveTimer.current = setTimeout(async () => {
+      const payload = cashPatchRef.current;
+      cashPatchRef.current = {};
+      if (!payload || Object.keys(payload).length === 0) return;
+      try {
+        const res = await axios.put(`${API}/cash/daily`, {
+          ...payload,
+          revision: cashRevisionRef.current || '',
+          ...histBody,
+        }, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const nextRevision = res.data?.revision || '';
+        cashRevisionRef.current = nextRevision;
+        setCashRevision(nextRevision);
+        setReportConflict('');
+      } catch (e) {
+        if (e?.response?.status === 409) {
+          setReportConflict(e.response.data?.detail || 'Report aggiornato da un altro dispositivo: ricarica prima di salvare.');
+        } else {
+          console.error('save cash report patch', e);
+        }
+      }
+    }, 500);
+  }, [cashLoaded, token, readOnlyHistorical, histBody]);
+
+  // Auto-save debounced di una bevanda: salva solo i campi modificati della sigla.
+  const scheduleBevSave = React.useCallback((sigla, patch) => {
     if (readOnlyHistorical) return; // sola lettura
+    bevPatchRef.current[sigla] = { ...(bevPatchRef.current[sigla] || {}), ...patch };
     if (bevSaveTimers.current[sigla]) clearTimeout(bevSaveTimers.current[sigla]);
     bevSaveTimers.current[sigla] = setTimeout(async () => {
+      const payload = bevPatchRef.current[sigla] || {};
+      delete bevPatchRef.current[sigla];
+      if (Object.keys(payload).length === 0) return;
       try {
-        await axios.put(`${API}/beverages/daily`, {
+        const res = await axios.put(`${API}/beverages/daily`, {
           sigla,
-          mattina: row.mattina ?? '',
-          inUsc: row.inUsc ?? '',
-          scarti: row.scarti ?? '',
-          sera: row.sera ?? '',
-          mattina_casse: row.mattina_casse ?? '',
-          mattina_sfuse: row.mattina_sfuse ?? '',
-          inUsc_casse: row.inUsc_casse ?? '',
-          sera_casse: row.sera_casse ?? '',
-          sera_sfuse: row.sera_sfuse ?? '',
-          comments: row.comments || {},
+          ...payload,
+          revision: bevRevisionRef.current[sigla] || '',
           ...histBody,
         }, { headers: { Authorization: `Bearer ${token}` } });
+        bevRevisionRef.current[sigla] = res.data?.revision || '';
+        setReportConflict('');
         // Mantieni protezione del valore locale per altri 2s dopo il save
         bevPendingSeraUntil.current[sigla] = Date.now() + 2000;
       } catch (e) {
-        console.error('save beverage sera (report)', e);
+        if (e?.response?.status === 409) {
+          setReportConflict(e.response.data?.detail || 'Report aggiornato da un altro dispositivo: ricarica prima di salvare.');
+        } else {
+          console.error('save beverage report patch', e);
+        }
       }
     }, 600);
   }, [token, histBody, readOnlyHistorical]);
@@ -518,7 +566,7 @@ const ReportBetaPageInner = () => {
         nextRow[slot] = Number.isInteger(total) ? String(total) : String(+total.toFixed(2));
       }
       const next = { ...prev, [sigla]: nextRow };
-      scheduleBevSave(sigla, nextRow);
+      scheduleBevSave(sigla, { [fieldKey]: value, [slot]: nextRow[slot] ?? '' });
       return next;
     });
   };
@@ -530,7 +578,7 @@ const ReportBetaPageInner = () => {
       const current = prev[sigla] || { mattina: '', inUsc: '', scarti: '', sera: '' };
       const nextRow = { ...current, sera: value };
       const next = { ...prev, [sigla]: nextRow };
-      scheduleBevSave(sigla, nextRow);
+      scheduleBevSave(sigla, { sera: value });
       return next;
     });
   };
@@ -543,7 +591,7 @@ const ReportBetaPageInner = () => {
       const current = prev[sigla] || { mattina: '', inUsc: '', scarti: '', sera: '', sera_casse: '', sera_sfuse: '' };
       const nextRow = { ...current, scarti: value };
       const next = { ...prev, [sigla]: nextRow };
-      scheduleBevSave(sigla, nextRow);
+      scheduleBevSave(sigla, { scarti: value });
       return next;
     });
   };
@@ -571,7 +619,7 @@ const ReportBetaPageInner = () => {
         nextRow.inUsc = Number.isInteger(total) ? String(total) : String(+total.toFixed(2));
       }
       const next = { ...prev, [sigla]: nextRow };
-      scheduleBevSave(sigla, nextRow);
+      scheduleBevSave(sigla, { inUsc_casse: value, inUsc: nextRow.inUsc ?? '' });
       return next;
     });
   };
@@ -596,7 +644,6 @@ const ReportBetaPageInner = () => {
         }
         setCashRow(initial);
         setCashComments(res.data?.comments || {});
-        setVersColor(res.data?.vers_color || '');
         // Persistenza paste incollate + banconote + prezzi manuali
         if (typeof res.data?.paste_text === 'string') setPasteText(res.data.paste_text);
         if (res.data?.cash_banconote && typeof res.data.cash_banconote === 'object') {
@@ -605,6 +652,9 @@ const ReportBetaPageInner = () => {
         if (res.data?.manual_prices && typeof res.data.manual_prices === 'object') {
           setManualPrices(res.data.manual_prices);
         }
+        const nextRevision = res.data?.revision || '';
+        cashRevisionRef.current = nextRevision;
+        setCashRevision(nextRevision);
         setCashLoaded(true);
       } catch (e) {
         // 403 se non Flaminio/Admin
@@ -613,27 +663,6 @@ const ReportBetaPageInner = () => {
     })();
     return () => { cancelled = true; };
   }, [token, histQS]);
-
-  // Debounced save del riepilogo cassa
-  useEffect(() => {
-    if (!cashLoaded || !token) return;
-    if (readOnlyHistorical) return; // sola lettura: nessuna scrittura
-    if (cashSaveTimer.current) clearTimeout(cashSaveTimer.current);
-    cashSaveTimer.current = setTimeout(() => {
-      axios.put(`${API}/cash/daily`, {
-        ...cashRow,
-        comments: cashComments,
-        vers_color: versColor,
-        paste_text: pasteText,
-        cash_banconote: cash,
-        manual_prices: manualPrices,
-        ...histBody,
-      }, {
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => { /* silenzioso */ });
-    }, 500);
-    return () => { if (cashSaveTimer.current) clearTimeout(cashSaveTimer.current); };
-  }, [cashRow, cashComments, versColor, pasteText, cash, manualPrices, cashLoaded, token, histBody]);
 
   // Auto-popolamento PASTE dalle paste mandate dal Cassa (live, per il locale effettivo).
   // - Fetch iniziale + polling 5s + ascolto eventi WS via OrderContext (refresh immediato).
@@ -676,10 +705,14 @@ const ReportBetaPageInner = () => {
   useEffect(() => {
     if (manualPasteOverride) return;
     if (historicalMode) return; // Storico: usa il paste_text salvato, non sovrascrivere
-    if (autoPasteText === pasteText) return;
-    setPasteText(autoPasteText);
+    if (autoPasteText !== pasteText) {
+      setPasteText(autoPasteText);
+    }
+    if (cashLoaded) {
+      queueCashPatch({ paste_text: autoPasteText });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoPasteText, manualPasteOverride, historicalMode]);
+  }, [autoPasteText, manualPasteOverride, historicalMode, cashLoaded, queueCashPatch]);
 
   // Quando un ordine viene creato/modificato/eliminato dall'OrderContext (WS live)
   // forziamo un refetch immediato così la colonna PASTE è subito aggiornata.
@@ -738,7 +771,11 @@ const ReportBetaPageInner = () => {
   // (lettere e altri caratteri vengono strippati). Usato da tutti gli input
   // della pagina Report (Movimentazione, Spicci, Cassetto, bevande, scarti).
   const sanitizeNum = (v) => String(v ?? '').replace(/[^0-9+\-*/.()\s,=]/g, '');
-  const setCashRowValue = (key, v) => setCashRow(p => ({ ...p, [key]: sanitizeNum(v) }));
+  const setCashRowValue = (key, v) => {
+    const clean = sanitizeNum(v);
+    setCashRow(p => ({ ...p, [key]: clean }));
+    queueCashPatch({ [key]: clean });
+  };
 
   // Auto-dismiss della preview: si chiude se l'utente clicca QUALSIASI punto
   // fuori dalla cella attualmente in preview (input/label/padding inclusi).
@@ -787,6 +824,7 @@ const ReportBetaPageInner = () => {
     if (!el) return;
     const clean = sanitizeVersHtml(el.innerHTML);
     setCashRow(p => ({ ...p, vers: clean }));
+    queueCashPatch({ vers: clean });
   };
 
   // Applica un colore alla porzione di testo selezionata dentro l'editor VERS.
@@ -816,7 +854,9 @@ const ReportBetaPageInner = () => {
     sel.removeAllRanges();
     sel.addRange(afterRange);
 
-    setCashRow(p => ({ ...p, vers: sanitizeVersHtml(el.innerHTML) }));
+    const clean = sanitizeVersHtml(el.innerHTML);
+    setCashRow(p => ({ ...p, vers: clean }));
+    queueCashPatch({ vers: clean });
   };
 
   // Autofocus quando si entra in edit mode su un quadratino del cassetto
@@ -847,6 +887,7 @@ const ReportBetaPageInner = () => {
     if (editingValue.trim() === '') {
       // Campo svuotato → resetto stock a stringa vuota
       setCashRow(p => ({ ...p, [f.key]: '' }));
+      queueCashPatch({ [f.key]: '' });
     } else {
       const typed = evaluateValue(editingValue);
       const aperti = evaluateValue(cashRow[f.spicciKey]);
@@ -854,6 +895,7 @@ const ReportBetaPageInner = () => {
       // Salvo come stringa "pulita" (no decimali se intero)
       const baseStr = Number.isInteger(newBase) ? String(newBase) : String(+newBase.toFixed(2));
       setCashRow(p => ({ ...p, [f.key]: baseStr }));
+      queueCashPatch({ [f.key]: baseStr });
     }
     setEditingCassetto(null);
     setEditingValue('');
@@ -892,7 +934,7 @@ const ReportBetaPageInner = () => {
         if (trimmed) newComments[subkey] = trimmed;
         else delete newComments[subkey];
         const nextRow = { ...current, comments: newComments };
-        scheduleBevSave(key, nextRow);
+        scheduleBevSave(key, { comments: newComments });
         return { ...prev, [key]: nextRow };
       });
     } else {
@@ -900,6 +942,7 @@ const ReportBetaPageInner = () => {
         const next = { ...prev };
         if (trimmed) next[key] = trimmed;
         else delete next[key];
+        queueCashPatch({ comments: next });
         return next;
       });
     }
@@ -945,7 +988,7 @@ const ReportBetaPageInner = () => {
         recognizedCount += 1;
         recognizedEuro += match.price;
       } else {
-        unrecognized.push({ idx, text: line });
+        unrecognized.push({ idx, text: line, key: manualPriceKeyForLine(line) });
       }
     });
 
@@ -953,7 +996,7 @@ const ReportBetaPageInner = () => {
     // Il prezzo è quello manuale se presente, altrimenti 0
     let manualEuro = 0;
     unrecognized.forEach(u => {
-      const raw = (manualPrices[u.idx] ?? '').toString().replace(/,/g, '.').trim();
+      const raw = (manualPrices[u.key] ?? manualPrices[u.idx] ?? '').toString().replace(/,/g, '.').trim();
       const n = parseFloat(raw);
       if (!Number.isNaN(n) && n > 0) manualEuro += n;
     });
@@ -964,7 +1007,7 @@ const ReportBetaPageInner = () => {
       totalCount: recognizedCount + unrecognized.length,
       totalEuro: recognizedEuro + manualEuro,
       missingPriceCount: unrecognized.filter(u => {
-        const raw = (manualPrices[u.idx] ?? '').toString().replace(/,/g, '.').trim();
+        const raw = (manualPrices[u.key] ?? manualPrices[u.idx] ?? '').toString().replace(/,/g, '.').trim();
         const n = parseFloat(raw);
         return Number.isNaN(n) || n <= 0;
       }).length,
@@ -1075,23 +1118,42 @@ const ReportBetaPageInner = () => {
     };
   }, [cashRow, pasteAnalysis.totalEuro, pasteAnalysis.totalCount, bevTotalInc, bevSales, spicciValues.total, spicciValues.rows]);
 
-  const setCashValue = (key, v) => setCash(p => ({ ...p, [key]: sanitizeNum(v) }));
-  const setManualPrice = (idx, v) => {
+  const setCashValue = (key, v) => {
+    const clean = sanitizeNum(v);
+    setCash(p => {
+      const next = { ...p, [key]: clean };
+      queueCashPatch({ cash_banconote: next });
+      return next;
+    });
+  };
+  const setManualPrice = (priceKey, v) => {
     // Cap manuale: massimo 15€ per una pasta sconosciuta (vale per
     // qualsiasi cifra numerica digitata; le formule "=" non sono ammesse qui).
     const raw = (v ?? '').toString();
     if (raw.trim() === '') {
-      setManualPrices(p => ({ ...p, [idx]: '' }));
+      setManualPrices(p => {
+        const next = { ...p, [priceKey]: '' };
+        queueCashPatch({ manual_prices: next });
+        return next;
+      });
       return;
     }
     const normalized = raw.replace(/,/g, '.');
     const n = parseFloat(normalized);
     if (!Number.isNaN(n) && n > 15) {
       // Sostituisco con 15 (preserva la virgola italiana nello stato visivo)
-      setManualPrices(p => ({ ...p, [idx]: '15' }));
+      setManualPrices(p => {
+        const next = { ...p, [priceKey]: '15' };
+        queueCashPatch({ manual_prices: next });
+        return next;
+      });
       return;
     }
-    setManualPrices(p => ({ ...p, [idx]: raw }));
+    setManualPrices(p => {
+      const next = { ...p, [priceKey]: raw };
+      queueCashPatch({ manual_prices: next });
+      return next;
+    });
   };
   const fmtEur = (n) => n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -1128,6 +1190,11 @@ const ReportBetaPageInner = () => {
           📖 Sola lettura — chiusura del {urlDate.split('-').reverse().join('/')}, non è possibile modificare
         </div>
       )}
+      {reportConflict && (
+        <div className="bg-red-100 border-y border-red-400 text-red-800 text-sm font-semibold px-4 py-2 text-center">
+          {reportConflict}
+        </div>
+      )}
       <main
         className={`flex-1 max-w-[1600px] w-full mx-auto px-3 py-2 flex flex-col min-h-0 ${readOnlyHistorical ? 'pointer-events-none select-text' : ''}`}
       >
@@ -1160,6 +1227,7 @@ const ReportBetaPageInner = () => {
                   // Torna ad auto: ricarica dal server (azzera modifiche manuali)
                   setManualPasteOverride(false);
                   setPasteText(autoPasteText);
+                  queueCashPatch({ paste_text: autoPasteText });
                 } else {
                   setManualPasteOverride(true);
                 }
@@ -1179,7 +1247,11 @@ const ReportBetaPageInner = () => {
             <textarea
               data-testid="paste-textarea"
               value={pasteText}
-              onChange={(e) => { if (manualPasteOverride) setPasteText(e.target.value); }}
+              onChange={(e) => {
+                if (!manualPasteOverride) return;
+                setPasteText(e.target.value);
+                queueCashPatch({ paste_text: e.target.value });
+              }}
               readOnly={!manualPasteOverride || readOnlyHistorical}
               spellCheck={false}
               title={manualPasteOverride
@@ -1207,8 +1279,8 @@ const ReportBetaPageInner = () => {
                         data-testid={`manual-price-${u.idx}`}
                         type="text"
                         inputMode="decimal"
-                        value={manualPrices[u.idx] ?? ''}
-                        onChange={(e) => setManualPrice(u.idx, e.target.value)}
+                        value={manualPrices[u.key] ?? manualPrices[u.idx] ?? ''}
+                        onChange={(e) => setManualPrice(u.key, e.target.value)}
                         placeholder="€"
                         title="Max 15€"
                         className="w-12 h-6 border border-rose-300 rounded px-1 text-center font-bold text-[11px] focus:outline-none focus:border-rose-500"

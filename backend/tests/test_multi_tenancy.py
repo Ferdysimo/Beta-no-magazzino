@@ -168,32 +168,37 @@ class TestCashDailyMultiTenancy:
 
     def test_non_admin_cannot_impersonate(self, flaminio_session, grazie_session):
         """Flaminio sending X-Restaurant-Id=grazie_id must still operate on its own."""
-        # Flaminio writes mattina=777 trying to spoof Grazie via header
+        # Flaminio writes a normal field while trying to spoof Grazie via header.
+        # `mattina` is protected server-side and cannot be forced by non-admin users.
         r = requests.put(
             f"{BASE_URL}/api/cash/daily",
             headers=_hdr(flaminio_session["token"], grazie_session["id"]),
-            json={"mattina": "777"},
+            json={"altro": "777", "mattina": "777"},
             timeout=TIMEOUT,
         )
         assert r.status_code == 200, r.text
 
-        # GET as Flaminio (own scope) -> mattina should be 777 (his own row)
+        # GET as Flaminio (own scope) -> normal field changed on his own row, mattina stayed protected.
         g_self = requests.get(
             f"{BASE_URL}/api/cash/daily",
             headers=_hdr(flaminio_session["token"]),
             timeout=TIMEOUT,
         )
         assert g_self.status_code == 200
-        assert g_self.json()["data"]["mattina"] == "777"
+        self_data = g_self.json()["data"]
+        assert self_data["altro"] == "777"
+        assert self_data["mattina"] == "100"
 
-        # GET as Grazie -> must NOT have 777 (still has 200 from previous test)
+        # GET as Grazie -> must NOT have Flaminio's write.
         g_gr = requests.get(
             f"{BASE_URL}/api/cash/daily",
             headers=_hdr(grazie_session["token"]),
             timeout=TIMEOUT,
         )
         assert g_gr.status_code == 200
-        assert g_gr.json()["data"]["mattina"] == "200"
+        grazie_data = g_gr.json()["data"]
+        assert grazie_data["mattina"] == "200"
+        assert grazie_data["altro"] != "777"
 
     def test_prev_cash_sera_carry_over(
         self, admin_token, flaminio_session
@@ -296,6 +301,69 @@ class TestCashDailyMultiTenancy:
             sync_client.close()
         assert persisted["mattina"] == body["data"]["mattina"]
         assert persisted["cd5"] == "9"
+
+    def test_cash_daily_partial_patch_preserves_other_fields(
+        self, admin_token, flaminio_session
+    ):
+        """PUT /cash/daily with one field must not blank the rest of the report."""
+        flaminio_id = flaminio_session["id"]
+        r1 = requests.put(
+            f"{BASE_URL}/api/cash/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            json={"mattina": "100", "vers": "25", "bp": "10"},
+            timeout=TIMEOUT,
+        )
+        assert r1.status_code == 200, r1.text
+        revision = r1.json()["revision"]
+
+        r2 = requests.put(
+            f"{BASE_URL}/api/cash/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            json={"bp": "12", "revision": revision},
+            timeout=TIMEOUT,
+        )
+        assert r2.status_code == 200, r2.text
+
+        g = requests.get(
+            f"{BASE_URL}/api/cash/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            timeout=TIMEOUT,
+        )
+        assert g.status_code == 200, g.text
+        data = g.json()["data"]
+        assert data["mattina"] == "100"
+        assert data["vers"] == "25"
+        assert data["bp"] == "12"
+
+    def test_cash_daily_rejects_stale_revision(
+        self, admin_token, flaminio_session
+    ):
+        """A stale autosave must fail instead of overwriting newer report data."""
+        flaminio_id = flaminio_session["id"]
+        r1 = requests.put(
+            f"{BASE_URL}/api/cash/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            json={"altro": "1"},
+            timeout=TIMEOUT,
+        )
+        assert r1.status_code == 200, r1.text
+        stale_revision = r1.json()["revision"]
+
+        r2 = requests.put(
+            f"{BASE_URL}/api/cash/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            json={"altro": "2", "revision": stale_revision},
+            timeout=TIMEOUT,
+        )
+        assert r2.status_code == 200, r2.text
+
+        r3 = requests.put(
+            f"{BASE_URL}/api/cash/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            json={"bp": "99", "revision": stale_revision},
+            timeout=TIMEOUT,
+        )
+        assert r3.status_code == 409, r3.text
 
 
 # ============ BEVERAGES DAILY ============
@@ -427,6 +495,41 @@ class TestBeveragesDailyMultiTenancy:
         assert persisted["mattina"] == "52"
         assert persisted["mattina_casse"] == "2"
         assert persisted["mattina_sfuse"] == "4"
+
+    def test_beverage_daily_partial_patch_preserves_other_fields(
+        self, admin_token, flaminio_session
+    ):
+        """PUT /beverages/daily with one field must not blank the beverage row."""
+        flaminio_id = flaminio_session["id"]
+        SIGLA = "CZ"
+        r1 = requests.put(
+            f"{BASE_URL}/api/beverages/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            json={"sigla": SIGLA, "mattina": "20", "inUsc": "5", "sera": "7"},
+            timeout=TIMEOUT,
+        )
+        assert r1.status_code == 200, r1.text
+        revision = r1.json()["revision"]
+
+        r2 = requests.put(
+            f"{BASE_URL}/api/beverages/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            json={"sigla": SIGLA, "scarti": "1", "revision": revision},
+            timeout=TIMEOUT,
+        )
+        assert r2.status_code == 200, r2.text
+
+        g = requests.get(
+            f"{BASE_URL}/api/beverages/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            timeout=TIMEOUT,
+        )
+        assert g.status_code == 200, g.text
+        row = g.json()["counts"][SIGLA]
+        assert row["mattina"] == "20"
+        assert row["inUsc"] == "5"
+        assert row["sera"] == "7"
+        assert row["scarti"] == "1"
 
 
 # ============ CLOSURES (Admin only) ============

@@ -3766,6 +3766,14 @@ def _resolve_historical_mode(
     return (date_param, rid_param)
 
 
+def _payload_fields(model: BaseModel) -> set:
+    """Return fields explicitly sent by the client, compatible with Pydantic v1/v2."""
+    fields = getattr(model, "model_fields_set", None)
+    if fields is None:
+        fields = getattr(model, "__fields_set__", set())
+    return set(fields or set())
+
+
 class BeverageDailyUpsert(BaseModel):
     sigla: str
     mattina: Optional[str] = ""
@@ -3785,6 +3793,7 @@ class BeverageDailyUpsert(BaseModel):
     # Modalità storica (Admin/Supervisor)
     date: Optional[str] = None
     restaurant_id: Optional[str] = None
+    revision: Optional[str] = None
 
 
 @api_router.get("/beverages/daily")
@@ -3820,6 +3829,7 @@ async def get_beverage_daily_counts(
         "sera_casse": d.get("sera_casse", ""),
         "sera_sfuse": d.get("sera_sfuse", ""),
         "comments": d.get("comments") or {},
+        "revision": d.get("updated_at", "") or "",
     } for d in today_docs}
 
     prev_sera = {}
@@ -3882,6 +3892,7 @@ async def get_beverage_daily_counts(
                 "sera_casse": current.get("sera_casse", ""),
                 "sera_sfuse": current.get("sera_sfuse", ""),
                 "comments": current.get("comments") or {},
+                "revision": now_iso,
             }
 
     return {"date": target_date, "counts": counts, "prev_sera": prev_sera, "historical": bool(historical)}
@@ -3903,45 +3914,50 @@ async def upsert_beverage_daily(
     valid_siglas = {b["sigla"] for b in BEVERAGES_CATALOG}
     if data.sigla not in valid_siglas:
         raise HTTPException(status_code=400, detail=f"Sigla non valida: {data.sigla}")
+
+    old_doc = await db.beverage_daily_counts.find_one(
+        {"restaurant_id": rid, "date_rome": target_date, "sigla": data.sigla}, {"_id": 0}
+    ) or {}
+    if data.revision and old_doc.get("updated_at") and data.revision != old_doc.get("updated_at"):
+        raise HTTPException(
+            status_code=409,
+            detail="Report aggiornato da un altro dispositivo: ricarica prima di salvare.",
+        )
+
+    sent_fields = _payload_fields(data)
+    now_iso = datetime.now(timezone.utc).isoformat()
     set_body = {
         "restaurant_id": rid,
         "date_rome": target_date,
         "sigla": data.sigla,
-        "mattina": data.mattina or "",
-        "inUsc": data.inUsc or "",
-        "scarti": data.scarti or "",
-        "sera": data.sera or "",
-        "mattina_casse": data.mattina_casse or "",
-        "mattina_sfuse": data.mattina_sfuse or "",
-        "inUsc_casse": data.inUsc_casse or "",
-        "sera_casse": data.sera_casse or "",
-        "sera_sfuse": data.sera_sfuse or "",
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": now_iso,
     }
+    for k in ("mattina", "inUsc", "scarti", "sera", "mattina_casse", "mattina_sfuse", "inUsc_casse", "sera_casse", "sera_sfuse"):
+        if k in sent_fields:
+            set_body[k] = getattr(data, k) or ""
     # Sanitize commenti (max 500 char per chiave, scarto chiavi non-valide)
-    if data.comments is not None:
+    if "comments" in sent_fields and data.comments is not None:
         clean: Dict[str, str] = {}
         for k in ("inUsc", "scarti"):
             v = data.comments.get(k)
             if isinstance(v, str) and v.strip():
                 clean[k] = v.strip()[:500]
         set_body["comments"] = clean
-    # Audit-log: registro diff per ogni colonna della riga bevanda
-    old_doc = await db.beverage_daily_counts.find_one(
-        {"restaurant_id": rid, "date_rome": target_date, "sigla": data.sigla}, {"_id": 0}
-    ) or {}
     # Sicurezza: i campi MATTINA (mattina + mattina_casse + mattina_sfuse) della
     # bevanda — coperti dal toggle "Forza Magazzino Mattina" — possono essere
     # modificati SOLO da admin/Federico. Per gli altri utenti preserviamo il
     # valore esistente nel DB ignorando ciò che è stato inviato.
     if token_data.get("role") != "admin":
         for k in ("mattina", "mattina_casse", "mattina_sfuse"):
-            set_body[k] = old_doc.get(k, "")
+            if k in set_body:
+                set_body[k] = old_doc.get(k, "")
     try:
         ui = _audit_user_info(request, token_data)
         if historical:
             ui = {**ui, "mode": "historical"}
         for col in ("mattina", "inUsc", "scarti", "sera"):
+            if col not in set_body:
+                continue
             await _audit_log_change(
                 category="beverage", rid=rid, date_rome=target_date,
                 field=f"{data.sigla}.{col}",
@@ -3965,7 +3981,7 @@ async def upsert_beverage_daily(
         {"$set": set_body},
         upsert=True,
     )
-    return {"ok": True, "historical": bool(historical)}
+    return {"ok": True, "historical": bool(historical), "revision": now_iso}
 
 
 @api_router.get("/beverages/daily/history")
@@ -4443,6 +4459,7 @@ class CashDailyUpsert(BaseModel):
     # avviene per il giorno+locale indicati invece che per oggi/ristorante effettivo.
     date: Optional[str] = None          # YYYY-MM-DD
     restaurant_id: Optional[str] = None
+    revision: Optional[str] = None
 
 
 @api_router.get("/cash/daily")
@@ -4473,6 +4490,7 @@ async def get_cash_daily(
     paste_text = today_doc.get("paste_text", "") or ""
     cash_banconote = today_doc.get("cash_banconote") or {}
     manual_prices = today_doc.get("manual_prices") or {}
+    revision = today_doc.get("updated_at", "") or ""
 
     prev_cash_sera = ""
     prev_row = None
@@ -4526,6 +4544,7 @@ async def get_cash_daily(
                 for k, v in carry_fields.items():
                     if k in data:
                         data[k] = v
+                revision = carry_fields["updated_at"]
     return {
         "date": target_date,
         "data": data,
@@ -4538,6 +4557,7 @@ async def get_cash_daily(
         "cash_banconote": cash_banconote,
         "manual_prices": manual_prices,
         "historical": bool(historical),
+        "revision": revision,
     }
 
 
@@ -4554,30 +4574,42 @@ async def upsert_cash_daily(
     else:
         rid = await _effective_restaurant_id(request, token_data)
         target_date = _today_rome_str()
-    payload = {f: (getattr(data, f) or "") for f in ALL_CASH_FIELDS}
+    old_doc = await db.cash_daily_counts.find_one(
+        {"restaurant_id": rid, "date_rome": target_date}, {"_id": 0}
+    ) or {}
+    if data.revision and old_doc.get("updated_at") and data.revision != old_doc.get("updated_at"):
+        raise HTTPException(
+            status_code=409,
+            detail="Report aggiornato da un altro dispositivo: ricarica prima di salvare.",
+        )
+
+    sent_fields = _payload_fields(data)
+    now_iso = datetime.now(timezone.utc).isoformat()
     set_payload = {
-        **payload,
         "restaurant_id": rid,
         "date_rome": target_date,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": now_iso,
     }
+    for f in ALL_CASH_FIELDS:
+        if f in sent_fields:
+            set_payload[f] = getattr(data, f) or ""
     # vers_color: solo valori validi
     allowed_colors = {"", "black", "red", "green", "blue", "orange"}
-    if data.vers_color is not None and data.vers_color in allowed_colors:
+    if "vers_color" in sent_fields and data.vers_color is not None and data.vers_color in allowed_colors:
         set_payload["vers_color"] = data.vers_color
     # Paste text (multiline area Report)
-    if data.paste_text is not None:
+    if "paste_text" in sent_fields and data.paste_text is not None:
         set_payload["paste_text"] = str(data.paste_text)[:50000]
     # Cassa banconote (input pezzi/€)
-    if data.cash_banconote is not None:
+    if "cash_banconote" in sent_fields and data.cash_banconote is not None:
         clean_b = {str(k)[:20]: str(v)[:50] for k, v in (data.cash_banconote or {}).items() if isinstance(k, str)}
         set_payload["cash_banconote"] = clean_b
     # Prezzi manuali per le paste non riconosciute (idx → prezzo)
-    if data.manual_prices is not None:
-        clean_p = {str(k)[:20]: str(v)[:50] for k, v in (data.manual_prices or {}).items() if isinstance(k, (str, int))}
+    if "manual_prices" in sent_fields and data.manual_prices is not None:
+        clean_p = {str(k)[:200]: str(v)[:50] for k, v in (data.manual_prices or {}).items() if isinstance(k, (str, int))}
         set_payload["manual_prices"] = clean_p
     # Sanitize commenti: solo str→str, max 500 char, scarto chiavi/valori vuoti
-    if data.comments is not None:
+    if "comments" in sent_fields and data.comments is not None:
         clean: Dict[str, str] = {}
         for k, v in data.comments.items():
             if not isinstance(k, str) or not isinstance(v, str):
@@ -4586,14 +4618,10 @@ async def upsert_cash_daily(
             if t:
                 clean[k[:50]] = t[:500]
         set_payload["comments"] = clean
-    # Audit-log: registro ogni delta rispetto al doc esistente
-    old_doc = await db.cash_daily_counts.find_one(
-        {"restaurant_id": rid, "date_rome": target_date}, {"_id": 0}
-    ) or {}
     # Sicurezza: il campo `mattina` (CASH MATTINA "Forza Mattina") può essere
     # modificato SOLO da admin/Federico. Per gli altri utenti preserviamo il
     # valore esistente nel DB ignorando ciò che è stato inviato lato client.
-    if token_data.get("role") != "admin":
+    if token_data.get("role") != "admin" and "mattina" in set_payload:
         set_payload["mattina"] = old_doc.get("mattina", "")
     try:
         ui = _audit_user_info(request, token_data)
@@ -4610,7 +4638,7 @@ async def upsert_cash_daily(
         {"$set": set_payload},
         upsert=True,
     )
-    return {"ok": True, "historical": bool(historical)}
+    return {"ok": True, "historical": bool(historical), "revision": now_iso}
 
 
 # ---------- Storico Chiusure (Admin only) ----------
