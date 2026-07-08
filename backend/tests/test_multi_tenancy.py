@@ -335,10 +335,10 @@ class TestCashDailyMultiTenancy:
         assert data["vers"] == "25"
         assert data["bp"] == "12"
 
-    def test_cash_daily_rejects_stale_revision(
+    def test_cash_daily_accepts_stale_partial_patch_without_blanket_overwrite(
         self, admin_token, flaminio_session
     ):
-        """A stale autosave must fail instead of overwriting newer report data."""
+        """Old tabs can still save a partial patch; unrelated newer fields must survive."""
         flaminio_id = flaminio_session["id"]
         r1 = requests.put(
             f"{BASE_URL}/api/cash/daily",
@@ -363,7 +363,63 @@ class TestCashDailyMultiTenancy:
             json={"bp": "99", "revision": stale_revision},
             timeout=TIMEOUT,
         )
-        assert r3.status_code == 409, r3.text
+        assert r3.status_code == 200, r3.text
+
+        g = requests.get(
+            f"{BASE_URL}/api/cash/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            timeout=TIMEOUT,
+        )
+        assert g.status_code == 200, g.text
+        data = g.json()["data"]
+        assert data["altro"] == "2"
+        assert data["bp"] == "99"
+
+    def test_cash_daily_paste_manual_override_roundtrip(
+        self, admin_token, flaminio_session
+    ):
+        """Manual paste lock is persisted, and unlocking can replace text with live paste text."""
+        flaminio_id = flaminio_session["id"]
+        r1 = requests.put(
+            f"{BASE_URL}/api/cash/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            json={"paste_manual_override": True, "paste_text": "MANUAL CARB"},
+            timeout=TIMEOUT,
+        )
+        assert r1.status_code == 200, r1.text
+        revision = r1.json()["revision"]
+
+        g1 = requests.get(
+            f"{BASE_URL}/api/cash/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            timeout=TIMEOUT,
+        )
+        assert g1.status_code == 200, g1.text
+        body1 = g1.json()
+        assert body1["paste_manual_override"] is True
+        assert body1["paste_text"] == "MANUAL CARB"
+
+        r2 = requests.put(
+            f"{BASE_URL}/api/cash/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            json={
+                "paste_manual_override": False,
+                "paste_text": "1 CARB\n2 AMAT",
+                "revision": revision,
+            },
+            timeout=TIMEOUT,
+        )
+        assert r2.status_code == 200, r2.text
+
+        g2 = requests.get(
+            f"{BASE_URL}/api/cash/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            timeout=TIMEOUT,
+        )
+        assert g2.status_code == 200, g2.text
+        body2 = g2.json()
+        assert body2["paste_manual_override"] is False
+        assert body2["paste_text"] == "1 CARB\n2 AMAT"
 
 
 # ============ BEVERAGES DAILY ============

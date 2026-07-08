@@ -339,6 +339,7 @@ const ReportBetaPageInner = () => {
   const [manualPasteOverride, setManualPasteOverride] = useState(false);
   const [autoPasteText, setAutoPasteText] = useState('');
   const [autoPasteCount, setAutoPasteCount] = useState(0);
+  const [autoPasteLoaded, setAutoPasteLoaded] = useState(false);
   const [focusedField, setFocusedField] = useState(null); // key | null (preview bar)
   const [previewKey, setPreviewKey] = useState(null); // key del campo MOVIMENTAZIONE da mostrare nella barra preview (toggle col pulsantino 🔍)
   // VERS rich-text editor (contentEditable) — supporta colorazione per-selezione.
@@ -350,7 +351,6 @@ const ReportBetaPageInner = () => {
   const cashPatchRef = React.useRef({});
   const cashRevisionRef = React.useRef('');
   const [, setCashRevision] = useState('');
-  const [reportConflict, setReportConflict] = useState('');
   // Cassetto spicci — edit mode (click-to-edit, conferma su Enter/blur, annulla su Esc)
   const [editingCassetto, setEditingCassetto] = useState(null); // key | null
   const [editingValue, setEditingValue] = useState('');         // valore digitato durante edit
@@ -498,13 +498,8 @@ const ReportBetaPageInner = () => {
         const nextRevision = res.data?.revision || '';
         cashRevisionRef.current = nextRevision;
         setCashRevision(nextRevision);
-        setReportConflict('');
       } catch (e) {
-        if (e?.response?.status === 409) {
-          setReportConflict(e.response.data?.detail || 'Report aggiornato da un altro dispositivo: ricarica prima di salvare.');
-        } else {
-          console.error('save cash report patch', e);
-        }
+        console.error('save cash report patch', e);
       }
     }, 500);
   }, [cashLoaded, token, readOnlyHistorical, histBody]);
@@ -526,15 +521,10 @@ const ReportBetaPageInner = () => {
           ...histBody,
         }, { headers: { Authorization: `Bearer ${token}` } });
         bevRevisionRef.current[sigla] = res.data?.revision || '';
-        setReportConflict('');
         // Mantieni protezione del valore locale per altri 2s dopo il save
         bevPendingSeraUntil.current[sigla] = Date.now() + 2000;
       } catch (e) {
-        if (e?.response?.status === 409) {
-          setReportConflict(e.response.data?.detail || 'Report aggiornato da un altro dispositivo: ricarica prima di salvare.');
-        } else {
-          console.error('save beverage report patch', e);
-        }
+        console.error('save beverage report patch', e);
       }
     }, 600);
   }, [token, histBody, readOnlyHistorical]);
@@ -628,7 +618,7 @@ const ReportBetaPageInner = () => {
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    (async () => {
+    const loadCashDaily = async () => {
       try {
         const res = await axios.get(`${API}/cash/daily${histQS}`, { headers: { Authorization: `Bearer ${token}` } });
         if (cancelled) return;
@@ -642,14 +632,30 @@ const ReportBetaPageInner = () => {
         if (!initial.mattina && prev !== '' && prev !== null && prev !== undefined) {
           initial.mattina = String(prev);
         }
-        setCashRow(initial);
-        setCashComments(res.data?.comments || {});
+        const pending = cashPatchRef.current || {};
+        const preserveKeys = new Set(Object.keys(pending));
+        if (focusedField) preserveKeys.add(focusedField);
+        if (editingCassetto) preserveKeys.add(editingCassetto);
+        setCashRow(current => {
+          const next = { ...initial };
+          preserveKeys.forEach(key => {
+            if (current[key] !== undefined) next[key] = current[key];
+          });
+          return next;
+        });
+        if (!('comments' in pending) && commentPopover?.kind !== 'cash') {
+          setCashComments(res.data?.comments || {});
+        }
         // Persistenza paste incollate + banconote + prezzi manuali
-        if (typeof res.data?.paste_text === 'string') setPasteText(res.data.paste_text);
-        if (res.data?.cash_banconote && typeof res.data.cash_banconote === 'object') {
+        const serverPasteOverride = !!res.data?.paste_manual_override;
+        setManualPasteOverride(serverPasteOverride);
+        if (typeof res.data?.paste_text === 'string' && (serverPasteOverride || historicalMode)) {
+          setPasteText(res.data.paste_text);
+        }
+        if (!('cash_banconote' in pending) && res.data?.cash_banconote && typeof res.data.cash_banconote === 'object') {
           setCash(res.data.cash_banconote);
         }
-        if (res.data?.manual_prices && typeof res.data.manual_prices === 'object') {
+        if (!('manual_prices' in pending) && res.data?.manual_prices && typeof res.data.manual_prices === 'object') {
           setManualPrices(res.data.manual_prices);
         }
         const nextRevision = res.data?.revision || '';
@@ -660,9 +666,14 @@ const ReportBetaPageInner = () => {
         // 403 se non Flaminio/Admin
         setCashLoaded(true);
       }
-    })();
-    return () => { cancelled = true; };
-  }, [token, histQS]);
+    };
+    loadCashDaily();
+    const id = historicalMode ? null : setInterval(loadCashDaily, 3000);
+    return () => {
+      cancelled = true;
+      if (id) clearInterval(id);
+    };
+  }, [token, histQS, historicalMode, focusedField, editingCassetto, commentPopover?.kind]);
 
   // Auto-popolamento PASTE dalle paste mandate dal Cassa (live, per il locale effettivo).
   // - Fetch iniziale + polling 5s + ascolto eventi WS via OrderContext (refresh immediato).
@@ -691,6 +702,7 @@ const ReportBetaPageInner = () => {
           .join('\n');
         setAutoPasteText(text);
         setAutoPasteCount(items.filter(it => (it.description || '').trim().length > 0).length);
+        setAutoPasteLoaded(true);
       } catch (e) {
         // 401/403 in scenari edge: ignora silenziosamente
       }
@@ -705,6 +717,7 @@ const ReportBetaPageInner = () => {
   useEffect(() => {
     if (manualPasteOverride) return;
     if (historicalMode) return; // Storico: usa il paste_text salvato, non sovrascrivere
+    if (!autoPasteLoaded) return;
     if (autoPasteText !== pasteText) {
       setPasteText(autoPasteText);
     }
@@ -712,7 +725,7 @@ const ReportBetaPageInner = () => {
       queueCashPatch({ paste_text: autoPasteText });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoPasteText, manualPasteOverride, historicalMode, cashLoaded, queueCashPatch]);
+  }, [autoPasteText, manualPasteOverride, historicalMode, cashLoaded, autoPasteLoaded, pasteText, queueCashPatch]);
 
   // Quando un ordine viene creato/modificato/eliminato dall'OrderContext (WS live)
   // forziamo un refetch immediato così la colonna PASTE è subito aggiornata.
@@ -739,6 +752,7 @@ const ReportBetaPageInner = () => {
           .join('\n');
         setAutoPasteText(text);
         setAutoPasteCount(items.filter(it => (it.description || '').trim().length > 0).length);
+        setAutoPasteLoaded(true);
       } catch (e) { /* ignore */ }
     })();
     return () => { cancelled = true; };
@@ -1190,11 +1204,6 @@ const ReportBetaPageInner = () => {
           📖 Sola lettura — chiusura del {urlDate.split('-').reverse().join('/')}, non è possibile modificare
         </div>
       )}
-      {reportConflict && (
-        <div className="bg-red-100 border-y border-red-400 text-red-800 text-sm font-semibold px-4 py-2 text-center">
-          {reportConflict}
-        </div>
-      )}
       <main
         className={`flex-1 max-w-[1600px] w-full mx-auto px-3 py-2 flex flex-col min-h-0 ${readOnlyHistorical ? 'pointer-events-none select-text' : ''}`}
       >
@@ -1226,10 +1235,15 @@ const ReportBetaPageInner = () => {
                 if (manualPasteOverride) {
                   // Torna ad auto: ricarica dal server (azzera modifiche manuali)
                   setManualPasteOverride(false);
-                  setPasteText(autoPasteText);
-                  queueCashPatch({ paste_text: autoPasteText });
+                  if (autoPasteLoaded) {
+                    setPasteText(autoPasteText);
+                    queueCashPatch({ paste_manual_override: false, paste_text: autoPasteText });
+                  } else {
+                    queueCashPatch({ paste_manual_override: false });
+                  }
                 } else {
                   setManualPasteOverride(true);
+                  queueCashPatch({ paste_manual_override: true });
                 }
               }}
               title={manualPasteOverride

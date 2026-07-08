@@ -163,6 +163,28 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-08 23:39 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/backend/tests/test_multi_tenancy.py`
+- `/app/frontend/src/pages/ReportBetaPage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Rimossa la logica di conflitto/stale revision dal Report: niente piu banner "aggiornato da un altro dispositivo". Il Report mantiene autosave patch-safe ma accetta salvataggi parziali da tab vecchie; il frontend rilegge periodicamente il cash report per riallineare piu pagine aperte sullo stesso giorno senza sovrascrivere il campo in editing.
+**Testato**: si (metodo: `python -m py_compile backend/server.py`, `npm run build`, backend locale riavviato, `pytest backend/tests/test_multi_tenancy.py -q` -> 13 passed)
+**Note per il prossimo agente**: Non reintrodurre blocchi 409 su `cash/daily` o `beverages/daily` per revision stale: l'utente preferisce aggiornamento automatico tra schede e nessun banner di conflitto.
+
+### [2026-07-08 23:29 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/backend/tests/test_multi_tenancy.py`
+- `/app/frontend/src/pages/ReportBetaPage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Reso persistente il blocco manuale paste del Report (`paste_manual_override`) senza fermare il polling live: mentre il blocco e attivo le paste automatiche continuano ad aggiornarsi in background e, quando il blocco viene tolto, il testo viene sostituito con l'ultimo live comprensivo delle paste mandate nel frattempo.
+**Testato**: si (metodo: `python -m py_compile backend/server.py`, `npm run build`, backend locale riavviato, `pytest backend/tests/test_multi_tenancy.py -q` -> 13 passed)
+**Note per il prossimo agente**: Non spegnere il fetch `/orders/today-paste-list` quando `manualPasteOverride=true`; serve proprio a recuperare le paste entrate durante il blocco.
+
 ### [2026-07-08 23:15 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix
 **File toccati**:
