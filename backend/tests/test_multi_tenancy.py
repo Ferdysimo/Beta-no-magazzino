@@ -109,6 +109,9 @@ def cleanup_data(flaminio_session, grazie_session):
         db.cash_daily_counts.delete_many(
             {"restaurant_id": rid, "date_rome": yest, "_test_marker": True}
         )
+        db.beverage_daily_counts.delete_many(
+            {"restaurant_id": rid, "date_rome": yest, "_test_marker": True}
+        )
     client.close()
 
 
@@ -232,6 +235,68 @@ class TestCashDailyMultiTenancy:
         # Today's row should not have inherited yesterday's vers value
         assert body["data"]["vers"] != "50" or body["date"] == yest
 
+    def test_cash_daily_materializes_morning_and_residual_cassetto(
+        self, admin_token, flaminio_session
+    ):
+        """New report day must inherit cash morning and cassetto residual from yesterday."""
+        flaminio_id = flaminio_session["id"]
+        today = _today_str()
+        yest = _yesterday_str()
+        from pymongo import MongoClient
+        sync_client = MongoClient(MONGO_URL)
+        try:
+            sync_db = sync_client[DB_NAME]
+            sync_db.cash_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": today}
+            )
+            sync_db.cash_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": yest}
+            )
+            sync_db.cash_daily_counts.insert_one(
+                {
+                    "restaurant_id": flaminio_id,
+                    "date_rome": yest,
+                    "mattina": "100",
+                    "vers": "10",
+                    "cd5": "12",
+                    "sp5": "3",
+                    "cd2": "8",
+                    "sp2": "2",
+                    "cd1": "6",
+                    "sp1": "1",
+                    "cd05": "5",
+                    "sp05": "4",
+                    "_test_marker": True,
+                }
+            )
+        finally:
+            sync_client.close()
+
+        g = requests.get(
+            f"{BASE_URL}/api/cash/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            timeout=TIMEOUT,
+        )
+        assert g.status_code == 200, g.text
+        body = g.json()
+        assert body["prev_cash_sera"] == 445
+        assert body["data"]["mattina"] == "445"
+        assert body["data"]["cd5"] == "9"
+        assert body["data"]["cd2"] == "6"
+        assert body["data"]["cd1"] == "5"
+        assert body["data"]["cd05"] == "1"
+
+        sync_client = MongoClient(MONGO_URL)
+        try:
+            persisted = sync_client[DB_NAME].cash_daily_counts.find_one(
+                {"restaurant_id": flaminio_id, "date_rome": today},
+                {"_id": 0},
+            )
+        finally:
+            sync_client.close()
+        assert persisted["mattina"] == body["data"]["mattina"]
+        assert persisted["cd5"] == "9"
+
 
 # ============ BEVERAGES DAILY ============
 class TestBeveragesDailyMultiTenancy:
@@ -308,6 +373,60 @@ class TestBeveragesDailyMultiTenancy:
         gr_ccz = next((r for r in gr_today["rows"] if r["sigla"] == "CZ"), None)
         assert fl_ccz and fl_ccz.get("mattina") == "10"
         assert gr_ccz and gr_ccz.get("mattina") == "20"
+
+    def test_beverage_daily_materializes_morning_from_previous_sera(
+        self, admin_token, flaminio_session
+    ):
+        """New report day must persist beverage mattina from yesterday sera."""
+        flaminio_id = flaminio_session["id"]
+        today = _today_str()
+        yest = _yesterday_str()
+        SIGLA = "CZ"
+        from pymongo import MongoClient
+        sync_client = MongoClient(MONGO_URL)
+        try:
+            sync_db = sync_client[DB_NAME]
+            sync_db.beverage_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": today, "sigla": SIGLA}
+            )
+            sync_db.beverage_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": yest, "sigla": SIGLA}
+            )
+            sync_db.beverage_daily_counts.insert_one(
+                {
+                    "restaurant_id": flaminio_id,
+                    "date_rome": yest,
+                    "sigla": SIGLA,
+                    "mattina": "70",
+                    "sera": "52",
+                    "_test_marker": True,
+                }
+            )
+        finally:
+            sync_client.close()
+
+        g = requests.get(
+            f"{BASE_URL}/api/beverages/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            timeout=TIMEOUT,
+        )
+        assert g.status_code == 200, g.text
+        row = g.json()["counts"][SIGLA]
+        assert row["mattina"] == "52"
+        assert row["mattina_casse"] == "2"
+        assert row["mattina_sfuse"] == "4"
+
+        sync_client = MongoClient(MONGO_URL)
+        try:
+            persisted = sync_client[DB_NAME].beverage_daily_counts.find_one(
+                {"restaurant_id": flaminio_id, "date_rome": today, "sigla": SIGLA},
+                {"_id": 0},
+            )
+        finally:
+            sync_client.close()
+        assert persisted["mattina"] == "52"
+        assert persisted["mattina_casse"] == "2"
+        assert persisted["mattina_sfuse"] == "4"
 
 
 # ============ CLOSURES (Admin only) ============

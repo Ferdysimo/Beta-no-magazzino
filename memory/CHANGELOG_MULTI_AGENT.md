@@ -163,6 +163,16 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-08 10:30 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/backend/tests/test_multi_tenancy.py`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Corretto il riporto giornaliero del Report: il reset notturno e il backend materializzano il nuovo giorno con magazzino mattina bevande = sera del giorno precedente e cassa mattina = cash sera precedente. Il cassetto spicci ora riparte dal residuo reale, cioe rotolini nel cassetto meno rotolini aperti il giorno prima.
+**Testato**: si (metodo: `python -m py_compile backend/server.py`; test mirati multi-tenancy/carry-over backend)
+**Note per il prossimo agente**: La regola di apertura giornata deve restare server-side; non affidarla solo all'autofill del frontend.
+
 ### [2026-07-07 16:05 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: ux
 **File toccati**:

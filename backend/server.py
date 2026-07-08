@@ -221,6 +221,24 @@ async def midnight_reset():
         )
         logger.info(f"Order counters reset to 0 (archived {archived_count} orders)")
 
+        try:
+            today_rome = _today_rome_str()
+            opening_summary = {"cash_fields": 0, "beverage_rows": 0, "restaurants": 0}
+            restaurants = await db.restaurants.find(
+                {"role": "restaurant"}, {"_id": 0, "id": 1}
+            ).to_list(100)
+            for r in restaurants:
+                rid = r.get("id")
+                if not rid:
+                    continue
+                partial = await _materialize_report_day_opening_for_restaurant(rid, today_rome)
+                opening_summary["restaurants"] += 1
+                opening_summary["cash_fields"] += partial.get("cash_fields", 0)
+                opening_summary["beverage_rows"] += partial.get("beverage_rows", 0)
+            logger.info(f"[REPORT_OPENING] midnight carry-over materialized: {opening_summary}")
+        except Exception as e:
+            logger.error(f"[REPORT_OPENING] midnight carry-over failed: {e}", exc_info=True)
+
         # Broadcast reset to all connected clients
         for rid in list(manager.active_connections.keys()):
             await manager.broadcast_to_restaurant(rid, {
@@ -3818,6 +3836,54 @@ async def get_beverage_daily_counts(
         ).to_list(50)
         prev_sera = {d["sigla"]: d.get("sera", "") for d in prev_docs}
 
+    if not historical and prev_sera:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        valid_siglas = {b["sigla"] for b in BEVERAGES_CATALOG}
+        for sigla, sera_value in prev_sera.items():
+            if sigla not in valid_siglas or not str(sera_value or "").strip():
+                continue
+            current = counts.get(sigla) or {}
+            if str(current.get("mattina") or "").strip():
+                continue
+            mattina_casse, mattina_sfuse = _split_beverage_stock(sera_value)
+            carry_fields = {
+                "restaurant_id": rid,
+                "date_rome": target_date,
+                "sigla": sigla,
+                "mattina": str(sera_value),
+                "mattina_casse": mattina_casse,
+                "mattina_sfuse": mattina_sfuse,
+                "updated_at": now_iso,
+            }
+            if not current:
+                carry_fields.update({
+                    "inUsc": "",
+                    "scarti": "",
+                    "sera": "",
+                    "inUsc_casse": "",
+                    "sera_casse": "",
+                    "sera_sfuse": "",
+                    "comments": {},
+                })
+            await db.beverage_daily_counts.update_one(
+                {"restaurant_id": rid, "date_rome": target_date, "sigla": sigla},
+                {"$set": carry_fields},
+                upsert=True,
+            )
+            counts[sigla] = {
+                **current,
+                "mattina": str(sera_value),
+                "mattina_casse": mattina_casse,
+                "mattina_sfuse": mattina_sfuse,
+                "inUsc": current.get("inUsc", ""),
+                "scarti": current.get("scarti", ""),
+                "sera": current.get("sera", ""),
+                "inUsc_casse": current.get("inUsc_casse", ""),
+                "sera_casse": current.get("sera_casse", ""),
+                "sera_sfuse": current.get("sera_sfuse", ""),
+                "comments": current.get("comments") or {},
+            }
+
     return {"date": target_date, "counts": counts, "prev_sera": prev_sera, "historical": bool(historical)}
 
 
@@ -4129,10 +4195,124 @@ def _compute_cash_sera_full(
                 + _compute_bev_total_eur(bev_docs)
 
 
+def _format_report_number(value) -> str:
+    try:
+        n = float(value)
+    except Exception:
+        return ""
+    if abs(n - round(n)) < 0.000001:
+        return str(int(round(n)))
+    return f"{round(n, 2):.2f}".rstrip("0").rstrip(".")
+
+
+def _split_beverage_stock(value) -> tuple[str, str]:
+    total = _eval_cash_value(value)
+    if total <= 0 or abs(total - round(total)) > 0.000001:
+        return "", ""
+    units = int(round(total))
+    return str(units // 24) if units // 24 else "", str(units % 24) if units % 24 else ""
+
+
 CASH_FIELDS = ["mattina", "altro", "glo", "just", "delv", "bp", "sat", "ft", "pos", "vers", "arr"]
 SPICCI_FIELDS = ["sp5", "sp2", "sp1", "sp05"]
 CASSETTO_FIELDS = ["cd5", "cd2", "cd1", "cd05"]
+CASSETTO_SPICCI_FIELD = {"cd5": "sp5", "cd2": "sp2", "cd1": "sp1", "cd05": "sp05"}
 ALL_CASH_FIELDS = CASH_FIELDS + SPICCI_FIELDS + CASSETTO_FIELDS
+
+
+async def _materialize_report_day_opening_for_restaurant(rid: str, target_date: str) -> Dict[str, int]:
+    """Persist report carry-over rows for a restaurant/day without overwriting filled fields."""
+    summary = {"cash_fields": 0, "beverage_rows": 0}
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    last_bev_day = await db.beverage_daily_counts.find_one(
+        {"restaurant_id": rid, "date_rome": {"$lt": target_date}},
+        sort=[("date_rome", -1)],
+        projection={"_id": 0, "date_rome": 1},
+    )
+    if last_bev_day:
+        prev_docs = await db.beverage_daily_counts.find(
+            {"restaurant_id": rid, "date_rome": last_bev_day["date_rome"]},
+            {"_id": 0, "sigla": 1, "sera": 1},
+        ).to_list(100)
+        valid_siglas = {b["sigla"] for b in BEVERAGES_CATALOG}
+        for prev in prev_docs:
+            sigla = prev.get("sigla")
+            sera_value = prev.get("sera", "")
+            if sigla not in valid_siglas or not str(sera_value or "").strip():
+                continue
+            today = await db.beverage_daily_counts.find_one(
+                {"restaurant_id": rid, "date_rome": target_date, "sigla": sigla},
+                {"_id": 0, "mattina": 1},
+            ) or {}
+            if str(today.get("mattina") or "").strip():
+                continue
+            mattina_casse, mattina_sfuse = _split_beverage_stock(sera_value)
+            await db.beverage_daily_counts.update_one(
+                {"restaurant_id": rid, "date_rome": target_date, "sigla": sigla},
+                {"$set": {
+                    "restaurant_id": rid,
+                    "date_rome": target_date,
+                    "sigla": sigla,
+                    "mattina": str(sera_value),
+                    "mattina_casse": mattina_casse,
+                    "mattina_sfuse": mattina_sfuse,
+                    "updated_at": now_iso,
+                }, "$setOnInsert": {
+                    "inUsc": "",
+                    "scarti": "",
+                    "sera": "",
+                    "inUsc_casse": "",
+                    "sera_casse": "",
+                    "sera_sfuse": "",
+                    "comments": {},
+                }},
+                upsert=True,
+            )
+            summary["beverage_rows"] += 1
+
+    today_cash = await db.cash_daily_counts.find_one(
+        {"restaurant_id": rid, "date_rome": target_date}, {"_id": 0}
+    ) or {}
+    last_cash = await db.cash_daily_counts.find_one(
+        {"restaurant_id": rid, "date_rome": {"$lt": target_date}},
+        sort=[("date_rome", -1)],
+        projection={"_id": 0},
+    )
+    if last_cash:
+        prev_bev_docs = await db.beverage_daily_counts.find(
+            {"restaurant_id": rid, "date_rome": last_cash["date_rome"]},
+            {"_id": 0},
+        ).to_list(100)
+        carry_fields = {}
+        if not str(today_cash.get("mattina") or "").strip():
+            carry_fields["mattina"] = _format_report_number(
+                round(_compute_cash_sera_full(last_cash, prev_bev_docs), 2)
+            )
+        for cf in CASSETTO_FIELDS:
+            if str(today_cash.get(cf) or "").strip():
+                continue
+            sp_field = CASSETTO_SPICCI_FIELD[cf]
+            prev_cd = str(last_cash.get(cf) or "").strip()
+            prev_sp = str(last_cash.get(sp_field) or "").strip()
+            if not prev_cd and not prev_sp:
+                continue
+            residual = _eval_cash_value(prev_cd) - _eval_cash_value(prev_sp)
+            carry_fields[cf] = _format_report_number(residual)
+        if carry_fields:
+            await db.cash_daily_counts.update_one(
+                {"restaurant_id": rid, "date_rome": target_date},
+                {"$set": {
+                    **carry_fields,
+                    "restaurant_id": rid,
+                    "date_rome": target_date,
+                    "updated_at": now_iso,
+                }},
+                upsert=True,
+            )
+            summary["cash_fields"] = len(carry_fields)
+
+    return summary
 
 
 def _audit_user_info(request: Request, token_data: dict) -> dict:
@@ -4316,12 +4496,36 @@ async def get_cash_daily(
         prev_date = last_doc.get("date_rome", "")
         prev_row = {f: last_doc.get(f, "") for f in ALL_CASH_FIELDS}
         prev_row["paste_text"] = last_doc.get("paste_text", "") or ""
-        # CARRY-OVER STOCK CASSETTO: lo stock spicci nel cassetto è un magazzino
-        # fisico che persiste tra i giorni. Se oggi non c'è ancora valore per cd*,
-        # eredito quello di ieri così la quantità non sparisce dopo l'archiviazione.
-        for cf in CASSETTO_FIELDS:
-            if not data.get(cf):
-                data[cf] = last_doc.get(cf, "") or ""
+        # Day opening: materialize the carry-over on the server so the new
+        # report day is stable even before the frontend autosave runs.
+        if not historical:
+            carry_fields = {}
+            if not str(data.get("mattina") or "").strip():
+                carry_fields["mattina"] = _format_report_number(prev_cash_sera)
+            for cf in CASSETTO_FIELDS:
+                if str(data.get(cf) or "").strip():
+                    continue
+                sp_field = CASSETTO_SPICCI_FIELD[cf]
+                prev_cd = str(last_doc.get(cf) or "").strip()
+                prev_sp = str(last_doc.get(sp_field) or "").strip()
+                if not prev_cd and not prev_sp:
+                    continue
+                residual = _eval_cash_value(prev_cd) - _eval_cash_value(prev_sp)
+                carry_fields[cf] = _format_report_number(residual)
+            if carry_fields:
+                carry_fields.update({
+                    "restaurant_id": rid,
+                    "date_rome": target_date,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                })
+                await db.cash_daily_counts.update_one(
+                    {"restaurant_id": rid, "date_rome": target_date},
+                    {"$set": carry_fields},
+                    upsert=True,
+                )
+                for k, v in carry_fields.items():
+                    if k in data:
+                        data[k] = v
     return {
         "date": target_date,
         "data": data,
