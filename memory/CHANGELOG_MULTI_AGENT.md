@@ -163,6 +163,16 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-10 08:51 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/backend/tests/test_report_backend_totals.py`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Allineato il calcolo backend dello storico chiusure ai prezzi manuali paste del Report: ora i prezzi delle paste non riconosciute vengono letti anche dalla chiave testuale normalizzata della riga, non solo dal vecchio indice numerico. Questo evita cash sera diversi tra griglia storico e dettaglio cliccato.
+**Testato**: si (metodo: `python -m py_compile backend/server.py`, `pytest backend/tests/test_beverage_signed_totals.py backend/tests/test_report_backend_totals.py -q`)
+**Note per il prossimo agente**: Mantenere il fallback a indice per compatibilita con chiusure vecchie, ma preferire la chiave testuale normalizzata come nel frontend `ReportBetaPage`.
+
 ### [2026-07-09 13:22 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix
 **File toccati**:

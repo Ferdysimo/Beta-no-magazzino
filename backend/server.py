@@ -4108,6 +4108,16 @@ def _compute_spicci_total(row: dict) -> float:
     return sum(_eval_cash_value(row.get(k, "")) * v for k, v in SPICCI_MULTIPLIERS.items())
 
 
+def _manual_price_key_for_line(line: str) -> str:
+    return re.sub(r"\s+", " ", str(line or "").strip().upper())[:200]
+
+
+def _manual_price_for_paste_line(manual_prices: dict, idx: int, line: str):
+    mp = manual_prices or {}
+    text_key = _manual_price_key_for_line(line)
+    return mp.get(text_key, mp.get(str(idx), mp.get(idx, "")))
+
+
 def _compute_paste_total_eur(
     paste_text: str,
     manual_prices: Optional[dict] = None,
@@ -4128,7 +4138,7 @@ def _compute_paste_total_eur(
         if recognized_sigla is not None:
             total += dict_map[recognized_sigla]
         else:
-            raw = mp.get(str(idx), mp.get(idx, ""))
+            raw = _manual_price_for_paste_line(mp, idx, line)
             try:
                 n = float(str(raw).replace(",", ".").strip()) if str(raw).strip() else 0.0
                 if n > 0:
@@ -4177,7 +4187,7 @@ def _compute_paste_unrecognized(
     for idx, line in enumerate(lines):
         if _pasta_recognized_sigla(line, dict_map) is not None:
             continue
-        raw_price = mp.get(str(idx), mp.get(idx, ""))
+        raw_price = _manual_price_for_paste_line(mp, idx, line)
         try:
             price = float(str(raw_price).replace(",", ".").strip()) if str(raw_price).strip() else 0.0
             if price < 0:
