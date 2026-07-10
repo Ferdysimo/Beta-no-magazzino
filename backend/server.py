@@ -4118,6 +4118,11 @@ def _manual_price_for_paste_line(manual_prices: dict, idx: int, line: str):
     return mp.get(text_key, mp.get(str(idx), mp.get(idx, "")))
 
 
+def _manual_price_for_paste_line_legacy_index_only(manual_prices: dict, idx: int):
+    mp = manual_prices or {}
+    return mp.get(str(idx), mp.get(idx, ""))
+
+
 def _compute_paste_total_eur(
     paste_text: str,
     manual_prices: Optional[dict] = None,
@@ -4139,6 +4144,34 @@ def _compute_paste_total_eur(
             total += dict_map[recognized_sigla]
         else:
             raw = _manual_price_for_paste_line(mp, idx, line)
+            try:
+                n = float(str(raw).replace(",", ".").strip()) if str(raw).strip() else 0.0
+                if n > 0:
+                    total += n
+            except Exception:
+                pass
+    return total
+
+
+def _compute_paste_total_eur_legacy_index_only(
+    paste_text: str,
+    manual_prices: Optional[dict] = None,
+    dict_map: Optional[Dict[str, float]] = None,
+) -> float:
+    if not paste_text:
+        return 0.0
+    if dict_map is None:
+        dict_map = PASTA_PRICES_MAP
+    lines = [l.strip() for l in paste_text.split("\n")]
+    lines = [l for l in lines if l]
+    total = 0.0
+    mp = manual_prices or {}
+    for idx, line in enumerate(lines):
+        recognized_sigla = _pasta_recognized_sigla(line, dict_map)
+        if recognized_sigla is not None:
+            total += dict_map[recognized_sigla]
+        else:
+            raw = _manual_price_for_paste_line_legacy_index_only(mp, idx)
             try:
                 n = float(str(raw).replace(",", ".").strip()) if str(raw).strip() else 0.0
                 if n > 0:
@@ -4214,6 +4247,21 @@ def _compute_cash_sera_full(
                 + _compute_bev_total_eur(bev_docs)
 
 
+def _compute_cash_sera_full_legacy_manual_prices(
+    cash_row: dict,
+    bev_docs: list,
+    dict_map: Optional[Dict[str, float]] = None,
+) -> float:
+    base = _compute_cash_sera(cash_row)
+    return base + _compute_spicci_total(cash_row) \
+                + _compute_paste_total_eur_legacy_index_only(
+                    cash_row.get("paste_text", "") or "",
+                    cash_row.get("manual_prices") or {},
+                    dict_map,
+                ) \
+                + _compute_bev_total_eur(bev_docs)
+
+
 def _format_report_number(value) -> str:
     try:
         n = float(value)
@@ -4232,11 +4280,58 @@ def _split_beverage_stock(value) -> tuple[str, str]:
     return str(units // 24) if units // 24 else "", str(units % 24) if units % 24 else ""
 
 
+def _report_numbers_equal(a, b) -> bool:
+    return abs(_eval_cash_value(a) - _eval_cash_value(b)) < 0.000001
+
+
 CASH_FIELDS = ["mattina", "altro", "glo", "just", "delv", "bp", "sat", "ft", "pos", "vers", "arr"]
 SPICCI_FIELDS = ["sp5", "sp2", "sp1", "sp05"]
 CASSETTO_FIELDS = ["cd5", "cd2", "cd1", "cd05"]
 CASSETTO_SPICCI_FIELD = {"cd5": "sp5", "cd2": "sp2", "cd1": "sp1", "cd05": "sp05"}
 ALL_CASH_FIELDS = CASH_FIELDS + SPICCI_FIELDS + CASSETTO_FIELDS
+
+
+async def _cash_mattina_carry_fields(
+    *, rid: str, target_date: str, today_cash: dict, last_cash: dict,
+    prev_bev_docs: list, dict_map: Optional[Dict[str, float]] = None,
+) -> Dict[str, object]:
+    if not last_cash:
+        return {}
+    prev_date = last_cash.get("date_rome", "")
+    current_value = today_cash.get("mattina", "")
+    carry_value = _format_report_number(round(_compute_cash_sera_full(last_cash, prev_bev_docs, dict_map), 2))
+    legacy_value = _format_report_number(round(_compute_cash_sera_full_legacy_manual_prices(last_cash, prev_bev_docs, dict_map), 2))
+
+    should_write = not str(current_value or "").strip()
+    if not should_write and today_cash.get("mattina_auto_carry") is True:
+        carry_from = today_cash.get("mattina_carry_from_date") or ""
+        if carry_from in ("", prev_date):
+            should_write = (
+                carry_from != prev_date
+                or not _report_numbers_equal(current_value, carry_value)
+                or str(today_cash.get("mattina_carry_value") or "") != carry_value
+            )
+    if not should_write and not today_cash.get("mattina_auto_carry"):
+        if legacy_value and not _report_numbers_equal(legacy_value, carry_value) and _report_numbers_equal(current_value, legacy_value):
+            manual_audit = await db.cash_audit_log.find_one(
+                {
+                    "restaurant_id": rid,
+                    "date_rome": target_date,
+                    "category": "cash",
+                    "field": "mattina",
+                },
+                {"_id": 1},
+            )
+            should_write = manual_audit is None
+
+    if not should_write:
+        return {}
+    return {
+        "mattina": carry_value,
+        "mattina_auto_carry": True,
+        "mattina_carry_from_date": prev_date,
+        "mattina_carry_value": carry_value,
+    }
 
 
 async def _materialize_report_day_opening_for_restaurant(rid: str, target_date: str) -> Dict[str, int]:
@@ -4304,10 +4399,13 @@ async def _materialize_report_day_opening_for_restaurant(rid: str, target_date: 
             {"_id": 0},
         ).to_list(100)
         carry_fields = {}
-        if not str(today_cash.get("mattina") or "").strip():
-            carry_fields["mattina"] = _format_report_number(
-                round(_compute_cash_sera_full(last_cash, prev_bev_docs), 2)
-            )
+        carry_fields.update(await _cash_mattina_carry_fields(
+            rid=rid,
+            target_date=target_date,
+            today_cash=today_cash,
+            last_cash=last_cash,
+            prev_bev_docs=prev_bev_docs,
+        ))
         for cf in CASSETTO_FIELDS:
             if str(today_cash.get(cf) or "").strip():
                 continue
@@ -4523,8 +4621,13 @@ async def get_cash_daily(
         # report day is stable even before the frontend autosave runs.
         if not historical:
             carry_fields = {}
-            if not str(data.get("mattina") or "").strip():
-                carry_fields["mattina"] = _format_report_number(prev_cash_sera)
+            carry_fields.update(await _cash_mattina_carry_fields(
+                rid=rid,
+                target_date=target_date,
+                today_cash=today_doc,
+                last_cash=last_doc,
+                prev_bev_docs=prev_bev_docs,
+            ))
             for cf in CASSETTO_FIELDS:
                 if str(data.get(cf) or "").strip():
                     continue
@@ -4625,6 +4728,10 @@ async def upsert_cash_daily(
     # valore esistente nel DB ignorando ciò che è stato inviato lato client.
     if token_data.get("role") != "admin" and "mattina" in set_payload:
         set_payload["mattina"] = old_doc.get("mattina", "")
+    elif token_data.get("role") == "admin" and "mattina" in set_payload:
+        set_payload["mattina_auto_carry"] = False
+        set_payload["mattina_carry_from_date"] = ""
+        set_payload["mattina_carry_value"] = ""
     try:
         ui = _audit_user_info(request, token_data)
         if historical:

@@ -112,6 +112,9 @@ def cleanup_data(flaminio_session, grazie_session):
         db.beverage_daily_counts.delete_many(
             {"restaurant_id": rid, "date_rome": yest, "_test_marker": True}
         )
+        db.cash_audit_log.delete_many(
+            {"restaurant_id": rid, "date_rome": today, "_test_marker": True}
+        )
     client.close()
 
 
@@ -301,6 +304,202 @@ class TestCashDailyMultiTenancy:
             sync_client.close()
         assert persisted["mattina"] == body["data"]["mattina"]
         assert persisted["cd5"] == "9"
+
+    def test_cash_daily_reconciles_legacy_auto_morning_after_formula_fix(
+        self, admin_token, flaminio_session
+    ):
+        """Existing automatic mattina from the legacy total must follow recalculated cash sera."""
+        flaminio_id = flaminio_session["id"]
+        today = _today_str()
+        yest = _yesterday_str()
+        from pymongo import MongoClient
+        sync_client = MongoClient(MONGO_URL)
+        try:
+            sync_db = sync_client[DB_NAME]
+            sync_db.cash_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": today}
+            )
+            sync_db.cash_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": yest}
+            )
+            sync_db.beverage_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": yest}
+            )
+            sync_db.cash_audit_log.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": today, "_test_marker": True}
+            )
+            sync_db.cash_daily_counts.insert_one(
+                {
+                    "restaurant_id": flaminio_id,
+                    "date_rome": yest,
+                    "mattina": "100",
+                    "paste_text": "1 CARB\n2 X UNKNOWN",
+                    "manual_prices": {"2 X UNKNOWN": "395"},
+                    "_test_marker": True,
+                }
+            )
+            sync_db.cash_daily_counts.insert_one(
+                {
+                    "restaurant_id": flaminio_id,
+                    "date_rome": today,
+                    "mattina": "108",
+                    "_test_marker": True,
+                }
+            )
+        finally:
+            sync_client.close()
+
+        g = requests.get(
+            f"{BASE_URL}/api/cash/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            timeout=TIMEOUT,
+        )
+        assert g.status_code == 200, g.text
+        body = g.json()
+        assert body["prev_cash_sera"] == 503
+        assert body["data"]["mattina"] == "503"
+
+        sync_client = MongoClient(MONGO_URL)
+        try:
+            persisted = sync_client[DB_NAME].cash_daily_counts.find_one(
+                {"restaurant_id": flaminio_id, "date_rome": today},
+                {"_id": 0},
+            )
+        finally:
+            sync_client.close()
+        assert persisted["mattina"] == "503"
+        assert persisted["mattina_auto_carry"] is True
+        assert persisted["mattina_carry_from_date"] == yest
+
+    def test_cash_daily_does_not_reconcile_manual_morning_audit(
+        self, admin_token, flaminio_session
+    ):
+        """A mattina value with an explicit audit entry is treated as manual."""
+        flaminio_id = flaminio_session["id"]
+        today = _today_str()
+        yest = _yesterday_str()
+        from pymongo import MongoClient
+        sync_client = MongoClient(MONGO_URL)
+        try:
+            sync_db = sync_client[DB_NAME]
+            sync_db.cash_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": today}
+            )
+            sync_db.cash_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": yest}
+            )
+            sync_db.beverage_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": yest}
+            )
+            sync_db.cash_audit_log.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": today, "_test_marker": True}
+            )
+            sync_db.cash_daily_counts.insert_one(
+                {
+                    "restaurant_id": flaminio_id,
+                    "date_rome": yest,
+                    "mattina": "100",
+                    "paste_text": "1 CARB\n2 X UNKNOWN",
+                    "manual_prices": {"2 X UNKNOWN": "395"},
+                    "_test_marker": True,
+                }
+            )
+            sync_db.cash_daily_counts.insert_one(
+                {
+                    "restaurant_id": flaminio_id,
+                    "date_rome": today,
+                    "mattina": "108",
+                    "_test_marker": True,
+                }
+            )
+            sync_db.cash_audit_log.insert_one(
+                {
+                    "restaurant_id": flaminio_id,
+                    "date_rome": today,
+                    "category": "cash",
+                    "field": "mattina",
+                    "old_value": "",
+                    "new_value": "108",
+                    "_test_marker": True,
+                }
+            )
+        finally:
+            sync_client.close()
+
+        g = requests.get(
+            f"{BASE_URL}/api/cash/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            timeout=TIMEOUT,
+        )
+        assert g.status_code == 200, g.text
+        body = g.json()
+        assert body["prev_cash_sera"] == 503
+        assert body["data"]["mattina"] == "108"
+
+    def test_cash_daily_does_not_rewrite_synced_auto_morning(
+        self, admin_token, flaminio_session
+    ):
+        """Already synced automatic mattina should not change the row revision on read."""
+        flaminio_id = flaminio_session["id"]
+        today = _today_str()
+        yest = _yesterday_str()
+        from pymongo import MongoClient
+        sync_client = MongoClient(MONGO_URL)
+        try:
+            sync_db = sync_client[DB_NAME]
+            sync_db.cash_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": today}
+            )
+            sync_db.cash_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": yest}
+            )
+            sync_db.beverage_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": yest}
+            )
+            sync_db.cash_daily_counts.insert_one(
+                {
+                    "restaurant_id": flaminio_id,
+                    "date_rome": yest,
+                    "mattina": "100",
+                    "paste_text": "1 CARB\n2 X UNKNOWN",
+                    "manual_prices": {"2 X UNKNOWN": "395"},
+                    "_test_marker": True,
+                }
+            )
+            sync_db.cash_daily_counts.insert_one(
+                {
+                    "restaurant_id": flaminio_id,
+                    "date_rome": today,
+                    "mattina": "503",
+                    "mattina_auto_carry": True,
+                    "mattina_carry_from_date": yest,
+                    "mattina_carry_value": "503",
+                    "updated_at": "keep-this-revision",
+                    "_test_marker": True,
+                }
+            )
+        finally:
+            sync_client.close()
+
+        g = requests.get(
+            f"{BASE_URL}/api/cash/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            timeout=TIMEOUT,
+        )
+        assert g.status_code == 200, g.text
+        body = g.json()
+        assert body["prev_cash_sera"] == 503
+        assert body["data"]["mattina"] == "503"
+
+        sync_client = MongoClient(MONGO_URL)
+        try:
+            persisted = sync_client[DB_NAME].cash_daily_counts.find_one(
+                {"restaurant_id": flaminio_id, "date_rome": today},
+                {"_id": 0},
+            )
+        finally:
+            sync_client.close()
+        assert persisted["updated_at"] == "keep-this-revision"
 
     def test_cash_daily_partial_patch_preserves_other_fields(
         self, admin_token, flaminio_session

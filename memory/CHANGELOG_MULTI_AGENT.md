@@ -163,6 +163,17 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-10 10:27 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/backend/tests/test_multi_tenancy.py`
+- `/app/backend/tests/test_report_backend_totals.py`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Corretto il disallineamento tra Cash Sera storico e Cash Mattina del giorno dopo quando il Cash Sera viene ricalcolato con logiche aggiornate. I riporti automatici gia salvati vengono riconciliati se riconoscibili come legacy, mentre le forzature manuali Admin restano protette.
+**Testato**: parziale (metodo: `py_compile` su backend e test OK; pytest locale bloccato da virtualenv Python rotta/mismatch `pydantic_core`)
+**Note per il prossimo agente**: I campi `mattina_auto_carry`, `mattina_carry_from_date`, `mattina_carry_value` servono a distinguere riporto automatico da forzatura manuale.
+
 ### [2026-07-10 08:51 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix
 **File toccati**:
