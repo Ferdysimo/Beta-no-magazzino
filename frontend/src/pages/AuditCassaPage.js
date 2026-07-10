@@ -58,6 +58,11 @@ const truncate = (s, n = 60) => {
   return str.length > n ? str.slice(0, n) + '…' : str;
 };
 
+const isHiddenMovement = (movement) => {
+  const field = movement?.field || '';
+  return field === 'paste_text' || field.startsWith('manual_prices.');
+};
+
 const AuditCassaPage = () => {
   const navigate = useNavigate();
   const { token, isAdmin } = useAuth();
@@ -87,6 +92,10 @@ const AuditCassaPage = () => {
   // Movimenti del gruppo selezionato
   const [movements, setMovements] = useState([]);
   const [loadingMov, setLoadingMov] = useState(false);
+  const visibleMovements = useMemo(
+    () => movements.filter(movement => !isHiddenMovement(movement)),
+    [movements],
+  );
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 
@@ -257,7 +266,7 @@ const AuditCassaPage = () => {
                     <div>
                       <div className="text-xs uppercase font-bold text-gray-700">{selected.restaurant_label} · {fmtDate(selected.date_rome)}</div>
                       <div className="text-[11px] text-gray-500">
-                        {loadingMov ? 'Caricamento…' : `${movements.length} ${movements.length === 1 ? 'modifica' : 'modifiche'}`}
+                        {loadingMov ? 'Caricamento…' : `${visibleMovements.length} ${visibleMovements.length === 1 ? 'modifica' : 'modifiche'}`}
                         <span className="text-gray-400 ml-2">· ogni riga = una modifica distinta (correzioni successive creano righe nuove)</span>
                       </div>
                     </div>
@@ -299,10 +308,10 @@ const AuditCassaPage = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {!loadingMov && movements.length === 0 && (
+                        {!loadingMov && visibleMovements.length === 0 && (
                           <tr><td colSpan={6} className="p-8 text-center text-gray-400">Nessun movimento corrispondente ai filtri.</td></tr>
                         )}
-                        {movements.map(it => (
+                        {visibleMovements.map(it => (
                           <tr key={it.id} data-testid={`audit-row-${it.id}`} className="border-t border-gray-100 hover:bg-yellow-50">
                             <td className="p-2 whitespace-nowrap font-mono text-[11px]">{fmtTime(it.last_at)}</td>
                             <td className="p-2">

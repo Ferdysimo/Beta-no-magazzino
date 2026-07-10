@@ -197,12 +197,12 @@ const MagazzinoBevandePageInner = () => {
     const scarti = evaluateValue(c.scarti);
     const sera = evaluateValue(c.sera);
     // Se MAGAZZINO SERA è 0 (non ancora contato) -> quantità venduta = 0
-    const quantita = sera === 0 ? 0 : (mattina + inUsc - scarti - sera);
-    const incasso = Math.max(0, quantita) * (b.price || 0);
+    const quantita = (sera === 0 ? 0 : (mattina + inUsc - sera)) - scarti;
+    const incasso = quantita * (b.price || 0);
     return { ...b, mattina, inUsc, scarti, sera, quantita, incasso };
   }), [inventory, counts]);
 
-  const totalQuantita = rows.reduce((s, r) => s + Math.max(0, r.quantita), 0);
+  const totalQuantita = rows.reduce((s, r) => s + r.quantita, 0);
   const totalIncasso = rows.reduce((s, r) => s + r.incasso, 0);
 
   const fmtEur = (n) => n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -394,8 +394,8 @@ const MagazzinoBevandePageInner = () => {
         )}
 
         <p className="mt-3 text-[11px] text-gray-500">
-          • Quantità venduta = Magazzino Mattina + Ingressi/Uscite − Scarti − Magazzino Sera.<br/>
-          • Se "Magazzino Sera" è 0 (non ancora contato) la quantità resta a 0.<br/>
+          • Quantità venduta = (Magazzino Mattina + Ingressi/Uscite − Magazzino Sera) − Scarti.<br/>
+          • Se "Magazzino Sera" è 0 (non ancora contato), le vendite da giacenza restano a 0 ma gli scarti sottraggono comunque dal totale.<br/>
           • Nelle caselle puoi usare le formule: es. <code className="bg-blue-50 px-1 rounded">=12-2</code> per inserire 10.<br/>
           • <b>I valori si salvano in tempo reale sul server</b>: alla mattina successiva la colonna "Magazzino Mattina" si auto-popola con il valore di "Magazzino Sera" di ieri.
         </p>

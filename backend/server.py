@@ -4139,15 +4139,14 @@ def _compute_paste_total_eur(
 
 
 def _compute_bev_total_eur(bev_docs: list) -> float:
-    """Somma incassi bevande (qty>0 only). Skip se sera==0 (giorno non chiuso)."""
+    """Somma incassi bevande. Le qty negative rettificano il totale."""
     prices = {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
     total = 0.0
     for r in bev_docs:
         m = _eval_cash_value(r.get("mattina")); u = _eval_cash_value(r.get("inUsc"))
         s = _eval_cash_value(r.get("scarti"));  e = _eval_cash_value(r.get("sera"))
-        qty = 0 if e == 0 else (m + u - s - e)
-        if qty > 0:
-            total += qty * prices.get(r["sigla"], 0)
+        qty = (0 if e == 0 else (m + u - e)) - s
+        total += qty * prices.get(r["sigla"], 0)
     return total
 
 
@@ -4745,10 +4744,9 @@ async def list_closures(
         for r in bev_docs:
             m = _eval_cash_value(r.get("mattina")); u = _eval_cash_value(r.get("inUsc"))
             s = _eval_cash_value(r.get("scarti"));  e = _eval_cash_value(r.get("sera"))
-            qty = 0 if e == 0 else (m + u - s - e)
-            if qty > 0:
-                bev_total_qty += int(qty)
-                bev_total_inc += qty * bev_prices.get(r["sigla"], 0)
+            qty = (0 if e == 0 else (m + u - e)) - s
+            bev_total_qty += int(qty)
+            bev_total_inc += qty * bev_prices.get(r["sigla"], 0)
         orders_info = await _orders_aggregate_for_date(date_str, restaurant_id=restaurant_id)
         paste_count = _compute_paste_count(cash_doc.get("paste_text", "") if cash_doc else "")
         items.append({
@@ -4929,8 +4927,8 @@ async def _build_closure_detail(date_str: str, restaurant_id: Optional[str]) -> 
     for r in bev_docs:
         m = _eval_cash_value(r.get("mattina")); u = _eval_cash_value(r.get("inUsc"))
         s = _eval_cash_value(r.get("scarti"));  e = _eval_cash_value(r.get("sera"))
-        qty = 0 if e == 0 else (m + u - s - e)
-        inc = max(0, qty) * bev_prices.get(r["sigla"], 0)
+        qty = (0 if e == 0 else (m + u - e)) - s
+        inc = qty * bev_prices.get(r["sigla"], 0)
         bev_rows.append({
             "sigla": r["sigla"],
             "name": bev_names.get(r["sigla"], r["sigla"]),
@@ -4942,9 +4940,8 @@ async def _build_closure_detail(date_str: str, restaurant_id: Optional[str]) -> 
             "incasso": round(inc, 2),
             "comments": r.get("comments") or {},
         })
-        if qty > 0:
-            bev_total_qty += int(qty)
-            bev_total_inc += inc
+        bev_total_qty += int(qty)
+        bev_total_inc += inc
     orders_info = await _orders_aggregate_for_date(date_str, restaurant_id=restaurant_id)
     bev_sort_idx = {b["sigla"]: b.get("sort_order", 999) for b in BEVERAGES_CATALOG}
     bev_rows.sort(key=lambda r: bev_sort_idx.get(r["sigla"], 999))
@@ -5040,15 +5037,14 @@ async def closures_grid_admin(
             u = _eval_cash_value(r.get("inUsc"))
             s = _eval_cash_value(r.get("scarti"))
             e = _eval_cash_value(r.get("sera"))
-            qty = 0 if e == 0 else (m + u - s - e)
-            inc = max(0, qty) * bev_prices.get(sigla, 0)
+            qty = (0 if e == 0 else (m + u - e)) - s
+            inc = qty * bev_prices.get(sigla, 0)
             bev_flat[sigla] = {
                 "mattina": m, "inUsc": u, "scarti": s, "sera": e,
                 "qty": int(qty), "incasso": round(inc, 2),
             }
-            if qty > 0:
-                bev_total_qty += int(qty)
-                bev_total_inc += inc
+            bev_total_qty += int(qty)
+            bev_total_inc += inc
 
         cash_sera = round(_compute_cash_sera_full(cash_doc, bev_docs, dmap_row), 2) if cash_doc else 0.0
         cash_sera_base = round(_compute_cash_sera(cash_doc), 2) if cash_doc else 0.0

@@ -68,9 +68,9 @@ const StoricoBevandePage = () => {
       const u = evaluateValue(r.inUsc);
       const sc = evaluateValue(r.scarti);
       const se = evaluateValue(r.sera);
-      const qty = se === 0 ? 0 : (m + u - sc - se);
-      if (qty > 0) q += qty;
-      e += Math.max(0, qty) * (priceMap[r.sigla] || 0);
+      const qty = (se === 0 ? 0 : (m + u - se)) - sc;
+      q += qty;
+      e += qty * (priceMap[r.sigla] || 0);
     }
     return { quantita: q, incasso: e };
   };
@@ -146,8 +146,8 @@ const StoricoBevandePage = () => {
                           const u = evaluateValue(r.inUsc);
                           const sc = evaluateValue(r.scarti);
                           const se = evaluateValue(r.sera);
-                          const qty = se === 0 ? 0 : (m + u - sc - se);
-                          const inc = Math.max(0, qty) * (priceMap[r.sigla] || 0);
+                          const qty = (se === 0 ? 0 : (m + u - se)) - sc;
+                          const inc = qty * (priceMap[r.sigla] || 0);
                           return (
                             <tr key={r.sigla} className="border-t border-gray-100">
                               <td className="px-2 py-1 font-bold">{r.sigla}</td>

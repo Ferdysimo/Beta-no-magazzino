@@ -8,8 +8,10 @@ import {
   Clock,
   Database,
   HardDrive,
+  Monitor,
   RefreshCw,
   Server,
+  Smartphone,
   Wifi,
   WifiOff,
 } from 'lucide-react';
@@ -150,6 +152,16 @@ const TabButton = ({ active, children, onClick }) => (
     {children}
   </button>
 );
+
+const riskRank = { critical: 3, warning: 2, ok: 1, neutral: 0 };
+
+const compactPath = (path) => {
+  if (!path) return '-';
+  const clean = String(path).split('?')[0] || '/';
+  if (clean === '/') return 'Home';
+  const last = clean.split('/').filter(Boolean).pop();
+  return last ? last.replace(/-/g, ' ') : clean;
+};
 
 const DiagnosticaLivePage = () => {
   const { token, isAdmin } = useAuth();
@@ -329,21 +341,95 @@ const DiagnosticaLivePage = () => {
     };
   }, [frontendSummary]);
 
-  const getDeviceAction = (device) => {
-    if (device.status !== 'online') return 'Controlla connessione o tablet spento';
-    if (deviceStats.expectedVersion && device.frontend_version && device.frontend_version !== deviceStats.expectedVersion) {
-      return 'Chiudi e riapri il browser sul dispositivo';
+  const getDeviceIssue = (device) => {
+    const isStale = deviceStats.expectedVersion && device.frontend_version && device.frontend_version !== deviceStats.expectedVersion;
+    if (device.status !== 'online') {
+      return {
+        level: 'warning',
+        label: 'Offline',
+        action: 'Verifica che il tablet sia acceso, connesso e sulla pagina corretta.',
+      };
     }
-    if ((device.recent_errors_count || 0) > 0) return 'Se ricapita, fai refresh del dispositivo';
-    return 'Nessuna azione';
+    if (isStale) {
+      return {
+        level: 'warning',
+        label: 'Build vecchia',
+        action: 'Chiudi e riapri il browser sul dispositivo.',
+      };
+    }
+    if ((device.recent_errors_count || 0) > 0) {
+      return {
+        level: 'warning',
+        label: 'Errori browser',
+        action: 'Aggiorna la pagina; se ricapita controlla la rete del locale.',
+      };
+    }
+    return {
+      level: 'ok',
+      label: 'Operativo',
+      action: 'Nessuna azione richiesta.',
+    };
   };
 
-  const getDeviceLevel = (device) => {
-    if (device.status !== 'online') return 'warning';
-    if (deviceStats.expectedVersion && device.frontend_version && device.frontend_version !== deviceStats.expectedVersion) return 'warning';
-    if ((device.recent_errors_count || 0) > 0) return 'warning';
-    return 'ok';
-  };
+  const locationOperations = useMemo(() => {
+    const expectedVersion = deviceStats.expectedVersion;
+    return frontendSummary.locations.map(loc => {
+      const key = loc.restaurant_id || loc.location;
+      const devices = frontendSummary.devices.filter(device => (
+        (device.restaurant_id || device.restaurant_location || 'unknown') === key
+      ));
+      const stale = devices.filter(device => (
+        expectedVersion && device.frontend_version && device.frontend_version !== expectedVersion
+      )).length;
+      const offline = loc.offline || 0;
+      const errors = loc.errors || 0;
+      const online = loc.online || 0;
+      const total = loc.devices_total || devices.length || 0;
+      const lastSeen = loc.last_seen || devices[0]?.last_seen || '';
+      let level = 'ok';
+      let action = 'Locale operativo.';
+      if (offline > 0) {
+        level = 'warning';
+        action = 'Controlla tablet spenti, rete o browser chiuso.';
+      } else if (stale > 0) {
+        level = 'warning';
+        action = 'Riapri il browser sui dispositivi con build vecchia.';
+      } else if (errors > 0) {
+        level = 'warning';
+        action = 'Aggiorna i dispositivi con errori browser.';
+      }
+      return {
+        ...loc,
+        key,
+        devices,
+        stale,
+        offline,
+        online,
+        total,
+        errors,
+        lastSeen,
+        level,
+        action,
+      };
+    }).sort((a, b) => (
+      (riskRank[b.level] - riskRank[a.level])
+      || (b.offline - a.offline)
+      || (b.stale - a.stale)
+      || (b.errors - a.errors)
+      || String(a.location).localeCompare(String(b.location), 'it')
+    ));
+  }, [frontendSummary, deviceStats.expectedVersion]);
+
+  const selectedLocation = useMemo(() => {
+    if (deviceLocationFilter === 'all') return null;
+    return locationOperations.find(loc => loc.key === deviceLocationFilter) || null;
+  }, [locationOperations, deviceLocationFilter]);
+
+  const actionQueue = useMemo(() => {
+    return locationOperations
+      .filter(loc => loc.level !== 'ok')
+      .slice(0, 6);
+  }, [locationOperations]);
 
   if (!isAdmin) {
     return (
@@ -554,9 +640,9 @@ const DiagnosticaLivePage = () => {
             <section className="mb-8">
               <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between mb-4">
                 <div>
-                  <SectionTitle>Dispositivi locali</SectionTitle>
+                  <SectionTitle>Controllo locali</SectionTitle>
                   <div className="text-sm text-gray-500">
-                    Lettura operativa per locale: stato, build webapp, pagina aperta e azione consigliata.
+                    Vista operativa: prima i locali che richiedono intervento, poi il dettaglio tecnico.
                   </div>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2">
@@ -579,14 +665,14 @@ const DiagnosticaLivePage = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
                 <MetricTile
                   icon={CheckCircle2}
-                  label="Build webapp attesa"
-                  value={deviceStats.expectedVersion || '-'}
-                  detail="La versione che devono usare i dispositivi"
-                  level={deviceStats.stale > 0 ? 'warning' : 'ok'}
-                  testId="diag-expected-webapp-build"
+                  label="Locali operativi"
+                  value={`${Math.max(0, frontendSummary.locations.length - deviceStats.locationsWithIssues)}/${frontendSummary.locations.length}`}
+                  detail={deviceStats.locationsWithIssues > 0 ? `${deviceStats.locationsWithIssues} locali richiedono controllo` : 'Nessun locale in anomalia'}
+                  level={deviceStats.locationsWithIssues > 0 ? 'warning' : 'ok'}
+                  testId="diag-location-issues"
                 />
                 <MetricTile
                   icon={Activity}
@@ -600,100 +686,176 @@ const DiagnosticaLivePage = () => {
                   icon={AlertTriangle}
                   label="Build vecchie"
                   value={deviceStats.stale}
-                  detail={deviceStats.stale > 0 ? 'Almeno un dispositivo non ha ancora aggiornato' : 'Versione uniforme'}
+                  detail={deviceStats.stale > 0 ? `Attesa ${formatVersion(deviceStats.expectedVersion)}` : 'Versione uniforme'}
                   level={deviceStats.stale > 0 ? 'warning' : 'ok'}
                   testId="diag-stale-builds"
                 />
                 <MetricTile
-                  icon={WifiOff}
-                  label="Locali da guardare"
-                  value={deviceStats.locationsWithIssues}
-                  detail="Offline, build diverse o errori ripetuti"
-                  level={deviceStats.locationsWithIssues > 0 ? 'warning' : 'ok'}
-                  testId="diag-location-issues"
+                  icon={AlertCircle}
+                  label="Errori browser"
+                  value={deviceStats.withErrors}
+                  detail={deviceStats.withErrors > 0 ? 'Dispositivi con segnali recenti' : 'Nessun errore browser recente'}
+                  level={deviceStats.withErrors > 0 ? 'warning' : 'ok'}
+                  testId="diag-device-errors"
                 />
               </div>
 
-              <div className="mb-4">
-                <div className="flex items-center justify-between gap-3 mb-2">
-                  <div className="text-sm font-bold text-gray-900 uppercase">Locali monitorati</div>
-                  <button
-                    type="button"
-                    onClick={() => setDeviceLocationFilter('all')}
-                    className="text-sm font-semibold text-gray-700 hover:text-gray-950"
-                  >
-                    Mostra tutti
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setDeviceLocationFilter('all')}
-                    className={`text-left border rounded-lg p-4 min-h-[128px] transition-colors ${
-                      deviceLocationFilter === 'all' ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-900'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-lg font-bold">Tutti i locali</div>
-                        <div className={`text-xs mt-1 ${deviceLocationFilter === 'all' ? 'text-gray-300' : 'text-gray-500'}`}>
-                          Vista completa
-                        </div>
-                      </div>
-                      <div className={`text-2xl font-bold ${deviceLocationFilter === 'all' ? 'text-white' : 'text-gray-950'}`}>
-                        {frontendSummary.devices.length}
-                      </div>
+              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)] gap-4 mb-5">
+                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-bold text-gray-900 uppercase">Priorita operative</div>
+                      <div className="text-xs text-gray-500">Ordinate per impatto sul locale</div>
                     </div>
-                    <div className={`mt-4 grid grid-cols-3 gap-2 text-xs ${deviceLocationFilter === 'all' ? 'text-gray-200' : 'text-gray-600'}`}>
-                      <span>online {frontendSummary.online}</span>
-                      <span>offline {frontendSummary.offline}</span>
-                      <span>problemi {deviceStats.locationsWithIssues}</span>
+                    <HealthPill level={actionQueue.length > 0 ? 'warning' : 'ok'}>
+                      {actionQueue.length > 0 ? `${actionQueue.length} da vedere` : 'tutto ok'}
+                    </HealthPill>
+                  </div>
+                  {actionQueue.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-sm text-gray-500">
+                      Nessuna azione richiesta sui dispositivi locali.
                     </div>
-                  </button>
-                  {frontendSummary.locations.length === 0 ? (
-                    <div className="bg-white border border-gray-200 rounded-lg p-6 text-sm text-center text-gray-400">
-                      Nessun locale con heartbeat
-                    </div>
-                  ) : frontendSummary.locations.map(loc => {
-                    const key = loc.restaurant_id || loc.location;
-                    const hasIssue = loc.offline > 0 || loc.errors > 0 || loc.versions?.length > 1;
-                    return (
-                      <button
-                        type="button"
-                        key={key}
-                        onClick={() => setDeviceLocationFilter(key)}
-                        className={`text-left border rounded-lg p-4 min-h-[128px] transition-colors ${
-                          deviceLocationFilter === key
-                            ? 'bg-gray-900 border-gray-900 text-white'
-                            : hasIssue
-                              ? 'bg-amber-50 border-amber-200 hover:bg-amber-100 text-gray-900'
-                              : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-900'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="text-lg font-bold truncate">{loc.location}</div>
-                            <div className={`text-xs mt-1 ${deviceLocationFilter === key ? 'text-gray-300' : 'text-gray-500'}`}>
-                              Ultimo heartbeat {formatAgo(loc.last_seen)}
+                  ) : (
+                    <div className="divide-y divide-gray-100">
+                      {actionQueue.map(loc => (
+                        <button
+                          key={loc.key}
+                          type="button"
+                          onClick={() => setDeviceLocationFilter(loc.key)}
+                          className="w-full px-4 py-3 text-left hover:bg-amber-50 transition-colors"
+                        >
+                          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <AlertTriangle size={17} className="text-amber-700 shrink-0" />
+                                <span className="font-bold text-gray-950 truncate">{loc.location}</span>
+                              </div>
+                              <div className="text-sm text-gray-700 mt-1">{loc.action}</div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-xs text-gray-700 shrink-0 min-w-[220px]">
+                              <span className="font-semibold">offline {loc.offline}</span>
+                              <span className="font-semibold">build {loc.stale}</span>
+                              <span className="font-semibold">errori {loc.errors}</span>
                             </div>
                           </div>
-                          <HealthPill level={hasIssue ? 'warning' : 'ok'}>{loc.online}/{loc.devices_total}</HealthPill>
-                        </div>
-                        <div className={`mt-4 grid grid-cols-3 gap-2 text-xs ${deviceLocationFilter === key ? 'text-gray-200' : 'text-gray-600'}`}>
-                          <span className={loc.offline > 0 ? 'font-bold text-orange-700' : ''}>offline {loc.offline}</span>
-                          <span className={(loc.versions?.length || 0) > 1 ? 'font-bold text-orange-700' : ''}>build {loc.versions?.length || 0}</span>
-                          <span className={loc.errors > 0 ? 'font-bold text-orange-700' : ''}>segnali {loc.errors}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between gap-3 mb-4">
+                    <div>
+                      <div className="text-sm font-bold text-gray-900 uppercase">
+                        {selectedLocation ? selectedLocation.location : 'Vista complessiva'}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {selectedLocation ? `Ultimo heartbeat ${formatAgo(selectedLocation.lastSeen)}` : 'Seleziona un locale per isolare i dispositivi'}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDeviceLocationFilter('all')}
+                      className="text-sm font-semibold text-gray-700 hover:text-gray-950"
+                    >
+                      Tutti
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="border border-gray-200 rounded-md px-3 py-2">
+                      <div className="text-xs text-gray-500 uppercase">Online</div>
+                      <div className="text-xl font-bold text-gray-950">
+                        {selectedLocation ? `${selectedLocation.online}/${selectedLocation.total}` : `${frontendSummary.online}/${frontendSummary.devices.length}`}
+                      </div>
+                    </div>
+                    <div className="border border-gray-200 rounded-md px-3 py-2">
+                      <div className="text-xs text-gray-500 uppercase">Build attesa</div>
+                      <div className="text-xl font-bold text-gray-950 truncate">{formatVersion(deviceStats.expectedVersion)}</div>
+                    </div>
+                    <div className="border border-gray-200 rounded-md px-3 py-2">
+                      <div className="text-xs text-gray-500 uppercase">Build vecchie</div>
+                      <div className={`text-xl font-bold ${selectedLocation?.stale || (!selectedLocation && deviceStats.stale) ? 'text-amber-700' : 'text-gray-950'}`}>
+                        {selectedLocation ? selectedLocation.stale : deviceStats.stale}
+                      </div>
+                    </div>
+                    <div className="border border-gray-200 rounded-md px-3 py-2">
+                      <div className="text-xs text-gray-500 uppercase">Errori</div>
+                      <div className={`text-xl font-bold ${selectedLocation?.errors || (!selectedLocation && deviceStats.withErrors) ? 'text-amber-700' : 'text-gray-950'}`}>
+                        {selectedLocation ? selectedLocation.errors : deviceStats.withErrors}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden mb-5">
+                <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="text-sm font-bold text-gray-900 uppercase">Locali monitorati</div>
+                    <div className="text-xs text-gray-500">
+                      Seleziona un locale per restringere il dettaglio dispositivi
+                    </div>
+                  </div>
+                  <HealthPill level={deviceStats.locationsWithIssues > 0 ? 'warning' : 'ok'}>
+                    {deviceStats.locationsWithIssues > 0 ? `${deviceStats.locationsWithIssues} con anomalie` : 'stabili'}
+                  </HealthPill>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[980px] text-sm">
+                    <thead className="bg-white text-gray-600 border-b border-gray-200">
+                      <tr>
+                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px]">Locale</th>
+                        <th className="text-center px-4 py-3 font-semibold uppercase text-[11px]">Dispositivi</th>
+                        <th className="text-center px-4 py-3 font-semibold uppercase text-[11px]">Offline</th>
+                        <th className="text-center px-4 py-3 font-semibold uppercase text-[11px]">Build vecchie</th>
+                        <th className="text-center px-4 py-3 font-semibold uppercase text-[11px]">Errori</th>
+                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px]">Ultimo segnale</th>
+                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px]">Azione</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {locationOperations.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-10 text-center text-gray-400">
+                            Nessun locale con heartbeat
+                          </td>
+                        </tr>
+                      ) : locationOperations.map(loc => {
+                        const selected = deviceLocationFilter === loc.key;
+                        return (
+                          <tr
+                            key={loc.key}
+                            className={`${selected ? 'bg-gray-900 text-white' : loc.level === 'warning' ? 'bg-amber-50' : 'bg-white'} cursor-pointer`}
+                            onClick={() => setDeviceLocationFilter(loc.key)}
+                          >
+                            <td className="px-4 py-3 align-top">
+                              <div className={`font-bold truncate ${selected ? 'text-white' : 'text-gray-950'}`}>{loc.location}</div>
+                              <div className={`text-xs mt-1 ${selected ? 'text-gray-300' : 'text-gray-500'}`}>{loc.role || 'restaurant'}</div>
+                            </td>
+                            <td className="px-4 py-3 text-center align-top font-semibold">{loc.online}/{loc.total}</td>
+                            <td className={`px-4 py-3 text-center align-top font-bold ${loc.offline > 0 && !selected ? 'text-amber-800' : ''}`}>{loc.offline}</td>
+                            <td className={`px-4 py-3 text-center align-top font-bold ${loc.stale > 0 && !selected ? 'text-amber-800' : ''}`}>{loc.stale}</td>
+                            <td className={`px-4 py-3 text-center align-top font-bold ${loc.errors > 0 && !selected ? 'text-amber-800' : ''}`}>{loc.errors}</td>
+                            <td className="px-4 py-3 align-top">
+                              <div className="font-semibold">{formatAgo(loc.lastSeen)}</div>
+                              <div className={`text-xs mt-1 ${selected ? 'text-gray-300' : 'text-gray-500'}`}>{loc.lastSeen ? formatTime(loc.lastSeen) : '-'}</div>
+                            </td>
+                            <td className="px-4 py-3 align-top">
+                              <div className={`font-semibold ${selected ? 'text-white' : loc.level === 'warning' ? 'text-amber-900' : 'text-green-700'}`}>{loc.action}</div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
               <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                 <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <div className="text-sm font-bold text-gray-900 uppercase">Dispositivi</div>
+                    <div className="text-sm font-bold text-gray-900 uppercase">Evidenza dispositivi</div>
                     <div className="text-xs text-gray-500">
                       {filteredDevices.length} risultati filtrati su {frontendSummary.devices.length} dispositivi
                     </div>
@@ -702,86 +864,53 @@ const DiagnosticaLivePage = () => {
                     Locale: <span className="font-semibold text-gray-800">
                       {deviceLocationFilter === 'all'
                         ? 'tutti'
-                        : (frontendSummary.locations.find(loc => (loc.restaurant_id || loc.location) === deviceLocationFilter)?.location || deviceLocationFilter)}
+                        : (selectedLocation?.location || deviceLocationFilter)}
                     </span>
                   </div>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1360px] text-sm">
-                    <thead className="bg-white text-gray-600 border-b border-gray-200">
-                      <tr>
-                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px] w-[130px]">Stato</th>
-                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px] w-[210px]">Locale</th>
-                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px] w-[290px]">Dispositivo</th>
-                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px] w-[220px]">Pagina</th>
-                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px] w-[230px]">Versione webapp</th>
-                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px] w-[250px]">Cosa fare</th>
-                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px] w-[120px]">Ultimo</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {filteredDevices.length === 0 ? (
-                        <tr>
-                          <td colSpan={7} className="px-4 py-10 text-center text-gray-400">
-                            Nessun dispositivo ristorante per questi filtri
-                          </td>
-                        </tr>
-                      ) : filteredDevices.map(device => {
-                        const versionDate = formatVersionDate(device.frontend_version);
-                        const deviceLevel = getDeviceLevel(device);
-                        const isStale = deviceStats.expectedVersion && device.frontend_version && device.frontend_version !== deviceStats.expectedVersion;
-                        return (
-                          <tr
-                            key={device.device_id}
-                            className={deviceLevel === 'warning' ? 'bg-amber-50' : 'bg-white'}
-                          >
-                            <td className="px-4 py-3 align-top">
-                              <HealthPill level={deviceLevel}>
-                                {device.status !== 'online' ? 'offline' : isStale ? 'build vecchia' : 'ok'}
-                              </HealthPill>
-                              {(device.recent_errors_count || 0) > 0 ? (
-                                <div className="mt-2 text-xs text-orange-700 font-semibold">
-                                  {device.recent_errors_count} segnali
-                                </div>
-                              ) : null}
-                            </td>
-                            <td className="px-4 py-3 align-top">
-                              <div className="font-bold text-gray-950 truncate">
-                                {device.restaurant_location || device.username || device.device_id.slice(0, 10)}
-                              </div>
-                              <div className="text-[11px] text-gray-400 uppercase mt-1">{device.role || '-'}</div>
-                            </td>
-                            <td className="px-4 py-3 align-top">
-                              <div className="font-semibold text-gray-800 truncate">{device.browser || 'Browser'} / {device.os || 'OS'}</div>
-                              <div className="text-xs text-gray-500 truncate mt-1">
-                                {device.device_type || '-'} / {device.viewport || device.screen || '-'}
-                              </div>
-                              <div className="text-xs text-gray-700 font-mono truncate mt-1">IP {device.ip || '-'}</div>
-                              <div className="text-[11px] text-gray-400 font-mono truncate mt-1">ID {(device.device_id || '').slice(0, 24)}</div>
-                            </td>
-                            <td className="px-4 py-3 align-top">
-                              <div className="font-mono text-xs text-gray-800 truncate">{device.path || '-'}</div>
-                              <div className="text-xs text-gray-500 mt-1">{device.visibility || '-'}</div>
-                            </td>
-                            <td className="px-4 py-3 align-top">
-                              <div className="font-mono text-sm font-bold text-gray-950 truncate">{formatVersion(device.frontend_version)}</div>
-                              {versionDate ? <div className="text-xs text-gray-500 mt-1">build {versionDate}</div> : null}
-                              {isStale ? <div className="text-xs text-orange-700 font-semibold mt-1">attesa {formatVersion(deviceStats.expectedVersion)}</div> : null}
-                            </td>
-                            <td className="px-4 py-3 align-top">
-                              <div className={`font-semibold ${deviceLevel === 'warning' ? 'text-orange-800' : 'text-green-700'}`}>
-                                {getDeviceAction(device)}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 align-top">
-                              <div className="font-semibold text-gray-800">{formatAgo(device.last_seen)}</div>
-                              <div className="text-xs text-gray-500 mt-1">{device.last_seen ? formatTime(device.last_seen) : '-'}</div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                <div className="divide-y divide-gray-100">
+                  {filteredDevices.length === 0 ? (
+                    <div className="px-4 py-10 text-center text-gray-400">
+                      Nessun dispositivo ristorante per questi filtri
+                    </div>
+                  ) : filteredDevices.map(device => {
+                    const versionDate = formatVersionDate(device.frontend_version);
+                    const issue = getDeviceIssue(device);
+                    const isStale = deviceStats.expectedVersion && device.frontend_version && device.frontend_version !== deviceStats.expectedVersion;
+                    const DeviceIcon = (device.device_type || '').toLowerCase().includes('mobile') ? Smartphone : Monitor;
+                    return (
+                      <div key={device.device_id} className={`px-4 py-3 ${issue.level === 'warning' ? 'bg-amber-50' : 'bg-white'}`}>
+                        <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)_240px_220px] gap-3">
+                          <div className="flex items-start gap-3 min-w-0">
+                            <div className={`w-9 h-9 rounded-md flex items-center justify-center shrink-0 ${issue.level === 'warning' ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-700'}`}>
+                              <DeviceIcon size={18} />
+                            </div>
+                            <div className="min-w-0">
+                              <HealthPill level={issue.level}>{issue.label}</HealthPill>
+                              <div className="text-xs text-gray-500 mt-2">{formatAgo(device.last_seen)} · {device.last_seen ? formatTime(device.last_seen) : '-'}</div>
+                            </div>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-bold text-gray-950 truncate">{device.restaurant_location || device.username || device.device_id.slice(0, 10)}</div>
+                            <div className="text-sm text-gray-700 truncate mt-1">{device.browser || 'Browser'} / {device.os || 'OS'} · {device.viewport || device.screen || '-'}</div>
+                            <div className="text-xs text-gray-500 font-mono truncate mt-1">IP {device.ip || '-'} · ID {(device.device_id || '').slice(0, 18)}</div>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-semibold text-gray-500 uppercase">Pagina</div>
+                            <div className="font-mono text-sm text-gray-900 truncate">{compactPath(device.path)}</div>
+                            <div className="text-xs text-gray-500 truncate mt-1">{device.visibility || '-'}</div>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-semibold text-gray-500 uppercase">Build / azione</div>
+                            <div className="font-mono text-sm font-bold text-gray-950 truncate">{formatVersion(device.frontend_version)}</div>
+                            {versionDate ? <div className="text-xs text-gray-500 mt-1">build {versionDate}</div> : null}
+                            {isStale ? <div className="text-xs text-amber-800 font-semibold mt-1">attesa {formatVersion(deviceStats.expectedVersion)}</div> : null}
+                            <div className={`text-sm font-semibold mt-2 ${issue.level === 'warning' ? 'text-amber-900' : 'text-green-700'}`}>{issue.action}</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 

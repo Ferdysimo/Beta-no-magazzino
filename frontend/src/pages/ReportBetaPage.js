@@ -1046,12 +1046,12 @@ const ReportBetaPageInner = () => {
       const u = evaluateValue(c.inUsc);
       const sc = evaluateValue(c.scarti);
       const se = evaluateValue(c.sera);
-      const qty = se === 0 ? 0 : (m + u - sc - se);
-      const inc = Math.max(0, qty) * (b.price || 0);
+      const qty = (se === 0 ? 0 : (m + u - se)) - sc;
+      const inc = qty * (b.price || 0);
       return { sigla: b.sigla, name: b.name, qty, inc };
     });
   }, [beverages, bevCounts]);
-  const bevTotalQty = bevSales.reduce((s, r) => s + Math.max(0, r.qty), 0);
+  const bevTotalQty = bevSales.reduce((s, r) => s + r.qty, 0);
   const bevTotalInc = bevSales.reduce((s, r) => s + r.inc, 0);
 
   // Calcolo CASH SERA in tempo reale
@@ -1104,7 +1104,7 @@ const ReportBetaPageInner = () => {
     running += pasteAnalysis.totalEuro;
 
     // 3. Bevande vendute
-    steps.push({ section: 'Bevande', label: 'incasso bevande (€)', raw: `${bevSales.reduce((s, r) => s + Math.max(0, r.qty), 0)} pz`, value: bevTotalInc, sign: '+', delta: bevTotalInc, running: running + bevTotalInc });
+    steps.push({ section: 'Bevande', label: 'incasso bevande (€)', raw: `${bevSales.reduce((s, r) => s + r.qty, 0)} pz`, value: bevTotalInc, sign: '+', delta: bevTotalInc, running: running + bevTotalInc });
     running += bevTotalInc;
 
     // 4. Spicci aperti (dettaglio per taglio)

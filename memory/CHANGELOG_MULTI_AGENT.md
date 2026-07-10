@@ -163,6 +163,50 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-09 13:22 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/backend/tests/test_beverage_signed_totals.py`
+- `/app/frontend/src/pages/ReportBetaPage.js`
+- `/app/frontend/src/pages/MagazzinoBevandePage.js`
+- `/app/frontend/src/pages/StoricoBevandePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Estesa la logica delle bevande firmate: gli scarti ora sottraggono sempre dal totale vendite bevande, anche quando `Magazzino Sera` e ancora 0/non contato. Le vendite da giacenza restano sospese fino al conteggio sera, ma gli scarti incidono subito in negativo.
+**Testato**: si (metodo: `python -m py_compile backend/server.py`, `pytest backend/tests/test_beverage_signed_totals.py -q`, `npm run build`, backend locale riavviato)
+**Note per il prossimo agente**: Formula coerente tra frontend e backend: `(sera == 0 ? 0 : mattina + ingressi - sera) - scarti`.
+
+### [2026-07-09 13:14 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix
+**File toccati**:
+- `/app/frontend/src/pages/AuditCassaPage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Nella pagina "Check singoli movimenti" nascosti i movimenti tecnici legati a `paste_text` ("Paste incollate (testo)") e `manual_prices.*` ("Prezzo manuale paste"), mantenendoli comunque registrati nell'audit-log backend.
+**Testato**: si (metodo: `npm run build`)
+**Note per il prossimo agente**: Il filtro e solo di presentazione: non rimuovere la registrazione backend di questi campi senza una richiesta esplicita.
+
+### [2026-07-09 12:26 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/backend/tests/test_beverage_signed_totals.py`
+- `/app/frontend/src/pages/ReportBetaPage.js`
+- `/app/frontend/src/pages/MagazzinoBevandePage.js`
+- `/app/frontend/src/pages/StoricoBevandePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Corretto il calcolo economico delle vendite bevande: le quantita negative ora rettificano il totale con il loro prezzo invece di essere ignorate. Esempio: `10 C` a 2 euro e `-10 CZ` a 2 euro danno totale bevande 0 euro.
+**Testato**: si (metodo: `python -m py_compile backend/server.py`, `pytest backend/tests/test_beverage_signed_totals.py -q` -> 2 passed, `npm run build`, backend locale riavviato)
+**Note per il prossimo agente**: Mantenere il caso `sera == 0` come "giornata non contata": in quel caso la quantita resta 0. Le quantita negative contano solo quando la riga ha un conteggio sera.
+
+### [2026-07-09 10:05 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: refactor
+**File toccati**:
+- `/app/frontend/src/pages/DiagnosticaLivePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Ripensata la sezione "Dispositivi locali" come vista operativa "Controllo locali": prima KPI e priorita di intervento per locale, poi matrice locali, infine evidenza tecnica per dispositivo. L'obiettivo e mostrare cosa fare prima, non solo una tabella di device.
+**Testato**: si (metodo: `npm run build`, frontend locale su `http://localhost:3000`)
+**Note per il prossimo agente**: La diagnostica dispositivi deve restare orientata alle decisioni operative: locale a rischio, motivo, azione consigliata, dettagli tecnici solo come supporto.
+
 ### [2026-07-08 23:39 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix
 **File toccati**:
