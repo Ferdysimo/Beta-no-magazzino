@@ -326,7 +326,12 @@ class TestCashDailyMultiTenancy:
                 {"restaurant_id": flaminio_id, "date_rome": yest}
             )
             sync_db.cash_audit_log.delete_many(
-                {"restaurant_id": flaminio_id, "date_rome": today, "_test_marker": True}
+                {
+                    "restaurant_id": flaminio_id,
+                    "date_rome": today,
+                    "category": "cash",
+                    "field": "mattina",
+                }
             )
             sync_db.cash_daily_counts.insert_one(
                 {
@@ -370,6 +375,77 @@ class TestCashDailyMultiTenancy:
         assert persisted["mattina"] == "503"
         assert persisted["mattina_auto_carry"] is True
         assert persisted["mattina_carry_from_date"] == yest
+
+    def test_cash_daily_carry_uses_restaurant_pasta_dictionary(
+        self, admin_token, flaminio_session
+    ):
+        """Carry-over must use the selected restaurant pasta dictionary, not the default map."""
+        flaminio_id = flaminio_session["id"]
+        today = _today_str()
+        yest = _yesterday_str()
+        from pymongo import MongoClient
+        sync_client = MongoClient(MONGO_URL)
+        original_dict = None
+        try:
+            sync_db = sync_client[DB_NAME]
+            original_dict = sync_db.pasta_dictionary.find_one(
+                {"restaurant_id": flaminio_id},
+                {"_id": 0},
+            )
+            sync_db.pasta_dictionary.update_one(
+                {"restaurant_id": flaminio_id},
+                {"$set": {
+                    "restaurant_id": flaminio_id,
+                    "siglas": [{"sigla": "CARB", "price": 10}],
+                    "_test_marker": True,
+                }},
+                upsert=True,
+            )
+            sync_db.cash_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": today}
+            )
+            sync_db.cash_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": yest}
+            )
+            sync_db.beverage_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": yest}
+            )
+            sync_db.cash_daily_counts.insert_one(
+                {
+                    "restaurant_id": flaminio_id,
+                    "date_rome": yest,
+                    "mattina": "100",
+                    "paste_text": "1 CARB",
+                    "_test_marker": True,
+                }
+            )
+        finally:
+            sync_client.close()
+
+        try:
+            g = requests.get(
+                f"{BASE_URL}/api/cash/daily",
+                headers=_hdr(admin_token, flaminio_id),
+                timeout=TIMEOUT,
+            )
+            assert g.status_code == 200, g.text
+            body = g.json()
+            assert body["prev_cash_sera"] == 110
+            assert body["data"]["mattina"] == "110"
+        finally:
+            sync_client = MongoClient(MONGO_URL)
+            try:
+                sync_db = sync_client[DB_NAME]
+                if original_dict:
+                    sync_db.pasta_dictionary.replace_one(
+                        {"restaurant_id": flaminio_id},
+                        original_dict,
+                        upsert=True,
+                    )
+                else:
+                    sync_db.pasta_dictionary.delete_one({"restaurant_id": flaminio_id})
+            finally:
+                sync_client.close()
 
     def test_cash_daily_does_not_reconcile_manual_morning_audit(
         self, admin_token, flaminio_session
@@ -500,6 +576,72 @@ class TestCashDailyMultiTenancy:
         finally:
             sync_client.close()
         assert persisted["updated_at"] == "keep-this-revision"
+
+    def test_cash_daily_reconciles_legacy_auto_cassetto_after_spicci_change(
+        self, admin_token, flaminio_session
+    ):
+        """Existing automatic cassetto mattina must follow corrected previous-day residual."""
+        flaminio_id = flaminio_session["id"]
+        today = _today_str()
+        yest = _yesterday_str()
+        from pymongo import MongoClient
+        sync_client = MongoClient(MONGO_URL)
+        try:
+            sync_db = sync_client[DB_NAME]
+            sync_db.cash_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": today}
+            )
+            sync_db.cash_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": yest}
+            )
+            sync_db.cash_audit_log.delete_many(
+                {
+                    "restaurant_id": flaminio_id,
+                    "date_rome": today,
+                    "category": "cash",
+                    "field": "cd5",
+                }
+            )
+            sync_db.cash_daily_counts.insert_one(
+                {
+                    "restaurant_id": flaminio_id,
+                    "date_rome": yest,
+                    "cd5": "12",
+                    "sp5": "3",
+                    "_test_marker": True,
+                }
+            )
+            sync_db.cash_daily_counts.insert_one(
+                {
+                    "restaurant_id": flaminio_id,
+                    "date_rome": today,
+                    "cd5": "10",
+                    "_test_marker": True,
+                }
+            )
+        finally:
+            sync_client.close()
+
+        g = requests.get(
+            f"{BASE_URL}/api/cash/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            timeout=TIMEOUT,
+        )
+        assert g.status_code == 200, g.text
+        body = g.json()
+        assert body["data"]["cd5"] == "9"
+
+        sync_client = MongoClient(MONGO_URL)
+        try:
+            persisted = sync_client[DB_NAME].cash_daily_counts.find_one(
+                {"restaurant_id": flaminio_id, "date_rome": today},
+                {"_id": 0},
+            )
+        finally:
+            sync_client.close()
+        assert persisted["cd5"] == "9"
+        assert persisted["cd5_auto_carry"] is True
+        assert persisted["cd5_carry_from_date"] == yest
 
     def test_cash_daily_partial_patch_preserves_other_fields(
         self, admin_token, flaminio_session
@@ -750,6 +892,78 @@ class TestBeveragesDailyMultiTenancy:
         assert persisted["mattina"] == "52"
         assert persisted["mattina_casse"] == "2"
         assert persisted["mattina_sfuse"] == "4"
+
+    def test_beverage_daily_reconciles_legacy_auto_morning_after_prev_sera_change(
+        self, admin_token, flaminio_session
+    ):
+        """Existing automatic beverage mattina must follow corrected previous-day sera."""
+        flaminio_id = flaminio_session["id"]
+        today = _today_str()
+        yest = _yesterday_str()
+        SIGLA = "CZ"
+        from pymongo import MongoClient
+        sync_client = MongoClient(MONGO_URL)
+        try:
+            sync_db = sync_client[DB_NAME]
+            sync_db.beverage_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": today, "sigla": SIGLA}
+            )
+            sync_db.beverage_daily_counts.delete_many(
+                {"restaurant_id": flaminio_id, "date_rome": yest, "sigla": SIGLA}
+            )
+            sync_db.cash_audit_log.delete_many(
+                {
+                    "restaurant_id": flaminio_id,
+                    "date_rome": today,
+                    "category": "beverage",
+                    "field": f"{SIGLA}.mattina",
+                }
+            )
+            sync_db.beverage_daily_counts.insert_one(
+                {
+                    "restaurant_id": flaminio_id,
+                    "date_rome": yest,
+                    "sigla": SIGLA,
+                    "sera": "52",
+                    "_test_marker": True,
+                }
+            )
+            sync_db.beverage_daily_counts.insert_one(
+                {
+                    "restaurant_id": flaminio_id,
+                    "date_rome": today,
+                    "sigla": SIGLA,
+                    "mattina": "40",
+                    "mattina_casse": "1",
+                    "mattina_sfuse": "16",
+                    "_test_marker": True,
+                }
+            )
+        finally:
+            sync_client.close()
+
+        g = requests.get(
+            f"{BASE_URL}/api/beverages/daily",
+            headers=_hdr(admin_token, flaminio_id),
+            timeout=TIMEOUT,
+        )
+        assert g.status_code == 200, g.text
+        row = g.json()["counts"][SIGLA]
+        assert row["mattina"] == "52"
+        assert row["mattina_casse"] == "2"
+        assert row["mattina_sfuse"] == "4"
+
+        sync_client = MongoClient(MONGO_URL)
+        try:
+            persisted = sync_client[DB_NAME].beverage_daily_counts.find_one(
+                {"restaurant_id": flaminio_id, "date_rome": today, "sigla": SIGLA},
+                {"_id": 0},
+            )
+        finally:
+            sync_client.close()
+        assert persisted["mattina"] == "52"
+        assert persisted["mattina_auto_carry"] is True
+        assert persisted["mattina_carry_from_date"] == yest
 
     def test_beverage_daily_partial_patch_preserves_other_fields(
         self, admin_token, flaminio_session

@@ -163,15 +163,29 @@ logger = logging.getLogger(__name__)
 ROME_TZ = ZoneInfo("Europe/Rome")
 
 
-def _today_rome_bounds_utc():
-    """Return (start_utc_iso, end_utc_iso) for the current day in Europe/Rome."""
-    now_rome = datetime.now(ROME_TZ)
-    start_rome = now_rome.replace(hour=0, minute=0, second=0, microsecond=0)
+def _rome_date_bounds_utc(date_rome_str: str):
+    """Return (start_utc_iso, end_utc_iso) for a specific Rome calendar day."""
+    start_rome = datetime.strptime(date_rome_str, "%Y-%m-%d").replace(tzinfo=ROME_TZ)
     end_rome = start_rome + timedelta(days=1)
     return (
         start_rome.astimezone(timezone.utc).isoformat(),
         end_rome.astimezone(timezone.utc).isoformat(),
     )
+
+
+def _rome_date_from_iso(value: str) -> Optional[str]:
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(ROME_TZ).strftime("%Y-%m-%d")
+    except Exception:
+        return None
+
+
+def _today_rome_bounds_utc():
+    """Return (start_utc_iso, end_utc_iso) for the current day in Europe/Rome."""
+    return _rome_date_bounds_utc(datetime.now(ROME_TZ).strftime("%Y-%m-%d"))
 
 
 async def _atomic_archive_and_clear(collection_name: str, archive_name: str) -> int:
@@ -203,11 +217,114 @@ async def _atomic_archive_and_clear(collection_name: str, archive_name: str) -> 
     return len(docs)
 
 
+def _paste_text_from_order_docs(order_docs: list) -> str:
+    def sort_key(doc: dict):
+        try:
+            return int(doc.get("order_number") or 0)
+        except Exception:
+            return 0
+
+    rows = []
+    for doc in sorted(order_docs or [], key=sort_key):
+        desc = (doc.get("description") or "").strip()
+        if not desc:
+            continue
+        rows.append(f"{doc.get('order_number')}  {desc}")
+    return "\n".join(rows)
+
+
+async def _build_paste_text_for_date(
+    restaurant_id: str,
+    date_rome_str: str,
+    *,
+    source_collections: tuple[str, ...] = ("orders", "archived_orders"),
+) -> str:
+    start_utc, end_utc = _rome_date_bounds_utc(date_rome_str)
+    docs = []
+    seen = set()
+    for coll_name in source_collections:
+        found = await db[coll_name].find(
+            {
+                "restaurant_id": restaurant_id,
+                "created_at": {"$gte": start_utc, "$lt": end_utc},
+            },
+            {"_id": 0, "id": 1, "order_number": 1, "description": 1},
+        ).to_list(5000)
+        for doc in found:
+            key = doc.get("id") or f"{doc.get('order_number')}::{doc.get('description')}"
+            if key in seen:
+                continue
+            seen.add(key)
+            docs.append(doc)
+    return _paste_text_from_order_docs(docs)
+
+
+async def _snapshot_report_paste_text_for_date(
+    date_rome_str: str,
+    *,
+    restaurant_ids: Optional[list[str]] = None,
+    source_collections: tuple[str, ...] = ("orders", "archived_orders"),
+) -> Dict[str, int]:
+    """Persist the Report paste_text snapshot server-side for a closed Rome day."""
+    summary = {"restaurants": 0, "updated": 0, "manual_skipped": 0}
+    if restaurant_ids is None:
+        restaurants = await db.restaurants.find(
+            {"role": "restaurant"}, {"_id": 0, "id": 1}
+        ).to_list(200)
+        restaurant_ids = [r.get("id") for r in restaurants if r.get("id")]
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for rid in restaurant_ids:
+        if not rid:
+            continue
+        summary["restaurants"] += 1
+        paste_text = await _build_paste_text_for_date(
+            rid,
+            date_rome_str,
+            source_collections=source_collections,
+        )
+        cash_doc = await db.cash_daily_counts.find_one(
+            {"restaurant_id": rid, "date_rome": date_rome_str},
+            {"_id": 0, "paste_text": 1, "paste_manual_override": 1},
+        ) or {}
+        if cash_doc.get("paste_manual_override") is True:
+            summary["manual_skipped"] += 1
+            continue
+        if not paste_text and not cash_doc:
+            continue
+        if (cash_doc.get("paste_text") or "") == paste_text:
+            continue
+        await db.cash_daily_counts.update_one(
+            {"restaurant_id": rid, "date_rome": date_rome_str},
+            {"$set": {
+                "restaurant_id": rid,
+                "date_rome": date_rome_str,
+                "paste_text": paste_text,
+                "paste_snapshot_at": now_iso,
+                "paste_snapshot_source": "server",
+                "updated_at": now_iso,
+            }},
+            upsert=True,
+        )
+        summary["updated"] += 1
+    return summary
+
+
 # Midnight reset: archive orders and reset counters
 async def midnight_reset():
     logger.info("Running midnight reset - archiving orders and resetting counters")
     archived_count = 0
     try:
+        closed_day_rome = (datetime.now(ROME_TZ) - timedelta(days=1)).strftime("%Y-%m-%d")
+        try:
+            paste_summary = await _snapshot_report_paste_text_for_date(
+                closed_day_rome,
+                source_collections=("orders", "archived_orders"),
+            )
+            logger.info(f"[REPORT_PASTE_SNAPSHOT] closed_day={closed_day_rome}: {paste_summary}")
+        except Exception as e:
+            logger.error(f"[REPORT_PASTE_SNAPSHOT] failed for {closed_day_rome}: {e}", exc_info=True)
+
         archived_count = await _atomic_archive_and_clear("orders", "archived_orders")
         await _atomic_archive_and_clear("deletion_logs", "archived_deletion_logs")
         await _atomic_archive_and_clear("modification_logs", "archived_modification_logs")
@@ -392,6 +509,23 @@ async def recover_stale_orders():
             logger.info("[RECOVERY] No stale orders found at boot")
             return
         logger.warning(f"[RECOVERY] Found {len(stale)} stale orders at boot, archiving...")
+        stale_by_date: Dict[str, set] = {}
+        for order in stale:
+            date_rome = _rome_date_from_iso(order.get("created_at"))
+            rid = order.get("restaurant_id")
+            if date_rome and rid:
+                stale_by_date.setdefault(date_rome, set()).add(rid)
+        for date_rome, rids in sorted(stale_by_date.items()):
+            try:
+                paste_summary = await _snapshot_report_paste_text_for_date(
+                    date_rome,
+                    restaurant_ids=sorted(rids),
+                    source_collections=("orders", "archived_orders"),
+                )
+                logger.warning(f"[RECOVERY] Report paste snapshot for {date_rome}: {paste_summary}")
+            except Exception as e:
+                logger.error(f"[RECOVERY] paste snapshot failed for {date_rome}: {e}", exc_info=True)
+
         # Archive stale orders atomically
         result = await db.archived_orders.insert_many([{**o} for o in stale], ordered=False)
         if len(result.inserted_ids) != len(stale):
@@ -3818,6 +3952,7 @@ async def get_beverage_daily_counts(
     today_docs = await db.beverage_daily_counts.find(
         {"restaurant_id": rid, "date_rome": target_date}, {"_id": 0}
     ).to_list(50)
+    today_by_sigla = {d["sigla"]: d for d in today_docs}
     counts = {d["sigla"]: {
         "mattina": d.get("mattina", ""),
         "inUsc": d.get("inUsc", ""),
@@ -3842,31 +3977,37 @@ async def get_beverage_daily_counts(
         prev_date = last_day_doc["date_rome"]
         prev_docs = await db.beverage_daily_counts.find(
             {"restaurant_id": rid, "date_rome": prev_date},
-            {"_id": 0, "sigla": 1, "sera": 1},
+            {"_id": 0, "date_rome": 1, "sigla": 1, "sera": 1},
         ).to_list(50)
         prev_sera = {d["sigla"]: d.get("sera", "") for d in prev_docs}
 
     if not historical and prev_sera:
         now_iso = datetime.now(timezone.utc).isoformat()
         valid_siglas = {b["sigla"] for b in BEVERAGES_CATALOG}
-        for sigla, sera_value in prev_sera.items():
-            if sigla not in valid_siglas or not str(sera_value or "").strip():
+        for prev_doc in prev_docs:
+            sigla = prev_doc.get("sigla")
+            if sigla not in valid_siglas:
                 continue
+            current_doc = today_by_sigla.get(sigla) or {}
             current = counts.get(sigla) or {}
-            if str(current.get("mattina") or "").strip():
+            carry_fields = await _beverage_mattina_carry_fields(
+                rid=rid,
+                target_date=target_date,
+                sigla=sigla,
+                today_row=current_doc,
+                prev_row=prev_doc,
+            )
+            if not carry_fields:
                 continue
-            mattina_casse, mattina_sfuse = _split_beverage_stock(sera_value)
-            carry_fields = {
+            update_fields = {
+                **carry_fields,
                 "restaurant_id": rid,
                 "date_rome": target_date,
                 "sigla": sigla,
-                "mattina": str(sera_value),
-                "mattina_casse": mattina_casse,
-                "mattina_sfuse": mattina_sfuse,
                 "updated_at": now_iso,
             }
             if not current:
-                carry_fields.update({
+                update_fields.update({
                     "inUsc": "",
                     "scarti": "",
                     "sera": "",
@@ -3877,14 +4018,14 @@ async def get_beverage_daily_counts(
                 })
             await db.beverage_daily_counts.update_one(
                 {"restaurant_id": rid, "date_rome": target_date, "sigla": sigla},
-                {"$set": carry_fields},
+                {"$set": update_fields},
                 upsert=True,
             )
             counts[sigla] = {
                 **current,
-                "mattina": str(sera_value),
-                "mattina_casse": mattina_casse,
-                "mattina_sfuse": mattina_sfuse,
+                "mattina": carry_fields["mattina"],
+                "mattina_casse": carry_fields["mattina_casse"],
+                "mattina_sfuse": carry_fields["mattina_sfuse"],
                 "inUsc": current.get("inUsc", ""),
                 "scarti": current.get("scarti", ""),
                 "sera": current.get("sera", ""),
@@ -3945,6 +4086,10 @@ async def upsert_beverage_daily(
         for k in ("mattina", "mattina_casse", "mattina_sfuse"):
             if k in set_body:
                 set_body[k] = old_doc.get(k, "")
+    elif any(k in set_body for k in ("mattina", "mattina_casse", "mattina_sfuse")):
+        set_body["mattina_auto_carry"] = False
+        set_body["mattina_carry_from_date"] = ""
+        set_body["mattina_carry_value"] = ""
     try:
         ui = _audit_user_info(request, token_data)
         if historical:
@@ -4303,7 +4448,8 @@ async def _cash_mattina_carry_fields(
     legacy_value = _format_report_number(round(_compute_cash_sera_full_legacy_manual_prices(last_cash, prev_bev_docs, dict_map), 2))
 
     should_write = not str(current_value or "").strip()
-    if not should_write and today_cash.get("mattina_auto_carry") is True:
+    auto_marker = today_cash.get("mattina_auto_carry")
+    if not should_write and auto_marker is True:
         carry_from = today_cash.get("mattina_carry_from_date") or ""
         if carry_from in ("", prev_date):
             should_write = (
@@ -4311,7 +4457,7 @@ async def _cash_mattina_carry_fields(
                 or not _report_numbers_equal(current_value, carry_value)
                 or str(today_cash.get("mattina_carry_value") or "") != carry_value
             )
-    if not should_write and not today_cash.get("mattina_auto_carry"):
+    if not should_write and auto_marker is None:
         if legacy_value and not _report_numbers_equal(legacy_value, carry_value) and _report_numbers_equal(current_value, legacy_value):
             manual_audit = await db.cash_audit_log.find_one(
                 {
@@ -4334,6 +4480,104 @@ async def _cash_mattina_carry_fields(
     }
 
 
+async def _cash_cassetto_carry_fields(
+    *, rid: str, target_date: str, today_cash: dict, last_cash: dict,
+) -> Dict[str, object]:
+    if not last_cash:
+        return {}
+    prev_date = last_cash.get("date_rome", "")
+    carry_fields: Dict[str, object] = {}
+    for cf in CASSETTO_FIELDS:
+        sp_field = CASSETTO_SPICCI_FIELD[cf]
+        prev_cd = str(last_cash.get(cf) or "").strip()
+        prev_sp = str(last_cash.get(sp_field) or "").strip()
+        if not prev_cd and not prev_sp:
+            continue
+        carry_value = _format_report_number(_eval_cash_value(prev_cd) - _eval_cash_value(prev_sp))
+        current_value = today_cash.get(cf, "")
+        auto_key = f"{cf}_auto_carry"
+        from_key = f"{cf}_carry_from_date"
+        value_key = f"{cf}_carry_value"
+        auto_marker = today_cash.get(auto_key)
+
+        should_write = not str(current_value or "").strip()
+        if not should_write and auto_marker is True:
+            carry_from = today_cash.get(from_key) or ""
+            if carry_from in ("", prev_date):
+                should_write = (
+                    carry_from != prev_date
+                    or not _report_numbers_equal(current_value, carry_value)
+                    or str(today_cash.get(value_key) or "") != carry_value
+                )
+        if not should_write and auto_marker is None:
+            manual_audit = await db.cash_audit_log.find_one(
+                {
+                    "restaurant_id": rid,
+                    "date_rome": target_date,
+                    "category": "cash",
+                    "field": cf,
+                },
+                {"_id": 1},
+            )
+            should_write = manual_audit is None
+
+        if should_write:
+            carry_fields[cf] = carry_value
+            carry_fields[auto_key] = True
+            carry_fields[from_key] = prev_date
+            carry_fields[value_key] = carry_value
+    return carry_fields
+
+
+async def _beverage_mattina_carry_fields(
+    *, rid: str, target_date: str, sigla: str, today_row: dict, prev_row: dict,
+) -> Dict[str, object]:
+    if not prev_row:
+        return {}
+    prev_date = prev_row.get("date_rome", "")
+    sera_value = prev_row.get("sera", "")
+    if not str(sera_value or "").strip():
+        return {}
+    carry_value = str(sera_value)
+    carry_casse, carry_sfuse = _split_beverage_stock(carry_value)
+    current_value = today_row.get("mattina", "")
+    auto_marker = today_row.get("mattina_auto_carry")
+
+    should_write = not str(current_value or "").strip()
+    if not should_write and auto_marker is True:
+        carry_from = today_row.get("mattina_carry_from_date") or ""
+        if carry_from in ("", prev_date):
+            should_write = (
+                carry_from != prev_date
+                or not _report_numbers_equal(current_value, carry_value)
+                or str(today_row.get("mattina_carry_value") or "") != carry_value
+                or str(today_row.get("mattina_casse") or "") != carry_casse
+                or str(today_row.get("mattina_sfuse") or "") != carry_sfuse
+            )
+    if not should_write and auto_marker is None:
+        manual_audit = await db.cash_audit_log.find_one(
+            {
+                "restaurant_id": rid,
+                "date_rome": target_date,
+                "category": "beverage",
+                "field": f"{sigla}.mattina",
+            },
+            {"_id": 1},
+        )
+        should_write = manual_audit is None
+
+    if not should_write:
+        return {}
+    return {
+        "mattina": carry_value,
+        "mattina_casse": carry_casse,
+        "mattina_sfuse": carry_sfuse,
+        "mattina_auto_carry": True,
+        "mattina_carry_from_date": prev_date,
+        "mattina_carry_value": carry_value,
+    }
+
+
 async def _materialize_report_day_opening_for_restaurant(rid: str, target_date: str) -> Dict[str, int]:
     """Persist report carry-over rows for a restaurant/day without overwriting filled fields."""
     summary = {"cash_fields": 0, "beverage_rows": 0}
@@ -4347,30 +4591,33 @@ async def _materialize_report_day_opening_for_restaurant(rid: str, target_date: 
     if last_bev_day:
         prev_docs = await db.beverage_daily_counts.find(
             {"restaurant_id": rid, "date_rome": last_bev_day["date_rome"]},
-            {"_id": 0, "sigla": 1, "sera": 1},
+            {"_id": 0, "date_rome": 1, "sigla": 1, "sera": 1},
         ).to_list(100)
         valid_siglas = {b["sigla"] for b in BEVERAGES_CATALOG}
         for prev in prev_docs:
             sigla = prev.get("sigla")
-            sera_value = prev.get("sera", "")
-            if sigla not in valid_siglas or not str(sera_value or "").strip():
+            if sigla not in valid_siglas:
                 continue
             today = await db.beverage_daily_counts.find_one(
                 {"restaurant_id": rid, "date_rome": target_date, "sigla": sigla},
-                {"_id": 0, "mattina": 1},
+                {"_id": 0},
             ) or {}
-            if str(today.get("mattina") or "").strip():
+            carry_fields = await _beverage_mattina_carry_fields(
+                rid=rid,
+                target_date=target_date,
+                sigla=sigla,
+                today_row=today,
+                prev_row=prev,
+            )
+            if not carry_fields:
                 continue
-            mattina_casse, mattina_sfuse = _split_beverage_stock(sera_value)
             await db.beverage_daily_counts.update_one(
                 {"restaurant_id": rid, "date_rome": target_date, "sigla": sigla},
                 {"$set": {
+                    **carry_fields,
                     "restaurant_id": rid,
                     "date_rome": target_date,
                     "sigla": sigla,
-                    "mattina": str(sera_value),
-                    "mattina_casse": mattina_casse,
-                    "mattina_sfuse": mattina_sfuse,
                     "updated_at": now_iso,
                 }, "$setOnInsert": {
                     "inUsc": "",
@@ -4398,6 +4645,7 @@ async def _materialize_report_day_opening_for_restaurant(rid: str, target_date: 
             {"restaurant_id": rid, "date_rome": last_cash["date_rome"]},
             {"_id": 0},
         ).to_list(100)
+        dmap = await _get_pasta_dict_for(rid)
         carry_fields = {}
         carry_fields.update(await _cash_mattina_carry_fields(
             rid=rid,
@@ -4405,17 +4653,14 @@ async def _materialize_report_day_opening_for_restaurant(rid: str, target_date: 
             today_cash=today_cash,
             last_cash=last_cash,
             prev_bev_docs=prev_bev_docs,
+            dict_map=dmap,
         ))
-        for cf in CASSETTO_FIELDS:
-            if str(today_cash.get(cf) or "").strip():
-                continue
-            sp_field = CASSETTO_SPICCI_FIELD[cf]
-            prev_cd = str(last_cash.get(cf) or "").strip()
-            prev_sp = str(last_cash.get(sp_field) or "").strip()
-            if not prev_cd and not prev_sp:
-                continue
-            residual = _eval_cash_value(prev_cd) - _eval_cash_value(prev_sp)
-            carry_fields[cf] = _format_report_number(residual)
+        carry_fields.update(await _cash_cassetto_carry_fields(
+            rid=rid,
+            target_date=target_date,
+            today_cash=today_cash,
+            last_cash=last_cash,
+        ))
         if carry_fields:
             await db.cash_daily_counts.update_one(
                 {"restaurant_id": rid, "date_rome": target_date},
@@ -4612,7 +4857,8 @@ async def get_cash_daily(
             {"restaurant_id": rid, "date_rome": last_doc["date_rome"]},
             {"_id": 0},
         ).to_list(100)
-        prev_cash_sera = round(_compute_cash_sera_full(last_doc, prev_bev_docs), 2)
+        dmap = await _get_pasta_dict_for(rid)
+        prev_cash_sera = round(_compute_cash_sera_full(last_doc, prev_bev_docs, dmap), 2)
         # Riga di ieri completa (per la vista read-only nel Report)
         prev_date = last_doc.get("date_rome", "")
         prev_row = {f: last_doc.get(f, "") for f in ALL_CASH_FIELDS}
@@ -4627,17 +4873,14 @@ async def get_cash_daily(
                 today_cash=today_doc,
                 last_cash=last_doc,
                 prev_bev_docs=prev_bev_docs,
+                dict_map=dmap,
             ))
-            for cf in CASSETTO_FIELDS:
-                if str(data.get(cf) or "").strip():
-                    continue
-                sp_field = CASSETTO_SPICCI_FIELD[cf]
-                prev_cd = str(last_doc.get(cf) or "").strip()
-                prev_sp = str(last_doc.get(sp_field) or "").strip()
-                if not prev_cd and not prev_sp:
-                    continue
-                residual = _eval_cash_value(prev_cd) - _eval_cash_value(prev_sp)
-                carry_fields[cf] = _format_report_number(residual)
+            carry_fields.update(await _cash_cassetto_carry_fields(
+                rid=rid,
+                target_date=target_date,
+                today_cash=today_doc,
+                last_cash=last_doc,
+            ))
             if carry_fields:
                 carry_fields.update({
                     "restaurant_id": rid,
@@ -4732,6 +4975,12 @@ async def upsert_cash_daily(
         set_payload["mattina_auto_carry"] = False
         set_payload["mattina_carry_from_date"] = ""
         set_payload["mattina_carry_value"] = ""
+    if token_data.get("role") == "admin":
+        for cf in CASSETTO_FIELDS:
+            if cf in set_payload:
+                set_payload[f"{cf}_auto_carry"] = False
+                set_payload[f"{cf}_carry_from_date"] = ""
+                set_payload[f"{cf}_carry_value"] = ""
     try:
         ui = _audit_user_info(request, token_data)
         if historical:

@@ -11,6 +11,7 @@ from server import (
     _compute_cash_sera_full_legacy_manual_prices,
     _compute_paste_total_eur,
     _compute_paste_unrecognized,
+    _paste_text_from_order_docs,
 )
 
 
@@ -47,3 +48,13 @@ def test_cash_sera_legacy_manual_price_total_can_be_reconciled():
 
     assert _compute_cash_sera_full_legacy_manual_prices(cash_row, [], PASTA_DICT) == 116
     assert _compute_cash_sera_full(cash_row, [], PASTA_DICT) == 511
+
+
+def test_paste_text_from_order_docs_matches_report_frontend_format():
+    docs = [
+        {"order_number": 3, "description": " AMAT "},
+        {"order_number": 1, "description": "CARB"},
+        {"order_number": 2, "description": ""},
+    ]
+
+    assert _paste_text_from_order_docs(docs) == "1  CARB\n3  AMAT"

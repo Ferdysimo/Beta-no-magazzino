@@ -163,6 +163,17 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-10 13:50 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/backend/tests/test_multi_tenancy.py`
+- `/app/backend/tests/test_report_backend_totals.py`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Rafforzati i riporti automatici del Report: Cash Mattina usa il dizionario paste del locale, il backend salva lo snapshot paste prima dell'archiviazione ordini, e i riporti automatici di Magazzino Mattina bevande e Cassetto Spicci vengono riconciliati se il giorno precedente viene corretto. Le forzature manuali restano protette tramite metadati/audit.
+**Testato**: si (metodo: `py_compile` backend/test, `pytest backend/tests/test_report_backend_totals.py -q`, `pytest backend/tests/test_multi_tenancy.py -q` -> 19 passed)
+**Note per il prossimo agente**: Punto escluso su richiesta utente: valutare separatamente il caso bevanda realmente chiusa a 0 pezzi, oggi ambiguo con "non contato".
+
 ### [2026-07-10 10:27 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix
 **File toccati**:
