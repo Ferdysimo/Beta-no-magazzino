@@ -172,7 +172,6 @@ const DiagnosticaLivePage = () => {
   const [filterPath, setFilterPath] = useState('');
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const [deviceLocationFilter, setDeviceLocationFilter] = useState('all');
-  const [deviceStatusFilter, setDeviceStatusFilter] = useState('all');
   const [deviceSearch, setDeviceSearch] = useState('');
   const [activeTab, setActiveTab] = useState('devices');
 
@@ -280,34 +279,27 @@ const DiagnosticaLivePage = () => {
 
   const frontendSummary = useMemo(() => {
     const devices = data?.frontend?.devices || [];
+    const onlineDevices = devices.filter(device => device.status === 'online');
     const versions = data?.deployment?.frontend_versions || [];
     const locations = data?.frontend?.locations || [];
     const sortedVersions = versions.slice().sort((a, b) => Number(a) - Number(b));
     const latestVersion = sortedVersions[sortedVersions.length - 1] || '';
     return {
       devices,
+      onlineDevices,
       locations,
-      online: data?.frontend?.online_count || 0,
-      offline: data?.frontend?.offline_count || 0,
+      online: onlineDevices.length,
       versions,
       latestVersion,
-      visible: devices.filter(d => d.visibility === 'visible').length,
+      visible: onlineDevices.filter(d => d.visibility === 'visible').length,
     };
   }, [data]);
 
-  useEffect(() => {
-    const locations = frontendSummary.locations || [];
-    if (deviceLocationFilter !== 'all' && !locations.some(loc => (loc.restaurant_id || loc.location) === deviceLocationFilter)) {
-      setDeviceLocationFilter('all');
-    }
-  }, [frontendSummary.locations, deviceLocationFilter]);
-
   const filteredDevices = useMemo(() => {
     const search = deviceSearch.trim().toLowerCase();
-    return frontendSummary.devices.filter(device => {
+    return frontendSummary.onlineDevices.filter(device => {
       const locationKey = device.restaurant_id || device.restaurant_location || 'unknown';
       if (deviceLocationFilter !== 'all' && locationKey !== deviceLocationFilter) return false;
-      if (deviceStatusFilter !== 'all' && device.status !== deviceStatusFilter) return false;
       if (!search) return true;
       const haystack = [
         device.restaurant_location,
@@ -322,114 +314,125 @@ const DiagnosticaLivePage = () => {
       ].filter(Boolean).join(' ').toLowerCase();
       return haystack.includes(search);
     });
-  }, [frontendSummary.devices, deviceLocationFilter, deviceStatusFilter, deviceSearch]);
+  }, [frontendSummary.onlineDevices, deviceLocationFilter, deviceSearch]);
 
   const deviceStats = useMemo(() => {
     const expectedVersion = frontendSummary.latestVersion;
-    const stale = frontendSummary.devices.filter(device => (
+    const stale = frontendSummary.onlineDevices.filter(device => (
       expectedVersion && device.frontend_version && device.frontend_version !== expectedVersion
     )).length;
-    const withErrors = frontendSummary.devices.filter(device => (device.recent_errors_count || 0) > 0).length;
-    const locationsWithIssues = frontendSummary.locations.filter(loc => (
-      loc.offline > 0 || loc.errors > 0 || (loc.versions?.length || 0) > 1
-    )).length;
+    const withErrors = frontendSummary.onlineDevices.filter(device => (device.recent_errors_count || 0) > 0).length;
     return {
       expectedVersion,
       stale,
       withErrors,
-      locationsWithIssues,
     };
   }, [frontendSummary]);
 
   const getDeviceIssue = (device) => {
     const isStale = deviceStats.expectedVersion && device.frontend_version && device.frontend_version !== deviceStats.expectedVersion;
-    if (device.status !== 'online') {
-      return {
-        level: 'warning',
-        label: 'Offline',
-        action: 'Verifica che il tablet sia acceso, connesso e sulla pagina corretta.',
-      };
-    }
     if (isStale) {
       return {
         level: 'warning',
         label: 'Build vecchia',
-        action: 'Chiudi e riapri il browser sul dispositivo.',
+        action: 'Aggiorna o riapri il browser.',
       };
     }
     if ((device.recent_errors_count || 0) > 0) {
       return {
         level: 'warning',
         label: 'Errori browser',
-        action: 'Aggiorna la pagina; se ricapita controlla la rete del locale.',
+        action: 'Aggiorna la pagina.',
       };
     }
     return {
       level: 'ok',
-      label: 'Operativo',
-      action: 'Nessuna azione richiesta.',
+      label: 'Online',
+      action: 'Nessun intervento.',
     };
   };
 
   const locationOperations = useMemo(() => {
     const expectedVersion = deviceStats.expectedVersion;
-    return frontendSummary.locations.map(loc => {
-      const key = loc.restaurant_id || loc.location;
-      const devices = frontendSummary.devices.filter(device => (
-        (device.restaurant_id || device.restaurant_location || 'unknown') === key
-      ));
+    const byLocation = new Map();
+    frontendSummary.locations.forEach(loc => {
+      const key = loc.restaurant_id || loc.location || 'unknown';
+      byLocation.set(key, { ...loc, key, devices: [] });
+    });
+    frontendSummary.onlineDevices.forEach(device => {
+      const key = device.restaurant_id || device.restaurant_location || 'unknown';
+      const current = byLocation.get(key) || {
+        key,
+        location: device.restaurant_location || device.username || key,
+        role: 'restaurant',
+        devices: [],
+      };
+      current.devices = [...(current.devices || []), device];
+      if (!current.location) {
+        current.location = device.restaurant_location || device.username || key;
+      }
+      byLocation.set(key, current);
+    });
+
+    return Array.from(byLocation.values()).map(loc => {
+      const devices = loc.devices || [];
       const stale = devices.filter(device => (
         expectedVersion && device.frontend_version && device.frontend_version !== expectedVersion
       )).length;
-      const offline = loc.offline || 0;
-      const errors = loc.errors || 0;
-      const online = loc.online || 0;
-      const total = loc.devices_total || devices.length || 0;
-      const lastSeen = loc.last_seen || devices[0]?.last_seen || '';
+      const errors = devices.reduce((sum, device) => sum + (device.recent_errors_count || 0), 0);
+      const online = devices.length;
+      const pages = Array.from(new Set(devices.map(device => compactPath(device.path)).filter(Boolean)));
+      const versions = Array.from(new Set(devices.map(device => device.frontend_version).filter(Boolean)));
+      const lastSeen = devices
+        .map(device => device.last_seen || '')
+        .filter(Boolean)
+        .sort()
+        .pop() || '';
       let level = 'ok';
-      let action = 'Locale operativo.';
-      if (offline > 0) {
+      let action = 'Online';
+      if (stale > 0) {
         level = 'warning';
-        action = 'Controlla tablet spenti, rete o browser chiuso.';
-      } else if (stale > 0) {
-        level = 'warning';
-        action = 'Riapri il browser sui dispositivi con build vecchia.';
+        action = 'Build da aggiornare';
       } else if (errors > 0) {
         level = 'warning';
-        action = 'Aggiorna i dispositivi con errori browser.';
+        action = 'Errori browser recenti';
       }
       return {
         ...loc,
-        key,
+        key: loc.key,
         devices,
         stale,
-        offline,
         online,
-        total,
+        total: online,
         errors,
         lastSeen,
+        pages,
+        versions,
         level,
         action,
       };
-    }).sort((a, b) => (
+    }).filter(loc => loc.online > 0).sort((a, b) => (
       (riskRank[b.level] - riskRank[a.level])
-      || (b.offline - a.offline)
       || (b.stale - a.stale)
       || (b.errors - a.errors)
       || String(a.location).localeCompare(String(b.location), 'it')
     ));
   }, [frontendSummary, deviceStats.expectedVersion]);
 
+  const onlineLocationIssueCount = useMemo(() => (
+    locationOperations.filter(loc => loc.level !== 'ok').length
+  ), [locationOperations]);
+
+  useEffect(() => {
+    if (deviceLocationFilter !== 'all' && !locationOperations.some(loc => loc.key === deviceLocationFilter)) {
+      setDeviceLocationFilter('all');
+    }
+  }, [locationOperations, deviceLocationFilter]);
+
   const selectedLocation = useMemo(() => {
     if (deviceLocationFilter === 'all') return null;
     return locationOperations.find(loc => loc.key === deviceLocationFilter) || null;
   }, [locationOperations, deviceLocationFilter]);
-
-  const actionQueue = useMemo(() => {
-    return locationOperations
-      .filter(loc => loc.level !== 'ok')
-      .slice(0, 6);
-  }, [locationOperations]);
 
   if (!isAdmin) {
     return (
@@ -640,26 +643,25 @@ const DiagnosticaLivePage = () => {
             <section className="mb-8">
               <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between mb-4">
                 <div>
-                  <SectionTitle>Controllo locali</SectionTitle>
-                  <div className="text-sm text-gray-500">
-                    Vista operativa: prima i locali che richiedono intervento, poi il dettaglio tecnico.
-                  </div>
+                  <SectionTitle>Dispositivi locali online</SectionTitle>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <select
-                    value={deviceStatusFilter}
-                    onChange={e => setDeviceStatusFilter(e.target.value)}
+                    value={deviceLocationFilter}
+                    onChange={e => setDeviceLocationFilter(e.target.value)}
                     className="h-10 px-3 border border-gray-300 rounded-md text-sm bg-white"
+                    data-testid="diag-device-location-filter"
                   >
-                    <option value="all">Tutti gli stati</option>
-                    <option value="online">Solo online</option>
-                    <option value="offline">Solo offline</option>
+                    <option value="all">Tutti i locali online</option>
+                    {locationOperations.map(loc => (
+                      <option key={loc.key} value={loc.key}>{loc.location}</option>
+                    ))}
                   </select>
                   <input
                     type="text"
                     value={deviceSearch}
                     onChange={e => setDeviceSearch(e.target.value)}
-                    placeholder="Cerca locale, IP, versione, pagina"
+                    placeholder="Cerca"
                     className="h-10 px-3 border border-gray-300 rounded-md text-sm w-full sm:w-80 xl:w-96"
                   />
                 </div>
@@ -668,18 +670,18 @@ const DiagnosticaLivePage = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
                 <MetricTile
                   icon={CheckCircle2}
-                  label="Locali operativi"
-                  value={`${Math.max(0, frontendSummary.locations.length - deviceStats.locationsWithIssues)}/${frontendSummary.locations.length}`}
-                  detail={deviceStats.locationsWithIssues > 0 ? `${deviceStats.locationsWithIssues} locali richiedono controllo` : 'Nessun locale in anomalia'}
-                  level={deviceStats.locationsWithIssues > 0 ? 'warning' : 'ok'}
+                  label="Locali online"
+                  value={locationOperations.length}
+                  detail={`${frontendSummary.online} dispositivi attivi`}
+                  level={onlineLocationIssueCount > 0 ? 'warning' : 'ok'}
                   testId="diag-location-issues"
                 />
                 <MetricTile
                   icon={Activity}
                   label="Dispositivi online"
-                  value={`${frontendSummary.online}/${frontendSummary.devices.length}`}
-                  detail={frontendSummary.offline > 0 ? `${frontendSummary.offline} dispositivi non rispondono` : 'Tutti i dispositivi stanno inviando heartbeat'}
-                  level={frontendSummary.offline > 0 ? 'warning' : 'ok'}
+                  value={frontendSummary.online}
+                  detail={`${frontendSummary.visible} schede visibili`}
+                  level="ok"
                   testId="diag-devices-online"
                 />
                 <MetricTile
@@ -700,125 +702,36 @@ const DiagnosticaLivePage = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)] gap-4 mb-5">
-                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-bold text-gray-900 uppercase">Priorita operative</div>
-                      <div className="text-xs text-gray-500">Ordinate per impatto sul locale</div>
-                    </div>
-                    <HealthPill level={actionQueue.length > 0 ? 'warning' : 'ok'}>
-                      {actionQueue.length > 0 ? `${actionQueue.length} da vedere` : 'tutto ok'}
-                    </HealthPill>
-                  </div>
-                  {actionQueue.length === 0 ? (
-                    <div className="px-4 py-8 text-center text-sm text-gray-500">
-                      Nessuna azione richiesta sui dispositivi locali.
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-gray-100">
-                      {actionQueue.map(loc => (
-                        <button
-                          key={loc.key}
-                          type="button"
-                          onClick={() => setDeviceLocationFilter(loc.key)}
-                          className="w-full px-4 py-3 text-left hover:bg-amber-50 transition-colors"
-                        >
-                          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <AlertTriangle size={17} className="text-amber-700 shrink-0" />
-                                <span className="font-bold text-gray-950 truncate">{loc.location}</span>
-                              </div>
-                              <div className="text-sm text-gray-700 mt-1">{loc.action}</div>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 text-xs text-gray-700 shrink-0 min-w-[220px]">
-                              <span className="font-semibold">offline {loc.offline}</span>
-                              <span className="font-semibold">build {loc.stale}</span>
-                              <span className="font-semibold">errori {loc.errors}</span>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-white border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between gap-3 mb-4">
-                    <div>
-                      <div className="text-sm font-bold text-gray-900 uppercase">
-                        {selectedLocation ? selectedLocation.location : 'Vista complessiva'}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {selectedLocation ? `Ultimo heartbeat ${formatAgo(selectedLocation.lastSeen)}` : 'Seleziona un locale per isolare i dispositivi'}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setDeviceLocationFilter('all')}
-                      className="text-sm font-semibold text-gray-700 hover:text-gray-950"
-                    >
-                      Tutti
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="border border-gray-200 rounded-md px-3 py-2">
-                      <div className="text-xs text-gray-500 uppercase">Online</div>
-                      <div className="text-xl font-bold text-gray-950">
-                        {selectedLocation ? `${selectedLocation.online}/${selectedLocation.total}` : `${frontendSummary.online}/${frontendSummary.devices.length}`}
-                      </div>
-                    </div>
-                    <div className="border border-gray-200 rounded-md px-3 py-2">
-                      <div className="text-xs text-gray-500 uppercase">Build attesa</div>
-                      <div className="text-xl font-bold text-gray-950 truncate">{formatVersion(deviceStats.expectedVersion)}</div>
-                    </div>
-                    <div className="border border-gray-200 rounded-md px-3 py-2">
-                      <div className="text-xs text-gray-500 uppercase">Build vecchie</div>
-                      <div className={`text-xl font-bold ${selectedLocation?.stale || (!selectedLocation && deviceStats.stale) ? 'text-amber-700' : 'text-gray-950'}`}>
-                        {selectedLocation ? selectedLocation.stale : deviceStats.stale}
-                      </div>
-                    </div>
-                    <div className="border border-gray-200 rounded-md px-3 py-2">
-                      <div className="text-xs text-gray-500 uppercase">Errori</div>
-                      <div className={`text-xl font-bold ${selectedLocation?.errors || (!selectedLocation && deviceStats.withErrors) ? 'text-amber-700' : 'text-gray-950'}`}>
-                        {selectedLocation ? selectedLocation.errors : deviceStats.withErrors}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               <div className="bg-white border border-gray-200 rounded-lg overflow-hidden mb-5">
                 <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <div className="text-sm font-bold text-gray-900 uppercase">Locali monitorati</div>
+                    <div className="text-sm font-bold text-gray-900 uppercase">Locali online</div>
                     <div className="text-xs text-gray-500">
-                      Seleziona un locale per restringere il dettaglio dispositivi
+                      {selectedLocation ? selectedLocation.location : 'Tutti i locali online'}
                     </div>
                   </div>
-                  <HealthPill level={deviceStats.locationsWithIssues > 0 ? 'warning' : 'ok'}>
-                    {deviceStats.locationsWithIssues > 0 ? `${deviceStats.locationsWithIssues} con anomalie` : 'stabili'}
+                  <HealthPill level={onlineLocationIssueCount > 0 ? 'warning' : 'ok'}>
+                    {onlineLocationIssueCount > 0 ? `${onlineLocationIssueCount} da controllare` : 'ok'}
                   </HealthPill>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[980px] text-sm">
+                  <table className="w-full min-w-[1040px] text-sm">
                     <thead className="bg-white text-gray-600 border-b border-gray-200">
                       <tr>
                         <th className="text-left px-4 py-3 font-semibold uppercase text-[11px]">Locale</th>
-                        <th className="text-center px-4 py-3 font-semibold uppercase text-[11px]">Dispositivi</th>
-                        <th className="text-center px-4 py-3 font-semibold uppercase text-[11px]">Offline</th>
-                        <th className="text-center px-4 py-3 font-semibold uppercase text-[11px]">Build vecchie</th>
-                        <th className="text-center px-4 py-3 font-semibold uppercase text-[11px]">Errori</th>
+                        <th className="text-center px-4 py-3 font-semibold uppercase text-[11px]">Online</th>
+                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px]">Pagine aperte</th>
+                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px]">Build</th>
+                        <th className="text-center px-4 py-3 font-semibold uppercase text-[11px]">Alert</th>
                         <th className="text-left px-4 py-3 font-semibold uppercase text-[11px]">Ultimo segnale</th>
-                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px]">Azione</th>
+                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px]">Stato</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {locationOperations.length === 0 ? (
                         <tr>
                           <td colSpan={7} className="px-4 py-10 text-center text-gray-400">
-                            Nessun locale con heartbeat
+                            Nessun dispositivo online
                           </td>
                         </tr>
                       ) : locationOperations.map(loc => {
@@ -833,10 +746,20 @@ const DiagnosticaLivePage = () => {
                               <div className={`font-bold truncate ${selected ? 'text-white' : 'text-gray-950'}`}>{loc.location}</div>
                               <div className={`text-xs mt-1 ${selected ? 'text-gray-300' : 'text-gray-500'}`}>{loc.role || 'restaurant'}</div>
                             </td>
-                            <td className="px-4 py-3 text-center align-top font-semibold">{loc.online}/{loc.total}</td>
-                            <td className={`px-4 py-3 text-center align-top font-bold ${loc.offline > 0 && !selected ? 'text-amber-800' : ''}`}>{loc.offline}</td>
-                            <td className={`px-4 py-3 text-center align-top font-bold ${loc.stale > 0 && !selected ? 'text-amber-800' : ''}`}>{loc.stale}</td>
-                            <td className={`px-4 py-3 text-center align-top font-bold ${loc.errors > 0 && !selected ? 'text-amber-800' : ''}`}>{loc.errors}</td>
+                            <td className="px-4 py-3 text-center align-top font-bold">{loc.online}</td>
+                            <td className="px-4 py-3 align-top">
+                              <div className={`font-mono text-xs leading-relaxed ${selected ? 'text-gray-100' : 'text-gray-800'}`}>
+                                {loc.pages.slice(0, 4).join(', ') || '-'}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 align-top">
+                              <div className={`font-mono text-xs leading-relaxed ${selected ? 'text-gray-100' : 'text-gray-800'}`}>
+                                {loc.versions.slice(0, 3).map(formatVersion).join(', ') || '-'}
+                              </div>
+                            </td>
+                            <td className={`px-4 py-3 text-center align-top font-bold ${loc.stale + loc.errors > 0 && !selected ? 'text-amber-800' : ''}`}>
+                              {loc.stale + loc.errors}
+                            </td>
                             <td className="px-4 py-3 align-top">
                               <div className="font-semibold">{formatAgo(loc.lastSeen)}</div>
                               <div className={`text-xs mt-1 ${selected ? 'text-gray-300' : 'text-gray-500'}`}>{loc.lastSeen ? formatTime(loc.lastSeen) : '-'}</div>
@@ -855,15 +778,15 @@ const DiagnosticaLivePage = () => {
               <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                 <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <div className="text-sm font-bold text-gray-900 uppercase">Evidenza dispositivi</div>
+                    <div className="text-sm font-bold text-gray-900 uppercase">Dispositivi online</div>
                     <div className="text-xs text-gray-500">
-                      {filteredDevices.length} risultati filtrati su {frontendSummary.devices.length} dispositivi
+                      {filteredDevices.length} visibili su {frontendSummary.online}
                     </div>
                   </div>
                   <div className="text-xs text-gray-500">
                     Locale: <span className="font-semibold text-gray-800">
                       {deviceLocationFilter === 'all'
-                        ? 'tutti'
+                        ? 'tutti online'
                         : (selectedLocation?.location || deviceLocationFilter)}
                     </span>
                   </div>
@@ -871,7 +794,7 @@ const DiagnosticaLivePage = () => {
                 <div className="divide-y divide-gray-100">
                   {filteredDevices.length === 0 ? (
                     <div className="px-4 py-10 text-center text-gray-400">
-                      Nessun dispositivo ristorante per questi filtri
+                      Nessun dispositivo online per questi filtri
                     </div>
                   ) : filteredDevices.map(device => {
                     const versionDate = formatVersionDate(device.frontend_version);
@@ -901,7 +824,7 @@ const DiagnosticaLivePage = () => {
                             <div className="text-xs text-gray-500 truncate mt-1">{device.visibility || '-'}</div>
                           </div>
                           <div className="min-w-0">
-                            <div className="text-xs font-semibold text-gray-500 uppercase">Build / azione</div>
+                            <div className="text-xs font-semibold text-gray-500 uppercase">Build</div>
                             <div className="font-mono text-sm font-bold text-gray-950 truncate">{formatVersion(device.frontend_version)}</div>
                             {versionDate ? <div className="text-xs text-gray-500 mt-1">build {versionDate}</div> : null}
                             {isStale ? <div className="text-xs text-amber-800 font-semibold mt-1">attesa {formatVersion(deviceStats.expectedVersion)}</div> : null}

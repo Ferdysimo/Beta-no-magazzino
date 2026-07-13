@@ -38,7 +38,6 @@ import AuditCassaPage from './pages/AuditCassaPage';
 import ChiusureExcelPage from './pages/ChiusureExcelPage';
 import DizionarioPastePage from './pages/DizionarioPastePage';
 import CreaLocaliPage from './pages/CreaLocaliPage';
-import DataIntegrityPage from './pages/DataIntegrityPage';
 import UpdateBanner from './components/UpdateBanner';
 import FrontendDiagnostics from './components/FrontendDiagnostics';
 
@@ -266,11 +265,6 @@ function AppRoutes() {
       <Route path="/simone/crea-locali" element={
         <ProtectedRoute>
           <CreaLocaliPage />
-        </ProtectedRoute>
-      } />
-      <Route path="/admin/controllo-integrita" element={
-        <ProtectedRoute>
-          <DataIntegrityPage />
         </ProtectedRoute>
       } />
     </Routes>

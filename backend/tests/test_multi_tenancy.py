@@ -1021,28 +1021,3 @@ class TestClosures:
         body = r.json()
         # Endpoint should return a dict with closures/items - just assert it's a dict
         assert isinstance(body, dict)
-
-
-# ============ DATA INTEGRITY (Admin only) ============
-class TestDataIntegrity:
-    def test_data_integrity_admin_only(self, flaminio_session):
-        r = requests.get(
-            f"{BASE_URL}/api/admin/data-integrity?days=7",
-            headers=_hdr(flaminio_session["token"]),
-            timeout=TIMEOUT,
-        )
-        assert r.status_code == 403, f"Non-admin should be 403, got {r.status_code}"
-
-    def test_data_integrity_admin_ok(self, admin_token):
-        r = requests.get(
-            f"{BASE_URL}/api/admin/data-integrity?days=7",
-            headers=_hdr(admin_token),
-            timeout=TIMEOUT,
-        )
-        assert r.status_code == 200, r.text
-        body = r.json()
-        assert isinstance(body.get("summary"), dict)
-        assert isinstance(body.get("issues"), list)
-        assert body["days"] == 7
-        assert "critical" in body["summary"]
-        assert "warning" in body["summary"]

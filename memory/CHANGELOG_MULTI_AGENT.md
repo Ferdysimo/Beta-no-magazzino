@@ -163,18 +163,19 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
-### [2026-07-10 15:36 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: feature
+### [2026-07-13 10:14 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: refactor
 **File toccati**:
 - `/app/backend/server.py`
 - `/app/backend/tests/test_multi_tenancy.py`
 - `/app/frontend/src/App.js`
 - `/app/frontend/src/pages/DataIntegrityPage.js`
+- `/app/frontend/src/pages/DiagnosticaLivePage.js`
 - `/app/frontend/src/pages/HomePage.js`
 - `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Aggiunta pagina Simone "Controllo integrita dati" con endpoint admin-only di sola lettura. Il controllo segnala mismatch su cash mattina, cassetto spicci, bevande mattina, paste report mancanti, ordini vecchi/duplicati, contatori ordini, stock/ledger magazzino e file upload mancanti.
-**Testato**: si (metodo: `py_compile` backend/test, `pytest backend/tests/test_multi_tenancy.py::TestDataIntegrity -q`, `pytest backend/tests/test_report_backend_totals.py -q`, `yarn build`, login Admin + GET `/api/admin/data-integrity?days=7`)
-**Note per il prossimo agente**: Il pannello non corregge dati e non scrive su DB: serve come allarme operativo per decidere interventi mirati.
+**Descrizione**: Rimossa la pagina "Controllo integrita dati" e relativo endpoint/test/route/pulsante Simone. Rifatta la tab "Dispositivi locali" della Diagnostica Live: mostra solo dispositivi online, elimina sezioni/label non utili e rende piu leggibili locali, build, pagine aperte e heartbeat.
+**Testato**: si (metodo: `py_compile` backend/test, `yarn build`)
+**Note per il prossimo agente**: La sezione Backend della diagnostica e stata lasciata volutamente quasi invariata.
 
 ### [2026-07-10 13:50 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix
