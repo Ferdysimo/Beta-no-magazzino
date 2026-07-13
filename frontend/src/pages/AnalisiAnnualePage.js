@@ -8,6 +8,27 @@ import { ArrowLeft, Download } from 'lucide-react';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+const downloadErrorMessage = async (error) => {
+  try {
+    let payload = error?.response?.data;
+    if (payload instanceof Blob) {
+      payload = JSON.parse(await payload.text());
+    }
+    const detail = payload?.detail;
+    if (detail && typeof detail === 'object') {
+      const firstIssue = detail.issues?.[0];
+      const firstCase = firstIssue
+        ? ` Primo caso: ${firstIssue.location}, ${firstIssue.date} (${firstIssue.actual_count}/${firstIssue.expected_count}).`
+        : '';
+      return `${detail.message || "Dati non coerenti per l'export."}${firstCase}`;
+    }
+    if (typeof detail === 'string' && detail) return detail;
+  } catch (parseError) {
+    console.error('analisi mensile errore non leggibile', parseError);
+  }
+  return 'Errore nello scaricare il file Excel';
+};
+
 const AnalisiAnnualePage = () => {
   const navigate = useNavigate();
   const { token, restaurant } = useAuth();
@@ -15,6 +36,7 @@ const AnalisiAnnualePage = () => {
   const [year, setYear] = useState(currentYear);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
   const yearOptions = useMemo(() => {
@@ -27,6 +49,7 @@ const AnalisiAnnualePage = () => {
     if (!token) return;
     setDownloading(true);
     setError('');
+    setNotice('');
     try {
       const res = await axios.get(`${API}/admin/analisi-mensile/export?year=${year}`, {
         headers,
@@ -40,9 +63,17 @@ const AnalisiAnnualePage = () => {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(blobUrl);
+      const warningCount = Number(res.headers?.['x-analysis-warning-count'] || 0);
+      const missingSnapshots = Number(res.headers?.['x-analysis-missing-snapshot-count'] || 0);
+      if (warningCount > 0) {
+        const snapshotText = missingSnapshots > 0
+          ? ` ${missingSnapshots} giornate usano il dizionario paste attuale perché prive di snapshot storico.`
+          : '';
+        setNotice(`Excel scaricato con ${warningCount} avvisi storici.${snapshotText}`);
+      }
     } catch (e) {
       console.error('analisi mensile export', e);
-      setError('Errore nello scaricare il file Excel');
+      setError(await downloadErrorMessage(e));
     } finally {
       setDownloading(false);
     }
@@ -99,6 +130,11 @@ const AnalisiAnnualePage = () => {
         {error && (
           <div className="mt-4 bg-red-50 border border-red-200 text-red-800 rounded px-4 py-3 text-sm font-bold">
             {error}
+          </div>
+        )}
+        {notice && (
+          <div className="mt-4 bg-yellow-50 border border-yellow-300 text-yellow-900 rounded px-4 py-3 text-sm font-bold">
+            {notice}
           </div>
         )}
       </main>

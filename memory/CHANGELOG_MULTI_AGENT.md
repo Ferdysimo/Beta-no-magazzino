@@ -163,6 +163,17 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-13 16:08 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix | refactor
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/backend/tests/test_report_backend_totals.py`
+- `/app/frontend/src/pages/AnalisiAnnualePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Resa affidabile l'analisi mensile includendo ordini attivi, archiviati, eliminati e cancellazioni archiviate secondo la data originale, con deduplica e lettura a cursore senza troncamento a 100.000 documenti. Gli snapshot del dizionario paste sono ora versionati e non vengono più sostituiti da salvataggi storici o dal reset notturno; prima dell'export viene verificata la coerenza tra ordini sorgente e paste, bloccando con HTTP 409 solo le incongruenze automatiche e segnalando gli avvisi storici/manuali. Il foglio `Totali` riusa gli stessi conteggi deduplicati già caricati, eliminando le query giorno per locale durante l'export.
+**Testato**: sì (metodo: `py_compile`; 16 test unitari/export + 19 regressioni API Report/multi-tenant; build React produzione; `git diff --check`; export reale 2026 via API aperto con openpyxl: 4 fogli, 365 giorni, HTTP 200)
+**Note per il prossimo agente**: nessun backfill prezzi è stato eseguito. Le giornate storiche già prive di `pasta_dict_snapshot` continuano a usare il dizionario corrente, ma ora sono dichiarate negli header dell'export e nella pagina; sui dati locali risultano 2 giornate.
+
 ### [2026-07-13 14:44 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: refactor | docs
 **File toccati**:

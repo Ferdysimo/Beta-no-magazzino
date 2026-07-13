@@ -233,37 +233,59 @@ def _paste_text_from_order_docs(order_docs: list) -> str:
     return "\n".join(rows)
 
 
+ANALYSIS_ORDER_SOURCES: Tuple[Tuple[str, str], ...] = (
+    ("orders", "created_at"),
+    ("archived_orders", "created_at"),
+    ("deletion_logs", "original_created_at"),
+    ("archived_deletion_logs", "original_created_at"),
+)
+
+
+def _normalize_analysis_order_doc(doc: dict, timestamp_field: str) -> Optional[dict]:
+    restaurant_id = doc.get("restaurant_id")
+    created_at = doc.get(timestamp_field)
+    date_rome = _rome_date_from_iso(created_at)
+    if not restaurant_id or not created_at or not date_rome:
+        return None
+    return {
+        "id": doc.get("id"),
+        "restaurant_id": restaurant_id,
+        "created_at": created_at,
+        "date_rome": date_rome,
+        "order_number": doc.get("order_number"),
+        "description": doc.get("description") or "",
+    }
+
+
+def _analysis_order_identity(doc: dict) -> tuple:
+    order_number = doc.get("order_number")
+    if order_number not in (None, ""):
+        return (doc.get("restaurant_id"), doc.get("date_rome"), str(order_number))
+    return (
+        doc.get("restaurant_id"),
+        doc.get("date_rome"),
+        doc.get("id") or (doc.get("description") or "").strip(),
+    )
+
+
 async def _build_paste_text_for_date(
     restaurant_id: str,
     date_rome_str: str,
-    *,
-    source_collections: tuple[str, ...] = ("orders", "archived_orders"),
 ) -> str:
     start_utc, end_utc = _rome_date_bounds_utc(date_rome_str)
-    docs = []
-    seen = set()
-    for coll_name in source_collections:
-        found = await db[coll_name].find(
-            {
-                "restaurant_id": restaurant_id,
-                "created_at": {"$gte": start_utc, "$lt": end_utc},
-            },
-            {"_id": 0, "id": 1, "order_number": 1, "description": 1},
-        ).to_list(5000)
-        for doc in found:
-            key = doc.get("id") or f"{doc.get('order_number')}::{doc.get('description')}"
-            if key in seen:
-                continue
-            seen.add(key)
-            docs.append(doc)
-    return _paste_text_from_order_docs(docs)
+    source_data = await _prefetch_analysis_order_data(
+        [restaurant_id],
+        start_utc,
+        end_utc,
+    )
+    return source_data["texts"].get((restaurant_id, date_rome_str), "")
 
 
 async def _snapshot_report_paste_text_for_date(
     date_rome_str: str,
     *,
     restaurant_ids: Optional[list[str]] = None,
-    source_collections: tuple[str, ...] = ("orders", "archived_orders"),
+    snapshot_source: str = "server",
 ) -> Dict[str, int]:
     """Persist the Report paste_text snapshot server-side for a closed Rome day."""
     summary = {"restaurants": 0, "updated": 0, "manual_skipped": 0}
@@ -281,31 +303,62 @@ async def _snapshot_report_paste_text_for_date(
         paste_text = await _build_paste_text_for_date(
             rid,
             date_rome_str,
-            source_collections=source_collections,
         )
         cash_doc = await db.cash_daily_counts.find_one(
             {"restaurant_id": rid, "date_rome": date_rome_str},
-            {"_id": 0, "paste_text": 1, "paste_manual_override": 1, "pasta_dict_snapshot": 1},
+            {
+                "_id": 0,
+                "paste_text": 1,
+                "paste_manual_override": 1,
+                "paste_snapshot_at": 1,
+                "pasta_dict_snapshot": 1,
+                "pasta_dict_snapshot_version": 1,
+                "pasta_dict_snapshot_at": 1,
+                "pasta_dict_snapshot_source": 1,
+            },
         ) or {}
         if cash_doc.get("paste_manual_override") is True:
             summary["manual_skipped"] += 1
             continue
         if not paste_text and not cash_doc:
             continue
-        dict_snapshot = _pasta_dict_snapshot_from_map(await _get_pasta_dict_for(rid))
-        if (cash_doc.get("paste_text") or "") == paste_text and cash_doc.get("pasta_dict_snapshot"):
+        set_fields = {
+            "restaurant_id": rid,
+            "date_rome": date_rome_str,
+            "paste_text": paste_text,
+            "paste_snapshot_at": now_iso,
+            "paste_snapshot_source": snapshot_source,
+            "updated_at": now_iso,
+        }
+        existing_snapshot = _pasta_dict_from_snapshot(cash_doc.get("pasta_dict_snapshot"))
+        if not existing_snapshot:
+            set_fields.update(
+                _pasta_dict_snapshot_fields(
+                    await _get_pasta_dict_for(rid),
+                    source=snapshot_source,
+                    captured_at=now_iso,
+                )
+            )
+        elif not cash_doc.get("pasta_dict_snapshot_version"):
+            set_fields.update({
+                "pasta_dict_snapshot_version": 1,
+                "pasta_dict_snapshot_at": cash_doc.get("paste_snapshot_at") or now_iso,
+                "pasta_dict_snapshot_source": "legacy",
+            })
+        snapshot_metadata_complete = bool(
+            cash_doc.get("pasta_dict_snapshot_version")
+            and cash_doc.get("pasta_dict_snapshot_at")
+            and cash_doc.get("pasta_dict_snapshot_source")
+        )
+        if (
+            (cash_doc.get("paste_text") or "") == paste_text
+            and existing_snapshot
+            and snapshot_metadata_complete
+        ):
             continue
         await db.cash_daily_counts.update_one(
             {"restaurant_id": rid, "date_rome": date_rome_str},
-            {"$set": {
-                "restaurant_id": rid,
-                "date_rome": date_rome_str,
-                "paste_text": paste_text,
-                "pasta_dict_snapshot": dict_snapshot,
-                "paste_snapshot_at": now_iso,
-                "paste_snapshot_source": "server",
-                "updated_at": now_iso,
-            }},
+            {"$set": set_fields},
             upsert=True,
         )
         summary["updated"] += 1
@@ -321,7 +374,7 @@ async def midnight_reset():
         try:
             paste_summary = await _snapshot_report_paste_text_for_date(
                 closed_day_rome,
-                source_collections=("orders", "archived_orders"),
+                snapshot_source="midnight",
             )
             logger.info(f"[REPORT_PASTE_SNAPSHOT] closed_day={closed_day_rome}: {paste_summary}")
         except Exception as e:
@@ -522,7 +575,7 @@ async def recover_stale_orders():
                 paste_summary = await _snapshot_report_paste_text_for_date(
                     date_rome,
                     restaurant_ids=sorted(rids),
-                    source_collections=("orders", "archived_orders"),
+                    snapshot_source="recovery",
                 )
                 logger.warning(f"[RECOVERY] Report paste snapshot for {date_rome}: {paste_summary}")
             except Exception as e:
@@ -1733,13 +1786,13 @@ async def get_media_locali(token_data: dict = Depends(verify_token)):
     
     while current >= from_start:
         day_start = current.astimezone(timezone.utc).isoformat()
-        day_end = current.replace(hour=23, minute=59, second=59).astimezone(timezone.utc).isoformat()
+        day_end_exclusive = (current + timedelta(days=1)).astimezone(timezone.utc).isoformat()
         
         day_data = {"date": current.strftime("%d/%m/%Y"), "locations": {}}
         
         for rest in restaurants:
             day_data["locations"][rest["location"]] = await _get_daily_order_count(
-                rest["id"], day_start, day_end
+                rest["id"], day_start, day_end_exclusive
             )
         
         result.append(day_data)
@@ -1767,18 +1820,18 @@ async def get_media_locali(token_data: dict = Depends(verify_token)):
         "days": result
     }
 
-async def _get_daily_order_count(restaurant_id: str, day_start: str, day_end: str) -> int:
-    active_count = await db.orders.count_documents(
-        {"restaurant_id": restaurant_id, "created_at": {"$gte": day_start, "$lte": day_end}}
-    )
-    archived_count = await db.archived_orders.count_documents(
-        {"restaurant_id": restaurant_id, "created_at": {"$gte": day_start, "$lte": day_end}}
-    )
-    deleted_count = await db.deletion_logs.count_documents(
-        {"restaurant_id": restaurant_id, "deleted_at": {"$gte": day_start, "$lte": day_end}}
-    )
-
-    return active_count + archived_count + deleted_count
+async def _get_daily_order_count(
+    restaurant_id: str,
+    day_start: str,
+    day_end_exclusive: str,
+) -> int:
+    total = 0
+    for collection_name, timestamp_field in ANALYSIS_ORDER_SOURCES:
+        total += await db[collection_name].count_documents({
+            "restaurant_id": restaurant_id,
+            timestamp_field: {"$gte": day_start, "$lt": day_end_exclusive},
+        })
+    return total
 
 
 def _format_italian_long_date(day: datetime) -> str:
@@ -1953,40 +2006,128 @@ def _safe_sheet_title(title: str, used_titles: set) -> str:
     return candidate
 
 
-async def _prefetch_analysis_order_texts(
+async def _collect_cursor_documents(cursor) -> List[dict]:
+    documents: List[dict] = []
+    async for document in cursor:
+        documents.append(document)
+    return documents
+
+
+async def _prefetch_analysis_order_data(
     restaurant_ids: List[str],
     start_utc: str,
     end_utc: str,
-) -> Dict[tuple, str]:
-    grouped: Dict[tuple, List[dict]] = {}
-    seen = set()
+) -> Dict[str, Dict[tuple, object]]:
+    grouped: Dict[tuple, Dict[tuple, dict]] = {}
     if not restaurant_ids:
-        return {}
-    query = {
-        "restaurant_id": {"$in": restaurant_ids},
-        "created_at": {"$gte": start_utc, "$lt": end_utc},
+        return {"texts": {}, "counts": {}}
+    projection = {
+        "_id": 0,
+        "id": 1,
+        "restaurant_id": 1,
+        "created_at": 1,
+        "original_created_at": 1,
+        "order_number": 1,
+        "description": 1,
     }
-    projection = {"_id": 0, "id": 1, "restaurant_id": 1, "created_at": 1, "order_number": 1, "description": 1}
-    for coll_name in ("orders", "archived_orders"):
-        docs = await db[coll_name].find(query, projection).to_list(100000)
-        for doc in docs:
-            rid = doc.get("restaurant_id")
-            date_rome = _rome_date_from_iso(doc.get("created_at"))
-            if not rid or not date_rome:
+    for collection_name, timestamp_field in ANALYSIS_ORDER_SOURCES:
+        query = {
+            "restaurant_id": {"$in": restaurant_ids},
+            timestamp_field: {"$gte": start_utc, "$lt": end_utc},
+        }
+        cursor = db[collection_name].find(query, projection)
+        async for raw_doc in cursor:
+            doc = _normalize_analysis_order_doc(raw_doc, timestamp_field)
+            if not doc:
                 continue
-            key = doc.get("id") or f"{rid}:{date_rome}:{doc.get('order_number')}:{doc.get('description')}"
-            if key in seen:
-                continue
-            seen.add(key)
-            grouped.setdefault((rid, date_rome), []).append(doc)
-    return {key: _paste_text_from_order_docs(docs) for key, docs in grouped.items()}
+            group_key = (doc["restaurant_id"], doc["date_rome"])
+            grouped.setdefault(group_key, {}).setdefault(_analysis_order_identity(doc), doc)
+    texts: Dict[tuple, str] = {}
+    counts: Dict[tuple, int] = {}
+    for key, by_identity in grouped.items():
+        docs = list(by_identity.values())
+        texts[key] = _paste_text_from_order_docs(docs)
+        counts[key] = len(docs)
+    return {"texts": texts, "counts": counts}
+
+
+def _normalized_paste_text(value: str) -> str:
+    return "\n".join(line.strip() for line in (value or "").splitlines() if line.strip())
+
+
+def _analysis_row_integrity(
+    *,
+    location: str,
+    date_str: str,
+    source_count: int,
+    paste_total_count: int,
+    manual_override: bool,
+    has_snapshot: bool,
+    stored_paste_text: str,
+    source_paste_text: str,
+) -> Dict[str, List[Dict]]:
+    errors: List[Dict] = []
+    warnings: List[Dict] = []
+
+    def issue(code: str, message: str) -> Dict:
+        return {
+            "code": code,
+            "location": location,
+            "date": date_str,
+            "expected_count": source_count,
+            "actual_count": paste_total_count,
+            "message": message,
+        }
+
+    if source_count > 0 and paste_total_count != source_count:
+        target = warnings if manual_override else errors
+        target.append(issue(
+            "manual_override_count_mismatch" if manual_override else "paste_count_mismatch",
+            (
+                "La forzatura manuale contiene un numero di paste diverso dagli ordini originali."
+                if manual_override
+                else "Il numero di paste ricostruite non coincide con gli ordini originali."
+            ),
+        ))
+    elif source_count == 0 and paste_total_count > 0:
+        warnings.append(issue(
+            "source_orders_missing",
+            "Sono presenti paste salvate nel Report ma non ordini sorgente negli archivi.",
+        ))
+
+    if paste_total_count > 0 and not has_snapshot:
+        warnings.append(issue(
+            "pasta_snapshot_missing",
+            "Manca lo snapshot storico del dizionario paste; viene usato il dizionario attuale.",
+        ))
+
+    if (
+        source_count > 0
+        and not manual_override
+        and _normalized_paste_text(stored_paste_text)
+        and _normalized_paste_text(stored_paste_text) != _normalized_paste_text(source_paste_text)
+    ):
+        warnings.append(issue(
+            "automatic_snapshot_rebuilt",
+            "Lo snapshot automatico differiva dagli archivi ed è stato ricostruito per questo export.",
+        ))
+
+    return {"errors": errors, "warnings": warnings}
+
+
+def _analysis_warning_counts(warnings: List[Dict]) -> Dict[str, int]:
+    counts: Dict[str, int] = {}
+    for warning in warnings:
+        code = warning.get("code") or "unknown"
+        counts[code] = counts.get(code, 0) + 1
+    return counts
 
 
 async def _build_annual_analysis_data(selected_year: int) -> Dict:
-    restaurants = await db.restaurants.find(
+    restaurants = await _collect_cursor_documents(db.restaurants.find(
         {"role": "restaurant"},
         {"_id": 0, "password": 0},
-    ).to_list(100)
+    ))
     restaurants = sorted(restaurants, key=lambda r: (r.get("location") or r.get("username") or "").lower())
     restaurant_ids = [r.get("id") for r in restaurants if r.get("id")]
     days = _analysis_year_days(selected_year)
@@ -1995,29 +2136,33 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
     start_utc, _ = _rome_date_bounds_utc(start_date)
     _, end_exclusive_utc = _rome_date_bounds_utc(end_date)
 
-    cash_docs = await db.cash_daily_counts.find(
+    cash_docs = await _collect_cursor_documents(db.cash_daily_counts.find(
         {"restaurant_id": {"$in": restaurant_ids}, "date_rome": {"$gte": start_date, "$lte": end_date}},
         {"_id": 0},
-    ).to_list(50000)
+    ))
     cash_by_key = {(d.get("restaurant_id"), d.get("date_rome")): d for d in cash_docs}
 
-    beverage_docs = await db.beverage_daily_counts.find(
+    beverage_docs = await _collect_cursor_documents(db.beverage_daily_counts.find(
         {"restaurant_id": {"$in": restaurant_ids}, "date_rome": {"$gte": start_date, "$lte": end_date}},
         {"_id": 0},
-    ).to_list(100000)
+    ))
     beverages_by_key: Dict[tuple, List[dict]] = {}
     for doc in beverage_docs:
         beverages_by_key.setdefault((doc.get("restaurant_id"), doc.get("date_rome")), []).append(doc)
 
-    fallback_paste_texts = await _prefetch_analysis_order_texts(
+    order_source_data = await _prefetch_analysis_order_data(
         restaurant_ids,
         start_utc,
         end_exclusive_utc,
     )
+    source_paste_texts = order_source_data["texts"]
+    source_order_counts = order_source_data["counts"]
 
     bev_sigle = [b["sigla"] for b in sorted(BEVERAGES_CATALOG, key=lambda x: x.get("sort_order", 999))]
     bev_prices = {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
     restaurants_data = []
+    integrity_errors: List[Dict] = []
+    integrity_warnings: List[Dict] = []
 
     for rest in restaurants:
         rid = rest.get("id")
@@ -2032,9 +2177,18 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
             date_str = day.strftime("%Y-%m-%d")
             cash_doc = cash_by_key.get((rid, date_str), {}) or {}
             manual_prices = cash_doc.get("manual_prices") or {}
-            paste_text = cash_doc.get("paste_text") or fallback_paste_texts.get((rid, date_str), "")
+            stored_paste_text = cash_doc.get("paste_text") or ""
+            source_paste_text = source_paste_texts.get((rid, date_str), "")
+            source_order_count = int(source_order_counts.get((rid, date_str), 0) or 0)
+            manual_override = cash_doc.get("paste_manual_override") is True
+            paste_text = (
+                stored_paste_text
+                if manual_override or source_order_count == 0
+                else source_paste_text
+            )
+            snapshot_dict = _pasta_dict_from_snapshot(cash_doc.get("pasta_dict_snapshot"))
             row_dict_map = _ordered_pasta_dict(
-                _pasta_dict_from_snapshot(cash_doc.get("pasta_dict_snapshot")) or dict_map
+                snapshot_dict or dict_map
             )
             for sigla, price in row_dict_map.items():
                 if sigla not in dict_map:
@@ -2081,6 +2235,19 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
             for sigla, values in paste_breakdown["breakdown"].items():
                 summary_by_sigla[sigla] = summary_by_sigla.get(sigla, 0) + values["count"]
 
+            integrity = _analysis_row_integrity(
+                location=rest.get("location") or rest.get("username") or "Locale",
+                date_str=date_str,
+                source_count=source_order_count,
+                paste_total_count=total_count,
+                manual_override=manual_override,
+                has_snapshot=bool(snapshot_dict),
+                stored_paste_text=stored_paste_text,
+                source_paste_text=source_paste_text,
+            )
+            integrity_errors.extend(integrity["errors"])
+            integrity_warnings.extend(integrity["warnings"])
+
             rows.append({
                 "date": day,
                 "date_str": date_str,
@@ -2095,6 +2262,8 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
                 "cassetto_total": cassetto_total,
                 "cash_sera": cash_sera,
                 "has_report_data": bool(cash_doc or bev_docs or paste_text),
+                "source_order_count": source_order_count,
+                "paste_manual_override": manual_override,
             })
 
         restaurants_data.append({
@@ -2117,6 +2286,11 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
         "restaurants": restaurants_data,
         "bev_sigle": bev_sigle,
         "bev_prices": bev_prices,
+        "integrity": {
+            "errors": integrity_errors,
+            "warnings": integrity_warnings,
+            "warning_counts": _analysis_warning_counts(integrity_warnings),
+        },
     }
 
 
@@ -2501,7 +2675,7 @@ def _write_analysis_locale_sheet(wb: Workbook, rest_data: Dict, data: Dict, used
     ws.row_dimensions[7].height = 46.8
 
 
-async def _write_totali_sheet_for_analysis(wb: Workbook, restaurants: List[Dict], selected_year: int):
+def _write_totali_sheet_for_analysis(wb: Workbook, restaurants: List[Dict], selected_year: int):
     ws = wb.create_sheet(title="Totali")
     restaurants = sorted(restaurants, key=lambda r: (r.get("location") or "").lower())
     days = _analysis_year_days(selected_year)
@@ -2524,15 +2698,21 @@ async def _write_totali_sheet_for_analysis(wb: Workbook, restaurants: List[Dict]
         cell.alignment = Alignment(horizontal="center", vertical="center")
     ws["A1"].font = Font(color="000000", name="Times New Roman", size=12)
 
+    counts_by_restaurant = {
+        rest["id"]: {
+            row["date_str"]: int(row.get("source_order_count", 0) or 0)
+            for row in rest.get("rows", [])
+        }
+        for rest in restaurants
+    }
     month_values = {r["location"]: [] for r in restaurants}
     today_rome = datetime.now(ROME_TZ)
     for day in days:
-        day_start = day.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc).isoformat()
-        day_end = day.replace(hour=23, minute=59, second=59, microsecond=0).astimezone(timezone.utc).isoformat()
+        date_str = day.strftime("%Y-%m-%d")
         excel_row = [_format_italian_long_date(day)]
         daily_total = 0
         for rest in restaurants:
-            value = await _get_daily_order_count(rest["id"], day_start, day_end)
+            value = counts_by_restaurant.get(rest["id"], {}).get(date_str, 0)
             excel_row.append(value if value > 0 else None)
             daily_total += value
             if value > 0:
@@ -2601,6 +2781,20 @@ def _analysis_summary_response(data: Dict) -> Dict:
     }
 
 
+def _ensure_analysis_integrity(data: Dict) -> None:
+    errors = (data.get("integrity") or {}).get("errors") or []
+    if not errors:
+        return
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "message": "Export bloccato: alcune giornate non coincidono con gli ordini sorgente.",
+            "error_count": len(errors),
+            "issues": errors[:20],
+        },
+    )
+
+
 @api_router.get("/admin/analisi-mensile/summary")
 async def get_analisi_mensile_summary(year: int = None, token_data: dict = Depends(verify_token)):
     if token_data.get("role") != "admin":
@@ -2616,6 +2810,7 @@ async def export_analisi_mensile_excel(year: int = None, token_data: dict = Depe
         raise HTTPException(status_code=403, detail="Admin only")
     selected_year = _validate_export_year(year)
     data = await _build_annual_analysis_data(selected_year)
+    _ensure_analysis_integrity(data)
 
     wb = Workbook()
     default_sheet = wb.active
@@ -2623,9 +2818,9 @@ async def export_analisi_mensile_excel(year: int = None, token_data: dict = Depe
     used_titles = set()
     for rest_data in data["restaurants"]:
         _write_analysis_locale_sheet(wb, rest_data, data, used_titles)
-    await _write_totali_sheet_for_analysis(
+    _write_totali_sheet_for_analysis(
         wb,
-        [{"id": r["id"], "location": r["location"]} for r in data["restaurants"]],
+        data["restaurants"],
         selected_year,
     )
 
@@ -2633,10 +2828,21 @@ async def export_analisi_mensile_excel(year: int = None, token_data: dict = Depe
     wb.save(output)
     output.seek(0)
     filename = f"analisi_mensile_{selected_year}.xlsx"
+    integrity = data.get("integrity") or {}
+    warning_counts = integrity.get("warning_counts") or {}
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Analysis-Warning-Count": str(len(integrity.get("warnings") or [])),
+            "X-Analysis-Missing-Snapshot-Count": str(
+                warning_counts.get("pasta_snapshot_missing", 0)
+            ),
+            "X-Analysis-Manual-Override-Count": str(
+                warning_counts.get("manual_override_count_mismatch", 0)
+            ),
+        },
     )
 
 
@@ -2662,11 +2868,13 @@ async def export_media_locali_excel(year: int = None, token_data: dict = Depends
     current = start
     while current <= end:
         day_start = current.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc).isoformat()
-        day_end = current.replace(hour=23, minute=59, second=59, microsecond=0).astimezone(timezone.utc).isoformat()
+        day_end_exclusive = (current + timedelta(days=1)).astimezone(timezone.utc).isoformat()
         location_values = {}
 
         for rest in restaurants:
-            location_values[rest["location"]] = await _get_daily_order_count(rest["id"], day_start, day_end)
+            location_values[rest["location"]] = await _get_daily_order_count(
+                rest["id"], day_start, day_end_exclusive
+            )
 
         rows.append({
             "date": current,
@@ -5077,6 +5285,24 @@ def _pasta_dict_snapshot_from_map(dict_map: Dict[str, float]) -> List[Dict]:
     ]
 
 
+def _pasta_dict_snapshot_fields(
+    dict_map: Dict[str, float],
+    *,
+    source: str,
+    captured_at: str,
+) -> Dict[str, object]:
+    return {
+        "pasta_dict_snapshot": _pasta_dict_snapshot_from_map(dict_map),
+        "pasta_dict_snapshot_version": 1,
+        "pasta_dict_snapshot_at": captured_at,
+        "pasta_dict_snapshot_source": source,
+    }
+
+
+def _should_create_pasta_dict_snapshot(*, historical: bool, existing_snapshot) -> bool:
+    return not historical and not _pasta_dict_from_snapshot(existing_snapshot)
+
+
 def _pasta_dict_from_snapshot(snapshot) -> Optional[Dict[str, float]]:
     if not isinstance(snapshot, list):
         return None
@@ -5843,14 +6069,19 @@ async def upsert_cash_daily(
             if t:
                 clean[k[:50]] = t[:500]
         set_payload["comments"] = clean
-    if (
-        "paste_text" in set_payload
-        or "manual_prices" in set_payload
-        or not old_doc.get("pasta_dict_snapshot")
+    # Lo snapshot del dizionario è storico: si crea una sola volta durante il
+    # giorno operativo e non viene sostituito da normali correzioni successive.
+    # Le modifiche storiche Admin restano quindi incapaci di applicare in modo
+    # silenzioso il listino corrente a una giornata passata.
+    if _should_create_pasta_dict_snapshot(
+        historical=bool(historical),
+        existing_snapshot=old_doc.get("pasta_dict_snapshot"),
     ):
-        set_payload["pasta_dict_snapshot"] = _pasta_dict_snapshot_from_map(
-            await _get_pasta_dict_for(rid)
-        )
+        set_payload.update(_pasta_dict_snapshot_fields(
+            await _get_pasta_dict_for(rid),
+            source="live_report",
+            captured_at=now_iso,
+        ))
     # Sicurezza: il campo `mattina` (CASH MATTINA "Forza Mattina") può essere
     # modificato SOLO da admin/Federico. Per gli altri utenti preserviamo il
     # valore esistente nel DB ignorando ciò che è stato inviato lato client.
@@ -7642,6 +7873,12 @@ app.add_middleware(
     allow_origin_regex=r"^http://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[
+        "Content-Disposition",
+        "X-Analysis-Warning-Count",
+        "X-Analysis-Missing-Snapshot-Count",
+        "X-Analysis-Manual-Override-Count",
+    ],
 )
 
 @app.on_event("shutdown")
@@ -7731,6 +7968,10 @@ async def startup_scheduler():
         logger.warning(f"Could not create unique index on orders (likely existing duplicates): {e}")
     await db.archived_orders.create_index([("restaurant_id", 1), ("created_at", -1)])
     await db.deletion_logs.create_index([("restaurant_id", 1), ("deleted_at", -1)])
+    await db.deletion_logs.create_index([("restaurant_id", 1), ("original_created_at", -1)])
+    await db.archived_deletion_logs.create_index(
+        [("restaurant_id", 1), ("original_created_at", -1)]
+    )
     # Stock movements ledger
     await db.stock_movements.create_index([("product_id", 1), ("timestamp", -1)])
     await db.stock_movements.create_index([("timestamp", -1)])
