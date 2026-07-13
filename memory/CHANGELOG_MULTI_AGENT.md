@@ -163,6 +163,62 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-13 14:44 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: refactor | docs
+**File toccati**:
+- `/app/frontend/src/pages/HomePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Allineata la descrizione del pulsante Admin "Analisi mensile" alla pagina semplificata: rimossa la promessa del riepilogo paste e indicato soltanto il download del file Excel completo. Verificata inoltre la copertura delle voci recenti del changelog rispetto a tutti i file della nuova funzionalità.
+**Testato**: sì (metodo: confronto `git diff`/`git status` con le voci del changelog e `git diff --check`)
+
+### [2026-07-13 14:42 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: refactor
+**File toccati**:
+- `/app/frontend/src/pages/AnalisiAnnualePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Semplificata la pagina "Analisi mensile" eliminando tabella, riepilogo, caricamento dati e comando di aggiornamento. La pagina ora contiene soltanto la scelta dell'anno e il pulsante per scaricare il file Excel; l'apertura della pagina non esegue più la richiesta di riepilogo al backend.
+**Testato**: sì (metodo: `npm run build`, verifica browser locale desktop e mobile; 0 tabelle, 0 pulsanti Aggiorna, 1 pulsante Scarica Excel, nessun overflow orizzontale a 390 px)
+
+### [2026-07-13 14:21 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | bugfix
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/backend/tests/test_report_backend_totals.py`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Riallineato l'export Analisi mensile al modello `2025.xlsx`: testi e palette originali, font Calibri, colonne compatte, blocco prezzi paste separato dagli incassi, sigle bevande formattate e intestazioni finanziarie complete. Rimossi separatori delle migliaia e decimali superflui; `Spicci aperti / portati` ora usa il valore reale delle monete nel cassetto invece di duplicare i tubetti.
+**Testato**: si (metodo: `py_compile`, `pytest backend/tests/test_report_backend_totals.py -q` -> 8 passed, generazione demo v6, confronto visuale di tutti i fogli con `2025.xlsx`, scansione errori formula -> 0)
+**Note per il prossimo agente**: Demo aggiornata in `C:\Users\pasta\Downloads\analisi_mensile_demo_2_mesi_v6.xlsx`.
+
+### [2026-07-13 13:51 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Aggiornato il formato numerico dell'export "Analisi mensile": i valori interi usano formato intero (`132` invece di `132,00`), mentre i valori con centesimi mantengono due decimali.
+**Testato**: si (metodo: `py_compile backend/server.py`, rigenerazione demo v5 e verifica openpyxl dei formati cella)
+
+### [2026-07-13 13:36 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Rifinito il formato Excel dell'export "Analisi mensile" per avvicinarlo al modello 2025.xlsx: palette per sezioni paste/bevande/cassa, colori specifici per movimentazione finanziaria, colonna TOTALE incassi e intestazioni spicci/cash sera piu coerenti.
+**Testato**: si (metodo: `py_compile`, `pytest backend/tests/test_report_backend_totals.py -q`, verifica openpyxl colori/intestazioni su demo, endpoint reale summary/export)
+**Note per il prossimo agente**: Il demo rigenerato e in `C:\Users\pasta\Downloads\analisi_mensile_demo_2_mesi_v2.xlsx`; il vecchio file demo non e stato sovrascritto perche probabilmente aperto in Excel.
+
+### [2026-07-13 12:37 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/backend/tests/test_report_backend_totals.py`
+- `/app/frontend/src/App.js`
+- `/app/frontend/src/pages/AnalisiAnnualePage.js`
+- `/app/frontend/src/pages/HomePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Aggiunta pagina Admin "Analisi mensile" sotto Numeri, con riepilogo paste per locale/tipo e download Excel. Il backend genera un workbook con un foglio per locale, sezioni paste/bevande/cassa, foglio "Totali" coerente con l'export Numeri e snapshot del dizionario paste per non ricalcolare il passato con prezzi futuri.
+**Testato**: si (metodo: `py_compile`, `pytest backend/tests/test_report_backend_totals.py -q`, dry-run openpyxl del workbook, endpoint reale summary/export, `yarn build`)
+**Note per il prossimo agente**: La parte analitica affidabile e il breakdown paste per sigla/Altro; cassa e bevande sono esportate come storico usando i dati Report esistenti. I dati precedenti allo snapshot prezzi usano il dizionario attuale come fallback.
+
 ### [2026-07-13 10:14 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: refactor
 **File toccati**:
@@ -637,15 +693,5 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 **Testato**: si (metodo: `docker compose build`, `docker compose up -d`, health backend `/api/`, frontend `localhost:3000`, seed e login Admin)
 **Note per il prossimo agente**: Su questo PC la porta host 8001 risultava bloccata da un socket Windows orfano; lo stack Docker e stato validato con `BACKEND_HOST_PORT=8002` e `REACT_APP_BACKEND_URL=http://localhost:8002`. Dentro Docker il backend resta su 8001.
 
-
-### [2026-02-XX] — Emergent E1 (Claude Sonnet 4.5)
-**Tipo**: docs
-**File toccati**:
-- `/app/memory/CHANGELOG_MULTI_AGENT.md` (creato)
-**Descrizione**: Creato questo file di sincronizzazione multi-agente con istruzioni IT/EN, formato voci e contesto rapido del progetto. Permette ad altri agenti AI esterni di sapere cosa è già stato fatto senza ripetere lavoro o introdurre regressioni.
-**Testato**: ✅ sì (creazione file verificata)
-**Note per il prossimo agente**: Quando modifichi codice, ricordati di aggiungere la tua voce QUI SOPRA prima di chiudere il task. Se l'utente ti chiede "leggi il changelog", riferisciti a questo file.
-
----
 
 <!-- Le voci più vecchie vanno archiviate in CHANGELOG_MULTI_AGENT_ARCHIVE.md dopo 30 giorni -->

@@ -17,7 +17,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import Any, List, Optional, Dict
+from typing import Any, List, Optional, Dict, Tuple
 import uuid
 from datetime import datetime, timezone, timedelta
 import json
@@ -285,14 +285,15 @@ async def _snapshot_report_paste_text_for_date(
         )
         cash_doc = await db.cash_daily_counts.find_one(
             {"restaurant_id": rid, "date_rome": date_rome_str},
-            {"_id": 0, "paste_text": 1, "paste_manual_override": 1},
+            {"_id": 0, "paste_text": 1, "paste_manual_override": 1, "pasta_dict_snapshot": 1},
         ) or {}
         if cash_doc.get("paste_manual_override") is True:
             summary["manual_skipped"] += 1
             continue
         if not paste_text and not cash_doc:
             continue
-        if (cash_doc.get("paste_text") or "") == paste_text:
+        dict_snapshot = _pasta_dict_snapshot_from_map(await _get_pasta_dict_for(rid))
+        if (cash_doc.get("paste_text") or "") == paste_text and cash_doc.get("pasta_dict_snapshot"):
             continue
         await db.cash_daily_counts.update_one(
             {"restaurant_id": rid, "date_rome": date_rome_str},
@@ -300,6 +301,7 @@ async def _snapshot_report_paste_text_for_date(
                 "restaurant_id": rid,
                 "date_rome": date_rome_str,
                 "paste_text": paste_text,
+                "pasta_dict_snapshot": dict_snapshot,
                 "paste_snapshot_at": now_iso,
                 "paste_snapshot_source": "server",
                 "updated_at": now_iso,
@@ -1795,6 +1797,847 @@ def _display_media_location(location: str) -> str:
     if "brazz" in lowered:
         return "BRAZZA"
     return (location or "").upper()
+
+
+PREFERRED_PASTA_EXPORT_ORDER = [
+    "RAGU", "PESTO", "CARB", "CACIO", "POM", "CARZUC",
+    "TONNO", "TART", "TARTUFO", "AMAT", "AMATRICIANA",
+]
+
+PASTA_EXPORT_LABELS = {
+    "RAGU": "Ragu",
+    "PESTO": "Pesto",
+    "CARB": "Carb",
+    "CACIO": "Cacio",
+    "POM": "Pom",
+    "CARZUC": "CarZuc",
+    "TONNO": "Tonno",
+    "TART": "Tartufo",
+    "TARTUFO": "Tartufo",
+    "AMAT": "Amatriciana",
+    "AMATRICIANA": "Amatriciana",
+}
+
+ANALYSIS_CASH_EXPORT_COLUMNS = [
+    ("paste_total_eur", "PIATTI"),
+    ("bev_total_inc", "BEVANDE"),
+    ("altro", "ALTRO"),
+    ("mattina", "Cash in cassa mattina"),
+    ("sales_total", "TOTALE"),
+    ("arr", "Arrotond."),
+    ("vers", "Versam."),
+    ("glo", "Glovo"),
+    ("just", "Just Eat"),
+    ("delv", "Deliveroo"),
+    ("bp", "Buoni Pasto"),
+    ("pos", "POS"),
+    ("sat", "BP elett"),
+    ("ft", "FT"),
+    ("sp05", "€ 0,5"),
+    ("sp1", "€ 1"),
+    ("sp2", "€ 2"),
+    ("sp5", "€ 5"),
+    ("spicci_total", "Valori tubetti"),
+    ("spicci_open", "Spicci aperti / portati"),
+    ("cash_sera", "Cash in cassa sera"),
+]
+
+ANALYSIS_CASH_HEADER_FONT_SIZES = {
+    "arr": 9,
+    "vers": 9,
+    "glo": 9,
+    "just": 9,
+    "sp05": 9,
+    "sp1": 9,
+    "sp2": 9,
+    "sp5": 9,
+    "spicci_total": 9,
+    "spicci_open": 9,
+    "cash_sera": 9,
+}
+
+
+def _validate_export_year(year: Optional[int]) -> int:
+    selected_year = year or datetime.now(ROME_TZ).year
+    if selected_year < 2020 or selected_year > 2100:
+        raise HTTPException(status_code=400, detail="Anno non valido")
+    return selected_year
+
+
+def _analysis_year_days(selected_year: int) -> List[datetime]:
+    current = datetime(selected_year, 1, 1, tzinfo=ROME_TZ)
+    end = datetime(selected_year, 12, 31, tzinfo=ROME_TZ)
+    days = []
+    while current <= end:
+        days.append(current)
+        current += timedelta(days=1)
+    return days
+
+
+def _pasta_export_label(sigla: str) -> str:
+    sigla_up = str(sigla or "").upper().strip()
+    return PASTA_EXPORT_LABELS.get(sigla_up, sigla_up.title() if sigla_up else "")
+
+
+def _ordered_pasta_dict(dict_map: Dict[str, float]) -> Dict[str, float]:
+    clean = {str(k).upper().strip(): float(v or 0) for k, v in (dict_map or {}).items() if str(k).strip()}
+    ordered: Dict[str, float] = {}
+    for sigla in PREFERRED_PASTA_EXPORT_ORDER:
+        if sigla in clean and sigla not in ordered:
+            ordered[sigla] = clean[sigla]
+    for sigla, price in clean.items():
+        if sigla not in ordered:
+            ordered[sigla] = price
+    return ordered
+
+
+def _compute_paste_breakdown_for_export(
+    paste_text: str,
+    manual_prices: Optional[dict] = None,
+    dict_map: Optional[Dict[str, float]] = None,
+) -> Dict:
+    if dict_map is None:
+        dict_map = PASTA_PRICES_MAP
+    ordered_dict = _ordered_pasta_dict(dict_map)
+    breakdown = {
+        sigla: {"count": 0, "total": 0.0, "price": price}
+        for sigla, price in ordered_dict.items()
+    }
+    unrecognized_count = 0
+    unrecognized_eur = 0.0
+    lines = [l.strip() for l in (paste_text or "").split("\n") if l.strip()]
+    mp = manual_prices or {}
+
+    for idx, line in enumerate(lines):
+        recognized_sigla = _pasta_recognized_sigla(line, ordered_dict)
+        if recognized_sigla is not None:
+            breakdown.setdefault(
+                recognized_sigla,
+                {"count": 0, "total": 0.0, "price": ordered_dict.get(recognized_sigla, 0)},
+            )
+            breakdown[recognized_sigla]["count"] += 1
+            breakdown[recognized_sigla]["total"] += ordered_dict.get(recognized_sigla, 0)
+            continue
+
+        unrecognized_count += 1
+        raw = _manual_price_for_paste_line(mp, idx, line)
+        try:
+            value = float(str(raw).replace(",", ".").strip()) if str(raw).strip() else 0.0
+        except Exception:
+            value = 0.0
+        if value > 0:
+            unrecognized_eur += value
+
+    recognized_count = sum(v["count"] for v in breakdown.values())
+    recognized_eur = sum(v["total"] for v in breakdown.values())
+    return {
+        "breakdown": breakdown,
+        "unrecognized_count": unrecognized_count,
+        "unrecognized_eur": round(unrecognized_eur, 2),
+        "total_count": recognized_count + unrecognized_count,
+        "total_eur": round(recognized_eur + unrecognized_eur, 2),
+    }
+
+
+def _safe_sheet_title(title: str, used_titles: set) -> str:
+    cleaned = re.sub(r"[:\\/?*\[\]]", " ", str(title or "Locale")).strip() or "Locale"
+    cleaned = re.sub(r"\s+", " ", cleaned)[:31]
+    base = cleaned or "Locale"
+    candidate = base
+    idx = 2
+    while candidate in used_titles:
+        suffix = f" {idx}"
+        candidate = f"{base[:31 - len(suffix)]}{suffix}"
+        idx += 1
+    used_titles.add(candidate)
+    return candidate
+
+
+async def _prefetch_analysis_order_texts(
+    restaurant_ids: List[str],
+    start_utc: str,
+    end_utc: str,
+) -> Dict[tuple, str]:
+    grouped: Dict[tuple, List[dict]] = {}
+    seen = set()
+    if not restaurant_ids:
+        return {}
+    query = {
+        "restaurant_id": {"$in": restaurant_ids},
+        "created_at": {"$gte": start_utc, "$lt": end_utc},
+    }
+    projection = {"_id": 0, "id": 1, "restaurant_id": 1, "created_at": 1, "order_number": 1, "description": 1}
+    for coll_name in ("orders", "archived_orders"):
+        docs = await db[coll_name].find(query, projection).to_list(100000)
+        for doc in docs:
+            rid = doc.get("restaurant_id")
+            date_rome = _rome_date_from_iso(doc.get("created_at"))
+            if not rid or not date_rome:
+                continue
+            key = doc.get("id") or f"{rid}:{date_rome}:{doc.get('order_number')}:{doc.get('description')}"
+            if key in seen:
+                continue
+            seen.add(key)
+            grouped.setdefault((rid, date_rome), []).append(doc)
+    return {key: _paste_text_from_order_docs(docs) for key, docs in grouped.items()}
+
+
+async def _build_annual_analysis_data(selected_year: int) -> Dict:
+    restaurants = await db.restaurants.find(
+        {"role": "restaurant"},
+        {"_id": 0, "password": 0},
+    ).to_list(100)
+    restaurants = sorted(restaurants, key=lambda r: (r.get("location") or r.get("username") or "").lower())
+    restaurant_ids = [r.get("id") for r in restaurants if r.get("id")]
+    days = _analysis_year_days(selected_year)
+    start_date = f"{selected_year}-01-01"
+    end_date = f"{selected_year}-12-31"
+    start_utc, _ = _rome_date_bounds_utc(start_date)
+    _, end_exclusive_utc = _rome_date_bounds_utc(end_date)
+
+    cash_docs = await db.cash_daily_counts.find(
+        {"restaurant_id": {"$in": restaurant_ids}, "date_rome": {"$gte": start_date, "$lte": end_date}},
+        {"_id": 0},
+    ).to_list(50000)
+    cash_by_key = {(d.get("restaurant_id"), d.get("date_rome")): d for d in cash_docs}
+
+    beverage_docs = await db.beverage_daily_counts.find(
+        {"restaurant_id": {"$in": restaurant_ids}, "date_rome": {"$gte": start_date, "$lte": end_date}},
+        {"_id": 0},
+    ).to_list(100000)
+    beverages_by_key: Dict[tuple, List[dict]] = {}
+    for doc in beverage_docs:
+        beverages_by_key.setdefault((doc.get("restaurant_id"), doc.get("date_rome")), []).append(doc)
+
+    fallback_paste_texts = await _prefetch_analysis_order_texts(
+        restaurant_ids,
+        start_utc,
+        end_exclusive_utc,
+    )
+
+    bev_sigle = [b["sigla"] for b in sorted(BEVERAGES_CATALOG, key=lambda x: x.get("sort_order", 999))]
+    bev_prices = {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
+    restaurants_data = []
+
+    for rest in restaurants:
+        rid = rest.get("id")
+        dict_map = _ordered_pasta_dict(await _get_pasta_dict_for(rid))
+        summary_by_sigla = {sigla: 0 for sigla in dict_map.keys()}
+        summary_unrecognized = 0
+        summary_total = 0
+        days_with_paste = 0
+        rows = []
+
+        for day in days:
+            date_str = day.strftime("%Y-%m-%d")
+            cash_doc = cash_by_key.get((rid, date_str), {}) or {}
+            manual_prices = cash_doc.get("manual_prices") or {}
+            paste_text = cash_doc.get("paste_text") or fallback_paste_texts.get((rid, date_str), "")
+            row_dict_map = _ordered_pasta_dict(
+                _pasta_dict_from_snapshot(cash_doc.get("pasta_dict_snapshot")) or dict_map
+            )
+            for sigla, price in row_dict_map.items():
+                if sigla not in dict_map:
+                    dict_map[sigla] = price
+                summary_by_sigla.setdefault(sigla, 0)
+            paste_breakdown = _compute_paste_breakdown_for_export(paste_text, manual_prices, row_dict_map)
+            bev_docs = beverages_by_key.get((rid, date_str), [])
+            bev_by_sigla = {d.get("sigla"): d for d in bev_docs}
+
+            beverages = {}
+            bev_total_qty = 0
+            bev_total_inc = 0.0
+            for sigla in bev_sigle:
+                row = bev_by_sigla.get(sigla, {}) or {}
+                m = _eval_cash_value(row.get("mattina"))
+                u = _eval_cash_value(row.get("inUsc"))
+                s = _eval_cash_value(row.get("scarti"))
+                e = _eval_cash_value(row.get("sera"))
+                qty = (0 if e == 0 else (m + u - e)) - s
+                inc = round(qty * bev_prices.get(sigla, 0), 2)
+                beverages[sigla] = {
+                    "mattina": m,
+                    "inUsc": u,
+                    "scarti": s,
+                    "sera": e,
+                    "qty": int(qty),
+                    "incasso": inc,
+                    "price": bev_prices.get(sigla, 0),
+                }
+                bev_total_qty += int(qty)
+                bev_total_inc += inc
+
+            cash_calc = {**cash_doc, "paste_text": paste_text, "manual_prices": manual_prices}
+            cash_values = {f: _eval_cash_value(cash_doc.get(f, "")) for f in ALL_CASH_FIELDS}
+            spicci_total = round(_compute_spicci_total(cash_doc), 2)
+            cassetto_total = round(_compute_cassetto_total(cash_doc), 2)
+            cash_sera = round(_compute_cash_sera_full(cash_calc, bev_docs, row_dict_map), 2) if (cash_doc or paste_text or bev_docs) else 0.0
+
+            total_count = paste_breakdown["total_count"]
+            if total_count > 0:
+                days_with_paste += 1
+            summary_total += total_count
+            summary_unrecognized += paste_breakdown["unrecognized_count"]
+            for sigla, values in paste_breakdown["breakdown"].items():
+                summary_by_sigla[sigla] = summary_by_sigla.get(sigla, 0) + values["count"]
+
+            rows.append({
+                "date": day,
+                "date_str": date_str,
+                "paste": paste_breakdown,
+                "paste_total_count": total_count,
+                "paste_total_eur": paste_breakdown["total_eur"],
+                "beverages": beverages,
+                "bev_total_qty": bev_total_qty,
+                "bev_total_inc": round(bev_total_inc, 2),
+                "cash": cash_values,
+                "spicci_total": spicci_total,
+                "cassetto_total": cassetto_total,
+                "cash_sera": cash_sera,
+                "has_report_data": bool(cash_doc or bev_docs or paste_text),
+            })
+
+        restaurants_data.append({
+            "id": rid,
+            "location": rest.get("location") or rest.get("username") or "Locale",
+            "username": rest.get("username"),
+            "pasta_dict": dict_map,
+            "rows": rows,
+            "summary": {
+                "total_paste": summary_total,
+                "days_with_paste": days_with_paste,
+                "unrecognized": summary_unrecognized,
+                "by_sigla": summary_by_sigla,
+            },
+        })
+
+    return {
+        "year": selected_year,
+        "days": days,
+        "restaurants": restaurants_data,
+        "bev_sigle": bev_sigle,
+        "bev_prices": bev_prices,
+    }
+
+
+def _apply_analysis_sheet_basics(ws):
+    ws.freeze_panes = "B8"
+    ws.sheet_view.showGridLines = True
+    ws.sheet_view.zoomScale = 70
+
+
+def _write_merged_group(
+    ws,
+    row_idx: int,
+    start_col: int,
+    end_col: int,
+    label: str,
+    fill_color: str,
+    font_color: str = "000000",
+):
+    if start_col > end_col:
+        return
+    if start_col < end_col:
+        ws.merge_cells(start_row=row_idx, start_column=start_col, end_row=row_idx, end_column=end_col)
+    cell = ws.cell(row_idx, start_col, label)
+    cell.fill = PatternFill("solid", fgColor=fill_color)
+    cell.font = Font(
+        name="Calibri",
+        size=12,
+        bold=label in ("VENDITE", "INCASSI TOTALI"),
+        color=font_color,
+    )
+    cell.alignment = Alignment(horizontal="center", vertical="center")
+
+
+def _analysis_group_fill(group: str) -> str:
+    if not group:
+        return "FFFFFFFF"
+    if group == "OUTPUT AUTOMATICO (n. Piatti)":
+        return "FFCCC1DA"
+    if group == "Prezzi e incassi":
+        return "FF604A7B"
+    if group in (
+        "MAGAZZ MATTINA",
+        "SCARICHI",
+        "Altri utilizzi / scarti",
+        "MAGAZZ SERA",
+        "VENDITE",
+        "PREZZI",
+        "INCASSO",
+    ):
+        return "FF77933C"
+    if group == "INCASSI TOTALI":
+        return "FF953735"
+    return "FFE5E7EB"
+
+
+def _analysis_group_font_color(group: str) -> str:
+    if group == "OUTPUT AUTOMATICO (n. Piatti)":
+        return "FF000000"
+    if group == "Prezzi e incassi" or group in (
+        "MAGAZZ MATTINA",
+        "SCARICHI",
+        "Altri utilizzi / scarti",
+        "MAGAZZ SERA",
+        "VENDITE",
+        "PREZZI",
+        "INCASSO",
+        "INCASSI TOTALI",
+    ):
+        return "FFFFFFFF"
+    return "FF000000"
+
+
+def _analysis_header_fill(group: str) -> Optional[str]:
+    return None
+
+
+def _analysis_header_font_color(group: str) -> str:
+    return "FF000000"
+
+
+ANALYSIS_CASH_HEADER_STYLES = {
+    "paste_total_eur": ("FF7030A0", "FFFFFFFF"),
+    "bev_total_inc": ("FF4F6228", "FFFFFFFF"),
+    "altro": ("FFFDEADA", "FF000000"),
+    "mattina": ("FFD9D9D9", "FF000000"),
+    "sales_total": ("FF984807", "FFFFFFFF"),
+    "arr": ("FFFF0000", "FF000000"),
+    "vers": ("FF3D85C6", "FFFFFFFF"),
+    "glo": ("FFFFFFAF", "FF000000"),
+    "just": ("FFFF9900", "FF000000"),
+    "delv": ("FF00B050", "FFFFFFFF"),
+    "bp": ("FFDCE6F2", "FF000000"),
+    "sat": ("FFC4BD97", "FF000000"),
+    "pos": ("FF7F7F7F", "FF000000"),
+    "ft": ("FFF2F2F2", "FF000000"),
+    "sp05": ("FFD0E0E3", "FF000000"),
+    "sp1": ("FFFFF2CC", "FF000000"),
+    "sp2": ("FFEAD1DC", "FF000000"),
+    "sp5": ("FFD9EAD3", "FF000000"),
+    "spicci_total": ("FFFCE5CD", "FF000000"),
+    "spicci_open": ("FFE5B8B7", "FF000000"),
+    "cash_sera": ("FFFFFF00", "FF000000"),
+}
+
+
+def _analysis_cash_header_style(field: str) -> Tuple[str, str]:
+    return ANALYSIS_CASH_HEADER_STYLES.get(field, ("FF953735", "FFFFFFFF"))
+
+
+def _analysis_body_fill(kind: str, group: str) -> Optional[str]:
+    if kind == "paste_price":
+        return "FFF4F5C1"
+    if group in ("VENDITE", "PREZZI", "INCASSO"):
+        return "FFF4F5C1"
+    return None
+
+
+def _analysis_cash_body_fill(field: str) -> Optional[str]:
+    if field in ("sp05", "sp1", "sp2", "sp5"):
+        return _analysis_cash_header_style(field)[0]
+    if field == "cash_sera":
+        return "FFF4F5C1"
+    return None
+
+
+def _analysis_short_pasta_label(sigla: str) -> str:
+    sigla_up = str(sigla or "").upper().strip()
+    if sigla_up in ("TART", "TARTUFO"):
+        return "Tart"
+    if sigla_up in ("AMAT", "AMATRICIANA"):
+        return "Amat"
+    if sigla_up == "CARZUC":
+        return "Carzuc"
+    return _pasta_export_label(sigla_up)
+
+
+def _analysis_beverage_label(sigla: str) -> str:
+    sigla_up = str(sigla or "").upper().strip()
+    return {"AL": "A L", "AG": "A G"}.get(sigla_up, sigla_up)
+
+
+def _analysis_money_number_format(value) -> str:
+    try:
+        numeric = float(value or 0)
+    except Exception:
+        return "0.##"
+    if abs(numeric - round(numeric)) < 0.000001:
+        return "0"
+    return "0.##"
+
+
+def _write_analysis_locale_sheet(wb: Workbook, rest_data: Dict, data: Dict, used_titles: set):
+    title = _safe_sheet_title(rest_data["location"], used_titles)
+    ws = wb.create_sheet(title=title)
+    paste_siglas = list(rest_data["pasta_dict"].keys())
+    bev_sigle = data["bev_sigle"]
+
+    ws["B2"] = "IN QUESTO FOGLIO VANNO MODIFICATE A MANO SOLO LE CELLE DI QUESTO COLORE GIALLINO: Le altre son calcoli automatici"
+    ws["B2"].font = Font(name="Calibri", size=12, bold=True, color="FF000000")
+
+    columns = [{"group": "", "label": "GIORNO", "kind": "date"}]
+    for sigla in paste_siglas:
+        columns.append({"group": "OUTPUT AUTOMATICO (n. Piatti)", "label": _pasta_export_label(sigla), "kind": "paste_count", "sigla": sigla})
+    columns.append({"group": "OUTPUT AUTOMATICO (n. Piatti)", "label": "Altro", "kind": "paste_unrecognized"})
+    columns.append({"group": "OUTPUT AUTOMATICO (n. Piatti)", "label": "TOT PIATTI", "kind": "paste_total_count"})
+    columns.append({"group": "", "label": "", "kind": "blank"})
+    for sigla in paste_siglas:
+        columns.append({"group": "Prezzi e incassi", "label": _analysis_short_pasta_label(sigla), "kind": "paste_price", "sigla": sigla})
+    columns.append({"group": "Prezzi e incassi", "label": "", "kind": "blank"})
+    for sigla in paste_siglas:
+        columns.append({"group": "Prezzi e incassi", "label": _analysis_short_pasta_label(sigla), "kind": "paste_incasso", "sigla": sigla})
+    columns.append({"group": "Prezzi e incassi", "label": "Altro", "kind": "paste_unrecognized_eur"})
+    columns.append({"group": "", "label": "", "kind": "blank"})
+
+    beverage_groups = [
+        ("MAGAZZ MATTINA", "mattina"),
+        ("SCARICHI", "inUsc"),
+        ("Altri utilizzi / scarti", "scarti"),
+        ("MAGAZZ SERA", "sera"),
+        ("VENDITE", "qty"),
+        ("PREZZI", "price"),
+        ("INCASSO", "incasso"),
+    ]
+    for group_label, value_key in beverage_groups:
+        for sigla in bev_sigle:
+            columns.append({"group": group_label, "label": _analysis_beverage_label(sigla), "kind": "beverage", "sigla": sigla, "field": value_key})
+        columns.append({"group": "", "label": "", "kind": "blank"})
+
+    for key, label in ANALYSIS_CASH_EXPORT_COLUMNS:
+        columns.append({"group": "INCASSI TOTALI", "label": label, "kind": "cash_export", "field": key})
+
+    last_paste_col = max(
+        [idx for idx, col in enumerate(columns, start=1) if col.get("group") in ("OUTPUT AUTOMATICO (n. Piatti)", "Prezzi e incassi")],
+        default=2,
+    )
+    last_paste_price_col = max(
+        [idx for idx, col in enumerate(columns, start=1) if col.get("kind") == "paste_price"],
+        default=last_paste_col,
+    )
+    first_bev_col = next(
+        (idx for idx, col in enumerate(columns, start=1) if col.get("group") == "MAGAZZ MATTINA"),
+        None,
+    )
+    last_bev_col = max(
+        [idx for idx, col in enumerate(columns, start=1) if col.get("kind") == "beverage"],
+        default=first_bev_col or last_paste_col,
+    )
+    first_cash_col = next(
+        (idx for idx, col in enumerate(columns, start=1) if col.get("kind") == "cash_export"),
+        None,
+    )
+
+    for col_idx in range(2, len(columns) + 1):
+        ws.cell(2, col_idx).fill = PatternFill("solid", fgColor="FFF4F5C1")
+    if last_paste_col >= 2:
+        for col_idx in range(2, last_paste_col + 1):
+            ws.cell(4, col_idx).fill = PatternFill("solid", fgColor="FF7030A0")
+        ws.merge_cells(start_row=4, start_column=2, end_row=4, end_column=last_paste_price_col)
+        ws.cell(4, 2, "PIATTI")
+        ws.cell(4, 2).fill = PatternFill("solid", fgColor="FF7030A0")
+        ws.cell(4, 2).font = Font(name="Calibri", size=12, bold=True, color="FFFFFFFF")
+        ws.cell(4, 2).alignment = Alignment(horizontal="center", vertical="center")
+    if first_bev_col:
+        ws.merge_cells(start_row=4, start_column=first_bev_col, end_row=4, end_column=last_bev_col)
+        ws.cell(4, first_bev_col, "BEVANDE")
+        ws.cell(4, first_bev_col).fill = PatternFill("solid", fgColor="FF4F6228")
+        ws.cell(4, first_bev_col).font = Font(name="Calibri", size=12, bold=True, color="FFFFFFFF")
+        ws.cell(4, first_bev_col).alignment = Alignment(horizontal="center", vertical="center")
+
+    for idx, col in enumerate(columns, start=1):
+        cell = ws.cell(7, idx, col["label"])
+        group = col.get("group") or ""
+        if col.get("kind") == "cash_export":
+            fill_color, font_color = _analysis_cash_header_style(col.get("field") or "")
+        else:
+            fill_color, font_color = _analysis_header_fill(group), _analysis_header_font_color(group)
+        if col.get("kind") == "paste_total_count":
+            fill_color, font_color = "FF403152", "FFFFFFFF"
+        if fill_color:
+            cell.fill = PatternFill("solid", fgColor=fill_color)
+        cell.font = Font(
+            name="Calibri",
+            size=ANALYSIS_CASH_HEADER_FONT_SIZES.get(col.get("field"), 12),
+            bold=True,
+            color=font_color,
+        )
+        if col.get("kind") == "paste_total_count":
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        elif col.get("kind") != "blank":
+            cell.alignment = Alignment(vertical="bottom", wrap_text=True)
+
+    group_start = None
+    current_group = None
+    for idx, col in enumerate(columns, start=1):
+        group = col["group"]
+        if group != current_group:
+            if current_group:
+                _write_merged_group(
+                    ws,
+                    6,
+                    group_start,
+                    idx - 1,
+                    current_group,
+                    _analysis_group_fill(current_group),
+                    _analysis_group_font_color(current_group),
+                )
+            current_group = "" if group == "INCASSI TOTALI" else group
+            group_start = idx
+    if current_group:
+        _write_merged_group(
+            ws,
+            6,
+            group_start,
+            len(columns),
+            current_group,
+            _analysis_group_fill(current_group),
+            _analysis_group_font_color(current_group),
+        )
+
+    if first_cash_col:
+        total_end_col = min(first_cash_col + 4, len(columns))
+        _write_merged_group(
+            ws,
+            6,
+            first_cash_col,
+            total_end_col,
+            "INCASSI TOTALI",
+            "FF953735",
+            "FFFFFFFF",
+        )
+        for col_idx in range(total_end_col + 1, len(columns) + 1):
+            field = columns[col_idx - 1].get("field")
+            fill = "FF632523" if field in ("pos", "sat", "ft", "sp05", "sp1", "sp2", "sp5", "spicci_total", "spicci_open", "cash_sera") else "FF953735"
+            ws.cell(6, col_idx).fill = PatternFill("solid", fgColor=fill)
+
+    money_kinds = {"paste_price", "paste_incasso", "paste_unrecognized_eur", "cash_export"}
+    for row_idx, row_data in enumerate(rest_data["rows"], start=8):
+        for col_idx, col in enumerate(columns, start=1):
+            kind = col["kind"]
+            value = None
+            if kind == "date":
+                value = row_data["date"].replace(tzinfo=None)
+            elif kind == "paste_count":
+                value = row_data["paste"]["breakdown"].get(col["sigla"], {}).get("count", 0)
+            elif kind == "paste_unrecognized":
+                value = row_data["paste"]["unrecognized_count"]
+            elif kind == "paste_total_count":
+                value = row_data["paste_total_count"]
+            elif kind == "paste_price":
+                value = row_data["paste"]["breakdown"].get(col["sigla"], {}).get("price", 0)
+            elif kind == "paste_incasso":
+                value = row_data["paste"]["breakdown"].get(col["sigla"], {}).get("total", 0)
+            elif kind == "paste_unrecognized_eur":
+                value = row_data["paste"]["unrecognized_eur"]
+            elif kind == "paste_total_eur":
+                value = row_data["paste_total_eur"]
+            elif kind == "beverage":
+                value = row_data["beverages"].get(col["sigla"], {}).get(col["field"], 0)
+            elif kind == "cash_export":
+                field = col["field"]
+                if field == "paste_total_eur":
+                    value = row_data["paste_total_eur"]
+                elif field == "bev_total_inc":
+                    value = row_data["bev_total_inc"]
+                elif field == "sales_total":
+                    value = round(
+                        row_data["paste_total_eur"]
+                        + row_data["bev_total_inc"]
+                        + row_data["cash"].get("altro", 0),
+                        2,
+                    )
+                elif field == "spicci_total":
+                    value = row_data["spicci_total"]
+                elif field == "spicci_open":
+                    value = row_data.get("cassetto_total", 0)
+                elif field == "cash_sera":
+                    value = row_data["cash_sera"]
+                else:
+                    value = row_data["cash"].get(field, 0)
+            cell = ws.cell(row_idx, col_idx, value if value not in (0, 0.0) else None)
+            fill_color = _analysis_cash_body_fill(col.get("field") or "") if kind == "cash_export" else _analysis_body_fill(kind, col.get("group") or "")
+            if fill_color:
+                cell.fill = PatternFill("solid", fgColor=fill_color)
+            cell.font = Font(
+                name="Calibri",
+                size=12,
+                bold=kind == "cash_export" and col.get("field") == "sales_total",
+                color="FF000000",
+            )
+            if kind == "date":
+                cell.number_format = "dd/mm/yyyy"
+            elif kind in money_kinds or (kind == "beverage" and col.get("field") in ("price", "incasso")):
+                cell.number_format = _analysis_money_number_format(value)
+            else:
+                cell.number_format = "0"
+
+    _apply_analysis_sheet_basics(ws)
+    ws.sheet_format.defaultColWidth = 8.796875
+    ws.column_dimensions["A"].width = 11.59765625
+    cash_widths = {
+        "paste_total_eur": 7,
+        "bev_total_inc": 10.5,
+        "altro": 8.5,
+        "mattina": 12,
+        "sales_total": 10.5,
+        "pos": 7,
+        "sat": 8,
+        "ft": 7,
+        "sp05": 5,
+        "sp1": 5,
+        "sp2": 5,
+        "sp5": 5,
+        "spicci_total": 8,
+        "spicci_open": 10,
+        "cash_sera": 10.5,
+    }
+    for col_idx, col in enumerate(columns[1:], start=2):
+        width = 6.5
+        if col.get("kind") == "cash_export":
+            width = cash_widths.get(col.get("field"), 9)
+        ws.column_dimensions[get_column_letter(col_idx)].width = width
+    ws.row_dimensions[7].height = 46.8
+
+
+async def _write_totali_sheet_for_analysis(wb: Workbook, restaurants: List[Dict], selected_year: int):
+    ws = wb.create_sheet(title="Totali")
+    restaurants = sorted(restaurants, key=lambda r: (r.get("location") or "").lower())
+    days = _analysis_year_days(selected_year)
+    location_headers = [_display_media_location(r["location"]) for r in restaurants]
+    media_headers = [f"MEDIA {header[0]}" for header in location_headers]
+    headers = ["DATA", *location_headers, "TOTALI", *media_headers, "MEDIA T"]
+    ws.append(headers)
+
+    thin = Side(style="thin", color="000000")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    header_fill = PatternFill("solid", fgColor="F2F2F2")
+    red_font = Font(color="D00000", name="Times New Roman", size=12)
+    black_font = Font(color="000000", name="Times New Roman", size=12)
+    header_font = Font(color="D00000", name="Times New Roman", size=12)
+
+    for cell in ws[1]:
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws["A1"].font = Font(color="000000", name="Times New Roman", size=12)
+
+    month_values = {r["location"]: [] for r in restaurants}
+    today_rome = datetime.now(ROME_TZ)
+    for day in days:
+        day_start = day.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc).isoformat()
+        day_end = day.replace(hour=23, minute=59, second=59, microsecond=0).astimezone(timezone.utc).isoformat()
+        excel_row = [_format_italian_long_date(day)]
+        daily_total = 0
+        for rest in restaurants:
+            value = await _get_daily_order_count(rest["id"], day_start, day_end)
+            excel_row.append(value if value > 0 else None)
+            daily_total += value
+            if value > 0:
+                month_values[rest["location"]].append(value)
+        excel_row.append(daily_total if daily_total > 0 else None)
+
+        is_month_end = (day + timedelta(days=1)).month != day.month
+        is_completed_month = (
+            day.year < today_rome.year
+            or (day.year == today_rome.year and day.month < today_rome.month)
+        )
+        if is_month_end and is_completed_month:
+            monthly_averages = []
+            for rest in restaurants:
+                values = month_values[rest["location"]]
+                monthly_averages.append(round(sum(values) / len(values), 1) if values else None)
+            valid_monthly_averages = [v for v in monthly_averages if v is not None]
+            excel_row.extend(monthly_averages)
+            excel_row.append(round(sum(valid_monthly_averages), 1) if valid_monthly_averages else None)
+            month_values = {r["location"]: [] for r in restaurants}
+        else:
+            excel_row.extend([None] * (len(restaurants) + 1))
+            if is_month_end:
+                month_values = {r["location"]: [] for r in restaurants}
+
+        ws.append(excel_row)
+
+    max_col = len(headers)
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row, max_col=max_col):
+        for idx, cell in enumerate(row, start=1):
+            cell.border = border
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.font = red_font if 2 <= idx <= (1 + len(restaurants)) else black_font
+            if idx >= len(restaurants) + 3 and cell.value is not None:
+                cell.number_format = "0.0"
+
+    ws.column_dimensions["A"].width = 34
+    for col_idx in range(2, max_col + 1):
+        ws.column_dimensions[get_column_letter(col_idx)].width = 14
+    ws.freeze_panes = "A2"
+
+
+def _analysis_summary_response(data: Dict) -> Dict:
+    locations = []
+    for rest in data["restaurants"]:
+        by_sigla = rest["summary"]["by_sigla"]
+        ordered = [
+            {"sigla": sigla, "label": _pasta_export_label(sigla), "count": count}
+            for sigla, count in by_sigla.items()
+            if count > 0
+        ]
+        ordered.sort(key=lambda x: x["count"], reverse=True)
+        locations.append({
+            "id": rest["id"],
+            "location": rest["location"],
+            "total_paste": rest["summary"]["total_paste"],
+            "days_with_paste": rest["summary"]["days_with_paste"],
+            "unrecognized": rest["summary"]["unrecognized"],
+            "top_paste": ordered[:8],
+            "all_paste": ordered,
+        })
+    return {
+        "year": data["year"],
+        "locations": locations,
+        "total_paste": sum(r["summary"]["total_paste"] for r in data["restaurants"]),
+    }
+
+
+@api_router.get("/admin/analisi-mensile/summary")
+async def get_analisi_mensile_summary(year: int = None, token_data: dict = Depends(verify_token)):
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    selected_year = _validate_export_year(year)
+    data = await _build_annual_analysis_data(selected_year)
+    return _analysis_summary_response(data)
+
+
+@api_router.get("/admin/analisi-mensile/export")
+async def export_analisi_mensile_excel(year: int = None, token_data: dict = Depends(verify_token)):
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    selected_year = _validate_export_year(year)
+    data = await _build_annual_analysis_data(selected_year)
+
+    wb = Workbook()
+    default_sheet = wb.active
+    wb.remove(default_sheet)
+    used_titles = set()
+    for rest_data in data["restaurants"]:
+        _write_analysis_locale_sheet(wb, rest_data, data, used_titles)
+    await _write_totali_sheet_for_analysis(
+        wb,
+        [{"id": r["id"], "location": r["location"]} for r in data["restaurants"]],
+        selected_year,
+    )
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    filename = f"analisi_mensile_{selected_year}.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @api_router.get("/admin/media-locali/export")
@@ -4226,6 +5069,31 @@ async def _get_pasta_dict_for(restaurant_id: Optional[str]) -> Dict[str, float]:
     return dict(PASTA_PRICES_MAP)
 
 
+def _pasta_dict_snapshot_from_map(dict_map: Dict[str, float]) -> List[Dict]:
+    return [
+        {"sigla": str(sigla).upper().strip(), "price": float(price or 0)}
+        for sigla, price in (dict_map or {}).items()
+        if str(sigla).strip()
+    ]
+
+
+def _pasta_dict_from_snapshot(snapshot) -> Optional[Dict[str, float]]:
+    if not isinstance(snapshot, list):
+        return None
+    out: Dict[str, float] = {}
+    for item in snapshot:
+        if not isinstance(item, dict):
+            continue
+        sigla = str(item.get("sigla", "")).upper().strip()
+        if not sigla:
+            continue
+        try:
+            out[sigla] = float(item.get("price", 0) or 0)
+        except Exception:
+            continue
+    return out or None
+
+
 # Regex per matchare una sigla SOLO se appare immediatamente dopo un eventuale
 # numero d'ordine + whitespace iniziale. Esempio:
 #   "42 CARB - PIET"    → match CARB ✓
@@ -4251,6 +5119,15 @@ def _pasta_recognized_sigla(line: str, dict_map: Dict[str, float]) -> Optional[s
 
 def _compute_spicci_total(row: dict) -> float:
     return sum(_eval_cash_value(row.get(k, "")) * v for k, v in SPICCI_MULTIPLIERS.items())
+
+
+def _compute_cassetto_total(row: dict) -> float:
+    return (
+        _eval_cash_value(row.get("cd5", "")) * 5
+        + _eval_cash_value(row.get("cd2", "")) * 2
+        + _eval_cash_value(row.get("cd1", ""))
+        + _eval_cash_value(row.get("cd05", "")) * 0.5
+    )
 
 
 def _manual_price_key_for_line(line: str) -> str:
@@ -4966,6 +5843,14 @@ async def upsert_cash_daily(
             if t:
                 clean[k[:50]] = t[:500]
         set_payload["comments"] = clean
+    if (
+        "paste_text" in set_payload
+        or "manual_prices" in set_payload
+        or not old_doc.get("pasta_dict_snapshot")
+    ):
+        set_payload["pasta_dict_snapshot"] = _pasta_dict_snapshot_from_map(
+            await _get_pasta_dict_for(rid)
+        )
     # Sicurezza: il campo `mattina` (CASH MATTINA "Forza Mattina") può essere
     # modificato SOLO da admin/Federico. Per gli altri utenti preserviamo il
     # valore esistente nel DB ignorando ciò che è stato inviato lato client.

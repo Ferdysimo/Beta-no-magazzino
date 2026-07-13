@@ -31,6 +31,7 @@ import CarichiMagazzinoPage from './pages/CarichiMagazzinoPage';
 import NuovoCaricoPage from './pages/NuovoCaricoPage';
 import InventarioPage from './pages/InventarioPage';
 import AnalisiPage from './pages/AnalisiPage';
+import AnalisiAnnualePage from './pages/AnalisiAnnualePage';
 import CronologiaMovimentiPage from './pages/CronologiaMovimentiPage';
 import ReportBetaPage from './pages/ReportBetaPage';
 import ReportIeriPage from './pages/ReportIeriPage';
@@ -225,6 +226,11 @@ function AppRoutes() {
       <Route path="/media-locali" element={
         <ProtectedRoute>
           <MediaLocaliPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/analisi-mensile" element={
+        <ProtectedRoute>
+          <AnalisiAnnualePage />
         </ProtectedRoute>
       } />
       <Route path="/diagnostica" element={
