@@ -163,6 +163,16 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-14 16:58 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: docs | architecture
+**File toccati**:
+- `/app/memory/TODO.md`
+- `/app/memory/OPERATIONAL_MEMORY_DESIGN.md`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Registrate nella TODO le funzionalita future approvate (Macchina del tempo, confronti tra giorni omogenei e festivita mobili, composizione delle paste). Progettata separatamente la futura Memoria operativa: acquisizione isolata e idempotente dei dati utili di ordini, report, magazzino, DDT e richieste locali, con storage dedicato, watermark, limiti di risorse, osservabilita, test, attivazione e rollback. Il principio vincolante e che la Memoria possa fallire senza trascinare con se l'applicazione; non e stata implementata alcuna modifica applicativa o infrastrutturale.
+**Testato**: si (metodo: inventario statico delle fonti dati e dei flussi applicativi; verifica del documento, delle esclusioni richieste, dell'assenza di credenziali e di whitespace errato)
+**Note per il prossimo agente**: usare `memory/OPERATIONAL_MEMORY_DESIGN.md` come specifica prima dell'implementazione. Fatture, versamenti, chiusure, immagini e segreti restano esclusi. `uploads/backup_flaminio.txt` e intenzionalmente escluso dal commit.
+
 ### [2026-07-14 12:40 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: security | audit | docs
 **File toccati**:
