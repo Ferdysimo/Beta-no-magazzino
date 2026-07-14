@@ -1,0 +1,62 @@
+from .auth import LoginRequest, LoginResponse, LocalRestaurantCreate, RestaurantCreate, RestaurantResponse
+from .beverages import BeverageCaricoCreate, BeverageCaricoItem, BeverageDailyUpsert
+from .diagnostics import FrontendDiagnosticsPayload, FrontendErrorPayload
+from .documents import (
+    ChiusuraCreate,
+    ChiusuraPiattiUpload,
+    FatturaGlobaleCreate,
+    FatturaUpload,
+    InvoiceCreate,
+    InvoiceResponse,
+    VersamentoCreate,
+)
+from .orders import DeletionLog, ModificationLog, OrderCreate, OrderResponse, OrderUpdate
+from .report import CashDailyUpsert, PastaDictionaryUpsert
+from .warehouse import (
+    CaricoCreate,
+    CaricoItem,
+    CaricoUpdate,
+    ProductCreate,
+    ProductQuantityUpdate,
+    ProductUpdate,
+    RichiestaCreate,
+    RichiestaErrorReport,
+    RichiestaItem,
+)
+
+
+__all__ = [
+    "BeverageCaricoCreate",
+    "BeverageCaricoItem",
+    "BeverageDailyUpsert",
+    "CaricoCreate",
+    "CaricoItem",
+    "CaricoUpdate",
+    "CashDailyUpsert",
+    "ChiusuraCreate",
+    "ChiusuraPiattiUpload",
+    "DeletionLog",
+    "FatturaGlobaleCreate",
+    "FatturaUpload",
+    "FrontendDiagnosticsPayload",
+    "FrontendErrorPayload",
+    "InvoiceCreate",
+    "InvoiceResponse",
+    "LocalRestaurantCreate",
+    "LoginRequest",
+    "LoginResponse",
+    "ModificationLog",
+    "OrderCreate",
+    "OrderResponse",
+    "OrderUpdate",
+    "PastaDictionaryUpsert",
+    "ProductCreate",
+    "ProductQuantityUpdate",
+    "ProductUpdate",
+    "RestaurantCreate",
+    "RestaurantResponse",
+    "RichiestaCreate",
+    "RichiestaErrorReport",
+    "RichiestaItem",
+    "VersamentoCreate",
+]

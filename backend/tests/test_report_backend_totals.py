@@ -12,7 +12,8 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-import server as server_module
+import app.services.analysis as analysis_service
+import app.services.report_snapshots as report_snapshots_service
 from server import (
     _analysis_row_integrity,
     _compute_cash_sera_full,
@@ -210,7 +211,7 @@ def test_analysis_prefetch_streams_all_order_sources_and_deduplicates(monkeypatc
             "description": "RAGU",
         }]),
     }
-    monkeypatch.setattr(server_module, "db", _FakeDatabase(collections))
+    monkeypatch.setattr(analysis_service, "db", _FakeDatabase(collections))
 
     result = asyncio.run(_prefetch_analysis_order_data(
         ["r1"],
@@ -243,7 +244,7 @@ def test_daily_order_count_includes_archived_deletions_and_uses_exclusive_end(mo
         "deletion_logs": _FakeCollection(count=5),
         "archived_deletion_logs": _FakeCollection(count=7),
     }
-    monkeypatch.setattr(server_module, "db", _FakeDatabase(collections))
+    monkeypatch.setattr(analysis_service, "db", _FakeDatabase(collections))
 
     result = asyncio.run(_get_daily_order_count(
         "r1",
@@ -297,9 +298,21 @@ def test_midnight_snapshot_preserves_existing_dictionary(monkeypatch):
     async def fail_if_dictionary_is_reloaded(restaurant_id):
         raise AssertionError("Lo snapshot esistente non deve essere sostituito")
 
-    monkeypatch.setattr(server_module, "db", type("Db", (), {"cash_daily_counts": cash})())
-    monkeypatch.setattr(server_module, "_build_paste_text_for_date", fake_build_paste_text)
-    monkeypatch.setattr(server_module, "_get_pasta_dict_for", fail_if_dictionary_is_reloaded)
+    monkeypatch.setattr(
+        report_snapshots_service,
+        "db",
+        type("Db", (), {"cash_daily_counts": cash})(),
+    )
+    monkeypatch.setattr(
+        report_snapshots_service,
+        "_build_paste_text_for_date",
+        fake_build_paste_text,
+    )
+    monkeypatch.setattr(
+        report_snapshots_service,
+        "_get_pasta_dict_for",
+        fail_if_dictionary_is_reloaded,
+    )
 
     result = asyncio.run(_snapshot_report_paste_text_for_date(
         "2026-07-12",

@@ -1,146 +1,121 @@
-# Piano refactor `server.py` (4483 -> ~250 righe in `server.py` + 12-13 router)
+# Piano refactor `server.py` in 3 fasi
 
-**Stato attuale**: 95 endpoint, 29 modelli Pydantic, 4483 righe in unico file.
+Aggiornato il 2026-07-14 dopo l'allineamento a `e6ac426`.
 
-**Garanzie trasversali**:
-- Nessun cambio di path API (`/api/...` invariati): tablet gia connessi continuano a funzionare.
-- Nessun cambio di schema DB.
-- Backup `server.py.backup-pre-split` salvato in sessione 1.
-- `testing_agent_v3_fork` obbligatorio prima del finish di ogni sessione.
-- Ogni sessione e deployabile da sola.
-- Ogni agente deve lavorare anche da reviewer e architetto: prima di chiudere una sessione deve cercare regressioni, cicli di import, singleton duplicati e rischi di layering, non solo "spostare codice".
-- I router non devono importare `server.py`: ogni dipendenza condivisa deve stare in `core/`, `models/`, `services/` o `tasks/`.
+## Fotografia iniziale
 
----
+- `backend/server.py`: 8004 righe.
+- Contratto pubblico: 89 path, 117 operazioni HTTP, 32 schemi OpenAPI.
+- 239 funzioni e 35 classi top-level, inclusa una doppia definizione di `OrderCreate`.
+- Import di `server` usati da test e script: devono continuare a funzionare durante il refactor.
+- Side effect all'import: caricamento ambiente, client Mongo, creazione app e singleton condivisi.
 
-## Gate anti-regressione obbligatori
+## Garanzie trasversali
 
-Da eseguire o validare dopo ogni sessione di split:
+- Nessun cambio di path, payload, status code o schema OpenAPI durante gli spostamenti.
+- Nessun cambio di collezioni, documenti o indici Mongo.
+- `server:app` resta l'entrypoint per VPS e sviluppo locale.
+- `server.py` riesporta temporaneamente i simboli usati da test e script.
+- I nuovi moduli non importano mai `server.py`.
+- Un solo `db`, un solo client Mongo e, quando verrà estratto, un solo WebSocket manager.
+- Invarianti auth: token coerente con l'account autenticato, revoca Simone, privilegi Federico e impersonificazione admin invariati.
+- Ogni fase è deployabile autonomamente e chiude con test di contratto e regressione.
+- Non eseguire contro il DB operativo le vecchie suite che cancellano indiscriminatamente dati giornalieri.
 
-- `python -m py_compile backend/server.py`
-- Login admin + login locale + flusso JWT su endpoint protetti.
-- Endpoint admin chiamato con token locale -> deve restituire `403`.
-- Flow Cassa -> Bollitore -> Generale -> Report -> Audit.
-- Verifica WebSocket/broadcast live.
-- `/admin/_simulate-midnight-reset`.
-- Verifica `id(manager)` in piu punti dopo import: deve essere lo stesso oggetto tra websocket, router business/admin e tasks/scheduler.
-- `grep -rn "from server import" backend/routers/` -> output vuoto.
-- `grep -rn "import server" backend/routers/` -> output vuoto.
-- Static analysis import graph: nessun ciclo `server.py <-> routers/*`.
-- Layering atteso: `server.py -> routers -> core/models/services/tasks`; `core` e `models` non importano mai `routers` o `server.py`.
+## Fase 1 - Fondamenta e schemi
 
----
+**Stato: completata il 2026-07-14.**
 
-## Sessione 1 - Fondamenta (`core/` + `models/`)
+- Creati `backend/app/core/config.py`, `database.py`, `security.py`, `time.py` e `files.py`.
+- Estratti tutti i modelli Pydantic in `backend/app/schemas/`, divisi per dominio.
+- Rimossa la doppia definizione di `OrderCreate`; lo schema canonico mantiene `description` e `order_number`.
+- Conservati i re-export da `server.py`.
+- Aggiunto hash di caratterizzazione OpenAPI e test puri per auth, fuso di Roma e upload.
+- Nessun endpoint spostato; WebSocket manager, audit e task notturni restano nel monolite fino alle fasi dedicate.
 
-Solo spostamento moduli condivisi, niente endpoint si muove.
+Risultato: `server.py` da 8004 a 7629 righe, contratto OpenAPI invariato.
 
-```text
-backend/core/
-|-- auth.py        # verify_token, SECRET_KEY, ALGORITHM, pwd_context, security
-|-- db.py          # client Motor, db, indici, RESTAURANT_LOCATION_CACHE
-|-- timezones.py   # ROME_TZ, _today_rome_str, _today_rome_bounds_utc, _now_rome_iso
-|-- deps.py        # _effective_restaurant_id, helper condivisi
-|-- ws_manager.py  # ConnectionManager + istanza `manager` (singolo punto)
-`-- audit.py       # _audit_diff_cash, _audit_diff_beverages
+## Fase 2 - Domini critici
 
-backend/models/    # un file per dominio
-|-- auth.py        # LoginRequest, RestaurantResponse, ...
-|-- orders.py
-|-- beverages.py
-|-- cash.py
-|-- carichi.py
-|-- richieste.py
-|-- products.py
-|-- invoices.py
-|-- chiusure.py
-|-- suppliers.py
-`-- versamenti.py
-```
+**Stato: completata il 2026-07-14.**
 
-**Effetto**: `server.py` 4483 -> ~3700 righe.
-**Rischio principale**: circular imports. Mitigazione: `core/` strict-layered, non importa router.
-**Test**: smoke auth + ordini + cash report + gate anti-regressione obbligatori.
+- Estratte 18 rotte Ordini, log movimenti e report giornaliero in `app/routers/orders.py`.
+- Estratte 18 rotte Report/chiusure/audit in `app/routers/report.py`.
+- Estratti i 4 endpoint Analisi/Numeri in `app/routers/analysis.py`.
+- Separati calcoli e accesso dati in `app/services/orders.py`, `report.py`, `analysis.py` e `report_snapshots.py`.
+- Spostati reset notturno, recupero ordini stale e retention upload in `app/tasks/`.
+- Spostati catalogo bevande, cache locali, dipendenze e WebSocket manager in singleton condivisi sotto `app/core/`.
+- Conservati tutti i re-export da `server.py`; nessun nuovo modulo importa il monolite.
+- Aggiunta protezione sul numero ordine manuale: una collisione attiva restituisce `409` senza abbassare il contatore; ripartire da un numero più basso resta possibile quando quel numero non è attivo.
 
----
-
-## Sessione 2 - Router core business (~50 endpoint)
+Struttura ottenuta:
 
 ```text
-backend/routers/
-|-- orders.py      # 13 endpoint /orders/*
-|-- beverages.py   # 12 endpoint /beverages/*
-|-- cash.py        # 2 endpoint /cash/* + audit hooks
-`-- admin.py       # 12 endpoint /admin/* (diagnostics, closures, audit-log, cleanup, simulate-midnight)
+backend/app/
+|-- routers/
+|   |-- orders.py
+|   |-- report.py
+|   `-- analysis.py
+|-- services/
+|   |-- orders.py
+|   |-- report.py
+|   |-- analysis.py
+|   `-- report_snapshots.py
+`-- tasks/
+    |-- maintenance.py
+    |-- midnight.py
+    `-- stale_orders.py
 ```
 
-Wire-up in `server.py`:
+Risultato: `server.py` da 7629 a 3677 righe. Contratto OpenAPI invariato; 34 test unitari/contratto superati, smoke ASGI completo superato e gate Mongo isolato superato con 20 ordini concorrenti, reset reale e carry-over cash/cassetto/bevande.
 
-```python
-from routers import orders, beverages, cash, admin
-api_router.include_router(orders.router)
-api_router.include_router(beverages.router)
-api_router.include_router(cash.router)
-api_router.include_router(admin.router)
-```
+## Fase 3 - Domini rimanenti e bootstrap
 
-**Effetto**: `server.py` ~3700 -> ~1700 righe.
-**Rischio principale**: doppia istanza `manager` WebSocket -> broadcast vuoti. Mitigazione: importare SEMPRE da `core/ws_manager.py` e verificare esplicitamente `id(manager)` dopo gli import nei punti critici.
-**Test**: full flow Cassa -> Bollitore -> Generale -> Report -> Audit + `/admin/_simulate-midnight-reset` + grep anti `from server import`/`import server` nei router + static analysis import graph senza cicli.
+**Stato: completata il 2026-07-14.**
 
----
+- Estratte 15 rotte di sistema, autenticazione, locali e diagnostica in `app/routers/system.py`.
+- Estratte 9 rotte fatture locali/fornitori in `app/routers/invoices.py`.
+- Estratte 25 rotte prodotti, ledger, richieste e carichi in `app/routers/warehouse.py`.
+- Estratte 12 rotte bevande e analisi magazzino in `app/routers/beverages.py`.
+- Estratte 16 rotte versamenti, chiusure e fatture globali in `app/routers/documents.py`.
+- Spostato l'endpoint WebSocket in `app/routers/websocket.py` mantenendo il manager singleton della fase 2.
+- Spostati buffer e middleware diagnostici in `app/core/diagnostics.py`; runtime e limiter hanno singleton dedicati.
+- Spostati seed account e catalogo bevande in `app/services/seeding.py`.
+- Centralizzati composizione app, CORS/GZip, indici Mongo, seed, recovery, retention, scheduler e shutdown in `app/bootstrap.py`.
+- Sostituiti entrambi gli handler `on_event` con un solo lifespan; il task notturno viene cancellato e atteso allo shutdown.
+- `server.py` resta l'entrypoint VPS `server:app` e una facciata temporanea di compatibilita per test/script.
 
-## Sessione 3 - Magazzino + tasks + finitura (resto ~45 endpoint)
+Risultato: `server.py` da 3677 a 269 righe, e da 8004 a 269 nell'intero refactor. Contratto OpenAPI invariato: 89 path, 117 operazioni e SHA-256 `feddac10addca6258b7522ae12eb10bce78cf9817472d22d99eba6ad3f6052b4`.
 
-```text
-backend/routers/
-|-- carichi.py
-|-- richieste.py
-|-- products.py
-|-- invoices.py
-|-- chiusure.py
-|-- suppliers.py
-|-- versamenti.py
-|-- logs.py                  # modification_logs, deletion_logs
-|-- analisi.py
-|-- restaurants.py
-|-- closures_yesterday.py
-`-- ws.py                    # opzionale: /ws/{restaurant_id}
+### Verifica differenziale post-refactor (2026-07-14)
 
-backend/tasks/
-|-- midnight.py              # midnight_reset, cleanup_old_uploads, _atomic_archive_and_clear
-|-- stale_orders.py          # recover_stale_orders
-`-- scheduler.py             # bootstrap APScheduler + startup events
-```
+- Confrontati direttamente il monolite `e6ac426` e il refactor, avviati insieme su due database Mongo gemelli.
+- I corpi AST di 95 funzioni della fase 3 sono identici; inizializzazione e shutdown sono equivalenti dopo la separazione del lifespan.
+- Identiche 102 risposte HTTP normalizzate su auth, ordini, report/audit, magazzino, richieste, documenti, bevande, analisi e diagnostica.
+- Identici i 2 workbook Excel, confrontati per fogli, celle, valori, formati, colori, dimensioni e merge.
+- Identico lo stato di 23 collezioni Mongo e le firme degli indici principali dopo gli stessi flussi.
+- Identico lo stato di 10 collezioni dopo un reset notturno controllato.
+- Verificate due connessioni WebSocket consecutive, upload/download file e autorizzazioni 401/403.
+- Unica differenza ammessa: dopo una collisione su un numero manuale gia attivo, il refactor lascia invariato il contatore invece di abbassarlo. Status HTTP `409` invariato.
+- Build React completata e 4/4 test frontend superati; sorgenti frontend identiche a `e6ac426`.
+- Smoke test di sola lettura superato sul database locale con Admin, Federico, Grazie e Magazziniere.
 
-**Resta in `server.py`** (~250 righe finali):
-- Creazione `FastAPI` app
-- CORS / Gzip / static `/uploads`
-- Middleware logging diagnostico
-- `@app.on_event("startup")` -> `tasks.scheduler.start()` + `recover_stale_orders()` + seed Federico
-- `app.include_router(api_router)` con tutti i router
-- Endpoint `/` e `/api/version`
+Gate finali:
 
-**Effetto finale**:
+- [x] Grafo import senza cicli; nessun modulo sotto `app/` importa `server.py`.
+- [x] Avvio reale `uvicorn server:app` con configurazione equivalente alla VPS.
+- [x] Login Admin, Federico, Magazziniere e locale; password errata 401 e diagnostica locale 403.
+- [x] Flusso Cassa -> Bollitore -> Generale -> Report -> Audit.
+- [x] WebSocket live con due connessioni consecutive e round-trip ping/pong.
+- [x] Magazzino, richieste con scarico stock, fatture, versamenti, chiusure e diagnostica.
+- [x] Reset notturno, archiviazione, ordini concorrenti e carry-over su database isolato.
+- [x] 40 test unitari/contratto e 2 test Mongo isolati superati; database e upload temporanei rimossi.
 
-```text
-server.py      ~250 righe
-core/*.py      ~600 righe totali
-models/*.py    ~400 righe totali
-routers/*.py   ~3000 righe (12-13 file da 100-300 righe)
-tasks/*.py     ~250 righe totali
-```
+## Debiti dopo il refactor
 
-**Rischio principale**: middleware logging usa `RESTAURANT_LOCATION_CACHE` ora in `core/db.py`. Errore solo cosmetico se sbagliato.
-**Test**: full regression magazzino + verifica log scheduler `Next midnight reset in N seconds` + gate anti-regressione obbligatori.
-
----
-
-## Tabella di marcia
-
-| Tappa | server.py | Endpoint spostati | Deployabile |
-|---|---:|---:|---|
-| Pre | 4483 | 0 | n/a |
-| Dopo S1 | ~3700 | 0 | si |
-| Dopo S2 | ~1700 | 50 | si |
-| Dopo S3 | ~250 | 95 | si |
+- `services/analysis.py` (1071 righe), `routers/report.py` (1097), `routers/warehouse.py` (962) e `routers/system.py` (823) sono ancora grandi. Dividerli ulteriormente resta un miglioramento successivo, non necessario per chiudere il monolite.
+- Passlib 1.7.4 emette un warning con le versioni moderne di bcrypt; hashing e login funzionano, ma la coppia di dipendenze va allineata separatamente.
+- Due punti usano ancora `BaseModel.dict()` e Pydantic 2 segnala la futura rimozione; migrare a `model_dump()` in un intervento dedicato.
+- Starlette segnala l'import legacy `multipart`; dipende dalla versione installata e non cambia il comportamento degli upload.
+- Il dev server locale risponde su `/`, ma l'apertura diretta di `/home` restituisce 404 per il wrapper Visual Edits preesistente; la produzione Nginx mantiene il fallback SPA configurato.
+- Le suite storiche con cleanup Mongo aggressivi non vanno eseguite sul DB operativo. I gate nuovi richiedono `PASTA_RUN_ISOLATED_INTEGRATION=1` e un `DB_NAME` con prefisso `pastasciutta_refactor_test_`.

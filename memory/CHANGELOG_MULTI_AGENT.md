@@ -163,6 +163,73 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-14 11:00 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: test | docs
+**File toccati**:
+- `/app/memory/refactor_plan_server_py.md`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Eseguita una verifica differenziale completa tra il monolite `e6ac426` e il refactor su due processi Uvicorn e database Mongo gemelli. Nessuna regressione rilevata: equivalenti corpi funzione, HTTP, Excel, stato Mongo, indici, WebSocket e reset notturno; confermata soltanto la protezione intenzionale del contatore su collisione manuale. Riavviati backend e frontend locali con il codice attuale.
+**Testato**: si (metodo: 95 corpi AST; 102 checkpoint HTTP; 2 workbook; 23 collezioni e indici Mongo; 10 collezioni post-reset; WebSocket reconnect; build React; 4/4 test frontend; smoke locale read-only con quattro ruoli)
+**Note per il prossimo agente**: backend locale attivo su `http://localhost:8001`, frontend su `http://localhost:3000/`. Aprire il dev server dalla radice `/`; il 404 su accesso diretto a `/home` e preesistente e legato al wrapper Visual Edits, mentre Nginx in produzione ha il fallback SPA.
+
+### [2026-07-14 10:36 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: refactor | test | docs
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/backend/app/bootstrap.py`
+- `/app/backend/app/core/diagnostics.py`
+- `/app/backend/app/core/rate_limit.py`
+- `/app/backend/app/core/runtime.py`
+- `/app/backend/app/routers/system.py`
+- `/app/backend/app/routers/websocket.py`
+- `/app/backend/app/routers/invoices.py`
+- `/app/backend/app/routers/warehouse.py`
+- `/app/backend/app/routers/beverages.py`
+- `/app/backend/app/routers/documents.py`
+- `/app/backend/app/services/seeding.py`
+- `/app/backend/tests/conftest.py`
+- `/app/backend/tests/test_phase3_module_contract.py`
+- `/app/backend/tests/test_phase3_isolated_integration.py`
+- `/app/memory/refactor_plan_server_py.md`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Completata la fase 3 e chiuso il refactor del monolite. Estratti tutti i domini residui e centralizzato il bootstrap FastAPI in un lifespan unico con startup, indici, seed, scheduler e shutdown. `server.py` passa da 3677 a 269 righe e resta compatibile con `uvicorn server:app` e con gli import storici; contratto OpenAPI invariato.
+**Testato**: si (metodo: 40 test unitari/contratto; 2 gate Mongo isolati per concorrenza, reset/carry-over, auth, flusso Ordini/Report/Audit, magazzino, richieste e documenti; processo Uvicorn reale con login Admin e 2 round-trip WebSocket; database e upload temporanei eliminati)
+**Note per il prossimo agente**: nessun modulo `app/` importa `server.py`; non usare le vecchie suite distruttive sul DB operativo. Debiti non bloccanti: warning Passlib/bcrypt, `BaseModel.dict()` deprecato e import Starlette `multipart` legacy.
+
+### [2026-07-14 10:21 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: refactor | bugfix | docs
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/backend/app/core/catalogs.py`
+- `/app/backend/app/core/deps.py`
+- `/app/backend/app/core/state.py`
+- `/app/backend/app/core/ws_manager.py`
+- `/app/backend/app/routers/*.py`
+- `/app/backend/app/services/*.py`
+- `/app/backend/app/tasks/*.py`
+- `/app/backend/tests/test_report_backend_totals.py`
+- `/app/backend/tests/test_phase2_module_contract.py`
+- `/app/backend/tests/test_phase2_isolated_integration.py`
+- `/app/memory/refactor_plan_server_py.md`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Completata la fase 2 del refactor: estratti router e servizi per Ordini, Report e Analisi, più singleton WebSocket/cache e task di reset, recovery e retention. `server.py` conserva tutti i re-export e passa da 7629 a 3677 righe; contratto OpenAPI, query e formati export restano invariati. Aggiunta inoltre una protezione al numero ordine manuale: una collisione attiva restituisce 409 senza abbassare il contatore, mentre il riavvio manuale resta consentito quando il numero non è attivo.
+**Testato**: si (metodo: compileall; 34 test unitari/contratto; smoke ASGI di sola lettura su login, auth/me, Ordini, Report, Analisi, Numeri e autorizzazioni; test Mongo isolato con 20 POST concorrenti, collisione manuale, archiviazione reale a mezzanotte e carry-over cash/cassetto/bevande; database temporaneo eliminato)
+**Note per il prossimo agente**: i nuovi moduli non importano `server.py` e condividono lo stesso `db` e lo stesso `manager`. Non rilanciare le vecchie suite con cleanup sul DB operativo; usare il gate isolato con `PASTA_RUN_ISOLATED_INTEGRATION=1` e un `DB_NAME` che inizi per `pastasciutta_refactor_test_`. Restano warning non bloccanti per FastAPI `on_event` e Passlib/bcrypt, da affrontare nella fase 3.
+
+### [2026-07-14 09:59 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: refactor | docs
+**File toccati**:
+- `/app/backend/server.py`
+- `/app/backend/app/__init__.py`
+- `/app/backend/app/core/*.py`
+- `/app/backend/app/schemas/*.py`
+- `/app/backend/tests/test_phase1_foundations_contract.py`
+- `/app/memory/refactor_plan_server_py.md`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Completata la fase 1 del refactor di `server.py` senza spostare endpoint: configurazione, client Mongo, sicurezza JWT, calendario di Roma e upload sono ora in `app/core`; tutti gli schemi Pydantic sono divisi per dominio in `app/schemas`. Rimossa la doppia definizione di `OrderCreate`, mantenendo i re-export da `server.py` e il contratto OpenAPI esattamente invariato.
+**Testato**: si (metodo: compileall; 28 test pytest su contratto OpenAPI, auth, timezone, upload e calcoli Report; smoke ASGI di sola lettura: versione 200, login Flaminio 200, auth/me 200, endpoint diagnostica con token locale 403)
+**Note per il prossimo agente**: `server.py` e sceso da 8004 a 7629 righe. Non spostare ancora manager WebSocket, reset notturno o audit senza i gate della fase 2. Restano warning non bloccanti gia esistenti per FastAPI `on_event` e Passlib/bcrypt; le vecchie suite con cleanup Mongo aggressivo non vanno lanciate sul DB operativo.
+
 ### [2026-07-14 09:45 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix | security
 **File toccati**:
