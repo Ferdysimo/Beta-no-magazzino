@@ -163,6 +163,46 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-14 12:40 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: security | audit | docs
+**File toccati**:
+- `/app/memory/SECURITY_HARDENING_PLAN.md`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Completato audit di sicurezza iniziale sull'intera applicazione e sulla configurazione pubblica della VPS. Salvato un piano operativo condiviso P0-P3 con contenimento immediato, identita e autorizzazioni, hardening VPS/Mongo/upload, supply-chain, backup, logging, integrita transazionale, CI, ASVS e penetration test. Il documento registra anche criteri di uscita verificabili e l'ordine consigliato delle release, senza riportare credenziali sensibili.
+**Testato**: si (metodo: analisi statica di 118 endpoint; verifica ruoli, tenant, JWT, WebSocket, upload e configurazione; audit `yarn audit` e `pip-audit`; verifica passiva HTTP/HTTPS, porta backend, route pubbliche e OpenAPI sulla VPS, senza login o operazioni distruttive)
+**Note per il prossimo agente**: leggere `memory/SECURITY_HARDENING_PLAN.md` prima di qualsiasi intervento di sicurezza. Le criticita P0 rappresentano esposizioni attive e precedono nuove funzionalita non urgenti. Non inserire password, token o copie di documenti nel changelog o nel piano.
+
+### [2026-07-14 12:05 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | config | test
+**File toccati**:
+- `/app/backend/app/schemas/auth.py`
+- `/app/backend/app/routers/system.py`
+- `/app/backend/app/routers/warehouse.py`
+- `/app/backend/app/routers/analysis.py`
+- `/app/backend/app/services/analysis.py`
+- `/app/backend/tests/test_new_restaurant_configuration.py`
+- `/app/backend/tests/test_phase1_foundations_contract.py`
+- `/app/backend/tests/test_phase3_module_contract.py`
+- `/app/frontend/src/pages/CreaLocaliPage.js`
+- `/app/frontend/src/pages/HomePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Rifatto il flusso Simone per creare un locale con configurazione completa: nome, username, password, sigla Excel univoca, bollitori, indirizzo/CAP/citta per i DDT e abilitazione opzionale del Monitor clienti. Il backend valida obbligatorieta, formato e duplicati senza distinzione maiuscole/minuscole, aggiorna subito la cache diagnostica e usa i dati del locale nei DDT e nelle intestazioni MEDIA degli Excel; i locali esistenti mantengono i fallback storici. La gestione bevande e stata intenzionalmente esclusa su richiesta.
+**Testato**: si (metodo: 51 test unitari/contratto; integrazione Mongo isolata Excel; build React produzione; controllo visuale desktop e mobile; prova interattiva di tutti i campi senza invio; login/API locale e rifiuto HTTP 400 di un CAP non valido senza scritture DB)
+**Note per il prossimo agente**: non rendere nuovamente opzionali indirizzo, CAP, citta o sigla Excel nella creazione Simone. `LOCATION_ADDRESSES` resta solo come fallback retrocompatibile per i locali storici non ancora migrati.
+
+### [2026-07-14 11:30 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix | test | performance | trasparenza dati
+**File toccati**:
+- `/app/backend/app/services/analysis.py`
+- `/app/backend/app/routers/analysis.py`
+- `/app/backend/tests/test_report_backend_totals.py`
+- `/app/backend/tests/test_analysis_excel_isolated_integration.py`
+- `/app/frontend/src/pages/AnalisiAnnualePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Verificata end-to-end la provenienza delle paste nell'Excel Analisi mensile e separata la statistica dall'audit. Pagina Numeri, Excel Numeri, snapshot automatico Report, fogli locali e Totali contano ora esclusivamente `orders` e `archived_orders`; `deletion_logs` e `archived_deletion_logs` restano disponibili per audit e continuita della numerazione ma non rappresentano paste uscite. Una giornata storica con sole cancellazioni non recupera piu un vecchio snapshot automatico contenente quelle paste. L'identita di deduplicazione usa anche l'istante originale di creazione, conservando eventuali numeri validi realmente riutilizzati e rimuovendo soltanto copie dello stesso ordine. Pagina Numeri ed export Numeri prelevano l'intero intervallo con due query invece delle query giorno per giorno. L'Analisi segnala inoltre ogni override manuale e le giornate prive di ordini sorgente dopo il download.
+**Testato**: si (metodo: 47 test unitari/contratto; 3 integrazioni Mongo isolate; workbook reale verificato cella per cella su due locali, giornata mista, giornata con sole cancellazioni, copie archiviate, numero riutilizzato, sigle, XL/Altro, snapshot e override manuale; build React produzione; audit read-only DB locale ed export HTTP reale: Flaminio 2026-07-03 contiene 21 ordini validi e 5 cancellazioni, entrambi i fogli riportano correttamente 21)
+**Note per il prossimo agente**: i database temporanei sono stati eliminati. Non reinserire le collection delle cancellazioni in `ANALYSIS_ORDER_SOURCES`; servono soltanto a distinguere i vecchi snapshot automatici nei giorni senza ordini validi. `uploads/backup_flaminio.txt` resta intenzionalmente escluso.
+
 ### [2026-07-14 11:00 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: test | docs
 **File toccati**:

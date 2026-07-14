@@ -16,7 +16,8 @@ from app.services.analysis import (
     _display_media_location,
     _ensure_analysis_integrity,
     _format_italian_long_date,
-    _get_daily_order_count,
+    _media_code_for_restaurant,
+    _prefetch_analysis_order_data,
     _validate_export_year,
     _write_analysis_locale_sheet,
     _write_totali_sheet_for_analysis,
@@ -58,16 +59,21 @@ async def get_media_locali(token_data: dict = Depends(verify_token)):
     # For each day in range
     current = today.replace(hour=0, minute=0, second=0, microsecond=0)
     from_start = from_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    restaurant_ids = [r.get("id") for r in restaurants if r.get("id")]
+    source_data = await _prefetch_analysis_order_data(
+        restaurant_ids,
+        from_start.astimezone(timezone.utc).isoformat(),
+        (current + timedelta(days=1)).astimezone(timezone.utc).isoformat(),
+    )
+    source_counts = source_data["counts"]
 
     while current >= from_start:
-        day_start = current.astimezone(timezone.utc).isoformat()
-        day_end_exclusive = (current + timedelta(days=1)).astimezone(timezone.utc).isoformat()
-
         day_data = {"date": current.strftime("%d/%m/%Y"), "locations": {}}
+        date_rome = current.strftime("%Y-%m-%d")
 
         for rest in restaurants:
-            day_data["locations"][rest["location"]] = await _get_daily_order_count(
-                rest["id"], day_start, day_end_exclusive
+            day_data["locations"][rest["location"]] = int(
+                source_counts.get((rest["id"], date_rome), 0) or 0
             )
 
         result.append(day_data)
@@ -141,7 +147,10 @@ async def export_analisi_mensile_excel(year: int = None, token_data: dict = Depe
                 warning_counts.get("pasta_snapshot_missing", 0)
             ),
             "X-Analysis-Manual-Override-Count": str(
-                warning_counts.get("manual_override_count_mismatch", 0)
+                warning_counts.get("manual_override_used", 0)
+            ),
+            "X-Analysis-Source-Missing-Count": str(
+                warning_counts.get("source_orders_missing", 0)
             ),
         },
     )
@@ -164,17 +173,23 @@ async def export_media_locali_excel(year: int = None, token_data: dict = Depends
     restaurants = sorted(restaurants, key=lambda r: (r.get("location") or "").lower())
     start = datetime(selected_year, 1, 1, tzinfo=ROME_TZ)
     end = datetime(selected_year, 12, 31, tzinfo=ROME_TZ)
+    restaurant_ids = [r.get("id") for r in restaurants if r.get("id")]
+    source_data = await _prefetch_analysis_order_data(
+        restaurant_ids,
+        start.astimezone(timezone.utc).isoformat(),
+        (end + timedelta(days=1)).astimezone(timezone.utc).isoformat(),
+    )
+    source_counts = source_data["counts"]
 
     rows = []
     current = start
     while current <= end:
-        day_start = current.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc).isoformat()
-        day_end_exclusive = (current + timedelta(days=1)).astimezone(timezone.utc).isoformat()
         location_values = {}
+        date_rome = current.strftime("%Y-%m-%d")
 
         for rest in restaurants:
-            location_values[rest["location"]] = await _get_daily_order_count(
-                rest["id"], day_start, day_end_exclusive
+            location_values[rest["location"]] = int(
+                source_counts.get((rest["id"], date_rome), 0) or 0
             )
 
         rows.append({
@@ -188,7 +203,7 @@ async def export_media_locali_excel(year: int = None, token_data: dict = Depends
     ws.title = f"Numeri {selected_year}"
 
     location_headers = [_display_media_location(r["location"]) for r in restaurants]
-    media_headers = [f"MEDIA {header[0]}" for header in location_headers]
+    media_headers = [f"MEDIA {_media_code_for_restaurant(r)}" for r in restaurants]
     headers = ["DATA", *location_headers, "TOTALI", *media_headers, "MEDIA T"]
     ws.append(headers)
 

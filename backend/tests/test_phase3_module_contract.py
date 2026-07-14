@@ -25,7 +25,7 @@ from app.core.ws_manager import manager
 from app.routers import beverages, documents, invoices, system, warehouse, websocket
 
 
-EXPECTED_OPENAPI_SHA256 = "feddac10addca6258b7522ae12eb10bce78cf9817472d22d99eba6ad3f6052b4"
+EXPECTED_OPENAPI_SHA256 = "87e7464fd4c1fa025c2bbf738e7b066410070a0410c66435845c1edf6ea1f776"
 
 
 def test_phase3_keeps_exact_openapi_contract_and_unique_routes():

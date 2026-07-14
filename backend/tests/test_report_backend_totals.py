@@ -150,6 +150,30 @@ def test_export_paste_breakdown_counts_types_and_altro():
     assert result["total_eur"] == 21
 
 
+@pytest.mark.parametrize(
+    ("line", "expected_sigla"),
+    [
+        ("42  CARB", "CARB"),
+        ("42  carb senza pepe", "CARB"),
+        ("7 AMAT - asporto", "AMAT"),
+        ("9 CARZUC", "CARZUC"),
+        ("10 - CARB", None),
+        ("11 PIETRO CARB", None),
+        ("12 CARB XL", None),
+        ("13 SCONOSCIUTA", None),
+    ],
+)
+def test_export_pasta_type_recognition_matches_report_rules(line, expected_sigla):
+    dictionary = {"CARB": 8, "AMAT": 8, "CARZUC": 8}
+
+    result = _compute_paste_breakdown_for_export(line, {}, dictionary)
+
+    assert result["total_count"] == 1
+    assert result["unrecognized_count"] == (1 if expected_sigla is None else 0)
+    for sigla, values in result["breakdown"].items():
+        assert values["count"] == (1 if sigla == expected_sigla else 0)
+
+
 def test_cash_sera_legacy_manual_price_total_can_be_reconciled():
     cash_row = {
         "mattina": "100",
@@ -171,7 +195,7 @@ def test_paste_text_from_order_docs_matches_report_frontend_format():
     assert _paste_text_from_order_docs(docs) == "1  CARB\n3  AMAT"
 
 
-def test_analysis_prefetch_streams_all_order_sources_and_deduplicates(monkeypatch):
+def test_analysis_prefetch_reads_valid_order_sources_and_deduplicates(monkeypatch):
     collections = {
         "orders": _FakeCollection([{
             "id": "order-1",
@@ -220,14 +244,47 @@ def test_analysis_prefetch_streams_all_order_sources_and_deduplicates(monkeypatc
     ))
 
     key = ("r1", "2026-01-02")
-    assert result["counts"][key] == 4
+    assert result["counts"][key] == 2
     assert result["texts"][key].splitlines() == [
         "1  CARB",
         "2  AMAT",
-        "3  PESTO",
-        "4  RAGU",
     ]
-    assert all(collection.find_queries for collection in collections.values())
+    assert collections["orders"].find_queries
+    assert collections["archived_orders"].find_queries
+    assert not collections["deletion_logs"].find_queries
+    assert not collections["archived_deletion_logs"].find_queries
+
+
+def test_analysis_prefetch_keeps_reused_number_with_distinct_creation_time(monkeypatch):
+    collections = {
+        "orders": _FakeCollection([{
+            "id": "order-new",
+            "restaurant_id": "r1",
+            "created_at": "2026-01-02T14:00:00+00:00",
+            "order_number": 7,
+            "description": "AMAT",
+        }]),
+        "archived_orders": _FakeCollection([{
+            "id": "order-old",
+            "restaurant_id": "r1",
+            "created_at": "2026-01-02T10:00:00+00:00",
+            "order_number": 7,
+            "description": "CARB",
+        }]),
+        "deletion_logs": _FakeCollection(),
+        "archived_deletion_logs": _FakeCollection(),
+    }
+    monkeypatch.setattr(analysis_service, "db", _FakeDatabase(collections))
+
+    result = asyncio.run(_prefetch_analysis_order_data(
+        ["r1"],
+        "2026-01-01T23:00:00+00:00",
+        "2026-01-02T23:00:00+00:00",
+    ))
+
+    key = ("r1", "2026-01-02")
+    assert result["counts"][key] == 2
+    assert result["texts"][key].splitlines() == ["7  AMAT", "7  CARB"]
 
 
 def test_cursor_collection_has_no_100000_document_truncation():
@@ -237,12 +294,45 @@ def test_cursor_collection_has_no_100000_document_truncation():
     assert result[-1]["index"] == 100_000
 
 
-def test_daily_order_count_includes_archived_deletions_and_uses_exclusive_end(monkeypatch):
+def test_daily_order_count_excludes_cancellations_and_keeps_reused_valid_numbers(monkeypatch):
     collections = {
-        "orders": _FakeCollection(count=2),
-        "archived_orders": _FakeCollection(count=3),
-        "deletion_logs": _FakeCollection(count=5),
-        "archived_deletion_logs": _FakeCollection(count=7),
+        "orders": _FakeCollection([{
+            "id": "active-1",
+            "restaurant_id": "r1",
+            "created_at": "2026-01-02T10:00:00+00:00",
+            "order_number": 1,
+            "description": "CARB",
+        }]),
+        "archived_orders": _FakeCollection([
+            {
+                "id": "active-1-copy",
+                "restaurant_id": "r1",
+                "created_at": "2026-01-02T10:00:00Z",
+                "order_number": 1,
+                "description": "CARB",
+            },
+            {
+                "id": "reused-1",
+                "restaurant_id": "r1",
+                "created_at": "2026-01-02T11:00:00+00:00",
+                "order_number": 1,
+                "description": "AMAT",
+            },
+        ]),
+        "deletion_logs": _FakeCollection([{
+            "id": "delete-2",
+            "restaurant_id": "r1",
+            "original_created_at": "2026-01-02T12:00:00+00:00",
+            "order_number": 2,
+            "description": "PESTO",
+        }]),
+        "archived_deletion_logs": _FakeCollection([{
+            "id": "delete-2-copy",
+            "restaurant_id": "r1",
+            "original_created_at": "2026-01-02T12:00:00Z",
+            "order_number": 2,
+            "description": "PESTO",
+        }]),
     }
     monkeypatch.setattr(analysis_service, "db", _FakeDatabase(collections))
 
@@ -252,14 +342,16 @@ def test_daily_order_count_includes_archived_deletions_and_uses_exclusive_end(mo
         "2026-01-03T00:00:00+00:00",
     ))
 
-    assert result == 17
-    for name, collection in collections.items():
-        query = collection.count_queries[0]
-        timestamp_field = "original_created_at" if "deletion" in name else "created_at"
-        assert query[timestamp_field] == {
+    assert result == 2
+    for name in ("orders", "archived_orders"):
+        collection = collections[name]
+        query = collection.find_queries[0]
+        assert query["created_at"] == {
             "$gte": "2026-01-02T00:00:00+00:00",
             "$lt": "2026-01-03T00:00:00+00:00",
         }
+    assert not collections["deletion_logs"].find_queries
+    assert not collections["archived_deletion_logs"].find_queries
 
 
 def test_pasta_dictionary_snapshot_is_versioned_and_not_recreated_for_history():
@@ -360,10 +452,27 @@ def test_analysis_integrity_allows_manual_override_and_reports_missing_snapshot(
 
     assert integrity["errors"] == []
     assert {item["code"] for item in integrity["warnings"]} == {
+        "manual_override_used",
         "manual_override_count_mismatch",
         "pasta_snapshot_missing",
     }
     _ensure_analysis_integrity({"integrity": integrity})
+
+
+def test_analysis_integrity_reports_manual_override_even_when_count_matches():
+    integrity = _analysis_row_integrity(
+        location="Grazie",
+        date_str="2026-01-04",
+        source_count=2,
+        paste_total_count=2,
+        manual_override=True,
+        has_snapshot=True,
+        stored_paste_text="1 AMAT\n2 AMAT",
+        source_paste_text="1 CARB\n2 CARB",
+    )
+
+    assert integrity["errors"] == []
+    assert [item["code"] for item in integrity["warnings"]] == ["manual_override_used"]
 
 
 def test_totali_sheet_reuses_deduplicated_source_counts():

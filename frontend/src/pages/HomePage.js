@@ -207,6 +207,9 @@ const HomePage = () => {
   const showLocation = effectiveRestaurant?.location || restaurant?.location;
   const activeBoilerCount = Number(effectiveRestaurant?.boiler_count ?? restaurant?.boiler_count ?? (showLocation === 'Flaminio' ? 2 : 1));
   const hasSecondBoiler = activeBoilerCount >= 2;
+  const monitorCustomersEnabled = effectiveRestaurant?.monitor_customers_enabled
+    ?? restaurant?.monitor_customers_enabled
+    ?? showLocation === 'Flaminio';
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -307,8 +310,7 @@ const HomePage = () => {
                 <span className="text-gray-600 text-sm">tutti gli ordini</span>
               </div>
 
-              {/* Monitor Clienti - Flaminio or Admin viewing Flaminio */}
-              {(showLocation === 'Flaminio') && (
+              {monitorCustomersEnabled && (
                 <div className="flex items-center gap-4">
                   <button data-testid="btn-monitor-clienti" onClick={() => navigate('/monitor-clienti')} className="action-button">
                     Monitor clienti

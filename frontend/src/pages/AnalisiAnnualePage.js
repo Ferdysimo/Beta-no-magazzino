@@ -65,11 +65,19 @@ const AnalisiAnnualePage = () => {
       window.URL.revokeObjectURL(blobUrl);
       const warningCount = Number(res.headers?.['x-analysis-warning-count'] || 0);
       const missingSnapshots = Number(res.headers?.['x-analysis-missing-snapshot-count'] || 0);
+      const manualOverrides = Number(res.headers?.['x-analysis-manual-override-count'] || 0);
+      const missingSources = Number(res.headers?.['x-analysis-source-missing-count'] || 0);
       if (warningCount > 0) {
         const snapshotText = missingSnapshots > 0
           ? ` ${missingSnapshots} giornate usano il dizionario paste attuale perché prive di snapshot storico.`
           : '';
-        setNotice(`Excel scaricato con ${warningCount} avvisi storici.${snapshotText}`);
+        const manualText = manualOverrides > 0
+          ? ` ${manualOverrides} giornate usano una correzione manuale delle paste salvata nel Report.`
+          : '';
+        const sourceText = missingSources > 0
+          ? ` ${missingSources} giornate usano solo i dati salvati nel Report perché gli ordini sorgente non sono disponibili.`
+          : '';
+        setNotice(`Excel scaricato con ${warningCount} avvisi storici.${snapshotText}${manualText}${sourceText}`);
       }
     } catch (e) {
       console.error('analisi mensile export', e);

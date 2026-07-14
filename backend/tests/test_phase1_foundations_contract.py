@@ -24,7 +24,7 @@ from app.core.time import _rome_date_bounds_utc
 from app.schemas import OrderCreate
 
 
-EXPECTED_OPENAPI_SHA256 = "feddac10addca6258b7522ae12eb10bce78cf9817472d22d99eba6ad3f6052b4"
+EXPECTED_OPENAPI_SHA256 = "87e7464fd4c1fa025c2bbf738e7b066410070a0410c66435845c1edf6ea1f776"
 
 
 def _request(headers=None) -> Request:

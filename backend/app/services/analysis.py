@@ -1,5 +1,5 @@
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
@@ -48,9 +48,24 @@ def _paste_text_from_order_docs(order_docs: list) -> str:
 ANALYSIS_ORDER_SOURCES: Tuple[Tuple[str, str], ...] = (
     ("orders", "created_at"),
     ("archived_orders", "created_at"),
+)
+
+
+ANALYSIS_DELETION_SOURCES: Tuple[Tuple[str, str], ...] = (
     ("deletion_logs", "original_created_at"),
     ("archived_deletion_logs", "original_created_at"),
 )
+
+
+def _canonical_analysis_order_timestamp(value) -> str:
+    """Normalize equivalent ISO timestamps before using them as order identity."""
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc).isoformat(timespec="microseconds")
+    except Exception:
+        return str(value or "").strip()
 
 
 def _normalize_analysis_order_doc(doc: dict, timestamp_field: str) -> Optional[dict]:
@@ -63,6 +78,7 @@ def _normalize_analysis_order_doc(doc: dict, timestamp_field: str) -> Optional[d
         "id": doc.get("id"),
         "restaurant_id": restaurant_id,
         "created_at": created_at,
+        "created_at_identity": _canonical_analysis_order_timestamp(created_at),
         "date_rome": date_rome,
         "order_number": doc.get("order_number"),
         "description": doc.get("description") or "",
@@ -70,12 +86,25 @@ def _normalize_analysis_order_doc(doc: dict, timestamp_field: str) -> Optional[d
 
 
 def _analysis_order_identity(doc: dict) -> tuple:
+    # An order keeps its original creation timestamp when it is archived or
+    # deleted. That timestamp distinguishes genuinely reused manual numbers,
+    # while still collapsing copies left in two collections by an interrupted
+    # archive operation.
+    created_at_identity = doc.get("created_at_identity") or _canonical_analysis_order_timestamp(
+        doc.get("created_at")
+    )
     order_number = doc.get("order_number")
     if order_number not in (None, ""):
-        return (doc.get("restaurant_id"), doc.get("date_rome"), str(order_number))
+        return (
+            doc.get("restaurant_id"),
+            doc.get("date_rome"),
+            created_at_identity,
+            str(order_number),
+        )
     return (
         doc.get("restaurant_id"),
         doc.get("date_rome"),
+        created_at_identity,
         doc.get("id") or (doc.get("description") or "").strip(),
     )
 
@@ -98,13 +127,16 @@ async def _get_daily_order_count(
     day_start: str,
     day_end_exclusive: str,
 ) -> int:
-    total = 0
-    for collection_name, timestamp_field in ANALYSIS_ORDER_SOURCES:
-        total += await db[collection_name].count_documents({
-            "restaurant_id": restaurant_id,
-            timestamp_field: {"$gte": day_start, "$lt": day_end_exclusive},
-        })
-    return total
+    source_data = await _prefetch_analysis_order_data(
+        [restaurant_id],
+        day_start,
+        day_end_exclusive,
+    )
+    return sum(
+        int(count or 0)
+        for (rid, _date_rome), count in source_data["counts"].items()
+        if rid == restaurant_id
+    )
 
 
 def _format_italian_long_date(day: datetime) -> str:
@@ -203,6 +235,14 @@ def _analysis_year_days(selected_year: int) -> List[datetime]:
     return days
 
 
+def _media_code_for_restaurant(restaurant: Dict) -> str:
+    explicit_code = str(restaurant.get("report_code") or "").strip().upper()
+    if explicit_code:
+        return explicit_code
+    display_name = _display_media_location(restaurant.get("location") or "")
+    return display_name[:1].upper() if display_name else "?"
+
+
 def _pasta_export_label(sigla: str) -> str:
     sigla_up = str(sigla or "").upper().strip()
     return PASTA_EXPORT_LABELS.get(sigla_up, sigla_up.title() if sigla_up else "")
@@ -289,10 +329,11 @@ async def _collect_cursor_documents(cursor) -> List[dict]:
     return documents
 
 
-async def _prefetch_analysis_order_data(
+async def _prefetch_analysis_source_data(
     restaurant_ids: List[str],
     start_utc: str,
     end_utc: str,
+    sources: Tuple[Tuple[str, str], ...],
 ) -> Dict[str, Dict[tuple, object]]:
     grouped: Dict[tuple, Dict[tuple, dict]] = {}
     if not restaurant_ids:
@@ -306,7 +347,7 @@ async def _prefetch_analysis_order_data(
         "order_number": 1,
         "description": 1,
     }
-    for collection_name, timestamp_field in ANALYSIS_ORDER_SOURCES:
+    for collection_name, timestamp_field in sources:
         query = {
             "restaurant_id": {"$in": restaurant_ids},
             timestamp_field: {"$gte": start_utc, "$lt": end_utc},
@@ -325,6 +366,34 @@ async def _prefetch_analysis_order_data(
         texts[key] = _paste_text_from_order_docs(docs)
         counts[key] = len(docs)
     return {"texts": texts, "counts": counts}
+
+
+async def _prefetch_analysis_order_data(
+    restaurant_ids: List[str],
+    start_utc: str,
+    end_utc: str,
+) -> Dict[str, Dict[tuple, object]]:
+    """Load only orders that remain valid for production statistics."""
+    return await _prefetch_analysis_source_data(
+        restaurant_ids,
+        start_utc,
+        end_utc,
+        ANALYSIS_ORDER_SOURCES,
+    )
+
+
+async def _prefetch_analysis_deleted_order_data(
+    restaurant_ids: List[str],
+    start_utc: str,
+    end_utc: str,
+) -> Dict[str, Dict[tuple, object]]:
+    """Load cancellations only to disambiguate legacy automatic snapshots."""
+    return await _prefetch_analysis_source_data(
+        restaurant_ids,
+        start_utc,
+        end_utc,
+        ANALYSIS_DELETION_SOURCES,
+    )
 
 
 def _normalized_paste_text(value: str) -> str:
@@ -354,6 +423,12 @@ def _analysis_row_integrity(
             "actual_count": paste_total_count,
             "message": message,
         }
+
+    if manual_override and (source_count > 0 or paste_total_count > 0):
+        warnings.append(issue(
+            "manual_override_used",
+            "I tipi di pasta provengono da una correzione manuale salvata nel Report.",
+        ))
 
     if source_count > 0 and paste_total_count != source_count:
         target = warnings if manual_override else errors
@@ -433,6 +508,12 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
     )
     source_paste_texts = order_source_data["texts"]
     source_order_counts = order_source_data["counts"]
+    deletion_source_data = await _prefetch_analysis_deleted_order_data(
+        restaurant_ids,
+        start_utc,
+        end_exclusive_utc,
+    )
+    deleted_order_counts = deletion_source_data["counts"]
 
     bev_sigle = [b["sigla"] for b in sorted(BEVERAGES_CATALOG, key=lambda x: x.get("sort_order", 999))]
     bev_prices = {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
@@ -456,11 +537,16 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
             stored_paste_text = cash_doc.get("paste_text") or ""
             source_paste_text = source_paste_texts.get((rid, date_str), "")
             source_order_count = int(source_order_counts.get((rid, date_str), 0) or 0)
+            deleted_order_count = int(deleted_order_counts.get((rid, date_str), 0) or 0)
             manual_override = cash_doc.get("paste_manual_override") is True
             paste_text = (
                 stored_paste_text
-                if manual_override or source_order_count == 0
-                else source_paste_text
+                if manual_override
+                else (
+                    source_paste_text
+                    if source_order_count > 0 or deleted_order_count > 0
+                    else stored_paste_text
+                )
             )
             snapshot_dict = _pasta_dict_from_snapshot(cash_doc.get("pasta_dict_snapshot"))
             row_dict_map = _ordered_pasta_dict(
@@ -539,6 +625,7 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
                 "cash_sera": cash_sera,
                 "has_report_data": bool(cash_doc or bev_docs or paste_text),
                 "source_order_count": source_order_count,
+                "deleted_order_count": deleted_order_count,
                 "paste_manual_override": manual_override,
             })
 
@@ -546,6 +633,7 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
             "id": rid,
             "location": rest.get("location") or rest.get("username") or "Locale",
             "username": rest.get("username"),
+            "report_code": rest.get("report_code") or "",
             "pasta_dict": dict_map,
             "rows": rows,
             "summary": {
@@ -956,7 +1044,7 @@ def _write_totali_sheet_for_analysis(wb: Workbook, restaurants: List[Dict], sele
     restaurants = sorted(restaurants, key=lambda r: (r.get("location") or "").lower())
     days = _analysis_year_days(selected_year)
     location_headers = [_display_media_location(r["location"]) for r in restaurants]
-    media_headers = [f"MEDIA {header[0]}" for header in location_headers]
+    media_headers = [f"MEDIA {_media_code_for_restaurant(r)}" for r in restaurants]
     headers = ["DATA", *location_headers, "TOTALI", *media_headers, "MEDIA T"]
     ws.append(headers)
 

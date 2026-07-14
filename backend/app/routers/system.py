@@ -1,4 +1,5 @@
 import logging
+import re
 import shutil
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -18,6 +19,7 @@ from app.core.diagnostics import (
 from app.core.rate_limit import limiter
 from app.core.runtime import SERVER_GIT_COMMIT, SERVER_STARTED_AT
 from app.core.security import create_token, pwd_context, verify_token
+from app.core.state import RESTAURANT_LOCATION_CACHE
 from app.core.time import ROME_TZ
 from app.core.ws_manager import manager
 from app.schemas import (
@@ -250,7 +252,12 @@ async def login(request: Request, data: LoginRequest):
             location=restaurant["location"],
             created_at=restaurant["created_at"],
             role=restaurant.get("role", "restaurant"),
-            boiler_count=restaurant.get("boiler_count", 1)
+            boiler_count=restaurant.get("boiler_count", 1),
+            report_code=restaurant.get("report_code", ""),
+            address=restaurant.get("address", ""),
+            postal_code=restaurant.get("postal_code", ""),
+            city=restaurant.get("city", ""),
+            monitor_customers_enabled=restaurant.get("monitor_customers_enabled"),
         )
     )
 
@@ -286,16 +293,48 @@ async def create_local_restaurant(
     username = data.username.strip()
     location = data.location.strip()
     password = data.password.strip()
-    if not username or not location or not password:
-        raise HTTPException(status_code=400, detail="Compila nome utente, nome locale e password")
+    report_code = data.report_code.strip().upper()
+    address = data.address.strip()
+    postal_code = data.postal_code.strip()
+    city = data.city.strip()
+    if not all((username, location, password, report_code, address, postal_code, city)):
+        raise HTTPException(status_code=400, detail="Compila tutti i campi obbligatori")
+    if len(username) > 50 or len(location) > 80 or len(address) > 120 or len(city) > 80:
+        raise HTTPException(status_code=400, detail="Uno dei campi supera la lunghezza consentita")
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="La password deve contenere almeno 8 caratteri")
+    if not re.fullmatch(r"[A-Z0-9]{1,4}", report_code):
+        raise HTTPException(status_code=400, detail="La sigla Excel deve contenere da 1 a 4 lettere o numeri")
+    if not re.fullmatch(r"\d{5}", postal_code):
+        raise HTTPException(status_code=400, detail="Il CAP deve contenere esattamente 5 cifre")
 
     boiler_count = int(data.boiler_count or 1)
     if boiler_count < 1 or boiler_count > 2:
         raise HTTPException(status_code=400, detail="Numero bollitori supportato: 1 o 2")
 
-    existing = await db.restaurants.find_one({"username": username})
-    if existing:
+    existing_username = await db.restaurants.find_one({
+        "username": {"$regex": f"^{re.escape(username)}$", "$options": "i"}
+    })
+    if existing_username:
         raise HTTPException(status_code=400, detail="Username gia esistente")
+    existing_location = await db.restaurants.find_one({
+        "location": {"$regex": f"^{re.escape(location)}$", "$options": "i"},
+        "role": "restaurant",
+    })
+    if existing_location:
+        raise HTTPException(status_code=400, detail="Nome locale gia esistente")
+
+    existing_restaurants = await db.restaurants.find(
+        {"role": "restaurant"},
+        {"_id": 0, "location": 1, "report_code": 1},
+    ).to_list(100)
+    used_report_codes = {
+        str(r.get("report_code") or (r.get("location") or "")[:1]).strip().upper()
+        for r in existing_restaurants
+        if r.get("report_code") or r.get("location")
+    }
+    if report_code in used_report_codes:
+        raise HTTPException(status_code=400, detail="Sigla Excel gia utilizzata da un altro locale")
 
     restaurant = {
         "id": str(uuid.uuid4()),
@@ -305,10 +344,16 @@ async def create_local_restaurant(
         "location": location,
         "role": "restaurant",
         "boiler_count": boiler_count,
+        "report_code": report_code,
+        "address": address,
+        "postal_code": postal_code,
+        "city": city,
+        "monitor_customers_enabled": bool(data.monitor_customers_enabled),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "order_counter": 0
     }
     await db.restaurants.insert_one(restaurant)
+    RESTAURANT_LOCATION_CACHE[restaurant["id"]] = location
 
     return RestaurantResponse(**{k: v for k, v in restaurant.items() if k != "password"})
 

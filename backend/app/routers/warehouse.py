@@ -346,7 +346,12 @@ async def _enrich_richiesta(r: dict) -> dict:
         r["restaurant_name"] = rest.get("name", "")
         r["restaurant_location"] = rest.get("location", "")
         loc = rest.get("location", "")
-        addr = LOCATION_ADDRESSES.get(loc, {"address": loc, "postal_code": "", "city": ""})
+        legacy_addr = LOCATION_ADDRESSES.get(loc, {})
+        addr = {
+            "address": rest.get("address") or legacy_addr.get("address") or loc,
+            "postal_code": rest.get("postal_code") or legacy_addr.get("postal_code") or "",
+            "city": rest.get("city") or legacy_addr.get("city") or "",
+        }
         r["destinatario"] = {
             "name": loc,
             "address": addr["address"],
