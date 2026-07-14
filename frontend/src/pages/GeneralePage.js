@@ -20,6 +20,7 @@ const loadHighlighted = () => {
 const GeneralePage = () => {
   const { restaurant } = useAuth();
   const { orders, hideFromGenerale, toggleMonitor, newOrdersAvailable, pauseUpdates, setPauseUpdates, refreshOrders } = useOrders();
+  const [actionError, setActionError] = useState('');
 
   // Track highlighted orders — persisted in sessionStorage so the selection
   // survives navigation to Home and back. Cleared when the tab is closed.
@@ -56,6 +57,7 @@ const GeneralePage = () => {
   };
 
   const handleDelete = async (orderId) => {
+    setActionError('');
     try {
       await hideFromGenerale(orderId);
       // Remove from highlighted if it was highlighted
@@ -66,12 +68,23 @@ const GeneralePage = () => {
       });
     } catch (error) {
       console.error('Error hiding order from generale:', error);
+      const detail = error?.response?.data?.detail;
+      setActionError(
+        typeof detail === 'string' && detail
+          ? `Impossibile rimuovere la pasta: ${detail}`
+          : 'Impossibile rimuovere la pasta. Controlla la connessione e riprova.'
+      );
     }
   };
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
       <Header />
+      {actionError && (
+        <div role="alert" className="bg-red-100 border-b border-red-300 text-red-900 px-6 py-3 font-bold">
+          {actionError}
+        </div>
+      )}
       
       <main className="max-w-6xl mx-auto p-6">
         {/* Page Header */}

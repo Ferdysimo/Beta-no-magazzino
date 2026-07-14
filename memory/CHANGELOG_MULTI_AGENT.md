@@ -163,6 +163,19 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-14 09:45 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix | security
+**File toccati**:
+- `/app/frontend/src/utils/authSession.js`
+- `/app/frontend/src/utils/authSession.test.js`
+- `/app/frontend/src/contexts/AuthContext.js`
+- `/app/frontend/src/components/Header.js`
+- `/app/frontend/src/pages/GeneralePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Eliminato il rischio di cambio silenzioso del locale dopo un refresh: token JWT, identita attesa e selezione Admin sono ora conservati in `sessionStorage`, isolati per singola scheda. Il vecchio token in `localStorage` viene scartato senza migrarlo, `/auth/me` deve coincidere con il locale atteso, l'header mostra sempre il locale corrente e il Tablet Generale segnala visibilmente gli errori di rimozione.
+**Testato**: sì (metodo: 4 test Jest sullo storage; build React produzione; prova E2E con Chrome, due schede nello stesso profilo Flaminio/Grazie e refresh di entrambe: ciascuna mantiene il proprio locale, nessun token condiviso)
+**Note per il prossimo agente**: al primo caricamento dopo il deploy tutti gli utenti vengono disconnessi una sola volta per eliminare in sicurezza il vecchio token condiviso. Non migrare nuovamente il token auth in `localStorage`. Il refactor pianificato di `server.py` non e ancora iniziato.
+
 ### [2026-07-13 16:08 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix | refactor
 **File toccati**:

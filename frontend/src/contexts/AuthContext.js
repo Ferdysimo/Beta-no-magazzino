@@ -1,5 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
+import {
+  ADMIN_SELECTED_RESTAURANT_KEY,
+  clearSessionAuth,
+  loadSessionToken,
+  saveSessionAuth,
+  sessionIdentityMatches,
+} from '../utils/authSession';
 
 const AuthContext = createContext(null);
 
@@ -8,17 +15,18 @@ const API = `${BACKEND_URL}/api`;
 
 export const AuthProvider = ({ children }) => {
   const [restaurant, setRestaurant] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [token, setToken] = useState(loadSessionToken);
   const [loading, setLoading] = useState(true);
-  // IMPORTANT: usiamo sessionStorage (non localStorage) per il locale selezionato
-  // dall'Admin/Federico. localStorage è condiviso tra tutti i tab del browser,
-  // quindi se l'admin apre due tab — uno su Flaminio e uno su Grazie — l'ultimo
-  // tab a fare selectRestaurant sovrascriverebbe la scelta dell'altro, e gli
-  // ordini finirebbero nel locale sbagliato (cross-tenant leak).
-  // sessionStorage è isolato per-tab: ogni tab mantiene la sua selezione.
-  const [adminSelectedRestaurant, setAdminSelectedRestaurant] = useState(
-    JSON.parse(sessionStorage.getItem('admin_selected_restaurant') || 'null')
-  );
+  // Token, identità e locale impersonato vivono tutti nella singola scheda.
+  // Un login eseguito in un'altra scheda non può più cambiare account al refresh.
+  const [adminSelectedRestaurant, setAdminSelectedRestaurant] = useState(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(ADMIN_SELECTED_RESTAURANT_KEY) || 'null');
+    } catch {
+      sessionStorage.removeItem(ADMIN_SELECTED_RESTAURANT_KEY);
+      return null;
+    }
+  });
 
   // "Federico" è l'unico supervisore con privilegi pieni tipo admin (vede tutti
   // i locali, pannello admin, dizionario, chiusure excel, ecc.).
@@ -35,12 +43,12 @@ export const AuthProvider = ({ children }) => {
 
   const selectRestaurant = (rest) => {
     setAdminSelectedRestaurant(rest);
-    sessionStorage.setItem('admin_selected_restaurant', JSON.stringify(rest));
+    sessionStorage.setItem(ADMIN_SELECTED_RESTAURANT_KEY, JSON.stringify(rest));
   };
 
   const clearSelectedRestaurant = () => {
     setAdminSelectedRestaurant(null);
-    sessionStorage.removeItem('admin_selected_restaurant');
+    sessionStorage.removeItem(ADMIN_SELECTED_RESTAURANT_KEY);
   };
 
   // ===== Axios interceptor: per Admin/Federico invia X-Restaurant-Id del locale impersonato =====
@@ -81,8 +89,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('token');
-    sessionStorage.removeItem('admin_selected_restaurant');
+    clearSessionAuth();
     setToken(null);
     setRestaurant(null);
     setAdminSelectedRestaurant(null);
@@ -110,28 +117,44 @@ export const AuthProvider = ({ children }) => {
   }, [logout]);
 
   useEffect(() => {
+    let cancelled = false;
     const initAuth = async () => {
       if (token) {
         try {
           const response = await axios.get(`${API}/auth/me`, {
             headers: { Authorization: `Bearer ${token}` }
           });
+          if (cancelled) return;
+          if (!sessionIdentityMatches(response.data?.id)) {
+            console.error('Auth identity mismatch: sessione locale non coerente');
+            clearSessionAuth();
+            setToken(null);
+            setRestaurant(null);
+            setAdminSelectedRestaurant(null);
+            return;
+          }
           setRestaurant(response.data);
         } catch (error) {
+          if (cancelled) return;
           console.error('Auth error:', error);
-          localStorage.removeItem('token');
+          clearSessionAuth();
           setToken(null);
+          setRestaurant(null);
+          setAdminSelectedRestaurant(null);
         }
       }
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     };
     initAuth();
+    return () => { cancelled = true; };
   }, [token]);
 
   const login = async (username, password) => {
     const response = await axios.post(`${API}/auth/login`, { username, password });
     const { token: newToken, restaurant: restaurantData } = response.data;
-    localStorage.setItem('token', newToken);
+    saveSessionAuth(newToken, restaurantData?.id);
+    sessionStorage.removeItem(ADMIN_SELECTED_RESTAURANT_KEY);
+    setAdminSelectedRestaurant(null);
     setToken(newToken);
     setRestaurant(restaurantData);
     return restaurantData;

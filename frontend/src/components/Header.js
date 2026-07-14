@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 export const APP_VERSION = '2026060108';
 
 const Header = () => {
-  const { logout, canImpersonate, effectiveRestaurant, clearSelectedRestaurant } = useAuth();
+  const { restaurant, logout, canImpersonate, effectiveRestaurant, clearSelectedRestaurant } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -30,6 +30,7 @@ const Header = () => {
   };
 
   const isHome = location.pathname === '/home';
+  const currentLocation = effectiveRestaurant?.location || restaurant?.location || '';
 
   return (
     <header className="bg-[#F5C518] h-16 flex items-center justify-between px-6 shadow-md">
@@ -50,6 +51,15 @@ const Header = () => {
           >
             {effectiveRestaurant.location} ▼
           </button>
+        )}
+        {(!canImpersonate || !effectiveRestaurant) && currentLocation && (
+          <span
+            data-testid="header-current-location"
+            className="font-bold text-gray-900 text-sm sm:text-base max-w-40 sm:max-w-64 truncate"
+            title={currentLocation}
+          >
+            {currentLocation}
+          </span>
         )}
       </div>
       
