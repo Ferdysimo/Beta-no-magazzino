@@ -4,7 +4,6 @@ import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import NavLinkSpa from '../components/NavLinkSpa';
-import useScrollMemory from '../hooks/useScrollMemory';
 import { formatItalianDateTime } from '../utils/formatDate';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -18,7 +17,6 @@ const RichiestaMercePage = () => {
   const [errorModal, setErrorModal] = useState(null); // {id, ddt_number}
   const [errorReason, setErrorReason] = useState('');
   const [submittingError, setSubmittingError] = useState(false);
-  useScrollMemory('locale-richieste-page');
 
   const headers = () => {
     const h = { Authorization: `Bearer ${token}` };

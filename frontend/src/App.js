@@ -41,6 +41,7 @@ import DizionarioPastePage from './pages/DizionarioPastePage';
 import CreaLocaliPage from './pages/CreaLocaliPage';
 import UpdateBanner from './components/UpdateBanner';
 import FrontendDiagnostics from './components/FrontendDiagnostics';
+import RouteScrollRestoration from './components/RouteScrollRestoration';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -282,6 +283,7 @@ function App() {
     <div className="App">
       <UpdateBanner />
       <BrowserRouter>
+        <RouteScrollRestoration />
         <AuthProvider>
           <FrontendDiagnostics />
           <AppRoutes />

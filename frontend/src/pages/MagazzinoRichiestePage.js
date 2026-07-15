@@ -24,9 +24,7 @@ const MagazzinoRichiestePage = () => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const storicoRef = useRef(null);
-  // Memorizza lo scroll della pagina (sezioni "Da evadere" + "Evase")
-  useScrollMemory('mag-richieste-page');
-  // E lo scroll INTERNO del box "Storico" (overflow-y-auto)
+  // Lo scroll della pagina è globale; questo conserva quello interno dello Storico.
   useScrollMemory('mag-richieste-storico', storicoRef);
 
   const headers = { Authorization: `Bearer ${token}` };

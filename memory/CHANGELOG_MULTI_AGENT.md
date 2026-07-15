@@ -163,6 +163,21 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-15 09:31 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | ux | test
+**File toccati**:
+- `/app/frontend/src/App.js`
+- `/app/frontend/src/components/RouteScrollRestoration.js`
+- `/app/frontend/src/components/RouteScrollRestoration.test.js`
+- `/app/frontend/src/utils/scrollMemory.js`
+- `/app/frontend/src/utils/scrollMemory.test.js`
+- `/app/frontend/src/pages/MagazzinoRichiestePage.js`
+- `/app/frontend/src/pages/RichiestaMercePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Aggiunta memoria globale dello scroll per tutte le route frontend. Ogni URL conserva in `sessionStorage` la propria posizione nella singola scheda: refresh e ritorno alla pagina riprendono dal punto precedente, mentre una pagina mai visitata parte dall'alto. Il ripristino attende fino a 15 secondi i contenuti caricati via API, non compete con l'interazione dell'utente e lascia indipendenti gli scroll interni esplicitamente gestiti. Rimossi gli agganci window duplicati dalle due pagine che usavano già il vecchio hook locale.
+**Testato**: si (metodo: 12 test frontend passati, inclusi salvataggio durante lo scroll, ripristino immediato, caricamento asincrono e React StrictMode; build produzione completata; dev server compilato senza nuovi warning; avvio browser locale senza errori console)
+**Note per il prossimo agente**: il comportamento globale riguarda lo scroll della finestra e usa chiavi per pathname, query string e hash. Per riquadri con `overflow:auto` continuare a usare `useScrollMemory` con una ref. `frontend/public/version.json` è generato da `npm run build` e non fa parte della modifica sorgente.
+
 ### [2026-07-14 16:58 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: docs | architecture
 **File toccati**:
