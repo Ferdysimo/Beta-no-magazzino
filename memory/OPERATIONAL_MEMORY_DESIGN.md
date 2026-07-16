@@ -1,6 +1,6 @@
 # Memoria operativa isolata
 
-Ultimo aggiornamento: 2026-07-14
+Ultimo aggiornamento: 2026-07-16
 
 Stato: progettazione approvata, nessuna implementazione avviata
 
@@ -750,7 +750,239 @@ Se la Memoria non e disponibile, queste funzioni possono mostrare `dati analitic
 temporaneamente non disponibili`. Non devono mai ripiegare su query pesanti al
 database operativo e non devono impedire il lavoro dei locali.
 
-## 27. Decisione architetturale finale
+## 27. Piano pratico di implementazione prudente
+
+Questa sezione traduce il progetto in un percorso operativo concreto. La regola
+resta: prima raccolta silenziosa e misurata, poi viste e funzioni.
+
+### 27.1 Prima il worker, non la UI
+
+La prima implementazione non deve partire da dashboard, previsioni o pagine
+utente. Deve partire da un worker spento e innocuo:
+
+```text
+backend/memory_worker/
+|-- main.py
+|-- config.py
+|-- watermarks.py
+|-- sanitize.py
+|-- integrity.py
+|-- snapshots.py
+|-- sources/
+|   |-- orders.py
+|   |-- report.py
+|   |-- warehouse.py
+|   `-- configuration.py
+`-- stores/
+    `-- mongo.py
+```
+
+Il worker viene installato come servizio separato:
+
+```text
+pastasciutta-memory.service
+```
+
+Il servizio non deve essere richiesto da `pastasciutta-backend.service`. Se il
+worker e spento, l'app continua a funzionare.
+
+### 27.2 Storage separato fin dal nome
+
+Anche se nella prima fase lo storage resta sulla stessa VPS/Mongo, deve usare un
+database separato:
+
+```text
+pastasciutta          database operativo
+pastasciutta_memory   database Memoria
+```
+
+Collection minime iniziali:
+
+```text
+memory_epochs
+memory_watermarks
+memory_raw_versions
+memory_order_facts
+memory_report_facts
+memory_warehouse_facts
+memory_daily_snapshots
+memory_gaps
+memory_quarantine
+```
+
+Lo storage separato serve a rendere chiaro che la Memoria puo essere spenta,
+spostata o cancellata senza migrare dati operativi.
+
+### 27.3 Attivazione da momento zero
+
+Non fare backfill storico nella prima versione. Si sceglie un istante esplicito,
+idealmente dopo il reset notturno e prima del servizio:
+
+```text
+activated_at_rome = 2026-xx-xx 06:00 Europe/Rome
+```
+
+Da quel momento il worker registra un `memory_epoch` e acquisisce solo una
+baseline:
+
+- locali e configurazioni attive;
+- dizionari paste e prezzi attivi;
+- prodotti e stock corrente;
+- eventuali ordini aperti;
+- Report del giorno corrente;
+- versione backend/frontend.
+
+Tutto cio che precede il momento zero resta fuori dalla Memoria iniziale.
+
+### 27.4 Lettura incrementale a piccoli batch
+
+Ogni sorgente usa un watermark indipendente:
+
+```json
+{
+  "source": "orders",
+  "last_seen_at": "...",
+  "last_success_at": "...",
+  "status": "ok",
+  "lag_seconds": 12
+}
+```
+
+Regole pratiche:
+
+- poll ogni 30-60 secondi nella fase iniziale;
+- batch piccoli, per esempio 50-100 record;
+- timeout Mongo brevi;
+- nessuna scansione completa durante il servizio;
+- finestra di rilettura limitata per modifiche tardive;
+- upsert idempotenti;
+- backoff progressivo sugli errori;
+- stop o pausa automatica se il DB operativo rallenta.
+
+### 27.5 Prime fonti da raccogliere
+
+La prima versione deve raccogliere poche fonti ma buone:
+
+```text
+orders
+archived_orders
+deletion_logs
+modification_logs
+cash_daily_counts
+beverage_daily_counts
+cash_audit_log
+products
+stock_movements
+richieste
+carichi_magazzino
+restaurants
+pasta_dictionary
+```
+
+Da lasciare fuori all'inizio:
+
+- immagini;
+- fatture;
+- chiusure fotografate;
+- meteo;
+- AI o previsioni;
+- errori frontend grezzi lunghi;
+- heartbeat grezzi.
+
+### 27.6 Raw e normalizzato
+
+Ogni dato utile deve conservare sia originale sia interpretazione:
+
+```json
+{
+  "raw": {
+    "description": "2 CARB 1 AMA XL"
+  },
+  "normalized": {
+    "items": [
+      {"type": "carbonara", "qty": 2},
+      {"type": "amatriciana", "qty": 1, "size": "xl"}
+    ]
+  }
+}
+```
+
+Il raw non viene mai sostituito dal parsing. Se in futuro cambia il parser, i
+derivati possono essere rigenerati.
+
+### 27.7 Limiti duri di servizio
+
+Il servizio systemd dovrebbe avere limiti prudenti:
+
+```text
+CPUQuota=10%
+MemoryMax=256M
+Nice=10
+IOSchedulingClass=idle
+Restart=on-failure
+```
+
+Nel codice:
+
+- nessuna coda infinita;
+- nessun accumulo RAM illimitato;
+- circuit breaker;
+- batch massimo configurabile;
+- quota giornaliera storage;
+- log chiari su lag, errori e quarantena.
+
+Se la Memoria appesantisce l'app operativa, si ferma la Memoria. Non si rallenta
+il lavoro dei locali.
+
+### 27.8 Snapshot giornaliero
+
+Dopo il reset notturno, o quando la giornata risulta consolidata, il worker crea
+uno snapshot per locale:
+
+```text
+Flaminio - 2026-07-16
+paste totali
+paste per tipo
+cash
+bevande
+scarti
+ordini cancellati/modificati
+stock mosso
+richieste/DDT
+dati mancanti o ambigui
+```
+
+Lo snapshot serve alle analisi future. Non serve al backend operativo per
+rispondere a ordini, Report o magazzino.
+
+### 27.9 Rollout consigliato
+
+Ordine pratico:
+
+1. Implementare worker in locale.
+2. Testarlo su Mongo locale copiato o isolato.
+3. Installarlo sulla VPS spento.
+4. Avviarlo in dry-run/log only.
+5. Attivare scrittura su `pastasciutta_memory`.
+6. Controllare per 24-48 ore peso, lag, errori, quarantena e impatto Mongo.
+7. Solo dopo valutare una pagina tecnica minima.
+
+La prima pagina non deve essere una dashboard analitica, ma solo uno stato
+tecnico:
+
+```text
+Memoria: attiva
+Ultimo batch: ok
+Lag: 12s
+Record quarantena: 0
+Ultimo snapshot: completo
+Peso DB memoria: 84 MB
+```
+
+Le funzioni visibili all'utente arrivano solo quando raccolta, limiti e rollback
+sono dimostrati.
+
+## 28. Decisione architetturale finale
 
 La Memoria viene progettata come osservatore isolato e ricostruibile, non come
 event store autorevole dell'applicazione.

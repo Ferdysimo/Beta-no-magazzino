@@ -1,4 +1,4 @@
-# 🤖 CHANGELOG MULTI-AGENT — Pastasciutta App
+﻿# 🤖 CHANGELOG MULTI-AGENT — Pastasciutta App
 
 > **Scopo / Purpose**
 > Questo file serve a sincronizzare il lavoro di più agenti AI (Emergent E1, Claude, GPT, Cursor, Copilot, agenti esterni, ecc.) che modificano lo stesso codebase in momenti diversi.
@@ -16,6 +16,12 @@ Prima di iniziare qualsiasi modifica al codice:
 4. NON cancellare voci precedenti. Solo aggiungere.
 5. Se il file supera le 500 righe, sposta le voci più vecchie di 30 giorni in `/app/memory/CHANGELOG_MULTI_AGENT_ARCHIVE.md`.
 6. Lavora anche da **reviewer e architetto**: segnala rischi, regressioni, debiti strutturali, cicli di import e test mancanti; non limitarti a implementare la richiesta minima.
+7. **Frontend = pubblico**: considera sempre `frontend/src`, `frontend/public`, `frontend/build`, sourcemap e variabili `REACT_APP_*` come leggibili dall'utente finale. Non inserire mai segreti, password, PIN di sicurezza reale, token permanenti, chiavi API non pubbliche, credenziali o documenti operativi nel frontend. Ogni autorizzazione, ruolo e tenant deve essere verificato dal backend; i controlli frontend sono solo UX.
+8. Ogni nuova route backend deve dichiarare e testare chi puo usarla: anonimo, locale, magazzino, Federico, Admin e Simone. Se manca una scelta esplicita, la route va considerata non pronta.
+9. Chi tocca login, auth, ruoli, upload, WebSocket o Report deve fare anche revisione sicurezza: tenant isolation, privilegi, dati esposti, logging, rollback e regressioni. Non basta verificare che "funzioni".
+10. Questo file deve restare in UTF-8 con BOM per compatibilita con PowerShell/Windows. Se compaiono caratteri strani nelle intestazioni, fermati e riapri/salva in UTF-8; non copiare testo mojibake nel file.
+11. **Aree analitiche/contabili sensibili**: Report, Cassa, Audit, Analisi, export Excel, chiusure, diagnostica su dati reali e qualunque calcolo economico/operativo vanno trattati come zone sensibili. Ogni modifica deve verificare dati vecchi e nuovi, mese aperto/chiuso quando rilevante, filtri, totali, duplicati, tenant/ruoli e aggiornamenti live.
+12. Se una richiesta tocca produzione, Nginx/SSL/cache, auth/ruoli, dati reali, cancellazioni, import/export o refactor strutturali, l'agente deve esplicitare il rischio prima di agire, indicare test e rollback, e fermarsi se manca una condizione di sicurezza essenziale.
 
 **🇬🇧 ENGLISH**
 Before making any code change:
@@ -25,6 +31,12 @@ Before making any code change:
 4. DO NOT delete previous entries. Only append.
 5. If this file grows beyond 500 lines, move entries older than 30 days to `/app/memory/CHANGELOG_MULTI_AGENT_ARCHIVE.md`.
 6. Also act as a **reviewer and architect**: call out risks, regressions, structural debt, import cycles, and missing tests; do not only implement the smallest requested change.
+7. **Frontend = public**: always treat `frontend/src`, `frontend/public`, `frontend/build`, sourcemaps, and `REACT_APP_*` variables as readable by end users. Never put secrets, passwords, real security PINs, long-lived tokens, non-public API keys, credentials, or operational documents in the frontend. Every authorization, role, and tenant check must be enforced by the backend; frontend checks are UX only.
+8. Every new backend route must declare and test who may use it: anonymous, restaurant, warehouse, Federico, Admin, and Simone. If this is not explicit, the route is not ready.
+9. Any change touching login, auth, roles, uploads, WebSocket, or Report must include a security review: tenant isolation, privileges, exposed data, logging, rollback, and regressions. Checking that it "works" is not enough.
+10. Keep this file encoded as UTF-8 with BOM for PowerShell/Windows compatibility. If headings show mojibake or broken characters, stop and reopen/save as UTF-8; do not paste mojibake back into the file.
+11. **Sensitive analytics/accounting areas**: Report, Cash Register, Audit, Analytics, Excel exports, closures, diagnostics over real data, and any economic/operational calculation must be treated as sensitive areas. Every change must verify old and new data, open/closed month behavior when relevant, filters, totals, duplicates, tenant/roles, and live updates.
+12. If a request touches production, Nginx/SSL/cache, auth/roles, real data, deletions, import/export, or structural refactors, the agent must explicitly call out the risk before acting, state tests and rollback, and stop if an essential safety condition is missing.
 
 ---
 
@@ -162,6 +174,40 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
+
+### [2026-07-16 02:38 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: docs | architecture
+**File toccati**:
+- `/app/memory/OPERATIONAL_MEMORY_DESIGN.md`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Salvato nel piano Memoria il percorso pratico di implementazione prudente: worker separato prima della UI, storage `pastasciutta_memory`, momento zero senza backfill, batch piccoli con watermark, prime fonti da raccogliere, raw+normalizzato, limiti systemd, snapshot giornalieri e rollout dry-run prima dell'attivazione.
+**Testato**: si (metodo: revisione manuale del documento)
+**Note per il prossimo agente**: la Memoria va implementata prima come raccolta silenziosa e spegnibile. Non partire da dashboard o previsioni; dimostrare per 24-48 ore impatto, lag, errori e rollback prima di esporre viste utente.
+
+### [2026-07-16 02:26 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: docs | architecture
+**File toccati**:
+- `/app/memory/TODO.md`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Salvata nel TODO l'idea completa dell'Audit sensibile unico: vista consultiva tipo estratto conto delle modifiche importanti, schema evento comune, riuso dei log esistenti tramite adapter, futura collection append-only `sensitive_audit_events`, whitelist per area, fasi di rollout, test obbligatori e non-obiettivi.
+**Testato**: si (metodo: revisione manuale dei documenti)
+**Note per il prossimo agente**: non implementare l'audit come tabella gigante o cronologia di ogni click. Prima creare standard comune e adapter sopra `cash_audit_log`, `deletion_logs`, `modification_logs`, `generale_hide_log` e `stock_movements`; poi introdurre emissione diretta graduale.
+
+### [2026-07-15 23:52 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: docs | security
+**File toccati**:
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Aggiunte regole multi-agente per trattare Report, Cassa, Audit, Analisi, export e calcoli operativi come aree sensibili; aggiunto obbligo di esplicitare rischi, test e rollback prima di agire su produzione, SSL/cache, auth, dati reali, cancellazioni, import/export o refactor strutturali.
+**Testato**: si (metodo: revisione manuale del vademecum multi-agente)
+**Note per il prossimo agente**: per aree analitiche/contabili non basta verificare la UI: controllare dati vecchi/nuovi, filtri, totali, ruoli, tenant e aggiornamenti live. Se il cambio e' rischioso, dirlo prima e preparare rollback.
+
+### [2026-07-15 23:45 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: docs | security
+**File toccati**:
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Aggiunte regole vincolanti per tutti gli agenti: frontend/build/sourcemap/`REACT_APP_*` sono pubblici; ogni nuova route backend deve dichiarare e testare i ruoli ammessi; modifiche a login/auth/ruoli/upload/WebSocket/Report richiedono revisione sicurezza, non solo verifica funzionale; il file va mantenuto in UTF-8 con BOM per evitare mojibake/patch fragili su Windows.
+**Testato**: si (metodo: revisione manuale del vademecum multi-agente)
+**Note per il prossimo agente**: quando tocchi frontend o deploy, controlla che non finiscano segreti nel bundle pubblico e valuta sourcemap produzione come superficie informativa da disabilitare/rimuovere. Quando tocchi route o aree sensibili, documenta i ruoli ammessi e i rischi verificati. Se questo file mostra caratteri strani, correggi l'encoding prima di modificare contenuto.
 
 ### [2026-07-15 09:31 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: feature | ux | test
