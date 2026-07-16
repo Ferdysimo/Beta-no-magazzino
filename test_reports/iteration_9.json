@@ -14,7 +14,7 @@
     "design_issues": []
   },
   "verified_OK_checks": [
-    "Login Flaminio/Pastasciutt4! → /report-beta → PIN 0123 works",
+    "Login Flaminio/[REDACTED-CREDENTIAL] → /report-beta → PIN 0123 works",
     "(b) Typing '10+5' on ALTRO: input bg stays rgb(255,255,255) WHITE — NO rose-100 highlight. has_rose=False in className. Regression from iter_8 is FIXED ✓",
     "(c) CASH SERA correctly updates: €3343,80 → €3361,80 after ALTRO=10+5 (delta +15) ✓",
     "(d) Caption below ALTRO input shows '+€15,00' (correct effective sign for plus-field) ✓",
@@ -27,7 +27,7 @@
     "Palette buttons present: 5 swatches under VERS ✓",
     "After applying color to '50', typing '+10' is placed OUTSIDE the colored span (cursor moved out of <span> after applyVersColor) ✓ — VERS innerHTML = `100+<span style=\"color: rgb(17, 24, 39);\">50</span>+30+10`",
     "CASH SERA recomputes correctly with HTML-stripped value (evaluateValue strips <span> tags) → 100+50+30+10=190, SERA=€3361,80-190=€3171,80 ✓",
-    "Federico/Pastasciutt4! login works via curl (token returned). HomePage code-inspected: NO 'Gestione report' button anywhere. Federico-only buttons: Storico chiusure → /chiusure-excel, Nomi e prezzi delle paste → /dizionario-paste, Check singoli movimenti → /audit-cassa ✓",
+    "Federico/[REDACTED-CREDENTIAL] login works via curl (token returned). HomePage code-inspected: NO 'Gestione report' button anywhere. Federico-only buttons: Storico chiusure → /chiusure-excel, Nomi e prezzi delle paste → /dizionario-paste, Check singoli movimenti → /audit-cassa ✓",
     "ChiusureExcelPage column order (code review @ lines 360-368): MOVIMENTAZIONE FINANZIARIA → SPICCI → TOT PIATTI → CASH SERA + bev groups. SPICCI is BETWEEN MOV and TOT PIATTI as requested ✓. SPICCI_FIELDS includes 'sp_init' (Iniziali) with value rendered as '—' (line 490, mocked since backend doesn't track it yet) ✓",
     "Backend APScheduler 'midnight_scheduler' is configured and running (logs show 'Next midnight reset in NNNN seconds' every restart, last seen 2026-06-23 08:18:49 — 49271s until next 00:00 Rome) ✓",
     "Admin endpoint POST /api/admin/_simulate-midnight-reset works: returned 200 OK with {ok:true, moved_cash_rows:1, moved_beverage_rows:2, from_date:'2026-06-23', to_date:'2026-06-22'} ✓ — cashRow (including vers HTML) is archived/preserved as yesterday's row, today's row reset",
@@ -35,20 +35,20 @@
   ],
   "critical_code_review_comments": [
     "The first VERS palette swatch applies color #111827 (gray-900/near-black) — if this is meant as a 'reset to default' it should be labelled as such; otherwise reorder COLOR_PALETTE so RED is first per the spec.",
-    "The path '/storico-chiusure' no longer exists in App.js routes (only /chiusure-excel). Manually navigating to /storico-chiusure will fall through to the catch-all (if any) or render an empty Route — could not verify the UX since Federico login from playwright had a stale invalid-credentials state, but the backend confirms Federico/Pastasciutt4! works. Recommend main-agent self-test that /storico-chiusure properly redirects or shows 404.",
-    "Note: the problem statement lists Federico password as 'Pastasciutta@32' but the seeded account uses the common password 'Pastasciutt4!' (backend curl confirmed). Update /app/memory/test_credentials.md to include Federico (currently missing) to avoid confusion in future iterations.",
+    "The path '/storico-chiusure' no longer exists in App.js routes (only /chiusure-excel). Manually navigating to /storico-chiusure will fall through to the catch-all (if any) or render an empty Route — could not verify the UX since Federico login from playwright had a stale invalid-credentials state, but the backend confirms Federico/[REDACTED-CREDENTIAL] works. Recommend main-agent self-test that /storico-chiusure properly redirects or shows 404.",
+    "Note: the problem statement lists Federico password as '[REDACTED-CREDENTIAL]' but the seeded account uses the common password '[REDACTED-CREDENTIAL]' (backend curl confirmed). Update /app/memory/test_credentials.md to include Federico (currently missing) to avoid confusion in future iterations.",
     "Triggering /api/admin/_simulate-midnight-reset DOES move today's rows to yesterday for ALL restaurants (1 cash row + 2 beverage rows moved during this test). If main-agent re-runs Flaminio Report after this run, today's CASH SERA will start fresh. Not destructive (data preserved on yesterday) but worth noting."
   ],
   "test_report_links": ["/app/test_reports/iteration_9.json"],
   "action_items": [
     "(LOW) Consider reordering COLOR_PALETTE so RED is at index 0 to match the spec ('click the RED palette swatch under VERS')",
-    "Add 'Federico' row to /app/memory/test_credentials.md (password Pastasciutt4!) so future testers know it",
+    "Add 'Federico' row to /app/memory/test_credentials.md (password [REDACTED-CREDENTIAL]) so future testers know it",
     "Self-test from main agent recommended for: (a) /storico-chiusure URL behaviour (404/redirect?), (b) AdminFattureGlobaliPage paid-DDT hiding (couldn't generate test data in time), (c) multi-upload picker reset (FatturePage/VersamentiPage/NuovoCaricoPage/ProdottiMagazzino/Chiusure/AdminFattureGlobali) — code-level fix is straightforward (`fileInputRef.current.value=''` before click) but needs runtime verification with a real upload",
     "Cross-restaurant Admin location switching with Report page state isolation was NOT exercised — only Flaminio has Report so the switch isn't user-visible from Report itself; verify previewKey/focusedField are reset on restaurant change via useEffect dependency on effectiveRestaurant.id if Admin impersonation can affect the same component"
   ],
   "updated_files": [],
   "success_rate": {"backend": "100% (midnight scheduler running + manual endpoint OK)", "frontend": "Report page core flows ~95% pass; 1 LOW cosmetic issue (palette order). Federico UI flow not verified end-to-end via browser due to login form state — backend login confirmed via curl."},
-  "test_credentials": "Flaminio / Pastasciutt4!  •  Admin / Pastasciutt4!  •  Federico / Pastasciutt4!  •  Report PIN 0123. (NOTE: problem statement said Federico = 'Pastasciutta@32' which is WRONG — seeded password is the common 'Pastasciutt4!')",
+  "test_credentials": "Flaminio / [REDACTED-CREDENTIAL]  •  Admin / [REDACTED-CREDENTIAL]  •  Federico / [REDACTED-CREDENTIAL]  •  Report PIN 0123. (NOTE: problem statement said Federico = '[REDACTED-CREDENTIAL]' which is WRONG — seeded password is the common '[REDACTED-CREDENTIAL]')",
   "seed_data_creation": "Triggered POST /api/admin/_simulate-midnight-reset once as Admin — moved 1 cash row + 2 beverage rows from 2026-06-23 → 2026-06-22 (today's report data archived to yesterday). Non-destructive.",
   "retest_needed": false,
   "main_agent_can_self_test": true,

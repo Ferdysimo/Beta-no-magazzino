@@ -35,6 +35,9 @@ function Write-LocalEnv {
 MONGO_URL=mongodb://localhost:$MongoPort
 DB_NAME=pastasciutta_local
 JWT_SECRET=local-dev-only-change-in-production-0123456789abcdef
+APP_ENV=development
+ENABLE_API_DOCS=true
+UPLOADS_DIR=$Root\uploads
 "@
     Set-Content -Path (Join-Path $BackendDir ".env") -Value $backendEnv -Encoding ASCII
 
@@ -85,7 +88,7 @@ function Ensure-Backend {
 
     Start-Process `
         -FilePath $python `
-        -ArgumentList @("-m", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "$BackendPort") `
+        -ArgumentList @("-m", "uvicorn", "server:app", "--host", "127.0.0.1", "--port", "$BackendPort") `
         -WorkingDirectory $BackendDir `
         -RedirectStandardOutput (Join-Path $LogsDir "backend.out.log") `
         -RedirectStandardError (Join-Path $LogsDir "backend.err.log") `

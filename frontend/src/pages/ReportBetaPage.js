@@ -290,7 +290,7 @@ const CommentPopover = ({ inputRef, value, onChange, onSave, onCancel }) => {
 const ReportBetaPageInner = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { token, isAdmin, restaurant, effectiveRestaurant } = useAuth();
+  const { token, canImpersonate, restaurant, effectiveRestaurant } = useAuth();
   // ───── Modalità storica: ?date=YYYY-MM-DD&rid=<restaurantId> ─────
   // - Admin/Supervisor: carica e PUÒ correggere la chiusura archiviata.
   // - Utenti normali (cassieri): carica SOLO IL PROPRIO locale in SOLA LETTURA
@@ -298,7 +298,7 @@ const ReportBetaPageInner = () => {
   const urlDate = searchParams.get('date') || '';
   const urlRid = searchParams.get('rid') || '';
   const historicalMode = !!(urlDate && urlRid);
-  const readOnlyHistorical = historicalMode && !isAdmin;
+  const readOnlyHistorical = historicalMode && !canImpersonate;
   // Suffisso querystring da appendere alle chiamate fetch in modalità storica
   const histQS = historicalMode ? `?date=${urlDate}&restaurant_id=${urlRid}` : '';
   // Oggetto da fondere nel body PUT (cash/daily, beverages/daily) in modalità storica
@@ -685,7 +685,7 @@ const ReportBetaPageInner = () => {
     let cancelled = false;
     const eid = effectiveRestaurant?.id;
     const headers = { Authorization: `Bearer ${token}` };
-    if (isAdmin && eid) {
+    if (canImpersonate && eid) {
       // Impersonificazione admin/supervisor → propaga il ristorante target
       headers['X-Restaurant-Id'] = eid;
     }
@@ -711,7 +711,7 @@ const ReportBetaPageInner = () => {
     // Polling come fallback; il WS sotto (OrderContext) farà i refresh "live".
     const id = setInterval(load, 5000);
     return () => { cancelled = true; clearInterval(id); };
-  }, [token, isAdmin, effectiveRestaurant?.id, historicalMode]);
+  }, [token, canImpersonate, effectiveRestaurant?.id, historicalMode]);
 
   // Sincronizza pasteText con autoPasteText quando NON è in override manuale.
   useEffect(() => {
@@ -740,7 +740,7 @@ const ReportBetaPageInner = () => {
     let cancelled = false;
     const eid = effectiveRestaurant?.id;
     const headers = { Authorization: `Bearer ${token}` };
-    if (isAdmin && eid) headers['X-Restaurant-Id'] = eid;
+    if (canImpersonate && eid) headers['X-Restaurant-Id'] = eid;
     (async () => {
       try {
         const res = await axios.get(`${API}/orders/today-paste-list`, { headers });
@@ -883,7 +883,7 @@ const ReportBetaPageInner = () => {
 
   const startEditCassetto = (f) => {
     // Solo Admin può modificare lo stock "Cassetto Spicci"
-    if (!isAdmin) return;
+    if (!canImpersonate) return;
     // Mostra nell'input il valore residuo corrente (stock_base - aperti)
     const raw = cashRow[f.key];
     if (raw === '' || raw === undefined || raw === null) {
@@ -1372,7 +1372,7 @@ const ReportBetaPageInner = () => {
               <h2 className="text-sm font-bold text-gray-800 uppercase text-center mb-0.5">Movimentazione finanziaria</h2>
               <div className="bg-white rounded p-1.5 relative" style={{ border: '2px solid #9ca3af' }}>
               <div className="absolute right-1.5 top-1.5 flex items-center gap-2 z-10">
-                {isAdmin && (
+                {canImpersonate && (
                 <button
                   type="button"
                   data-testid="toggle-force-mattina"
@@ -1667,7 +1667,7 @@ const ReportBetaPageInner = () => {
                   >
                     {showMagMattina ? '▼ nascondi' : '▶ mostra'}
                   </button>
-                  {isAdmin && (
+                  {canImpersonate && (
                   <button
                     type="button"
                     data-testid="force-mag-mattina-toggle"
@@ -2153,13 +2153,13 @@ const ReportBetaPageInner = () => {
                                 data-testid={`cassetto-display-${f.key}`}
                                 onClick={() => startEditCassetto(f)}
                                 onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
-                                title={isAdmin ? "Clicca per modificare · destro per commento" : "Solo lettura · destro per commento"}
+                                title={canImpersonate ? "Clicca per modificare · destro per commento" : "Solo lettura · destro per commento"}
                                 className={`w-full h-7 border rounded px-0.5 text-center font-semibold text-[11px] transition-colors ${
-                                  isAdmin ? 'cursor-pointer' : 'cursor-not-allowed'
+                                  canImpersonate ? 'cursor-pointer' : 'cursor-not-allowed'
                                 } ${
                                   isNegative
                                     ? 'bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100'
-                                    : isAdmin
+                                    : canImpersonate
                                       ? 'bg-white border-gray-200 text-gray-900 hover:bg-yellow-50 hover:border-yellow-300'
                                       : 'bg-white border-gray-200 text-gray-700'
                                 }`}

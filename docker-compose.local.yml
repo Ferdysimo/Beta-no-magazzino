@@ -18,6 +18,9 @@ services:
       MONGO_URL: mongodb://mongo:27017
       DB_NAME: pastasciutta_local
       JWT_SECRET: local-dev-only-change-in-production-0123456789abcdef
+      APP_ENV: development
+      ENABLE_API_DOCS: "true"
+      UPLOADS_DIR: /app/uploads
       PYTHONUNBUFFERED: "1"
     ports:
       - "${BACKEND_HOST_PORT:-8001}:8001"

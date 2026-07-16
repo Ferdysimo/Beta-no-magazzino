@@ -1,6 +1,8 @@
 import base64
 import os
 import sys
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -15,6 +17,10 @@ if os.environ.get("PASTA_RUN_ISOLATED_INTEGRATION") != "1":
         allow_module_level=True,
     )
 
+TEST_PASSWORD = os.environ.get("PASTA_TEST_PASSWORD", "")
+if not TEST_PASSWORD:
+    pytest.skip("PASTA_TEST_PASSWORD not set", allow_module_level=True)
+
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -22,6 +28,7 @@ if str(BACKEND_DIR) not in sys.path:
 import server
 from app import bootstrap
 from app.core.config import UPLOADS_DIR
+from app.core.security import pwd_context
 
 
 PNG_1X1 = "data:image/png;base64," + base64.b64encode(
@@ -42,14 +49,34 @@ async def _exercise_phase3_domains():
 
     await server.client.drop_database(db_name)
     try:
+        now = datetime.now(timezone.utc).isoformat()
+        await server.db.restaurants.insert_many([
+            {
+                "id": str(uuid.uuid4()),
+                "name": name,
+                "username": username,
+                "password": pwd_context.hash(TEST_PASSWORD),
+                "location": location,
+                "role": role,
+                "token_version": 2 if username == "Simone" else 1,
+                "boiler_count": 1,
+                "created_at": now,
+                "order_counter": 0,
+            }
+            for username, name, location, role in (
+                ("Admin", "Amministratore", "Amministrazione", "admin"),
+                ("Flaminio", "Pastasciutta Roma", "Flaminio", "restaurant"),
+                ("Magazziniere", "Magazziniere", "Magazzino", "magazzino"),
+                ("Federico", "Supervisore", "Supervisione", "supervisor"),
+            )
+        ])
         transport = httpx.ASGITransport(app=server.app)
         async with httpx.AsyncClient(
             transport=transport,
             base_url="http://testserver",
             timeout=30,
         ) as client:
-            seeded = await client.post("/api/seed")
-            assert seeded.status_code == 200
+            assert (await client.post("/api/seed")).status_code in (404, 405)
             await bootstrap.initialize_application()
 
             async def login(username, password):
@@ -60,14 +87,14 @@ async def _exercise_phase3_domains():
                 assert response.status_code == 200, response.text
                 return {"Authorization": f"Bearer {response.json()['token']}"}
 
-            admin_headers = await login("Admin", "Pastasciutt4!")
-            flaminio_headers = await login("Flaminio", "Pastasciutt4!")
-            warehouse_headers = await login("Magazziniere", "Pastasciutt4!")
-            federico_headers = await login("Federico", "Pastasciutta@32")
+            admin_headers = await login("Admin", TEST_PASSWORD)
+            flaminio_headers = await login("Flaminio", TEST_PASSWORD)
+            warehouse_headers = await login("Magazziniere", TEST_PASSWORD)
+            federico_headers = await login("Federico", TEST_PASSWORD)
 
             wrong_password = await client.post(
                 "/api/auth/login",
-                json={"username": "Federico", "password": "Pastasciutt4!"},
+                json={"username": "Federico", "password": "definitely-wrong-password"},
             )
             assert wrong_password.status_code == 401
 
@@ -119,16 +146,23 @@ async def _exercise_phase3_domains():
                 for row in audit.json()["items"]
             )
 
-            product = await client.post(
+            product_payload = {
+                "name": "Prodotto fase 3",
+                "unit": "pz",
+                "supplier": "Test supplier",
+                "quantity": 10,
+                "image_data": "",
+            }
+            forbidden_product = await client.post(
                 "/api/products",
                 headers=warehouse_headers,
-                json={
-                    "name": "Prodotto fase 3",
-                    "unit": "pz",
-                    "supplier": "Test supplier",
-                    "quantity": 10,
-                    "image_data": "",
-                },
+                json=product_payload,
+            )
+            assert forbidden_product.status_code == 403
+            product = await client.post(
+                "/api/products",
+                headers=admin_headers,
+                json=product_payload,
             )
             assert product.status_code == 200, product.text
             product_id = product.json()["id"]

@@ -6,7 +6,6 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pymongo.errors import DuplicateKeyError
 
-from app.core.config import UPLOADS_DIR
 from app.core.database import db
 from app.core.deps import _effective_restaurant_id
 from app.core.security import verify_token
@@ -101,13 +100,6 @@ async def create_order(data: OrderCreate, token_data: dict = Depends(verify_toke
             status_code=409,
             detail=f"Numero #{order_number} già in uso tra gli ordini attivi"
         )
-
-    # Backup to file for Flaminio
-    restaurant = await db.restaurants.find_one({"id": restaurant_id})
-    if restaurant and restaurant.get("location") == "Flaminio":
-        backup_file = UPLOADS_DIR / "backup_flaminio.txt"
-        with open(backup_file, "a") as f:
-            f.write(f"{order_number} {data.description}\n")
 
     # Broadcast to all connected clients
     await manager.broadcast_to_restaurant(restaurant_id, {

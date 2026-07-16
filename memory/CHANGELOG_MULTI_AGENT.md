@@ -63,7 +63,7 @@ Before making any code change:
   - `/app/backend/server.py` — 5500+ righe, monolite
   - `/app/frontend/src/pages/ReportBetaPage.js` — 2100+ righe, math parsing + contentEditable + rich text + XSS sanitization
   - `/app/backend/.env` — `JWT_SECRET` obbligatorio in produzione
-- **Credenziali test** → `/app/memory/test_credentials.md`
+- **Credenziali test** → mai nel repository; il file dedicato descrive solo la procedura
 - **Ruoli**: `admin` (Admin), `supervisor` (Federico), `restaurant`, `magazzino`
 
 ---
@@ -81,7 +81,7 @@ Before making any code change:
 | Frontend build statico | `/opt/pastasciutta/frontend/build/` |
 | Python virtualenv | `/opt/pastasciutta/backend/venv/` |
 | Pip eseguibile | `/opt/pastasciutta/backend/venv/bin/pip` |
-| Uploads (foto DDT/fatture) | `/opt/pastasciutta/uploads/` |
+| Uploads (foto DDT/fatture) | `/var/lib/pastasciutta/uploads/` dopo P0-B |
 | Google Sheets creds | `/opt/pastasciutta/backend/google_credentials.json` |
 | Backend `.env` | `/opt/pastasciutta/backend/.env` |
 | Frontend `.env` | `/opt/pastasciutta/frontend/.env` |
@@ -93,12 +93,12 @@ Before making any code change:
 - **MongoDB**: 8.0 (servizio `mongod`, locale su `mongodb://localhost:27017`)
 - **Web server**: Nginx (reverse proxy + serve build React statico)
 - **Process manager**: systemd (NON supervisor come su Emergent)
-- **HTTPS / Cert**: certbot installato (configurabile a parte)
+- **HTTPS / Cert**: HTTPS attivo; redirect HTTP da applicare/verificare nel P0-B
 
 ### ⚙️ Servizi systemd / systemd services
 | Servizio | Funzione |
 |---|---|
-| `pastasciutta-backend.service` | FastAPI via uvicorn su `0.0.0.0:8001` |
+| `pastasciutta-backend.service` | FastAPI via uvicorn; P0-B richiede bind `127.0.0.1:8001` |
 | `mongod.service` | MongoDB |
 | `nginx.service` | Reverse proxy `:80` → frontend + `/api/` → backend |
 
@@ -109,14 +109,14 @@ Type=simple
 User=root
 WorkingDirectory=/opt/pastasciutta/backend
 Environment=PATH=/opt/pastasciutta/backend/venv/bin:/usr/bin
-ExecStart=/opt/pastasciutta/backend/venv/bin/uvicorn server:app --host 0.0.0.0 --port 8001
+ExecStart=/opt/pastasciutta/backend/venv/bin/uvicorn server:app --host 127.0.0.1 --port 8001
 Restart=always
 RestartSec=3
 ```
 
 ### 🌐 Configurazione Nginx (sintesi)
 File: `/etc/nginx/sites-available/pastasciutta`
-- `listen 80` → root su `/opt/pastasciutta/frontend/build`
+- `listen 80` → redirect a HTTPS dopo P0-B
 - `location /api/` → proxy a `http://127.0.0.1:8001/api/`
 - WebSocket upgrade headers attivi (`Upgrade`, `Connection`)
 - `client_max_body_size 20M` per upload foto fatture/DDT
@@ -129,10 +129,13 @@ File: `/etc/nginx/sites-available/pastasciutta`
 MONGO_URL=mongodb://localhost:27017
 DB_NAME=pastasciutta
 JWT_SECRET=<openssl rand -hex 32 — OBBLIGATORIO, no fallback>
+APP_ENV=production
+ENABLE_API_DOCS=false
+UPLOADS_DIR=/var/lib/pastasciutta/uploads
 ```
 **Frontend** (`/opt/pastasciutta/frontend/.env`):
 ```env
-REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
+REACT_APP_BACKEND_URL=https://pasta-app.it
 ```
 
 ### 🚀 Comandi utili per il VPS / Useful VPS commands
@@ -174,6 +177,20 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
+
+### [2026-07-16 15:31 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: security | refactor | config | test | docs
+**File toccati**:
+- `/app/backend/app/core/{config,security,files,deps,diagnostics,rate_limit}.py`
+- `/app/backend/app/routers/{system,websocket,analysis,report,documents,invoices,warehouse,beverages,orders}.py`
+- `/app/backend/app/bootstrap.py`, `/app/backend/app/services/{seeding,report}.py`, `/app/backend/server.py`
+- `/app/backend/scripts/{manage_account,seed_test_environment}.py`, `/app/backend/tests/`
+- `/app/frontend/src/contexts/{AuthContext,OrderContext}.js` e pagine con controlli ruolo
+- `/app/.gitignore`, `/app/uploads/`, `/app/setup.sh`, configurazione e documentazione locale
+- `/app/memory/{SECURITY_HARDENING_PLAN,P0_VPS_RUNBOOK,PRD,TODO,test_credentials}.md`
+**Descrizione**: Implementato il P0-A lato codice. Federico mantiene il ruolo `supervisor` e capability esplicite per locale/Report senza diventare admin; prodotti, quantità, fornitori e fatture globali richiedono ora un admin reale. Rimossi dal runtime seed pubblico, elenco/creazione locali pubblici, summary morto, route mock/snapshot e route bevande legacy. Gli upload usano URL HMAC temporanee, il WebSocket usa ticket monouso autenticati con Origin allowlist, Swagger è disattivato in produzione, CORS è configurabile e gli account privilegiati non vengono più creati o resettati all'avvio. Rimossi 56 upload di test dal repository e bonificate le credenziali note nei file correnti. Rimossa anche la scrittura runtime del vecchio `backup_flaminio.txt`, rilevata durante i test live. Preparato il runbook P0-B senza eseguire modifiche sulla VPS.
+**Testato**: sì (metodo: `compileall`, flake8 F821, suite backend standard, 3 integrazioni Mongo isolate passate, 108 test HTTP live passati su database isolato, prova mirata ordine Flaminio senza ricreazione del backup, build React produzione completata, `git diff --check`, scansione delle credenziali note senza corrispondenze)
+**Note per il prossimo agente**: non fare un deploy P0 come aggiornamento ordinario. Eseguire `/app/memory/P0_VPS_RUNBOOK.md` in finestra di manutenzione: backup, migrazione upload fuori repo, HTTPS redirect, bind locale/chiusura 8001, rotazione password e `JWT_SECRET`, smoke test e rollback. La riscrittura della cronologia Git resta separata e richiede freeze coordinato di tutti i clone.
 
 ### [2026-07-16 02:38 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: docs | architecture
@@ -625,8 +642,8 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 - `/app/memory/test_credentials.md`
 - `/app/memory/PRD.md`
 - `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Ripristinata la password dedicata di Federico a `Pastasciutta@32`. Il seed/startup non forza piu Federico a `Pastasciutt4!`; aggiornata anche la documentazione credenziali.
-**Testato**: si (metodo: aggiornato DB locale Docker, restart backend, login Federico OK con `Pastasciutta@32`, KO con `Pastasciutt4!`)
+**Descrizione**: Ripristinata la password dedicata di Federico a `[REDACTED-CREDENTIAL]`. Il seed/startup non forza piu Federico a `[REDACTED-CREDENTIAL]`; aggiornata anche la documentazione credenziali.
+**Testato**: si (metodo: aggiornato DB locale Docker, restart backend, login Federico OK con `[REDACTED-CREDENTIAL]`, KO con `[REDACTED-CREDENTIAL]`)
 **Note per il prossimo agente**: Federico e l'unica eccezione alla password comune dei locali/test account.
 
 ### [2026-07-06 12:00 CEST] - Codex (GPT-5 / OpenAI)
@@ -835,7 +852,7 @@ REACT_APP_BACKEND_URL=http://<IP_VPS_O_DOMINIO>
 **File toccati**:
 - `/app/frontend/src/pages/HomePage.js`
 - `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Cambiata l'intestazione della dashboard dell'account Federico da "Supervisione" a "Federico", lasciando invariato il fallback "Supervisione" per eventuali altri supervisor. Allineata anche la password seed di Federico alla credenziale documentata `Pastasciutt4!`.
+**Descrizione**: Cambiata l'intestazione della dashboard dell'account Federico da "Supervisione" a "Federico", lasciando invariato il fallback "Supervisione" per eventuali altri supervisor. Allineata anche la password seed di Federico alla credenziale documentata `[REDACTED-CREDENTIAL]`.
 **Testato**: si (metodo: login Federico API, `python -m py_compile`, `yarn build`)
 **Note per il prossimo agente**: Non fare commit/push senza conferma esplicita dell'utente.
 

@@ -32,7 +32,7 @@
     "backend": "100% (22/22: 13 new atomic tests + 9 iteration-5 regression tests)",
     "frontend": "not tested (per instructions: backend only)"
   },
-  "test_credentials": "Flaminio / Pastasciutt4! (used). Admin / Pastasciutt4! available but not needed.",
+  "test_credentials": "Flaminio / [REDACTED-CREDENTIAL] (used). Admin / [REDACTED-CREDENTIAL] available but not needed.",
   "seed_data_creation": "All TEST_-prefixed orders + per-restaurant deletion_logs + archived_orders are scrubbed before AND after each test via autouse fixture; restaurant order_counter is reset to 0 between tests. No production data left behind.",
   "retest_needed": false,
   "should_main_agent_self_test": true,

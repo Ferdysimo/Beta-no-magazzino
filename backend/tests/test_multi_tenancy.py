@@ -31,8 +31,13 @@ if not BASE_URL:
     except Exception:
         pass
 
+if not BASE_URL:
+    pytest.skip("live backend not configured", allow_module_level=True)
+
 ROME_TZ = ZoneInfo("Europe/Rome")
-PASSWORD = "Pastasciutt4!"
+PASSWORD = os.environ.get("PASTA_TEST_PASSWORD", "")
+if not PASSWORD:
+    pytest.skip("PASTA_TEST_PASSWORD not set", allow_module_level=True)
 TIMEOUT = 30
 
 

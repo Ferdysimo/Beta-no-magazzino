@@ -9,7 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from app.core.catalogs import BEVERAGES_CATALOG
 from app.core.database import db
 from app.core.deps import _effective_restaurant_id
-from app.core.security import verify_token
+from app.core.security import (
+    can_impersonate,
+    require_admin_or_federico,
+    verify_token,
+)
 from app.core.time import ROME_TZ, _today_rome_str
 from app.schemas import BeverageDailyUpsert, CashDailyUpsert, PastaDictionaryUpsert
 from app.services.report import (
@@ -195,7 +199,7 @@ async def upsert_beverage_daily(
     # bevanda — coperti dal toggle "Forza Magazzino Mattina" — possono essere
     # modificati SOLO da admin/Federico. Per gli altri utenti preserviamo il
     # valore esistente nel DB ignorando ciò che è stato inviato.
-    if token_data.get("role") != "admin":
+    if not can_impersonate(token_data):
         for k in ("mattina", "mattina_casse", "mattina_sfuse"):
             if k in set_body:
                 set_body[k] = old_doc.get(k, "")
@@ -431,13 +435,13 @@ async def upsert_cash_daily(
     # Sicurezza: il campo `mattina` (CASH MATTINA "Forza Mattina") può essere
     # modificato SOLO da admin/Federico. Per gli altri utenti preserviamo il
     # valore esistente nel DB ignorando ciò che è stato inviato lato client.
-    if token_data.get("role") != "admin" and "mattina" in set_payload:
+    if not can_impersonate(token_data) and "mattina" in set_payload:
         set_payload["mattina"] = old_doc.get("mattina", "")
-    elif token_data.get("role") == "admin" and "mattina" in set_payload:
+    elif can_impersonate(token_data) and "mattina" in set_payload:
         set_payload["mattina_auto_carry"] = False
         set_payload["mattina_carry_from_date"] = ""
         set_payload["mattina_carry_value"] = ""
-    if token_data.get("role") == "admin":
+    if can_impersonate(token_data):
         for cf in CASSETTO_FIELDS:
             if cf in set_payload:
                 set_payload[f"{cf}_auto_carry"] = False
@@ -470,8 +474,7 @@ async def list_closures(
     """Lista delle chiusure (date) con riepilogo: incasso, # paste, # bevande, ecc.
     Filtra per `restaurant_id` se fornito (richiesto per la vista per-locale).
     """
-    if token_data.get("role") not in ("admin",):
-        raise HTTPException(status_code=403, detail="Admin only")
+    require_admin_or_federico(token_data)
     cutoff = (datetime.now(ROME_TZ) - timedelta(days=max(1, min(days, 365)))).strftime("%Y-%m-%d")
     today = _today_rome_str()
     base_q = {"date_rome": {"$gte": cutoff, "$lt": today}}
@@ -529,8 +532,7 @@ async def admin_beverages_reset(payload: Dict, token_data: dict = Depends(verify
     """Admin-only: azzera (cancella tutte le righe) il Magazzino Bevande di un locale.
     Tutte le date vengono rimosse. Riaprendo la pagina partirà tutto da 0 (anche la
     colonna Mattina, perché viene calcolata dal Sera di ieri che non esiste più)."""
-    if token_data.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    require_admin_or_federico(token_data)
     rid = (payload or {}).get("restaurant_id")
     if not rid or not isinstance(rid, str):
         raise HTTPException(status_code=400, detail="restaurant_id mancante")
@@ -547,8 +549,7 @@ async def admin_audit_log_groups(
     token_data: dict = Depends(verify_token),
 ):
     """Raggruppa l'audit-log per (locale, data report). Una entry = una chiusura/report."""
-    if token_data.get("role") not in ("admin",):
-        raise HTTPException(status_code=403, detail="Admin only")
+    require_admin_or_federico(token_data)
     match: Dict[str, object] = {}
     if date_from or date_to:
         rng: Dict[str, str] = {}
@@ -623,8 +624,7 @@ async def admin_audit_log(
     token_data: dict = Depends(verify_token),
 ):
     """Audit-log dei salvataggi su Report (Cassa + Bevande). Admin only."""
-    if token_data.get("role") not in ("admin",):
-        raise HTTPException(status_code=403, detail="Admin only")
+    require_admin_or_federico(token_data)
     q: Dict[str, object] = {}
     if date_from or date_to:
         rng: Dict[str, str] = {}
@@ -683,7 +683,7 @@ async def closures_grid_admin(
 
     Accessibile anche da utenti normali (in sola lettura, forzati sul proprio locale).
     """
-    is_admin = token_data.get("role") in ("admin",)
+    is_admin = can_impersonate(token_data)
     if not is_admin:
         # Utente normale: forziamo il restaurant_id sul proprio
         restaurant_id = token_data.get("restaurant_id")
@@ -781,7 +781,6 @@ async def closures_grid_admin(
     }
 
 
-@router.post("/admin/closures/generate-mock")
 async def admin_generate_mock_closures(
     payload: Dict, token_data: dict = Depends(verify_token)
 ):
@@ -905,7 +904,6 @@ async def admin_generate_mock_closures(
     }
 
 
-@router.delete("/admin/closures/mock")
 async def admin_delete_mock_closures(
     restaurant_id: Optional[str] = None,
     token_data: dict = Depends(verify_token),
@@ -932,7 +930,7 @@ async def get_pasta_dictionary(
     torna il default `PASTA_PRICES_MAP`. Tutti possono leggere il proprio dict;
     Admin/Supervisor possono leggere quello di qualsiasi locale specificando `restaurant_id`."""
     role = token_data.get("role")
-    if restaurant_id and role not in ("admin",):
+    if restaurant_id and not can_impersonate(token_data):
         # Utenti non admin/supervisor non possono leggere il dict di un altro locale
         raise HTTPException(status_code=403, detail="Admin only per leggere dict altri locali")
     rid = restaurant_id
@@ -962,8 +960,7 @@ async def upsert_pasta_dictionary(
     token_data: dict = Depends(verify_token),
 ):
     """Sovrascrive il dizionario paste di un ristorante. Solo Admin/Supervisor."""
-    if token_data.get("role") not in ("admin",):
-        raise HTTPException(status_code=403, detail="Solo Admin/Supervisor possono modificare il dizionario")
+    require_admin_or_federico(token_data)
     if not data.restaurant_id or not isinstance(data.restaurant_id, str):
         raise HTTPException(status_code=400, detail="restaurant_id mancante")
     # Sanitizzazione: sigla maiuscola, no spazi, prezzo numerico positivo
@@ -1004,13 +1001,11 @@ async def reset_pasta_dictionary(
     token_data: dict = Depends(verify_token),
 ):
     """Resetta il dizionario di un ristorante al default. Solo Admin/Supervisor."""
-    if token_data.get("role") not in ("admin",):
-        raise HTTPException(status_code=403, detail="Solo Admin/Supervisor")
+    require_admin_or_federico(token_data)
     res = await db.pasta_dictionary.delete_one({"restaurant_id": restaurant_id})
     return {"ok": True, "deleted": res.deleted_count}
 
 
-@router.post("/admin/closures/snapshot-today")
 async def admin_snapshot_today(
     payload: Dict, request: Request, token_data: dict = Depends(verify_token),
 ):
@@ -1080,8 +1075,7 @@ async def closure_detail_admin(
     token_data: dict = Depends(verify_token),
 ):
     """Dettaglio completo di una chiusura (data Rome YYYY-MM-DD). Admin only."""
-    if token_data.get("role") not in ("admin",):
-        raise HTTPException(status_code=403, detail="Admin only")
+    require_admin_or_federico(token_data)
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
         raise HTTPException(status_code=400, detail="Data non valida")
     return await _build_closure_detail(date_str, restaurant_id)

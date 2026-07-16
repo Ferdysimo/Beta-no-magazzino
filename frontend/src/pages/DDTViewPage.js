@@ -22,7 +22,8 @@ const API = `${BACKEND_URL}/api`;
 const DDTViewPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { token, restaurant, isAdmin } = useAuth();
+  const { token, restaurant, effectiveRestaurant, canImpersonate, isAdmin } = useAuth();
+  const activeRestaurant = canImpersonate ? effectiveRestaurant : restaurant;
   const [ddt, setDdt] = useState(null);
   const [loading, setLoading] = useState(true);
   // Tick di 1s per il countdown "Modificabile per ancora MM:SS"
@@ -52,7 +53,7 @@ const DDTViewPage = () => {
   const editWindow = (() => {
     if (!ddt || ddt.status !== 'pending') return null;
     if (isAdmin) return null;
-    const isOwner = ddt.restaurant_id === restaurant?.id;
+    const isOwner = ddt.restaurant_id === activeRestaurant?.id;
     if (!isOwner) return null;
     try {
       const created = new Date(ddt.created_at).getTime();
@@ -82,7 +83,7 @@ const DDTViewPage = () => {
   const canEdit = (() => {
     if (!ddt || ddt.status !== 'pending') return false;
     if (isAdmin) return true;
-    const isOwner = ddt.restaurant_id === restaurant?.id;
+    const isOwner = ddt.restaurant_id === activeRestaurant?.id;
     if (!isOwner) return false;
     try {
       const ageMs = Date.now() - new Date(ddt.created_at).getTime();

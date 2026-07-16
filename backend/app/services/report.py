@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from app.core.catalogs import BEVERAGES_CATALOG
 from app.core.database import db
+from app.core.security import can_impersonate
 from app.core.time import ROME_TZ, _today_rome_str
 
 
@@ -49,7 +50,7 @@ def _resolve_historical_mode(
     if not date_param or not rid_param:
         # Entrambi devono essere presenti per attivare la modalità storica
         return None
-    is_admin = token_data.get("role") in ("admin",)
+    is_admin = can_impersonate(token_data)
     if not is_admin:
         if not allow_self:
             raise HTTPException(status_code=403, detail="Modalità storica scrittura riservata ad Admin")
@@ -632,12 +633,15 @@ def _audit_user_info(request: Request, token_data: dict) -> dict:
     """Restituisce metadati utente per audit-log."""
     role = token_data.get("role")
     is_admin = role == "admin"
-    impersonated = bool(request.headers.get("X-Restaurant-Id") or request.headers.get("x-restaurant-id")) if is_admin else False
+    impersonated = bool(
+        request.headers.get("X-Restaurant-Id")
+        or request.headers.get("x-restaurant-id")
+    ) if can_impersonate(token_data) else False
     username = token_data.get("username") or token_data.get("restaurant_name") or "unknown"
     return {
         "by_role": role or "unknown",
         "by_user": "Admin" if is_admin else username,
-        "by_user_id": token_data.get("restaurant_id") or "",
+        "by_user_id": token_data.get("authenticated_restaurant_id") or token_data.get("restaurant_id") or "",
         "is_impersonating": impersonated,
     }
 

@@ -8,7 +8,7 @@
     2. Carry-over: Sera (ieri) → Mattina (oggi)
     3. Box "Vendite Bevande" nel Report mostra quantità + EUR corretti
     4. Refresh pagina mantiene i dati
-  - Credenziali: Flaminio/Pastasciutt4! oppure Admin/Pastasciutt4!
+  - Credenziali live: fornirle tramite variabili d'ambiente locali o password manager, mai nel repository.
 
 ## Idea futura - Macchina del tempo
 

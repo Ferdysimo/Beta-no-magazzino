@@ -7,10 +7,14 @@ import requests
 import os
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
+if not BASE_URL:
+    pytest.skip("live backend not configured", allow_module_level=True)
 
 # Test credentials
 TEST_USERNAME = "Flaminio"
-TEST_PASSWORD = "Pastasciutt4!"
+TEST_PASSWORD = os.environ.get("PASTA_TEST_PASSWORD", "")
+if not TEST_PASSWORD:
+    pytest.skip("PASTA_TEST_PASSWORD not set", allow_module_level=True)
 
 
 class TestAuthentication:
@@ -246,14 +250,14 @@ class TestWebSocketEndpoint:
 
     def test_websocket_endpoint_exists(self):
         """Test that WebSocket URL is correctly formed"""
-        # The WebSocket endpoint is at /api/ws/{restaurant_id}
+        # The WebSocket endpoint receives a short-lived, one-time ticket.
         # We can't test WebSocket directly with requests, but we can verify URL formation
         ws_base = BASE_URL.replace("https://", "wss://").replace("http://", "ws://")
-        ws_url = f"{ws_base}/api/ws/test-restaurant-id"
+        ws_url = f"{ws_base}/api/ws?ticket=test-ticket"
         
         # Just verify the URL is correctly formed
         assert "wss://" in ws_url or "ws://" in ws_url
-        assert "/api/ws/" in ws_url
+        assert "/api/ws?ticket=" in ws_url
         print(f"WebSocket URL would be: {ws_url}")
 
 

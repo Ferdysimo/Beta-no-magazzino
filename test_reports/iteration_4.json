@@ -48,7 +48,7 @@
     "backend": "100% (17/17 carichi tests passed)",
     "frontend": "95% — all core flows work; 2 minor UX issues (edit preview math, locale RBAC redirect)"
   },
-  "test_credentials": "Magazziniere/Flaminio/Admin all Pastasciutt4!",
+  "test_credentials": "Magazziniere/Flaminio/Admin all [REDACTED-CREDENTIAL]",
   "seed_data_creation": "Backend tests created 2 products (TEST_Carico_Prod_A/B) with supplier TEST_Supplier_Carico and tore them down via DELETE /api/products/{id} after the suite. Frontend test created one carico on supplier Derrate (DDT-UITEST-001) with Pecorino +12; stock went 99→111→99 after deletion — CONFIRMED restored. No residue left in DB.",
   "retest_needed": false,
   "should_main_agent_self_test": true,

@@ -1,6 +1,8 @@
+import asyncio
 import hashlib
 import json
 import sys
+from urllib.parse import parse_qs, urlparse
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -19,12 +21,13 @@ import server
 from app.core import files as files_module
 from app.core.config import ALGORITHM, SECRET_KEY
 from app.core.database import db
-from app.core.security import create_token, verify_token
+from app.core.security import can_impersonate, create_token, require_admin, verify_token
 from app.core.time import _rome_date_bounds_utc
 from app.schemas import OrderCreate
+from app.routers import websocket as websocket_router
 
 
-EXPECTED_OPENAPI_SHA256 = "87e7464fd4c1fa025c2bbf738e7b066410070a0410c66435845c1edf6ea1f776"
+EXPECTED_OPENAPI_SHA256 = "bcfa91f4e3686e4d8e721dc8775efd3f394698e984ddcc07840d1b44afe8b0a6"
 
 
 def _request(headers=None) -> Request:
@@ -62,8 +65,8 @@ def test_openapi_contract_is_unchanged():
     ).encode()
 
     assert hashlib.sha256(encoded).hexdigest() == EXPECTED_OPENAPI_SHA256
-    assert len(spec["paths"]) == 89
-    assert len(spec.get("components", {}).get("schemas", {})) == 32
+    assert len(spec["paths"]) == 81
+    assert len(spec.get("components", {}).get("schemas", {})) == 29
 
 
 def test_server_keeps_legacy_reexports_and_one_canonical_order_schema():
@@ -91,7 +94,7 @@ def test_create_and_verify_restaurant_token():
     assert payload["role"] == "restaurant"
 
 
-def test_only_admin_impersonation_header_changes_restaurant():
+def test_only_admin_or_federico_impersonation_header_changes_restaurant():
     restaurant_payload = verify_token(
         _credentials(_raw_token()),
         _request({"X-Admin-Restaurant-Id": "restaurant-2"}),
@@ -100,19 +103,31 @@ def test_only_admin_impersonation_header_changes_restaurant():
         _credentials(_raw_token(role="admin", username="Admin")),
         _request({"X-Admin-Restaurant-Id": "restaurant-2"}),
     )
+    federico_payload = verify_token(
+        _credentials(_raw_token(role="supervisor", username="Federico")),
+        _request({"X-Admin-Restaurant-Id": "restaurant-2"}),
+    )
 
     assert restaurant_payload["restaurant_id"] == "restaurant-1"
     assert admin_payload["restaurant_id"] == "restaurant-2"
+    assert federico_payload["restaurant_id"] == "restaurant-2"
 
 
-def test_federico_is_promoted_without_losing_original_role():
+def test_federico_keeps_supervisor_role_and_explicit_impersonation_capability():
     payload = verify_token(
         _credentials(_raw_token(role="supervisor", username="Federico")),
         _request(),
     )
 
-    assert payload["role"] == "admin"
-    assert payload["original_role"] == "supervisor"
+    assert payload["role"] == "supervisor"
+    assert can_impersonate(payload) is True
+
+
+def test_federico_is_not_an_admin_for_global_mutations():
+    with pytest.raises(HTTPException) as exc_info:
+        require_admin({"role": "supervisor", "username": "Federico"})
+    assert exc_info.value.status_code == 403
+    require_admin({"role": "admin", "username": "Simone"})
 
 
 def test_old_simone_token_is_rejected():
@@ -142,3 +157,42 @@ def test_image_storage_keeps_data_uri_extension_and_bytes(tmp_path, monkeypatch)
     assert filename.startswith("test_")
     assert filename.endswith(".png")
     assert (tmp_path / filename).read_bytes() == b"hello"
+
+
+def test_upload_urls_are_signed_and_expire(tmp_path, monkeypatch):
+    monkeypatch.setattr(files_module, "UPLOADS_DIR", tmp_path)
+    (tmp_path / "document.jpg").write_bytes(b"content")
+
+    url = files_module.build_upload_url("document.jpg", ttl_seconds=120)
+    parsed = urlparse(url)
+    query = parse_qs(parsed.query)
+    expires = int(query["expires"][0])
+    signature = query["signature"][0]
+
+    assert files_module.verify_upload_signature("document.jpg", expires, signature).name == "document.jpg"
+    with pytest.raises(HTTPException) as exc_info:
+        files_module.verify_upload_signature("other.jpg", expires, signature)
+    assert exc_info.value.status_code in (403, 404)
+    monkeypatch.setattr(files_module.time, "time", lambda: expires + 1)
+    with pytest.raises(HTTPException) as expired_info:
+        files_module.verify_upload_signature("document.jpg", expires, signature)
+    assert expired_info.value.status_code == 403
+
+
+def test_removed_public_and_mock_routes_are_not_registered():
+    paths = set(server.app.openapi()["paths"])
+    assert "/api/seed" not in paths
+    assert "/api/restaurants" not in paths
+    assert "/api/admin/closures/generate-mock" not in paths
+    assert "/api/admin/closures/mock" not in paths
+    assert "/api/admin/closures/snapshot-today" not in paths
+    assert "/api/admin/analisi-mensile/summary" not in paths
+
+
+def test_websocket_ticket_is_short_lived_and_single_use():
+    async def scenario():
+        ticket = await websocket_router._issue_ticket("restaurant-1")
+        assert await websocket_router._consume_ticket(ticket) == "restaurant-1"
+        assert await websocket_router._consume_ticket(ticket) is None
+
+    asyncio.run(scenario())

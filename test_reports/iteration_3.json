@@ -40,7 +40,7 @@
     "backend": "100% (25/25 tests passed)",
     "frontend": "100% after bug fix (Flaminio create -> DDT redirect -> Magazziniere evade -> Flaminio conferma all verified end-to-end)"
   },
-  "test_credentials": "Flaminio/Grazie/Brazza/Magazziniere/Admin all use password Pastasciutt4!",
+  "test_credentials": "Flaminio/Grazie/Brazza/Magazziniere/Admin all use password [REDACTED-CREDENTIAL]",
   "seed_data_creation": "During testing: created 2 richieste from Flaminio (DDT#? deleted via conferma path) and Grazie (deleted in test cleanup). Stock of 1 product was modified during PATCH quantity test (reverted); edit-form test set one product quantity to 99.",
   "retest_needed": false,
   "should_main_agent_self_test": true,

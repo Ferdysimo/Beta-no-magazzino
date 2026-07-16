@@ -116,7 +116,7 @@ const Td = ({ children, bg, sticky, left, mono, align = 'right', bold, color, ti
 
 const ChiusureExcelPage = () => {
   const navigate = useNavigate();
-  const { token, isAdmin, restaurant, effectiveRestaurant } = useAuth();
+  const { token, canImpersonate, restaurant, effectiveRestaurant } = useAuth();
   const [restaurants, setRestaurants] = useState([]);
   const [selectedRestId, setSelectedRestId] = useState(() => localStorage.getItem('closures_excel_rest_id') || '');
   const [days, setDays] = useState(() => Number(localStorage.getItem('closures_excel_days')) || 30);
@@ -128,10 +128,10 @@ const ChiusureExcelPage = () => {
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
   // Utenti non-admin: forzo il rid sul proprio locale, ignoro selector e localStorage
   const ownRid = effectiveRestaurant?.id || restaurant?.id || '';
-  const effectiveRestId = isAdmin ? (selectedRestId || restaurants[0]?.id || '') : ownRid;
+  const effectiveRestId = canImpersonate ? (selectedRestId || restaurants[0]?.id || '') : ownRid;
 
   useEffect(() => {
-    if (!isAdmin || !token) return;
+    if (!canImpersonate || !token) return;
     (async () => {
       try {
         const res = await axios.get(`${API}/admin/restaurants`, { headers });
@@ -140,7 +140,7 @@ const ChiusureExcelPage = () => {
       } catch (e) { console.error('list restaurants', e); }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, token]);
+  }, [canImpersonate, token]);
 
   const loadGrid = useCallback(async () => {
     if (!token || !effectiveRestId) {
@@ -237,7 +237,7 @@ const ChiusureExcelPage = () => {
 
         {/* Toolbar */}
         <div className="mb-3 bg-white border border-gray-200 rounded-lg p-3 flex items-center gap-3 flex-wrap">
-          {isAdmin ? (
+          {canImpersonate ? (
             <>
               <label className="text-sm font-bold text-gray-700">Locale:</label>
               <select

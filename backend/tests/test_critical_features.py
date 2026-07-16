@@ -13,13 +13,19 @@ import os
 import time
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
+if not BASE_URL:
+    pytest.skip("live backend not configured", allow_module_level=True)
+
+TEST_PASSWORD = os.environ.get("PASTA_TEST_PASSWORD", "")
+if not TEST_PASSWORD:
+    pytest.skip("PASTA_TEST_PASSWORD not set", allow_module_level=True)
 
 # Test credentials for all 4 accounts
 ACCOUNTS = [
-    {"username": "Flaminio", "password": "Pastasciutt4!", "location": "Flaminio", "role": "restaurant"},
-    {"username": "Grazie", "password": "Pastasciutt4!", "location": "Grazie", "role": "restaurant"},
-    {"username": "Brazza", "password": "Pastasciutt4!", "location": "Largo di Brazzà", "role": "restaurant"},
-    {"username": "Magazziniere", "password": "Pastasciutt4!", "location": "Magazzino", "role": "magazzino"},
+    {"username": "Flaminio", "password": TEST_PASSWORD, "location": "Flaminio", "role": "restaurant"},
+    {"username": "Grazie", "password": TEST_PASSWORD, "location": "Grazie", "role": "restaurant"},
+    {"username": "Brazza", "password": TEST_PASSWORD, "location": "Largo di Brazzà", "role": "restaurant"},
+    {"username": "Magazziniere", "password": TEST_PASSWORD, "location": "Magazzino", "role": "magazzino"},
 ]
 
 
@@ -53,7 +59,7 @@ class TestCriticalHideFromGenerale:
         """Login before each test"""
         login_response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "username": "Flaminio",
-            "password": "Pastasciutt4!"
+            "password": TEST_PASSWORD
         })
         self.token = login_response.json()["token"]
         self.headers = {"Authorization": f"Bearer {self.token}"}
@@ -203,7 +209,7 @@ class TestKitchenComplete:
     def setup(self):
         login_response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "username": "Flaminio",
-            "password": "Pastasciutt4!"
+            "password": TEST_PASSWORD
         })
         self.token = login_response.json()["token"]
         self.headers = {"Authorization": f"Bearer {self.token}"}
@@ -241,7 +247,7 @@ class TestOrderNumberIncrement:
     def setup(self):
         login_response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "username": "Flaminio",
-            "password": "Pastasciutt4!"
+            "password": TEST_PASSWORD
         })
         self.token = login_response.json()["token"]
         self.headers = {"Authorization": f"Bearer {self.token}"}
@@ -279,7 +285,7 @@ class TestDailyReport:
     def setup(self):
         login_response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "username": "Flaminio",
-            "password": "Pastasciutt4!"
+            "password": TEST_PASSWORD
         })
         self.token = login_response.json()["token"]
         self.headers = {"Authorization": f"Bearer {self.token}"}
@@ -306,7 +312,7 @@ class TestBollitoreFilters:
     def setup(self):
         login_response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "username": "Flaminio",
-            "password": "Pastasciutt4!"
+            "password": TEST_PASSWORD
         })
         self.token = login_response.json()["token"]
         self.headers = {"Authorization": f"Bearer {self.token}"}
@@ -336,7 +342,7 @@ class TestTimerOperations:
     def setup(self):
         login_response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "username": "Flaminio",
-            "password": "Pastasciutt4!"
+            "password": TEST_PASSWORD
         })
         self.token = login_response.json()["token"]
         self.headers = {"Authorization": f"Bearer {self.token}"}
@@ -397,7 +403,7 @@ class TestMonitorToggle:
     def setup(self):
         login_response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "username": "Flaminio",
-            "password": "Pastasciutt4!"
+            "password": TEST_PASSWORD
         })
         self.token = login_response.json()["token"]
         self.headers = {"Authorization": f"Bearer {self.token}"}

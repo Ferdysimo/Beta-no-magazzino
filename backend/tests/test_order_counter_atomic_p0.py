@@ -13,15 +13,18 @@ Covers:
 import os
 import sys
 import asyncio
+from pathlib import Path
 
 import pytest
 import requests
 
-sys.path.insert(0, "/app/backend")
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 USERNAME = "Flaminio"
-PASSWORD = "Pastasciutt4!"
+PASSWORD = os.environ.get("PASTA_TEST_PASSWORD", "")
 
 
 # ---------- helpers ----------
@@ -143,8 +146,8 @@ class TestAtomicCounter:
         )
         assert _get_counter(rid) == 50
 
-    def test_post_with_lower_order_number_uses_counter_plus_one(self, auth):
-        """KEY FIX: counter=10, requested=5 -> order #11, counter=11 (NOT #5)."""
+    def test_post_with_active_lower_order_number_is_rejected(self, auth):
+        """An explicitly requested active number must never be silently remapped."""
         token = auth["token"]
         rid = auth["restaurant_id"]
         for i in range(10):
@@ -152,16 +155,10 @@ class TestAtomicCounter:
         assert _get_counter(rid) == 10
 
         r = _create_order(token, "TEST_lo_replay", order_number=5)
-        assert r.status_code == 200, r.text
-        got = r.json()["order_number"]
-        assert got == 11, (
-            f"DUPLICATE BUG REGRESSION: requested=5 (already used) but got {got}, "
-            f"expected 11. Counter={_get_counter(rid)}"
-        )
-        assert _get_counter(rid) == 11
+        assert r.status_code == 409, r.text
+        assert _get_counter(rid) == 10
 
-    def test_post_with_equal_order_number_increments(self, auth):
-        """counter=5, requested=5 -> $max($add(counter,1),5)=max(6,5)=6."""
+    def test_post_with_active_equal_order_number_is_rejected(self, auth):
         token = auth["token"]
         rid = auth["restaurant_id"]
         for i in range(5):
@@ -169,9 +166,8 @@ class TestAtomicCounter:
         assert _get_counter(rid) == 5
 
         r = _create_order(token, "TEST_eq_replay", order_number=5)
-        assert r.status_code == 200, r.text
-        assert r.json()["order_number"] == 6
-        assert _get_counter(rid) == 6
+        assert r.status_code == 409, r.text
+        assert _get_counter(rid) == 5
 
 
 class TestConcurrency:
@@ -198,9 +194,8 @@ class TestConcurrency:
         assert sorted(numbers) == list(range(1, 11))
         assert _get_counter(rid) == 10
 
-    def test_10_parallel_posts_same_explicit_number_all_unique(self, auth):
-        """All 10 parallel POSTs request order_number=100. Counter must
-        atomically increment for each so each gets a distinct number >= 100."""
+    def test_10_parallel_posts_same_explicit_number_allow_one_winner(self, auth):
+        """Only one request may claim the same explicit active number."""
         token = auth["token"]
         rid = auth["restaurant_id"]
 
@@ -214,16 +209,12 @@ class TestConcurrency:
             return await asyncio.gather(*tasks)
 
         responses = asyncio.run(_runner())
-        for r in responses:
-            assert r.status_code == 200, r.text
-        numbers = [r.json()["order_number"] for r in responses]
-        assert len(set(numbers)) == 10, (
-            f"DUPLICATE BUG: parallel POSTs with same order_number "
-            f"produced duplicates: {sorted(numbers)}"
-        )
-        # First wins with $max(0+1, 100) = 100; others advance by +1 each
-        assert sorted(numbers) == [100, 101, 102, 103, 104, 105, 106, 107, 108, 109]
-        assert _get_counter(rid) == 109
+        successes = [response for response in responses if response.status_code == 200]
+        conflicts = [response for response in responses if response.status_code == 409]
+        assert len(successes) == 1
+        assert len(conflicts) == 9
+        assert successes[0].json()["order_number"] == 100
+        assert _get_counter(rid) == 100
 
 
 class TestNextNumberEndpoint:

@@ -31,7 +31,7 @@
     "backend": "100% (9/9 P0 tests passed)",
     "frontend": "not tested (per instructions: backend only)"
   },
-  "test_credentials": "Flaminio / Pastasciutt4! (used) and Admin / Pastasciutt4!",
+  "test_credentials": "Flaminio / [REDACTED-CREDENTIAL] (used) and Admin / [REDACTED-CREDENTIAL]",
   "seed_data_creation": "All TEST_-prefixed orders cleaned up via autouse fixture before AND after each test. Restaurant order_counter, deletion_logs and archived_orders for restaurant 'Flaminio' are scrubbed and reset to 0 between tests, so production data state is restored at end of run (counter back to 0, no test orders left).",
   "retest_needed": false,
   "should_main_agent_self_test": true,

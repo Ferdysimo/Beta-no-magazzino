@@ -15,7 +15,7 @@ const resolveImageSrc = (url) => {
 };
 
 const ProdottiMagazzinoPage = () => {
-  const { token } = useAuth();
+  const { token, isAdmin } = useAuth();
   const [products, setProducts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [filterSupplier, setFilterSupplier] = useState('');
@@ -169,17 +169,19 @@ const ProdottiMagazzinoPage = () => {
           <h1 className="font-heading text-3xl font-bold text-gray-900 uppercase">
             Prodotti magazzino
           </h1>
-          <button
-            data-testid="add-product-btn"
-            onClick={() => { resetForm(); setShowForm(true); }}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-          >
-            <Plus size={18} /> Aggiungi prodotto
-          </button>
+          {isAdmin && (
+            <button
+              data-testid="add-product-btn"
+              onClick={() => { resetForm(); setShowForm(true); }}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+            >
+              <Plus size={18} /> Aggiungi prodotto
+            </button>
+          )}
         </div>
 
         {/* Form */}
-        {showForm && (
+        {isAdmin && showForm && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-gray-800">
@@ -399,7 +401,7 @@ const ProdottiMagazzinoPage = () => {
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-2 ml-4">
+                {isAdmin && <div className="flex items-center gap-2 ml-4">
                   <button
                     data-testid={`edit-product-${product.id}`}
                     onClick={() => openEditForm(product)}
@@ -414,7 +416,7 @@ const ProdottiMagazzinoPage = () => {
                   >
                     <Trash2 size={16} />
                   </button>
-                </div>
+                </div>}
               </div>
             ))
           )}

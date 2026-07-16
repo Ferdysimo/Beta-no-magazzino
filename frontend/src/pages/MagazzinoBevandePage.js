@@ -61,7 +61,7 @@ const BevCommentPopover = ({ inputRef, value, onChange, onSave, onCancel }) => (
 );
 
 const MagazzinoBevandePageInner = () => {
-  const { token, isAdmin, restaurant, effectiveRestaurant } = useAuth();
+  const { token, canImpersonate, restaurant, effectiveRestaurant } = useAuth();
   const navigate = useNavigate();
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -78,7 +78,7 @@ const MagazzinoBevandePageInner = () => {
   // esplicitamente per correzioni manuali (toggle non persistente).
   const [forceMattina, setForceMattina] = useState(false);
 
-  const canAccess = isAdmin || restaurant?.username === 'Flaminio';
+  const canAccess = canImpersonate || restaurant?.username === 'Flaminio';
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 
   // Carica inventario + conteggi giornata + carryover mattina dal giorno prima
@@ -249,7 +249,7 @@ const MagazzinoBevandePageInner = () => {
             >
               {forceMattina ? '🔓 mattina sbloccato' : '🔒 forza mattina'}
             </button>
-            {isAdmin && effectiveRestaurant?.id && (
+            {canImpersonate && effectiveRestaurant?.id && (
               <button
                 data-testid="btn-bev-reset"
                 onClick={async () => {

@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.config import UPLOADS_DIR
 from app.core.database import db
-from app.core.files import save_image_to_disk
-from app.core.security import verify_token
+from app.core.files import build_upload_url, save_image_to_disk
+from app.core.security import require_admin, verify_token
 from app.core.time import ROME_TZ
 from app.schemas import (
     CaricoCreate,
@@ -81,7 +81,7 @@ async def get_products(supplier: str = None, token_data: dict = Depends(verify_t
     products = await db.products.find(query, {"_id": 0}).sort("name", 1).to_list(1000)
     for p in products:
         if p.get("image_file"):
-            p["image_url"] = f"/api/uploads/{p['image_file']}"
+            p["image_url"] = build_upload_url(p["image_file"])
         elif p.get("image_data") and p["image_data"].startswith("data:"):
             p["image_url"] = p["image_data"]
         else:
@@ -96,6 +96,7 @@ async def get_products(supplier: str = None, token_data: dict = Depends(verify_t
 @router.post("/products")
 async def create_product(data: ProductCreate, token_data: dict = Depends(verify_token)):
     """Create a warehouse product (shared)"""
+    require_admin(token_data)
     product_id = str(uuid.uuid4())
 
     image_filename = ""
@@ -135,7 +136,7 @@ async def create_product(data: ProductCreate, token_data: dict = Depends(verify_
 
     response = {k: v for k, v in product.items() if k != "_id"}
     if response.get("image_file"):
-        response["image_url"] = f"/api/uploads/{response['image_file']}"
+        response["image_url"] = build_upload_url(response["image_file"])
     else:
         response["image_url"] = ""
     response.pop("image_file", None)
@@ -145,6 +146,7 @@ async def create_product(data: ProductCreate, token_data: dict = Depends(verify_
 @router.put("/products/{product_id}")
 async def update_product(product_id: str, data: ProductUpdate, token_data: dict = Depends(verify_token)):
     """Update a warehouse product"""
+    require_admin(token_data)
     update_fields = {}
     if data.name is not None:
         update_fields["name"] = data.name
@@ -207,7 +209,7 @@ async def update_product(product_id: str, data: ProductUpdate, token_data: dict 
 
     response = {k: v for k, v in result.items() if k != "_id"}
     if response.get("image_file"):
-        response["image_url"] = f"/api/uploads/{response['image_file']}"
+        response["image_url"] = build_upload_url(response["image_file"])
     else:
         response["image_url"] = ""
     response.pop("image_file", None)
@@ -219,6 +221,7 @@ async def update_product(product_id: str, data: ProductUpdate, token_data: dict 
 @router.patch("/products/{product_id}/quantity")
 async def update_product_quantity(product_id: str, data: ProductQuantityUpdate, token_data: dict = Depends(verify_token)):
     """Force stock override. ADMIN ONLY (Inventario / Forza il sistema)."""
+    require_admin(token_data)
     if token_data.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Solo l'Admin può forzare le quantità")
     result = await _set_stock_absolute(
@@ -314,6 +317,7 @@ async def list_stock_movements(
 @router.delete("/products/{product_id}")
 async def delete_product(product_id: str, token_data: dict = Depends(verify_token)):
     """Delete a warehouse product"""
+    require_admin(token_data)
     product = await db.products.find_one({"id": product_id})
     if not product:
         raise HTTPException(status_code=404, detail="Prodotto non trovato")
@@ -382,7 +386,7 @@ async def get_warehouse_products_for_request(token_data: dict = Depends(verify_t
 
     for p in products:
         if p.get("image_file"):
-            p["image_url"] = f"/api/uploads/{p['image_file']}"
+            p["image_url"] = build_upload_url(p["image_file"])
         elif p.get("image_data") and p["image_data"].startswith("data:"):
             p["image_url"] = p["image_data"]
         else:
@@ -733,9 +737,9 @@ async def _set_stock_absolute(
 def _serialize_carico(c: dict) -> dict:
     c = {k: v for k, v in c.items() if k != "_id"}
     photo = c.pop("photo_file", None)
-    c["photo_url"] = f"/api/uploads/{photo}" if photo else ""
+    c["photo_url"] = build_upload_url(photo)
     fattura = c.pop("fattura_file", None)
-    c["fattura_url"] = f"/api/uploads/{fattura}" if fattura else ""
+    c["fattura_url"] = build_upload_url(fattura)
     return c
 
 @router.post("/carichi")

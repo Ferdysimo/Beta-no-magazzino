@@ -8,7 +8,7 @@ const MagazzinierePage = () => {
   const mainButtons = [
     { label: 'Scarico verso i locali', path: '/magazzino/richieste-in-arrivo' },
     { label: 'Carico verso il magazzino', path: '/magazzino/carichi' },
-    { label: 'Modifica prodotti magazzino', path: '/magazzino/prodotti' },
+    { label: 'Consulta prodotti magazzino', path: '/magazzino/prodotti' },
   ];
 
   const secondaryButtons = [

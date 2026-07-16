@@ -1,17 +1,10 @@
-# Test Credentials — Pastasciutta Roma
+# Credenziali di test
 
-Password comune: `Pastasciutt4!`
+Le credenziali non devono essere salvate nel repository, neppure per ambienti di test condivisi.
 
-Eccezione Federico: `Pastasciutta@32`
+- Conservare le password operative nel password manager concordato.
+- Passare le credenziali ai test live tramite variabili d'ambiente locali non versionate.
+- Per un database locale isolato creare account dedicati con `backend/scripts/manage_account.py`.
+- Non riutilizzare mai in produzione password create per test automatici.
 
-| Ruolo        | Username       | Password        |
-|--------------|----------------|-----------------|
-| Admin        | `Admin`        | `Pastasciutt4!` |
-| Federico     | `Federico`     | `Pastasciutta@32` |
-| Flaminio     | `Flaminio`     | `Pastasciutt4!` |
-| Grazie       | `Grazie`       | `Pastasciutt4!` |
-| Brazza       | `Brazza`       | `Pastasciutt4!` |
-| Magazziniere | `Magazziniere` | `Pastasciutt4!` |
-
-## Endpoint di login
-`POST /api/auth/login` with body `{"username": "...", "password": "..."}`
+Endpoint di login: `POST /api/auth/login` con body `{"username": "...", "password": "..."}`.

@@ -33,7 +33,7 @@
     "backend": "100% (7/7 pytest)",
     "frontend": "~90% — admin/flaminio core checks passed; one math-formula visualization concern pending main-agent confirmation"
   },
-  "test_credentials": "Admin/Pastasciutt4!, Flaminio/Pastasciutt4!, Grazie/Pastasciutt4! — PIN 0123 for report-beta and magazzino-bevande",
+  "test_credentials": "Admin/[REDACTED-CREDENTIAL], Flaminio/[REDACTED-CREDENTIAL], Grazie/[REDACTED-CREDENTIAL] — PIN 0123 for report-beta and magazzino-bevande",
   "seed_data_creation": "Inserted one yesterday cash_daily_counts row for Flaminio with _test_marker=true (vers=50) to verify prev_cash_sera carry-over; cleaned up in teardown.",
   "retest_needed": false,
   "main_agent_can_self_test": true,

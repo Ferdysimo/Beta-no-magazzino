@@ -9,9 +9,12 @@ import pytest
 import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
-assert BASE_URL, "REACT_APP_BACKEND_URL is required"
+if not BASE_URL:
+    pytest.skip("live backend not configured", allow_module_level=True)
 
-PASSWORD = "Pastasciutt4!"
+PASSWORD = os.environ.get("PASTA_TEST_PASSWORD", "")
+if not PASSWORD:
+    pytest.skip("PASTA_TEST_PASSWORD not set", allow_module_level=True)
 USERS = ["Admin", "Flaminio", "Grazie", "Brazza", "Magazziniere"]
 
 
@@ -24,6 +27,28 @@ def _login(username: str) -> str:
 @pytest.fixture(scope="module")
 def tokens():
     return {u: _login(u) for u in USERS}
+
+
+@pytest.fixture(scope="module", autouse=True)
+def test_product(tokens):
+    response = requests.post(
+        f"{BASE_URL}/api/products",
+        headers={"Authorization": f"Bearer {tokens['Admin']}"},
+        json={
+            "name": "TEST_Richieste_Prodotto",
+            "unit": "pz",
+            "supplier": "TEST_Richieste_Fornitore",
+            "quantity": 100,
+            "image_data": "",
+        },
+    )
+    assert response.status_code == 200, response.text
+    product_id = response.json()["id"]
+    yield response.json()
+    requests.delete(
+        f"{BASE_URL}/api/products/{product_id}",
+        headers={"Authorization": f"Bearer {tokens['Admin']}"},
+    )
 
 
 def _h(token: str, admin_rest_id: str = None):
@@ -68,18 +93,24 @@ class TestWarehouseProducts:
                               json={"quantity": 999}, headers=_h(tokens["Flaminio"]))
         assert resp.status_code == 403
 
-    def test_patch_product_quantity_ok_for_magazziniere(self, tokens):
+    def test_patch_product_quantity_forbidden_for_magazziniere_and_ok_for_admin(self, tokens):
         r = requests.get(f"{BASE_URL}/api/warehouse/products", headers=_h(tokens["Magazziniere"]))
         pid = r.json()[0]["id"]
         original = r.json()[0]["quantity"]
         new_qty = original + 5
+        forbidden = requests.patch(
+            f"{BASE_URL}/api/products/{pid}/quantity",
+            json={"quantity": new_qty},
+            headers=_h(tokens["Magazziniere"]),
+        )
+        assert forbidden.status_code == 403
         resp = requests.patch(f"{BASE_URL}/api/products/{pid}/quantity",
-                              json={"quantity": new_qty}, headers=_h(tokens["Magazziniere"]))
+                              json={"quantity": new_qty}, headers=_h(tokens["Admin"]))
         assert resp.status_code == 200
         assert resp.json()["quantity"] == new_qty
         # revert
         requests.patch(f"{BASE_URL}/api/products/{pid}/quantity",
-                       json={"quantity": original}, headers=_h(tokens["Magazziniere"]))
+                       json={"quantity": original}, headers=_h(tokens["Admin"]))
 
 
 # ---------- Richieste endpoints ----------

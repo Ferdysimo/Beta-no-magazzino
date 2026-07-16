@@ -32,7 +32,7 @@
   "should_main_agent_self_test": false,
   "context_for_next_testing_agent": "All 4 accounts (Flaminio, Grazie, Brazza, Magazziniere) login successfully. Critical hide-from-generale functionality verified: orders hidden from Generale page still appear on Cassa with blue frozen timer. Timer color coding on Bollitore works (green < 3min, red 3-4min, gray > 4min). Kitchen complete hides orders from Bollitore but keeps them on Cassa.",
   "verified_critical_features": {
-    "login_all_accounts": "PASS - All 4 accounts (Flaminio/Grazie/Brazza/Magazziniere) with password Pastasciutt4! work",
+    "login_all_accounts": "PASS - All 4 accounts (Flaminio/Grazie/Brazza/Magazziniere) with password [REDACTED-CREDENTIAL] work",
     "hide_from_generale": "PASS - POST /api/orders/{id}/hide-generale sets hidden_generale=true, order STILL exists in DB",
     "hidden_orders_on_cassa": "PASS - Orders with hidden_generale=true still appear on Cassa page",
     "hidden_orders_filtered_generale": "PASS - Generale page filters OUT orders with hidden_generale=true",
@@ -48,10 +48,10 @@
   },
   "test_credentials": {
     "accounts": [
-      {"username": "Flaminio", "password": "Pastasciutt4!", "location": "Flaminio", "role": "restaurant"},
-      {"username": "Grazie", "password": "Pastasciutt4!", "location": "Grazie", "role": "restaurant"},
-      {"username": "Brazza", "password": "Pastasciutt4!", "location": "Largo di Brazzà", "role": "restaurant"},
-      {"username": "Magazziniere", "password": "Pastasciutt4!", "location": "Magazzino", "role": "magazzino"}
+      {"username": "Flaminio", "password": "[REDACTED-CREDENTIAL]", "location": "Flaminio", "role": "restaurant"},
+      {"username": "Grazie", "password": "[REDACTED-CREDENTIAL]", "location": "Grazie", "role": "restaurant"},
+      {"username": "Brazza", "password": "[REDACTED-CREDENTIAL]", "location": "Largo di Brazzà", "role": "restaurant"},
+      {"username": "Magazziniere", "password": "[REDACTED-CREDENTIAL]", "location": "Magazzino", "role": "magazzino"}
     ]
   }
 }

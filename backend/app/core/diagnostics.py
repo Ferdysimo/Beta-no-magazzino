@@ -6,6 +6,7 @@ import jwt
 from fastapi import Request
 
 from app.core.config import ALGORITHM, SECRET_KEY
+from app.core.security import can_impersonate
 from app.core.state import RESTAURANT_LOCATION_CACHE
 
 
@@ -51,7 +52,7 @@ async def diagnostics_middleware(request: Request, call_next):
                         rname = payload.get("restaurant_name", "") or ""
                         role = payload.get("role", "") or ""
                         # Admin/supervisor overriding a specific restaurant via header
-                        if role in ("admin",):
+                        if can_impersonate(payload):
                             override = request.headers.get("X-Admin-Restaurant-Id")
                             if override:
                                 rid = override

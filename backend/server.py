@@ -90,7 +90,6 @@ from app.routers.orders import (
 from app.routers.analysis import (
     export_analisi_mensile_excel,
     export_media_locali_excel,
-    get_analisi_mensile_summary,
     get_media_locali,
     router as analysis_router,
 )
@@ -258,10 +257,7 @@ from app.routers.warehouse import (
 )
 from app.routers.websocket import websocket_endpoint
 from app.services.seeding import (
-    PRIVILEGED_SEED_ACCOUNTS,
     _ensure_beverages_seeded,
-    ensure_seed_account,
-    ensure_simone_token_version,
 )
 
 

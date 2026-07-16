@@ -197,6 +197,15 @@ const HomePage = () => {
                 <span className="block text-xs text-gray-500 mt-0.5">Audit log: ogni movimento/operazione su Cassa e Bevande</span>
               </button>
               )}
+              {isFederico && (
+              <button
+                data-testid="federico-diagnostica"
+                onClick={() => navigate('/diagnostica')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Diagnostica live</span>
+              </button>
+              )}
             </div>
           </div>
         </main>
@@ -327,7 +336,7 @@ const HomePage = () => {
               className="border border-gray-400 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-md font-medium text-sm transition-colors">
               Richiesta / Check merce dal magazzino
             </button>
-            {isAdmin && (
+            {canImpersonate && (
               <button data-testid="btn-media-locali" onClick={() => navigate('/media-locali')}
                 className="border border-gray-400 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-md font-medium text-sm transition-colors">
                 Numeri

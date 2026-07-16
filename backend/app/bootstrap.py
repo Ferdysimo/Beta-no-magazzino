@@ -1,8 +1,6 @@
 import asyncio
 import logging
-import uuid
 from contextlib import asynccontextmanager, suppress
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, FastAPI
 from slowapi import _rate_limit_exceeded_handler
@@ -10,10 +8,10 @@ from slowapi.errors import RateLimitExceeded
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 
+from app.core.config import CORS_ALLOWED_ORIGINS, ENABLE_API_DOCS, IS_DEVELOPMENT
 from app.core.database import client, db
 from app.core.diagnostics import diagnostics_middleware
 from app.core.rate_limit import limiter
-from app.core.security import pwd_context
 from app.core.state import RESTAURANT_LOCATION_CACHE
 from app.routers.analysis import router as analysis_router
 from app.routers.beverages import router as beverages_router
@@ -24,12 +22,7 @@ from app.routers.report import router as report_router
 from app.routers.system import router as system_router
 from app.routers.warehouse import router as warehouse_router
 from app.routers.websocket import router as websocket_router
-from app.services.seeding import (
-    PRIVILEGED_SEED_ACCOUNTS,
-    _ensure_beverages_seeded,
-    ensure_seed_account,
-    ensure_simone_token_version,
-)
+from app.services.seeding import _ensure_beverages_seeded
 from app.tasks.maintenance import cleanup_old_uploads
 from app.tasks.midnight import midnight_scheduler
 from app.tasks.stale_orders import recover_stale_orders
@@ -56,41 +49,6 @@ async def initialize_application():
 
     # Seed beverage catalog if empty (9 beverages for Flaminio)
     await _ensure_beverages_seeded()
-
-    # Seed Federico (role "supervisor"): has access to Storico Chiusure,
-    # Controllo Report (audit-cassa) and Diagnostica Live — nothing else.
-    try:
-        federico_password = "Pastasciutta@32"
-        federico = await db.restaurants.find_one({"username": "Federico"})
-        if not federico:
-            await db.restaurants.insert_one({
-                "id": str(uuid.uuid4()),
-                "name": "Supervisore",
-                "username": "Federico",
-                "password": pwd_context.hash(federico_password),
-                "location": "Supervisione",
-                "role": "supervisor",
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "order_counter": 0,
-            })
-            logger.info("[SEED] Created Federico (role=supervisor)")
-        elif not pwd_context.verify(federico_password, federico.get("password", "")):
-            await db.restaurants.update_one(
-                {"username": "Federico"},
-                {"$set": {"password": pwd_context.hash(federico_password)}}
-            )
-            logger.info("[SEED] Updated Federico password to documented test credential")
-    except Exception as e:
-        logger.warning(f"[SEED] Could not ensure Federico account: {e}")
-
-    try:
-        for account in PRIVILEGED_SEED_ACCOUNTS:
-            created = await ensure_seed_account(account)
-            if created:
-                logger.info(f"[SEED] Created {account['username']} (role={account['role']})")
-        await ensure_simone_token_version()
-    except Exception as e:
-        logger.warning(f"[SEED] Could not ensure privileged accounts: {e}")
 
     try:
         await db.restaurants.update_many(
@@ -190,7 +148,13 @@ api_router.include_router(documents_router)
 
 
 def create_app() -> FastAPI:
-    application = FastAPI(lifespan=lifespan)
+    docs_enabled = ENABLE_API_DOCS or IS_DEVELOPMENT
+    application = FastAPI(
+        lifespan=lifespan,
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
+    )
     application.state.limiter = limiter
     application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     application.add_middleware(GZipMiddleware, minimum_size=500)
@@ -202,16 +166,10 @@ def create_app() -> FastAPI:
     application.add_middleware(
         CORSMiddleware,
         allow_credentials=True,
-        allow_origins=[
-            "https://real-time-orders-3.preview.emergentagent.com",
-            "http://51.91.125.232",
-            "http://pasta-app.it",
-            "http://www.pasta-app.it",
-            "https://51.91.125.232",
-            "https://pasta-app.it",
-            "https://www.pasta-app.it",
-        ],
-        allow_origin_regex=r"^http://(localhost|127\.0\.0\.1)(:\d+)?$",
+        allow_origins=list(CORS_ALLOWED_ORIGINS),
+        allow_origin_regex=(
+            r"^http://(localhost|127\.0\.0\.1)(:\d+)?$" if IS_DEVELOPMENT else None
+        ),
         allow_methods=["*"],
         allow_headers=["*"],
         expose_headers=[

@@ -28,15 +28,12 @@ export const AuthProvider = ({ children }) => {
     }
   });
 
-  // "Federico" è l'unico supervisore con privilegi pieni tipo admin (vede tutti
-  // i locali, pannello admin, dizionario, chiusure excel, ecc.).
-  // Altri account "supervisor" (futuri) avranno solo i permessi di base senza
-  // i pulsanti admin extra.
+  // Federico puo selezionare i locali, ma mantiene il ruolo supervisor.
+  // Le mutazioni globali continuano a richiedere il ruolo admin reale.
   const isSupervisor = restaurant?.role === 'supervisor';
   const isFederico = isSupervisor && restaurant?.username === 'Federico';
-  const isAdmin = restaurant?.role === 'admin' || isFederico;
-  // Alias storico mantenuto per chiarezza nei call site che vogliono ENTRAMBI.
-  const canImpersonate = isAdmin;
+  const isAdmin = restaurant?.role === 'admin';
+  const canImpersonate = isAdmin || isFederico;
 
   // The effective restaurant: for admin/supervisor it's the selected one, for others it's their own
   const effectiveRestaurant = canImpersonate ? adminSelectedRestaurant : restaurant;
@@ -55,16 +52,16 @@ export const AuthProvider = ({ children }) => {
   // Usiamo un ref così l'interceptor è registrato una volta sola ma legge sempre
   // il valore aggiornato di adminSelectedRestaurant.
   const adminRestRef = useRef(adminSelectedRestaurant);
-  const isAdminRef = useRef(false);
+  const canImpersonateRef = useRef(false);
   useEffect(() => { adminRestRef.current = adminSelectedRestaurant; }, [adminSelectedRestaurant]);
   useEffect(() => {
     const r = restaurant?.role;
-    isAdminRef.current = r === 'admin' || (r === 'supervisor' && restaurant?.username === 'Federico');
+    canImpersonateRef.current = r === 'admin' || (r === 'supervisor' && restaurant?.username === 'Federico');
   }, [restaurant]);
   useEffect(() => {
     const id = axios.interceptors.request.use((config) => {
       try {
-        if (isAdminRef.current && adminRestRef.current?.id) {
+        if (canImpersonateRef.current && adminRestRef.current?.id) {
           config.headers = config.headers || {};
           // X-Restaurant-Id viene letto da `_effective_restaurant_id` (alcuni
           // endpoint specifici come /orders/today-paste-list, /cash/*, ecc.).

@@ -6,7 +6,9 @@ const OrderContext = createContext(null);
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
-const WS_URL = BACKEND_URL.replace(/^http/, 'ws');
+const WS_URL = BACKEND_URL
+  ? BACKEND_URL.replace(/^http/, 'ws')
+  : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
 
 const OPTIMISTIC_GUARD_MS = 3000;
 const WS_BUFFER_FLUSH_MS = 300;
@@ -14,8 +16,8 @@ const WS_PING_INTERVAL_MS = 25000;     // keepalive ping every 25s
 const POLLING_FALLBACK_MS = 15000;      // safety-net poll every 15s
 
 export const OrderProvider = ({ children }) => {
-  const { token, restaurant, effectiveRestaurant, isAdmin } = useAuth();
-  const activeRestaurant = isAdmin ? effectiveRestaurant : restaurant;
+  const { token, restaurant, effectiveRestaurant, canImpersonate } = useAuth();
+  const activeRestaurant = canImpersonate ? effectiveRestaurant : restaurant;
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [newOrdersAvailable, setNewOrdersAvailable] = useState(false);
@@ -171,9 +173,10 @@ export const OrderProvider = ({ children }) => {
   };
 
   // WebSocket connect — uses only refs, no hook dependencies
-  const connectWebSocket = () => {
+  const connectWebSocket = async () => {
     const rid = restaurantIdRef.current;
-    if (!rid || !mountedRef.current) return;
+    const currentToken = tokenRef.current;
+    if (!rid || !currentToken || !mountedRef.current) return;
 
     // Clean up existing
     if (wsRef.current) {
@@ -182,8 +185,28 @@ export const OrderProvider = ({ children }) => {
       wsRef.current = null;
     }
 
+    let ticket;
+    try {
+      const response = await axios.post(`${API}/ws-ticket`, {}, {
+        headers: { Authorization: `Bearer ${currentToken}` }
+      });
+      ticket = response.data?.ticket;
+    } catch (error) {
+      console.error('WebSocket ticket error:', error);
+      if (!pollingIntervalRef.current && mountedRef.current) {
+        pollingIntervalRef.current = setInterval(() => fetchOrdersImpl(false), POLLING_FALLBACK_MS);
+      }
+      if (mountedRef.current) {
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 15000);
+        reconnectAttemptsRef.current++;
+        reconnectTimeoutRef.current = setTimeout(connectWebSocket, delay);
+      }
+      return;
+    }
+
+    if (!ticket || !mountedRef.current || rid !== restaurantIdRef.current) return;
     wsClosedIntentionallyRef.current = false;
-    const wsUrl = `${WS_URL}/api/ws/${rid}`;
+    const wsUrl = `${WS_URL}/api/ws?ticket=${encodeURIComponent(ticket)}`;
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
@@ -227,6 +250,7 @@ export const OrderProvider = ({ children }) => {
     };
 
     ws.onclose = () => {
+      if (wsRef.current !== ws) return;
       if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
       wsRef.current = null;
       wsConnectedRef.current = false;

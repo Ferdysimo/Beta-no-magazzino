@@ -25,14 +25,14 @@ from app.core.ws_manager import manager
 from app.routers import beverages, documents, invoices, system, warehouse, websocket
 
 
-EXPECTED_OPENAPI_SHA256 = "87e7464fd4c1fa025c2bbf738e7b066410070a0410c66435845c1edf6ea1f776"
+EXPECTED_OPENAPI_SHA256 = "bcfa91f4e3686e4d8e721dc8775efd3f394698e984ddcc07840d1b44afe8b0a6"
 
 
 def test_phase3_keeps_exact_openapi_contract_and_unique_routes():
     schema = server.app.openapi()
     payload = json.dumps(schema, sort_keys=True, separators=(",", ":")).encode()
     assert hashlib.sha256(payload).hexdigest() == EXPECTED_OPENAPI_SHA256
-    assert len(schema["paths"]) == 89
+    assert len(schema["paths"]) == 81
 
     route_pairs = [
         (method, route.path)
@@ -44,12 +44,12 @@ def test_phase3_keeps_exact_openapi_contract_and_unique_routes():
 
 
 def test_phase3_router_ownership_counts_are_stable():
-    assert len(system.router.routes) == 15
+    assert len(system.router.routes) == 12
     assert len(invoices.router.routes) == 9
     assert len(warehouse.router.routes) == 25
-    assert len(beverages.router.routes) == 12
+    assert len(beverages.router.routes) == 8
     assert len(documents.router.routes) == 16
-    assert len(websocket.router.routes) == 1
+    assert len(websocket.router.routes) == 2
 
 
 def test_phase3_singletons_and_compatibility_reexports_are_shared():

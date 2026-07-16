@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.config import UPLOADS_DIR
 from app.core.database import db
-from app.core.files import save_image_to_disk
+from app.core.files import build_upload_url, save_image_to_disk
 from app.core.security import verify_token
 from app.core.time import _today_rome_utc_range
 from app.schemas import (
@@ -96,7 +96,7 @@ async def get_versamenti(
 
     for v in versamenti:
         if v.get("image_file"):
-            v["image_data"] = f"/api/uploads/{v['image_file']}"
+            v["image_data"] = build_upload_url(v["image_file"])
         v.pop("image_file", None)
 
     return versamenti
@@ -188,10 +188,10 @@ async def get_chiusure(
 
     for c in chiusure:
         if c.get("image_file"):
-            c["image_data"] = f"/api/uploads/{c['image_file']}"
+            c["image_data"] = build_upload_url(c["image_file"])
         c.pop("image_file", None)
         piatti = c.pop("piatti_file", None)
-        c["piatti_url"] = f"/api/uploads/{piatti}" if piatti else ""
+        c["piatti_url"] = build_upload_url(piatti)
 
     return chiusure
 
@@ -246,7 +246,7 @@ async def upload_chiusura_piatti(chiusura_id: str, data: ChiusuraPiattiUpload, t
         {"id": chiusura_id},
         {"$set": {"piatti_file": filename}}
     )
-    return {"piatti_url": f"/api/uploads/{filename}"}
+    return {"piatti_url": build_upload_url(filename)}
 
 
 @router.delete("/chiusure/{chiusura_id}/piatti")
@@ -308,7 +308,6 @@ def _parse_ddt_numbers(text: str) -> list:
 
 async def _enrich_global_invoice(doc: dict) -> dict:
     """Aggiunge URL immagini, dettagli invoices linkate e stato match per numero DDT."""
-    base_url = "/api/uploads/"
     linked_ids = doc.get("linked_invoice_ids") or []
     linked_docs = []
     linked_norms = set()
@@ -322,7 +321,7 @@ async def _enrich_global_invoice(doc: dict) -> dict:
                 "supplier": inv.get("supplier") or "",
                 "importo": float(inv.get("importo") or 0),
                 "ddt_number": ddt_n,
-                "image_url": base_url + inv["image_file"] if inv.get("image_file") else "",
+                "image_url": build_upload_url(inv.get("image_file", "")),
                 "uploaded_by": inv.get("uploaded_by") or "",
                 "created_at": inv.get("created_at"),
                 "restaurant_id": inv.get("restaurant_id"),
@@ -341,7 +340,7 @@ async def _enrich_global_invoice(doc: dict) -> dict:
         "declared_ddt": [d["raw"] for d in declared],
         "missing_ddt": missing,
         "extra_ddt_count": len(extra),
-        "image_url": base_url + doc["image_file"] if doc.get("image_file") else "",
+        "image_url": build_upload_url(doc.get("image_file", "")),
         "invoice_date": doc.get("invoice_date"),
         "created_at": doc.get("created_at"),
         "uploaded_by": doc.get("uploaded_by") or "",
@@ -352,7 +351,7 @@ async def _enrich_global_invoice(doc: dict) -> dict:
 
 
 def _require_admin(token_data: dict):
-    if token_data.get("role") not in ("admin", "supervisor"):
+    if token_data.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Solo admin")
 
 
@@ -441,7 +440,7 @@ async def list_all_ddt(token_data: dict = Depends(verify_token)):
             "id": d.get("id"),
             "supplier": d.get("supplier") or "",
             "ddt_number": d.get("ddt_number") or "",
-            "image_url": ("/api/uploads/" + d["image_file"]) if d.get("image_file") else "",
+            "image_url": build_upload_url(d.get("image_file", "")),
             "uploaded_by": d.get("uploaded_by") or "",
             "created_at": d.get("created_at"),
             "invoice_date": d.get("invoice_date"),
@@ -477,7 +476,7 @@ async def list_locale_invoices_by_supplier(
             "supplier": d.get("supplier") or "",
             "importo": float(d.get("importo") or 0),
             "ddt_number": d.get("ddt_number") or "",
-            "image_url": ("/api/uploads/" + d["image_file"]) if d.get("image_file") else "",
+            "image_url": build_upload_url(d.get("image_file", "")),
             "uploaded_by": d.get("uploaded_by") or "",
             "created_at": d.get("created_at"),
             "restaurant_id": d.get("restaurant_id"),

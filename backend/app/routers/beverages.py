@@ -8,8 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from app.core.catalogs import BEVERAGES_CATALOG, UNITS_PER_CASE
 from app.core.database import db
 from app.core.deps import _effective_restaurant_id
-from app.core.files import save_image_to_disk
-from app.core.security import verify_token
+from app.core.files import build_upload_url, save_image_to_disk
+from app.core.security import can_impersonate, verify_token
 from app.core.time import ROME_TZ, _today_rome_bounds_utc
 from app.schemas import BeverageCaricoCreate
 from app.tasks.maintenance import UPLOADS_RETENTION_DAYS, cleanup_old_uploads
@@ -37,6 +37,11 @@ __all__ = [
 async def _get_flaminio_restaurant_id() -> Optional[str]:
     r = await db.restaurants.find_one({"username": "Flaminio"}, {"_id": 0, "id": 1})
     return r["id"] if r else None
+
+
+def _require_flaminio_access(token_data: dict, flaminio_id: str) -> None:
+    if token_data.get("restaurant_id") != flaminio_id and not can_impersonate(token_data):
+        raise HTTPException(status_code=403, detail="Funzione riservata a Flaminio")
 
 
 # ==================== BEVANDE (FLAMINIO ONLY) ====================
@@ -234,7 +239,6 @@ async def get_generale_hide_log(
 
 
 
-@router.post("/beverages/carichi")
 async def create_beverage_carico(
     data: BeverageCaricoCreate, token_data: dict = Depends(verify_token)
 ):
@@ -272,7 +276,7 @@ async def create_beverage_carico(
         "restaurant_id": flaminio_id,
         "supplier": data.supplier.strip() or "Gioia",
         "invoice_file": invoice_filename,
-        "invoice_url": f"/api/uploads/{invoice_filename}" if invoice_filename else "",
+        "invoice_url": build_upload_url(invoice_filename),
         "invoice_date": data.invoice_date or "",
         "items": items_saved,
         "units_per_case": UNITS_PER_CASE,
@@ -296,7 +300,6 @@ async def create_beverage_carico(
     return doc
 
 
-@router.get("/beverages/carichi")
 async def list_beverage_carichi(token_data: dict = Depends(verify_token)):
     flaminio_id = await _get_flaminio_restaurant_id()
     if not flaminio_id:
@@ -307,7 +310,6 @@ async def list_beverage_carichi(token_data: dict = Depends(verify_token)):
     return docs
 
 
-@router.delete("/beverages/carichi/{carico_id}")
 async def delete_beverage_carico(carico_id: str, token_data: dict = Depends(verify_token)):
     """Delete a carico and revert its inventory impact. Within 20min for non-admins."""
     flaminio_id = await _get_flaminio_restaurant_id()
@@ -344,6 +346,7 @@ async def register_beverage_sale(
     flaminio_id = await _get_flaminio_restaurant_id()
     if not flaminio_id:
         raise HTTPException(status_code=404, detail="Ristorante Flaminio non trovato")
+    _require_flaminio_access(token_data, flaminio_id)
     now_iso = datetime.now(timezone.utc).isoformat()
     sale = {
         "id": str(uuid.uuid4()),
@@ -380,6 +383,7 @@ async def undo_beverage_sale(data: dict, token_data: dict = Depends(verify_token
     flaminio_id = await _get_flaminio_restaurant_id()
     if not flaminio_id:
         raise HTTPException(status_code=404, detail="Ristorante Flaminio non trovato")
+    _require_flaminio_access(token_data, flaminio_id)
     # "Today" in Europe/Rome
     start_utc, end_utc = _today_rome_bounds_utc()
     last = await db.beverage_sales.find_one(
@@ -408,6 +412,7 @@ async def get_beverage_sales_today(token_data: dict = Depends(verify_token)):
     flaminio_id = await _get_flaminio_restaurant_id()
     if not flaminio_id:
         return []
+    _require_flaminio_access(token_data, flaminio_id)
     start_utc, end_utc = _today_rome_bounds_utc()
     # Aggregate today's sales
     pipeline = [
@@ -437,7 +442,6 @@ async def get_beverage_sales_today(token_data: dict = Depends(verify_token)):
     ]
 
 
-@router.get("/beverages/report")
 async def beverage_report(
     date_from: str,
     date_to: str,
@@ -592,7 +596,7 @@ async def analisi_magazzino(
         pid = p["id"]
         image_url = ""
         if p.get("image_file"):
-            image_url = f"/api/uploads/{p['image_file']}"
+            image_url = build_upload_url(p["image_file"])
         elif p.get("image_data", "").startswith("data:"):
             image_url = p["image_data"]
 

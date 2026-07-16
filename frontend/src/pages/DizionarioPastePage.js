@@ -21,10 +21,8 @@ const DEFAULT_DICT = [
 
 const DizionarioPastePage = () => {
   const navigate = useNavigate();
-  const { token, isAdmin, restaurant } = useAuth();
-  // Admin + Supervisor (Federico) hanno accesso. Restaurant base no.
-  const role = restaurant?.role;
-  const canAccess = role === 'admin' || role === 'supervisor';
+  const { token, canImpersonate } = useAuth();
+  const canAccess = canImpersonate;
 
   const [restaurants, setRestaurants] = useState([]);
   const [selectedRestId, setSelectedRestId] = useState(

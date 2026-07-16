@@ -20,7 +20,7 @@ const resolveImageSrc = (imageData) => {
 };
 
 const FatturePage = () => {
-  const { restaurant, token } = useAuth();
+  const { restaurant, token, isAdmin } = useAuth();
   const fileInputRef = useRef(null);
   
   // Form state
@@ -371,15 +371,17 @@ const FatturePage = () => {
                   <option key={s.id} value={s.name}>{s.name}</option>
                 ))}
               </select>
-              <button
-                type="button"
-                onClick={() => setShowSupplierModal(true)}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md transition-colors"
-                data-testid="manage-suppliers-btn"
-              >
-                <Settings size={16} />
-                Gestisci fornitori
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setShowSupplierModal(true)}
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md transition-colors"
+                  data-testid="manage-suppliers-btn"
+                >
+                  <Settings size={16} />
+                  Gestisci fornitori
+                </button>
+              )}
             </div>
 
             {/* Numero DDT */}
@@ -545,7 +547,7 @@ const FatturePage = () => {
       </main>
 
       {/* Supplier Management Modal */}
-      {showSupplierModal && (
+      {isAdmin && showSupplierModal && (
         <div 
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
           onClick={() => setShowSupplierModal(false)}

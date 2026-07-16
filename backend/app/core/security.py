@@ -12,6 +12,27 @@ security = HTTPBearer()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+def is_federico(token_data: dict) -> bool:
+    return (
+        token_data.get("role") == "supervisor"
+        and token_data.get("username") == "Federico"
+    )
+
+
+def can_impersonate(token_data: dict) -> bool:
+    return token_data.get("role") == "admin" or is_federico(token_data)
+
+
+def require_admin(token_data: dict) -> None:
+    if token_data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+
+
+def require_admin_or_federico(token_data: dict) -> None:
+    if not can_impersonate(token_data):
+        raise HTTPException(status_code=403, detail="Admin or Federico only")
+
+
 def create_token(
     restaurant_id: str,
     restaurant_name: str,
@@ -36,13 +57,10 @@ def verify_token(
 ) -> dict:
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        payload["authenticated_restaurant_id"] = payload.get("restaurant_id", "")
         if payload.get("username") == "Simone" and int(payload.get("token_version") or 0) < SIMONE_MIN_TOKEN_VERSION:
             raise HTTPException(status_code=401, detail="Token revoked")
-        if payload.get("role") == "supervisor":
-            payload["original_role"] = "supervisor"
-            if payload.get("username") == "Federico":
-                payload["role"] = "admin"
-        if payload.get("role") == "admin" and request:
+        if can_impersonate(payload) and request:
             admin_restaurant_id = request.headers.get("X-Admin-Restaurant-Id")
             if admin_restaurant_id:
                 payload["restaurant_id"] = admin_restaurant_id

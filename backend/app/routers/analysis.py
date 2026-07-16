@@ -8,10 +8,9 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from app.core.database import db
-from app.core.security import verify_token
+from app.core.security import require_admin, require_admin_or_federico, verify_token
 from app.core.time import ROME_TZ
 from app.services.analysis import (
-    _analysis_summary_response,
     _build_annual_analysis_data,
     _display_media_location,
     _ensure_analysis_integrity,
@@ -29,8 +28,7 @@ router = APIRouter()
 
 @router.get("/admin/media-locali")
 async def get_media_locali(token_data: dict = Depends(verify_token)):
-    if token_data.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    require_admin_or_federico(token_data)
 
     # Get all restaurants
     restaurants = await db.restaurants.find(
@@ -102,19 +100,9 @@ async def get_media_locali(token_data: dict = Depends(verify_token)):
     }
 
 
-@router.get("/admin/analisi-mensile/summary")
-async def get_analisi_mensile_summary(year: int = None, token_data: dict = Depends(verify_token)):
-    if token_data.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-    selected_year = _validate_export_year(year)
-    data = await _build_annual_analysis_data(selected_year)
-    return _analysis_summary_response(data)
-
-
 @router.get("/admin/analisi-mensile/export")
 async def export_analisi_mensile_excel(year: int = None, token_data: dict = Depends(verify_token)):
-    if token_data.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    require_admin(token_data)
     selected_year = _validate_export_year(year)
     data = await _build_annual_analysis_data(selected_year)
     _ensure_analysis_integrity(data)
@@ -158,8 +146,7 @@ async def export_analisi_mensile_excel(year: int = None, token_data: dict = Depe
 
 @router.get("/admin/media-locali/export")
 async def export_media_locali_excel(year: int = None, token_data: dict = Depends(verify_token)):
-    if token_data.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    require_admin_or_federico(token_data)
 
     selected_year = year or datetime.now(ROME_TZ).year
     if selected_year < 2020 or selected_year > 2100:

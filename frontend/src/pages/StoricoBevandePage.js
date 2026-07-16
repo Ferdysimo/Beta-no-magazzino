@@ -25,13 +25,13 @@ const evaluateValue = (v) => {
 };
 
 const StoricoBevandePage = () => {
-  const { token, isAdmin, restaurant } = useAuth();
+  const { token, canImpersonate, restaurant } = useAuth();
   const navigate = useNavigate();
   const [history, setHistory] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const canAccess = isAdmin || restaurant?.username === 'Flaminio';
+  const canAccess = canImpersonate || restaurant?.username === 'Flaminio';
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 
   useEffect(() => {

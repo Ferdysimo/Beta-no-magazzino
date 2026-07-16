@@ -1,7 +1,7 @@
 # Piano di sicurezza applicazione
 
-Ultimo aggiornamento: 2026-07-14
-Stato: audit iniziale completato, interventi non ancora applicati
+Ultimo aggiornamento: 2026-07-16
+Stato: P0-A lato codice implementato e testato; P0-B VPS preparato ma non eseguito
 Riferimento: OWASP ASVS 5.0 livello 2, con controlli rafforzati per gli account privilegiati
 
 ## Regole operative
@@ -16,8 +16,8 @@ Riferimento: OWASP ASVS 5.0 livello 2, con controlli rafforzati per gli account 
 
 - Analizzati repository, 118 endpoint applicativi, autenticazione, autorizzazioni, isolamento tra locali, WebSocket, upload, dipendenze, frontend, configurazione VPS, logging e backup.
 - Otto route applicative risultano prive di autenticazione, incluso il WebSocket.
-- Il repository remoto risulta pubblico e contiene 56 file versionati nella cartella `uploads/`, tra cui documenti operativi.
-- La VPS risponde in HTTP; HTTPS non risulta attivo e Uvicorn e raggiungibile direttamente sulla porta 8001.
+- Al momento dell'audit il repository remoto risultava pubblico e conteneva 56 file versionati in `uploads`; il repository e stato poi reso privato e i file sono stati rimossi dal branch di lavoro.
+- HTTPS e stato attivato dopo l'audit; restano da applicare redirect HTTP, chiusura esterna della porta 8001 e verifica WSS durante P0-B.
 - L'elenco account, la documentazione OpenAPI e un file di backup ordini risultano accessibili senza login.
 - Sono presenti credenziali cablate nel codice e nella cronologia Git. Non riportarle in questo documento: devono essere considerate compromesse e ruotate.
 - JWT validi per sette giorni, senza revoca generale dopo logout, cambio password, eliminazione o cambio ruolo.

@@ -4,8 +4,8 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.database import db
-from app.core.files import save_image_to_disk
-from app.core.security import verify_token
+from app.core.files import build_upload_url, save_image_to_disk
+from app.core.security import require_admin, verify_token
 from app.core.time import _today_rome_utc_range
 from app.schemas import InvoiceCreate
 
@@ -97,7 +97,7 @@ async def get_invoices(
     # Build image_url from file or keep legacy base64
     for inv in invoices:
         if inv.get("image_file"):
-            inv["image_data"] = f"/api/uploads/{inv['image_file']}"
+            inv["image_data"] = build_upload_url(inv["image_file"])
         inv.pop("image_file", None)
 
     return invoices
@@ -111,7 +111,7 @@ async def get_invoice(invoice_id: str, token_data: dict = Depends(verify_token))
     if not invoice:
         raise HTTPException(status_code=404, detail="Fattura non trovata")
     if invoice.get("image_file"):
-        invoice["image_data"] = f"/api/uploads/{invoice['image_file']}"
+        invoice["image_data"] = build_upload_url(invoice["image_file"])
     invoice.pop("image_file", None)
     return invoice
 
@@ -160,6 +160,7 @@ async def get_suppliers(token_data: dict = Depends(verify_token)):
 @router.post("/suppliers")
 async def create_supplier(name: str, token_data: dict = Depends(verify_token)):
     """Add a new supplier (shared across all restaurants)"""
+    require_admin(token_data)
     # Check if exists
     existing = await db.suppliers.find_one({
         "name": {"$regex": f"^{name}$", "$options": "i"}
@@ -179,6 +180,7 @@ async def create_supplier(name: str, token_data: dict = Depends(verify_token)):
 @router.patch("/suppliers/{supplier_id}")
 async def update_supplier(supplier_id: str, name: str, token_data: dict = Depends(verify_token)):
     """Update supplier name (affects all restaurants)"""
+    require_admin(token_data)
     result = await db.suppliers.find_one_and_update(
         {"id": supplier_id},
         {"$set": {"name": name}},
@@ -193,6 +195,7 @@ async def update_supplier(supplier_id: str, name: str, token_data: dict = Depend
 @router.delete("/suppliers/{supplier_id}")
 async def delete_supplier(supplier_id: str, token_data: dict = Depends(verify_token)):
     """Delete a supplier (affects all restaurants)"""
+    require_admin(token_data)
     result = await db.suppliers.delete_one({
         "id": supplier_id
     })

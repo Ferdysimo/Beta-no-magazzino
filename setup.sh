@@ -67,6 +67,9 @@ cat > .env << EOF
 MONGO_URL=mongodb://localhost:27017
 DB_NAME=$DB_NAME
 JWT_SECRET=$JWT_SECRET
+APP_ENV=production
+ENABLE_API_DOCS=false
+UPLOADS_DIR=/var/lib/pastasciutta/uploads
 EOF
 
 deactivate
@@ -77,7 +80,7 @@ cd "$APP_DIR/frontend"
 yarn install
 
 cat > .env << EOF
-REACT_APP_BACKEND_URL=http://$SERVER_IP:8001
+REACT_APP_BACKEND_URL=
 EOF
 
 echo "  Build produzione..."
@@ -97,7 +100,7 @@ Type=simple
 User=root
 WorkingDirectory=$APP_DIR/backend
 Environment=PATH=$APP_DIR/backend/venv/bin:/usr/bin
-ExecStart=$APP_DIR/backend/venv/bin/uvicorn server:app --host 0.0.0.0 --port 8001
+ExecStart=$APP_DIR/backend/venv/bin/uvicorn server:app --host 127.0.0.1 --port 8001
 Restart=always
 RestartSec=3
 
@@ -163,14 +166,8 @@ systemctl enable pastasciutta-backend
 systemctl start pastasciutta-backend
 systemctl restart nginx
 
-# Seed database
-echo ""
-echo "Creazione account..."
-sleep 2
-curl -s -X POST http://localhost:8001/api/seed | python3 -c "import sys,json;d=json.load(sys.stdin);print(json.dumps(d,indent=2))" 2>/dev/null || echo "Seed fallito, riprova: curl -X POST http://localhost:8001/api/seed"
-
 # Crea cartella uploads
-mkdir -p "$APP_DIR/uploads"
+mkdir -p /var/lib/pastasciutta/uploads
 
 echo ""
 echo "=========================================="
@@ -179,11 +176,9 @@ echo "=========================================="
 echo ""
 echo "  Apri dal browser: http://$SERVER_IP"
 echo ""
-echo "  Account:"
-echo "    Flaminio    / Pastasciutt4!"
-echo "    Grazie      / Pastasciutt4!"
-echo "    Brazza      / Pastasciutt4!"
-echo "    Magazziniere/ Pastasciutt4!"
+echo "  Gli account si gestiscono solo da shell fidata con:"
+echo "    cd $APP_DIR/backend && source venv/bin/activate"
+echo "    python scripts/manage_account.py create --username NOME --name NOME --location SEDE --role RUOLO"
 echo ""
 echo "  Comandi utili:"
 echo "    Stato:    systemctl status pastasciutta-backend"

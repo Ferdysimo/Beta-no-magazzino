@@ -17,7 +17,7 @@ const resolveImageSrc = (url) => {
 };
 
 const NuovaRichiestaPage = () => {
-  const { token, restaurant, effectiveRestaurant, isAdmin } = useAuth();
+  const { token, restaurant, effectiveRestaurant, canImpersonate } = useAuth();
   const navigate = useNavigate();
   const { id: editId } = useParams(); // when present we are editing an existing richiesta
   const isEdit = Boolean(editId);
@@ -33,7 +33,7 @@ const NuovaRichiestaPage = () => {
 
   const headers = () => {
     const h = { Authorization: `Bearer ${token}` };
-    if (isAdmin && effectiveRestaurant?.id) {
+    if (canImpersonate && effectiveRestaurant?.id) {
       h['X-Admin-Restaurant-Id'] = effectiveRestaurant.id;
     }
     return h;

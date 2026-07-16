@@ -3,12 +3,13 @@ import re
 import shutil
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List
+from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 
-from app.core.config import API_VERSION, SIMONE_MIN_TOKEN_VERSION, UPLOADS_DIR
+from app.core.config import API_VERSION, UPLOADS_DIR
+from app.core.files import verify_upload_signature
 from app.core.database import db
 from app.core.diagnostics import (
     api_call_log,
@@ -18,7 +19,13 @@ from app.core.diagnostics import (
 )
 from app.core.rate_limit import limiter
 from app.core.runtime import SERVER_GIT_COMMIT, SERVER_STARTED_AT
-from app.core.security import create_token, pwd_context, verify_token
+from app.core.security import (
+    create_token,
+    pwd_context,
+    require_admin,
+    require_admin_or_federico,
+    verify_token,
+)
 from app.core.state import RESTAURANT_LOCATION_CACHE
 from app.core.time import ROME_TZ
 from app.core.ws_manager import manager
@@ -28,13 +35,7 @@ from app.schemas import (
     LocalRestaurantCreate,
     LoginRequest,
     LoginResponse,
-    RestaurantCreate,
     RestaurantResponse,
-)
-from app.services.seeding import (
-    PRIVILEGED_SEED_ACCOUNTS,
-    ensure_seed_account,
-    ensure_simone_token_version,
 )
 
 
@@ -47,8 +48,6 @@ __all__ = [
     "frontend_heartbeat",
     "frontend_error",
     "serve_upload",
-    "create_restaurant",
-    "get_restaurants",
     "login",
     "get_current_restaurant",
     "get_admin_restaurants",
@@ -56,22 +55,16 @@ __all__ = [
     "get_system_alerts",
     "acknowledge_system_alert",
     "get_diagnostics",
-    "seed_data",
 ]
 
 
 @router.get("/")
 async def root():
-    return {"message": "Pastasciutta Roma API", "version": API_VERSION}
+    return {"status": "ok"}
 
 @router.get("/version")
 async def version_check():
-    return {
-        "version": API_VERSION,
-        "git_commit": SERVER_GIT_COMMIT,
-        "started_at": SERVER_STARTED_AT.isoformat(),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
+    return {"version": API_VERSION}
 
 
 def _frontend_client_ip(request: Request) -> str:
@@ -164,7 +157,7 @@ async def frontend_error(
     return {"ok": True}
 
 @router.get("/uploads/{filename}")
-async def serve_upload(filename: str):
+async def serve_upload(filename: str, expires: int, signature: str):
     """Serve un file caricato. Protetto da:
     - rifiuta filename con separatori path o ".." (path traversal),
     - verifica che il path risolto sia effettivamente dentro UPLOADS_DIR (anti symlink escape).
@@ -182,49 +175,13 @@ async def serve_upload(filename: str):
         or ".." in filename
     ):
         raise HTTPException(status_code=400, detail="Invalid filename")
-    filepath = (UPLOADS_DIR / filename).resolve()
-    try:
-        filepath.relative_to(UPLOADS_DIR.resolve())
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid filename")
+    filepath = verify_upload_signature(filename, expires, signature)
     if not filepath.exists() or not filepath.is_file():
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(filepath)
-
-# Restaurant Routes
-@router.post("/restaurants", response_model=RestaurantResponse)
-async def create_restaurant(data: RestaurantCreate):
-    existing = await db.restaurants.find_one({"username": data.username})
-    if existing:
-        raise HTTPException(status_code=400, detail="Username already exists")
-
-    restaurant_id = str(uuid.uuid4())
-    hashed_password = pwd_context.hash(data.password)
-
-    restaurant = {
-        "id": restaurant_id,
-        "name": data.name,
-        "username": data.username,
-        "password": hashed_password,
-        "location": data.location,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "order_counter": 0
-    }
-
-    await db.restaurants.insert_one(restaurant)
-
-    return RestaurantResponse(
-        id=restaurant_id,
-        name=data.name,
-        username=data.username,
-        location=data.location,
-        created_at=restaurant["created_at"]
+    return FileResponse(
+        filepath,
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
     )
-
-@router.get("/restaurants", response_model=List[RestaurantResponse])
-async def get_restaurants():
-    restaurants = await db.restaurants.find({}, {"_id": 0, "password": 0}).to_list(100)
-    return [RestaurantResponse(**r) for r in restaurants]
 
 # Auth Routes
 @router.post("/auth/login", response_model=LoginResponse)
@@ -273,8 +230,7 @@ async def get_current_restaurant(token_data: dict = Depends(verify_token)):
 
 @router.get("/admin/restaurants")
 async def get_admin_restaurants(token_data: dict = Depends(verify_token)):
-    if token_data.get("role") not in ("admin",):
-        raise HTTPException(status_code=403, detail="Admin only")
+    require_admin_or_federico(token_data)
     restaurants = await db.restaurants.find(
         {"role": "restaurant"},
         {"_id": 0, "password": 0}
@@ -361,8 +317,7 @@ async def create_local_restaurant(
 @router.get("/admin/system-alerts")
 async def get_system_alerts(token_data: dict = Depends(verify_token)):
     """Return unacknowledged system alerts (e.g. stale orders recovered at boot)."""
-    if token_data.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    require_admin(token_data)
     alerts = await db.system_alerts.find(
         {"acknowledged": False},
         {"_id": 0}
@@ -372,8 +327,7 @@ async def get_system_alerts(token_data: dict = Depends(verify_token)):
 
 @router.post("/admin/system-alerts/{alert_id}/acknowledge")
 async def acknowledge_system_alert(alert_id: str, token_data: dict = Depends(verify_token)):
-    if token_data.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    require_admin(token_data)
     result = await db.system_alerts.update_one(
         {"id": alert_id},
         {"$set": {"acknowledged": True, "acknowledged_at": datetime.now(timezone.utc).isoformat()}}
@@ -388,8 +342,7 @@ async def get_diagnostics(token_data: dict = Depends(verify_token)):
     """Live system diagnostics for the Admin dashboard.
     Reports per-restaurant WebSocket state, recent disconnect events,
     last 50 API calls and last 50 errors."""
-    if token_data.get("role") not in ("admin",):
-        raise HTTPException(status_code=403, detail="Admin only")
+    require_admin_or_federico(token_data)
 
     now = datetime.now(timezone.utc)
     cutoff_15m_dt = now - timedelta(minutes=15)
@@ -800,69 +753,3 @@ async def get_diagnostics(token_data: dict = Depends(verify_token)):
         "slow_calls_count": len(slow_calls),
         "buffer_size": len(api_call_log),
     }
-
-
-@router.post("/seed")
-async def seed_data():
-    # Only create restaurants if they don't exist
-    existing = await db.restaurants.count_documents({})
-    if existing > 0:
-        # Check if Magazziniere exists, add if not
-        mag = await db.restaurants.find_one({"username": "Magazziniere"})
-        if not mag:
-            await db.restaurants.insert_one({
-                "id": str(uuid.uuid4()),
-                "name": "Pastasciutta Roma",
-                "username": "Magazziniere",
-                "password": pwd_context.hash("Pastasciutt4!"),
-                "location": "Magazzino",
-                "role": "magazzino",
-                "boiler_count": 1,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "order_counter": 0
-            })
-        for account in PRIVILEGED_SEED_ACCOUNTS:
-            await ensure_seed_account(account)
-        await ensure_simone_token_version()
-        return {"message": "Database già configurato", "accounts": [
-            {"username": "Flaminio", "location": "Flaminio"},
-            {"username": "Grazie", "location": "Grazie"},
-            {"username": "Brazza", "location": "Largo di Brazzà"},
-            {"username": "Magazziniere", "location": "Magazzino"},
-            {"username": "Admin", "location": "Amministrazione"},
-            {"username": "Simone", "location": "Amministrazione"},
-        ]}
-
-    # Create the 3 restaurants + magazziniere
-    restaurants = [
-        {"name": "Pastasciutta Roma", "username": "Flaminio", "password": "Pastasciutt4!", "location": "Flaminio", "role": "restaurant", "boiler_count": 2},
-        {"name": "Pastasciutta Roma", "username": "Grazie", "password": "Pastasciutt4!", "location": "Grazie", "role": "restaurant", "boiler_count": 1},
-        {"name": "Pastasciutta Roma", "username": "Brazza", "password": "Pastasciutt4!", "location": "Largo di Brazzà", "role": "restaurant", "boiler_count": 1},
-        {"name": "Pastasciutta Roma", "username": "Magazziniere", "password": "Pastasciutt4!", "location": "Magazzino", "role": "magazzino", "boiler_count": 1},
-        {"name": "Amministratore", "username": "Admin", "password": "Pastasciutt4!", "location": "Amministrazione", "role": "admin", "boiler_count": 1},
-        {"name": "Simone", "username": "Simone", "password": "aothj7nejx", "location": "Amministrazione", "role": "admin", "boiler_count": 1, "token_version": SIMONE_MIN_TOKEN_VERSION},
-    ]
-
-    for r in restaurants:
-        restaurant_id = str(uuid.uuid4())
-        await db.restaurants.insert_one({
-            "id": restaurant_id,
-            "name": r["name"],
-            "username": r["username"],
-            "password": pwd_context.hash(r["password"]),
-            "location": r["location"],
-            "role": r.get("role", "restaurant"),
-            "token_version": r.get("token_version", 1),
-            "boiler_count": r.get("boiler_count", 1),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "order_counter": 0
-        })
-
-    return {"message": "Credenziali create", "accounts": [
-        {"username": "Flaminio", "password": "Pastasciutt4!", "location": "Flaminio"},
-        {"username": "Grazie", "password": "Pastasciutt4!", "location": "Grazie"},
-        {"username": "Brazza", "password": "Pastasciutt4!", "location": "Largo di Brazzà"},
-        {"username": "Magazziniere", "password": "Pastasciutt4!", "location": "Magazzino"},
-        {"username": "Admin", "password": "Pastasciutt4!", "location": "Amministrazione"},
-        {"username": "Simone", "password": "aothj7nejx", "location": "Amministrazione"},
-    ]}

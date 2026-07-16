@@ -164,7 +164,7 @@ const compactPath = (path) => {
 };
 
 const DiagnosticaLivePage = () => {
-  const { token, isAdmin } = useAuth();
+  const { token, canImpersonate } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -434,7 +434,7 @@ const DiagnosticaLivePage = () => {
     return locationOperations.find(loc => loc.key === deviceLocationFilter) || null;
   }, [locationOperations, deviceLocationFilter]);
 
-  if (!isAdmin) {
+  if (!canImpersonate) {
     return (
       <div className="min-h-screen bg-[#F5F5F5]">
         <Header />

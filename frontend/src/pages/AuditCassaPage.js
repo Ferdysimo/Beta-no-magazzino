@@ -65,7 +65,7 @@ const isHiddenMovement = (movement) => {
 
 const AuditCassaPage = () => {
   const navigate = useNavigate();
-  const { token, isAdmin } = useAuth();
+  const { token, canImpersonate } = useAuth();
 
   const today = useMemo(() => fmtRomeISODate(), []);
   const thirtyDaysAgo = useMemo(() => {
@@ -100,17 +100,17 @@ const AuditCassaPage = () => {
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 
   useEffect(() => {
-    if (!isAdmin || !token) return;
+    if (!canImpersonate || !token) return;
     (async () => {
       try {
         const res = await axios.get(`${API}/admin/restaurants`, { headers });
         setRestaurants((res.data || []).filter(r => r.role !== 'admin'));
       } catch (e) { console.error(e); }
     })();
-  }, [isAdmin, token, headers]);
+  }, [canImpersonate, token, headers]);
 
   const loadGroups = useCallback(async () => {
-    if (!isAdmin || !token) return;
+    if (!canImpersonate || !token) return;
     setLoadingGroups(true);
     try {
       const params = new URLSearchParams();
@@ -120,7 +120,7 @@ const AuditCassaPage = () => {
       const res = await axios.get(`${API}/admin/audit-log/groups?${params.toString()}`, { headers });
       setGroups(res.data?.items || []);
     } catch (e) { console.error(e); } finally { setLoadingGroups(false); }
-  }, [isAdmin, token, headers, dateFrom, dateTo, restaurantFilter]);
+  }, [canImpersonate, token, headers, dateFrom, dateTo, restaurantFilter]);
 
   useEffect(() => { loadGroups(); }, [loadGroups]);
 
@@ -143,7 +143,7 @@ const AuditCassaPage = () => {
 
   useEffect(() => { loadMovements(); }, [loadMovements]);
 
-  if (!isAdmin) {
+  if (!canImpersonate) {
     return (
       <div className="min-h-screen bg-[#F5F5F5]">
         <Header />

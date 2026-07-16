@@ -13,16 +13,19 @@ import sys
 import asyncio
 import uuid
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 
 import pytest
 import requests
 
-# Make backend importable for direct fn calls (midnight_reset, recover_stale_orders)
-sys.path.insert(0, "/app/backend")
+# Make backend importable for direct fn calls (midnight_reset, recover_stale_orders).
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 USERNAME = "Flaminio"
-PASSWORD = "Pastasciutt4!"
+PASSWORD = os.environ.get("PASTA_TEST_PASSWORD", "")
 
 
 # ---------- helpers ----------

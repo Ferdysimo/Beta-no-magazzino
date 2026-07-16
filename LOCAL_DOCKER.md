@@ -58,23 +58,14 @@ Dentro Docker il backend resta comunque sulla porta `8001`, come sulla VPS; camb
 Dopo il primo avvio:
 
 ```powershell
-Invoke-RestMethod -Method Post http://localhost:8002/api/seed
+Invoke-RestMethod http://localhost:8002/api/
 ```
 
-Se stai usando la porta standard:
+Gli account non vengono creati tramite HTTP. Eseguire il comando offline nel
+container/backend configurato per il database locale:
 
 ```powershell
-Invoke-RestMethod -Method Post http://localhost:8001/api/seed
-```
-
-Credenziali principali:
-
-```text
-Admin / Pastasciutt4!
-Flaminio / Pastasciutt4!
-Grazie / Pastasciutt4!
-Brazza / Pastasciutt4!
-Magazziniere / Pastasciutt4!
+python scripts/manage_account.py create --username Admin --name Amministratore --location Amministrazione --role admin
 ```
 
 ## Comandi utili

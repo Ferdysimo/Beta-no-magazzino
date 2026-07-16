@@ -49,19 +49,16 @@ npx --yes yarn@1.22.22 install --frozen-lockfile
 
 ```powershell
 Invoke-RestMethod http://localhost:8001/api/
-Invoke-RestMethod -Method Post http://localhost:8001/api/seed
 ```
 
-Credenziali principali:
+Gli account non vengono creati o resettati all'avvio. Per creare un account in
+un database locale vuoto, usare il comando offline dalla cartella `backend`:
 
-```text
-Admin / Pastasciutt4!
-Federico / Pastasciutt4!
-Flaminio / Pastasciutt4!
-Grazie / Pastasciutt4!
-Brazza / Pastasciutt4!
-Magazziniere / Pastasciutt4!
+```powershell
+.\.venv\Scripts\python.exe scripts\manage_account.py create --username Admin --name Amministratore --location Amministrazione --role admin
 ```
+
+La password viene richiesta senza essere scritta nel terminale o nel repository.
 
 ## Log
 

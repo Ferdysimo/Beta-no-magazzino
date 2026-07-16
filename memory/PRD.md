@@ -8,18 +8,21 @@ Sistema di gestione ordini pasta per multi-ristorante (Flaminio, Grazie, Largo d
 - **Frontend**: React.js su porta 3000
 - **Database**: MongoDB
 - **Real-time**: WebSocket con fallback polling (15s)
-- **File Storage**: Immagini su filesystem `/app/uploads`
+- **File Storage**: immagini su filesystem runtime configurato da `UPLOADS_DIR`, fuori dalla repo in produzione
 - **Integrazione**: Google Sheets API per export automatico ordini
 
 ## Account
-| Username | Password | Ruolo |
-|---|---|---|
-| Flaminio | Pastasciutt4! | restaurant |
-| Grazie | Pastasciutt4! | restaurant |
-| Brazza | Pastasciutt4! | restaurant |
-| Magazziniere | Pastasciutt4! | magazzino |
-| Admin | Pastasciutt4! | admin |
-| Federico | Pastasciutta@32 | supervisor |
+| Username | Ruolo |
+|---|---|
+| Flaminio | restaurant |
+| Grazie | restaurant |
+| Brazza | restaurant |
+| Magazziniere | magazzino |
+| Admin | admin |
+| Simone | admin |
+| Federico | supervisor |
+
+Le credenziali sono gestite fuori dal repository tramite password manager e comando offline.
 
 ## Funzionalità Implementate
 
@@ -189,7 +192,7 @@ Applicate 7 modifiche di layout/logica richieste dall'utente su `/app/frontend/s
   - `PUT /api/beverages/daily` — body accetta opzionali `date` + `restaurant_id`.
   - Helper `_resolve_historical_mode()` valida formato data + ruolo + non-futuro.
   - Audit-log loggato con `mode: "historical"` per tracciare correzioni postume.
-  - `GET /api/admin/closures/grid` / `POST /api/admin/closures/generate-mock` / `DELETE /api/admin/closures/mock` (già aggiunti).
+  - `GET /api/admin/closures/grid`; le vecchie route mock sono state rimosse dal runtime nel P0 di sicurezza.
 - **Pulsante "Chiusure Excel"** nel pannello selettore Admin in `HomePage.js`.
 - **Test E2E**:
   - curl backend: GET storico (cash + bev) OK ✓, PUT storico salva e ricarica OK ✓, non-admin → 403 ✓.

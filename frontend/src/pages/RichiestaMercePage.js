@@ -10,7 +10,7 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 const RichiestaMercePage = () => {
-  const { token, restaurant, effectiveRestaurant, isAdmin } = useAuth();
+  const { token, restaurant, effectiveRestaurant, canImpersonate } = useAuth();
   const navigate = useNavigate();
   const [richieste, setRichieste] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,7 +20,7 @@ const RichiestaMercePage = () => {
 
   const headers = () => {
     const h = { Authorization: `Bearer ${token}` };
-    if (isAdmin && effectiveRestaurant?.id) {
+    if (canImpersonate && effectiveRestaurant?.id) {
       h['X-Admin-Restaurant-Id'] = effectiveRestaurant.id;
     }
     return h;

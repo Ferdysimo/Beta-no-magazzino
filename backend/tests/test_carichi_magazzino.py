@@ -11,9 +11,12 @@ import pytest
 import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
-assert BASE_URL, "REACT_APP_BACKEND_URL is required"
+if not BASE_URL:
+    pytest.skip("live backend not configured", allow_module_level=True)
 
-PASSWORD = "Pastasciutt4!"
+PASSWORD = os.environ.get("PASTA_TEST_PASSWORD", "")
+if not PASSWORD:
+    pytest.skip("PASTA_TEST_PASSWORD not set", allow_module_level=True)
 # Tiny 1x1 transparent PNG
 TINY_PNG = (
     "data:image/png;base64,"
@@ -55,7 +58,7 @@ def test_products(tokens):
     for name in ("TEST_Carico_Prod_A", "TEST_Carico_Prod_B"):
         r = requests.post(
             f"{BASE_URL}/api/products",
-            headers=_h(tokens["Magazziniere"]),
+            headers=_h(tokens["Admin"]),
             json={
                 "name": name,
                 "unit": "kg",
@@ -72,7 +75,7 @@ def test_products(tokens):
     for p in created:
         requests.delete(
             f"{BASE_URL}/api/products/{p['id']}",
-            headers=_h(tokens["Magazziniere"]),
+            headers=_h(tokens["Admin"]),
             timeout=10,
         )
 
