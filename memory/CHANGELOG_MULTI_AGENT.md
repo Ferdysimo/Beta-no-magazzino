@@ -178,6 +178,15 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-17 22:53 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: security | config
+**File toccati**:
+- configurazione account protetta su MongoDB in produzione
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Impostata su tre account locali la credenziale scelta esplicitamente dall'utente, senza inserirne il valore nel repository, nei log o sulla VPS. La scelta di condividere una password tra piu locali e un compromesso operativo consapevole rispetto alle credenziali uniche previste dal piano di sicurezza.
+**Testato**: si (metodo: backup root-only della collezione account; login HTTPS e `/api/auth/me` riusciti separatamente per tutti e tre gli account; vecchie credenziali rifiutate)
+**Note per il prossimo agente**: un cambio password locale non revoca ancora i JWT gia emessi per quell'account; la revoca per-account tramite `token_version` resta lavoro P1. Non riportare mai la password nel codice, nella documentazione o nei messaggi.
+
 ### [2026-07-17 22:43 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: security | config | deploy | docs
 **File toccati**:
