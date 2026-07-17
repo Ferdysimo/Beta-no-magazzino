@@ -178,6 +178,15 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-17 22:25 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix | config | docs
+**File toccati**:
+- `/app/backend/requirements.txt`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Allineate al repository le correzioni di compatibilita Python 3.10 gia necessarie sulla VPS: rimossa la dipendenza non pubblicata `emergentintegrations` e fissate NumPy 2.2.6 e Pandas 2.3.3. La modifica evita che un'installazione pulita del P0-B riproponga gli errori di risoluzione osservati in produzione.
+**Testato**: si (metodo: confronto con l'ambiente VPS Python 3.10 e risoluzione pip senza installazione)
+**Note per il prossimo agente**: non ripristinare NumPy 2.4.x o Pandas 3.x finche la produzione resta su Python 3.10; l'upgrade Python va eseguito come intervento separato.
+
 ### [2026-07-16 15:31 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: security | refactor | config | test | docs
 **File toccati**:
