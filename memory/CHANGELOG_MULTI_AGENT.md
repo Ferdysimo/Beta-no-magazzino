@@ -178,6 +178,15 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-17 22:57 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: security | config
+**File toccati**:
+- configurazione account protetta su MongoDB in produzione
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Applicate agli altri quattro account le credenziali scelte esplicitamente dall'utente, senza inserirne i valori nel repository, nei log o sulla VPS. Una scelta e una deroga deliberata al minimo di 12 caratteri del comando amministrativo P0; la regola generale nel codice non e stata abbassata.
+**Testato**: si (metodo: backup root-only della collezione account; login HTTPS e `/api/auth/me` riusciti separatamente per i quattro account; credenziali precedenti rifiutate; helper amministrativo temporaneo eliminato)
+**Note per il prossimo agente**: non modificare automaticamente le credenziali scelte dall'utente e non riportarne mai i valori nel codice o nella documentazione. La revoca JWT per-account resta lavoro P1.
+
 ### [2026-07-17 22:53 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: security | config
 **File toccati**:
