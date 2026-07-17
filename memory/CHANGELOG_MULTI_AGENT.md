@@ -93,12 +93,12 @@ Before making any code change:
 - **MongoDB**: 8.0 (servizio `mongod`, locale su `mongodb://localhost:27017`)
 - **Web server**: Nginx (reverse proxy + serve build React statico)
 - **Process manager**: systemd (NON supervisor come su Emergent)
-- **HTTPS / Cert**: HTTPS attivo; redirect HTTP da applicare/verificare nel P0-B
+- **HTTPS / Cert**: HTTPS attivo; HTTP e accesso via IP reindirizzano a `https://pasta-app.it`
 
 ### ⚙️ Servizi systemd / systemd services
 | Servizio | Funzione |
 |---|---|
-| `pastasciutta-backend.service` | FastAPI via uvicorn; P0-B richiede bind `127.0.0.1:8001` |
+| `pastasciutta-backend.service` | FastAPI via uvicorn su `127.0.0.1:8001` |
 | `mongod.service` | MongoDB |
 | `nginx.service` | Reverse proxy `:80` → frontend + `/api/` → backend |
 
@@ -116,7 +116,7 @@ RestartSec=3
 
 ### 🌐 Configurazione Nginx (sintesi)
 File: `/etc/nginx/sites-available/pastasciutta`
-- `listen 80` → redirect a HTTPS dopo P0-B
+- `listen 80` → redirect a HTTPS; anche l'accesso via IP reindirizza al dominio canonico
 - `location /api/` → proxy a `http://127.0.0.1:8001/api/`
 - WebSocket upgrade headers attivi (`Upgrade`, `Connection`)
 - `client_max_body_size 20M` per upload foto fatture/DDT
@@ -141,7 +141,7 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ### 🚀 Comandi utili per il VPS / Useful VPS commands
 | Operazione | Comando |
 |---|---|
-| **Deploy completo** | `cd /root/pasta-app && git pull && cd frontend && npm run build && sudo systemctl restart pastasciutta-backend` |
+| **Deploy completo** | `cd /opt/pastasciutta && sudo git pull --ff-only origin main && cd frontend && sudo yarn build && sudo systemctl restart pastasciutta-backend` |
 | Riavvio backend | `sudo systemctl restart pastasciutta-backend` |
 | Log backend live | `sudo journalctl -u pastasciutta-backend -f` |
 | Stato backend | `sudo systemctl status pastasciutta-backend` |
@@ -150,15 +150,15 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 | Mongo shell | `mongosh pastasciutta` |
 | Installare pacchetto Python sul VPS | `/opt/pastasciutta/backend/venv/bin/pip install <pkg>` |
 | Build frontend | `cd /opt/pastasciutta/frontend && yarn build` |
-| Re-seed account | `curl -X POST http://localhost:8001/api/seed` |
+| Gestione account offline | `cd /opt/pastasciutta/backend && sudo venv/bin/python scripts/manage_account.py --help` |
 
 ### 🛡️ Note di sicurezza specifiche VPS
 - `JWT_SECRET` **non ha fallback** nel codice → se manca, il backend non parte. Generare con `openssl rand -hex 32`.
-- CORS: whitelist esplicita nel `server.py`, deve includere il dominio/IP reale del VPS.
+- CORS: allowlist di produzione limitata a `https://pasta-app.it` e `https://www.pasta-app.it`.
 - Rate limiting su `/api/auth/login` (10/min via `slowapi`).
 - Path traversal in `/api/uploads/{filename}` mitigato.
-- Le foto caricate finiscono in `/opt/pastasciutta/uploads/` → assicurarsi che la cartella sia scrivibile dall'user del service (`root` di default).
-- Backup: **manuale al momento** (P2: backup cloud automatico in roadmap). Cose da salvare in backup: dump MongoDB (`mongodump --db pastasciutta`) + intera cartella `/opt/pastasciutta/uploads/` + `google_credentials.json`.
+- Le foto caricate finiscono in `/var/lib/pastasciutta/uploads/`; non riportarle nella repository.
+- Backup: **manuale al momento** (P2: backup cloud automatico in roadmap). Salvare dump MongoDB, `/var/lib/pastasciutta/uploads/`, file `.env` e credenziali di integrazione in una destinazione root-only/off-site.
 
 ### 🆚 Differenze ambiente Emergent (questo) vs VPS produzione
 | Aspetto | Emergent (qui) | VPS utente |
@@ -168,7 +168,7 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 | Backend reload | hot reload uvicorn | manual `systemctl restart` |
 | Mongo | URL da env | `mongodb://localhost:27017` locale |
 | `REACT_APP_BACKEND_URL` | preview emergentagent.com | IP/dominio VPS |
-| Uploads | `/app/uploads/` | `/opt/pastasciutta/uploads/` |
+| Uploads | `/app/uploads/` | `/var/lib/pastasciutta/uploads/` |
 | Google creds | non presenti / mock | `/opt/pastasciutta/backend/google_credentials.json` |
 
 > **➡️ Quando suggerisci comandi all'utente, usa SEMPRE i path VPS (`/opt/pastasciutta/...`) e `systemctl`, NON i path di Emergent (`/app/...`) né `supervisorctl`.**
@@ -177,6 +177,17 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
+
+### [2026-07-17 22:43 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: security | config | deploy | docs
+**File toccati**:
+- `/app/memory/SECURITY_HARDENING_PLAN.md`
+- `/app/memory/P0_VPS_RUNBOOK.md`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+- configurazione protetta VPS: systemd, Nginx, UFW, `.env`, deploy key e runtime upload
+**Descrizione**: Completato P0-B in produzione con release pulita `ee33a98`, backup verificato, upload fuori repo, rotazione password/JWT, backend solo locale, firewall attivo, redirect HTTPS/IP, WSS autenticato e deploy key GitHub read-only. Aggiornata la memoria operativa per impedire che futuri agenti trattino ancora P0-B come pendente.
+**Testato**: si (metodo: preflight Python 3.10 e build React senza sourcemap; login e `/auth/me` per 7 account; matrice ruoli e tenant; impersonazione Federico/Admin; Report/Cassa/Bevande; upload firmato/negato; WSS ticket monouso/Origin; CORS; route rimosse; cache; servizi, firewall, porte e nuova sessione SSH)
+**Note per il prossimo agente**: non rimettere Uvicorn su `0.0.0.0`, non riaprire la 8001 e non riportare upload o segreti nella repo. Il backend gira ancora come root e backup off-site/automatici, hardening systemd, Mongo least-privilege e bonifica coordinata della cronologia Git restano P1/P0 separato.
 
 ### [2026-07-17 22:25 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix | config | docs

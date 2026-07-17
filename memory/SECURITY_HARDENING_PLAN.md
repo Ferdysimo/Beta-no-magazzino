@@ -1,7 +1,7 @@
 # Piano di sicurezza applicazione
 
-Ultimo aggiornamento: 2026-07-16
-Stato: P0-A lato codice implementato e testato; P0-B VPS preparato ma non eseguito
+Ultimo aggiornamento: 2026-07-17
+Stato: P0-A lato codice e P0-B VPS implementati e verificati; restano separati bonifica cronologia Git e valutazione privacy
 Riferimento: OWASP ASVS 5.0 livello 2, con controlli rafforzati per gli account privilegiati
 
 ## Regole operative
@@ -17,7 +17,7 @@ Riferimento: OWASP ASVS 5.0 livello 2, con controlli rafforzati per gli account 
 - Analizzati repository, 118 endpoint applicativi, autenticazione, autorizzazioni, isolamento tra locali, WebSocket, upload, dipendenze, frontend, configurazione VPS, logging e backup.
 - Otto route applicative risultano prive di autenticazione, incluso il WebSocket.
 - Al momento dell'audit il repository remoto risultava pubblico e conteneva 56 file versionati in `uploads`; il repository e stato poi reso privato e i file sono stati rimossi dal branch di lavoro.
-- HTTPS e stato attivato dopo l'audit; restano da applicare redirect HTTP, chiusura esterna della porta 8001 e verifica WSS durante P0-B.
+- HTTPS, redirect HTTP, bind locale/chiusura esterna della porta 8001 e WSS autenticato sono stati attivati e verificati nel P0-B del 17 luglio 2026.
 - L'elenco account, la documentazione OpenAPI e un file di backup ordini risultano accessibili senza login.
 - Sono presenti credenziali cablate nel codice e nella cronologia Git. Non riportarle in questo documento: devono essere considerate compromesse e ruotate.
 - JWT validi per sette giorni, senza revoca generale dopo logout, cambio password, eliminazione o cambio ruolo.
@@ -33,6 +33,10 @@ Riferimento: OWASP ASVS 5.0 livello 2, con controlli rafforzati per gli account 
 ## P0 - Contenimento immediato
 
 Obiettivo: chiudere le esposizioni gia attive prima di procedere con hardening evoluto.
+
+Il contenimento tecnico P0-A/P0-B e operativo in produzione dal 17 luglio 2026.
+La riscrittura coordinata della cronologia Git e la valutazione formale privacy
+restano attivita separate: non riaprire le esposizioni nel frattempo.
 
 1. Aprire un registro incidente, conservare log ed evidenze, inventariare i file esposti e calcolarne gli hash senza aprirli inutilmente.
 2. Rendere immediatamente privato il repository e disabilitare la funzione template.

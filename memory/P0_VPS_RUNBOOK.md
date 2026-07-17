@@ -1,6 +1,6 @@
 # Stato e runbook P0
 
-Stato: P0-A completato e testato in locale; P0-B preparato, non ancora eseguito.
+Stato: P0-A e P0-B completati e verificati in produzione il 17 luglio 2026.
 
 Questo runbook completa sulla VPS il contenimento P0 gia implementato nel codice.
 Va eseguito in una finestra di manutenzione senza operatori collegati. Non salvare
@@ -8,8 +8,7 @@ password o `JWT_SECRET` nel repository, nei messaggi o nella shell history.
 
 ## P0-A completato nel codice il 16 luglio 2026
 
-Queste modifiche sono presenti nel commit di rilascio, ma non diventano operative
-sulla VPS fino al deploy P0-B:
+Queste modifiche sono operative sulla VPS dal deploy P0-B:
 
 - autorizzazioni backend centralizzate con controlli espliciti di ruolo, capability
   e locale effettivo;
@@ -54,9 +53,32 @@ Il warning `python_multipart`/Starlette e il warning di compatibilita
 Passlib/bcrypt osservati nei test non hanno causato fallimenti; vanno trattati nel
 lavoro dipendenze P1 e non richiedono modifiche d'emergenza nel deploy P0.
 
-## P0-B da eseguire sulla VPS
+## P0-B eseguito sulla VPS il 17 luglio 2026
 
-## Condizioni prima di iniziare
+- release applicativa `ee33a98` installata da worktree pulito in `/opt/pastasciutta`;
+- backup pre-deploy root-only in
+  `/var/backups/pastasciutta/p0b-20260717-2025-codex`, con dump MongoDB finale,
+  2.197 upload verificati e copie delle configurazioni;
+- release precedente conservata in `/opt/pastasciutta-pre-p0b-0477dc6`;
+- upload runtime spostati in `/var/lib/pastasciutta/uploads`;
+- password dei sette account noti e `JWT_SECRET` ruotati, con invalidazione delle
+  sessioni precedenti;
+- Uvicorn vincolato a `127.0.0.1:8001`; UFW attivo con ingresso consentito solo
+  su 22, 80 e 443 e blocco esplicito della 8001;
+- HTTP e accesso tramite IP reindirizzati a `https://pasta-app.it`; HTTPS e WSS
+  funzionanti;
+- documentazione API disattivata, CORS limitato ai due domini HTTPS, upload
+  protetti da firma e route P0 rimosse;
+- deploy key GitHub dedicata e in sola lettura configurata sulla VPS per i futuri
+  `git fetch`/`git pull`;
+- smoke test completati su login/ruoli, isolamento tenant, impersonazione,
+  Report/Cassa/Bevande, upload firmati, WebSocket, CORS, cache e porte.
+
+Le credenziali correnti non sono nel repository ne in questo documento. Il backend
+continua temporaneamente a girare come root: la migrazione a utente Linux dedicato
+e hardening systemd restano P1.
+
+## Condizioni usate prima di iniziare
 
 - branch `main` aggiornato e testato in locale;
 - commit di rilascio identificato;
