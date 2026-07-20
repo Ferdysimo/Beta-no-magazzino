@@ -10,6 +10,33 @@
     4. Refresh pagina mantiene i dati
   - Credenziali live: fornirle tramite variabili d'ambiente locali o password manager, mai nel repository.
 
+## Affidabilita Report e mezzanotte
+
+Stato: da implementare. Ordine consigliato: R1, R2, R3.
+
+### R1 - Archiviazione prima dell'azzeramento
+
+- Distinguere esplicitamente "nessun ordine" da "archiviazione fallita".
+- Se l'archivio ordini fallisce, non azzerare i contatori; creare un alert e
+  continuare soltanto le fasi indipendenti, inclusi i riporti del Report.
+- Testare successo, giornata vuota, copia parziale ed errore Mongo simulato.
+
+### R2 - Formule numeriche uniformi
+
+- Usare un solo valutatore frontend condiviso da Report, Magazzino Bevande,
+  Storico Bevande e dettaglio chiusure, mantenendolo allineato al backend.
+- Le nuove scritture devono validare formule e numeri; i dati storici restano
+  leggibili senza riscrittura automatica.
+- Testare almeno `132`, `132,50`, `=100+32`, `100+32`, negativi, parentesi,
+  divisione per zero, lettere e formule malformate.
+
+### R3 - Lock giornaliero del reset
+
+- Acquisire in MongoDB un lock con scadenza prima di eseguire il reset.
+- Un solo processo esegue snapshot, archivi, contatori e riporti; gli altri
+  saltano il ciclo. La scadenza consente il recupero dopo un crash.
+- Testare doppio avvio concorrente, lock scaduto e retry.
+
 ## Idea futura - Macchina del tempo
 
 - Realizzare una vista esclusivamente consultiva che ricostruisca lo stato dell'applicazione per locale, giornata e istante selezionato.

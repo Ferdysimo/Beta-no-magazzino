@@ -1,0 +1,78 @@
+name: Controlli leggeri
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lightweight-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Backend, frontend e repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      APP_ENV: test
+      DB_NAME: pastasciutta_ci_contract
+      JWT_SECRET: ci-only-placeholder-not-valid-in-production
+      MONGO_URL: mongodb://127.0.0.1:27017
+      CI: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-ci.txt
+
+      - name: Dipendenze backend minime
+        run: python -m pip install --disable-pip-version-check -r backend/requirements-ci.txt
+
+      - name: Igiene repository
+        run: python scripts/check_repository_hygiene.py
+
+      - name: Compilazione e nomi Python
+        run: |
+          python -m compileall -q backend/app backend/scripts backend/tests backend/server.py
+          python -m flake8 backend/app backend/scripts backend/tests backend/server.py --select=F821
+
+      - name: Test backend standard
+        run: python -m pytest -q backend/tests
+
+      - name: Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Dipendenze frontend
+        working-directory: frontend
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Test frontend
+        working-directory: frontend
+        run: yarn test --watchAll=false --runInBand
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          CI: "false"
+          GENERATE_SOURCEMAP: "false"
+        run: yarn build

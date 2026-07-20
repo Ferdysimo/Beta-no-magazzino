@@ -10,6 +10,11 @@ from .documents import (
     InvoiceResponse,
     VersamentoCreate,
 )
+from .laboratory import (
+    DocumentScanAnalyzeRequest,
+    DocumentScanFeedback,
+    DocumentScanFeedbackRow,
+)
 from .orders import DeletionLog, ModificationLog, OrderCreate, OrderResponse, OrderUpdate
 from .report import CashDailyUpsert, PastaDictionaryUpsert
 from .warehouse import (
@@ -36,6 +41,9 @@ __all__ = [
     "ChiusuraCreate",
     "ChiusuraPiattiUpload",
     "DeletionLog",
+    "DocumentScanAnalyzeRequest",
+    "DocumentScanFeedback",
+    "DocumentScanFeedbackRow",
     "FatturaGlobaleCreate",
     "FatturaUpload",
     "FrontendDiagnosticsPayload",

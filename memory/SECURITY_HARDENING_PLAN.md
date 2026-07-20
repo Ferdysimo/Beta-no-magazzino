@@ -84,7 +84,7 @@ restano attivita separate: non riaprire le esposizioni nel frattempo.
 12. Eseguire FastAPI con utente Linux dedicato e hardening systemd: `NoNewPrivileges`, `ProtectSystem`, `ProtectHome`, `PrivateTmp`, `UMask` e capability minime.
 13. Abilitare autenticazione MongoDB/SCRAM, utente applicativo least-privilege, bind locale, permessi file restrittivi e backup cifrati.
 14. Ridurre `requirements.txt` al runtime reale, separare test/dev, aggiornare stack Python e migrare il frontend fuori da Create React App.
-15. Aggiungere CI con test, secret scanning, CodeQL/SAST, dependency review, audit lockfile, SBOM e blocco merge sulle criticita.
+15. Aggiungere CI con test, secret scanning, CodeQL/SAST, dependency review, audit lockfile, SBOM e blocco merge sulle criticita. Baseline leggera completata il 17 luglio 2026: test/compilazione backend, test/build frontend e controllo ad alta confidenza di segreti e file runtime sul push a `main`; CodeQL, dependency review, SBOM e protezione branch restano da completare.
 16. Automatizzare backup MongoDB e uploads cifrati e off-site; obiettivo iniziale RPO 1 ora e RTO 4 ore, da confermare con il titolare.
 
 ### Uscita P1

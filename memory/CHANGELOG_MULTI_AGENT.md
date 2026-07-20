@@ -178,6 +178,99 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-20 16:03 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | architecture | resilience | security | test | docs
+**File toccati**:
+- `/app/backend/memory_worker/{__main__,config,context,contracts,runner,snapshots}.py`
+- `/app/backend/memory_worker/sources/report.py`
+- `/app/backend/memory_worker/stores/mongo.py`
+- `/app/backend/tests/test_memory_worker_{foundations,isolated_integration,report_isolated_integration,runner,runner_isolated_integration,snapshots,snapshot_isolated_integration}.py`
+- `/app/deploy/{memory.env.example,pastasciutta-memory.service.example}`
+- `/app/memory/{OPERATIONAL_MEMORY_DESIGN,OPERATIONAL_MEMORY_ADVANCED_CAPABILITIES,MEMORY_PHASE5_RUNBOOK,MEMORY_PHASE6_RUNBOOK,PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Completate localmente le Fasi 5 e 6 della Memoria. Aggiunti contesto calendario, snapshot giornalieri versionati per locale e magazzino globale, provenienza, controlli di integrita e gap apribili/risolvibili senza inventare dati mancanti. Configurazioni e cataloghi vengono letti nella versione valida per la giornata, senza cambiare retroattivamente lo storico; dopo un fermo vengono recuperate prima le giornate mancanti. Il runner continuo separato esegue collector sequenziali e snapshot periodici con dry-run read-only, limiti di latenza/storage comprensivi degli indici, backoff, circuit breaker e arresto ordinato. Preparati template env/systemd limitati in CPU, RAM e I/O, senza installarli o attivarli.
+**Testato**: si (metodo: suite backend completa `133 passed, 30 skipped`, con tutte le integrazioni Mongo Memoria abilitate; correzioni `A-B-A` con versioni distinte, configurazione storica invariata dopo nuovi locali/cataloghi, cancellazione fisica e risoluzione gap, recupero date mancanti, idempotenza, provenienza, dry-run senza scritture, primo giorno senza falso errore, backoff, circuit breaker, stop e recovery; `compileall`; 14 test frontend passati; build React produzione completata con soli warning Hooks preesistenti; repository hygiene su 309 file; comando `status` Fase 6 con raccolta inattiva)
+**Note per il prossimo agente**: codice e template sono pronti soltanto in locale. Non esistono servizio VPS, credenziali Mongo dedicate, database Memoria ufficiale, momento zero o raccolta attiva. Il prossimo confine richiede backup/spazio, utenti Mongo separati, utente Linux, env root-only, installazione disabilitata, dry-run e osservazione 24-48 ore. Le capacita avanzate B-E restano successive ai dati reali stabili.
+
+### [2026-07-20 15:42 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | architecture | security | test | docs
+**File toccati**:
+- `/app/backend/memory_worker/{__main__,collector,contracts,sanitize}.py`
+- `/app/backend/memory_worker/sources/{__init__,warehouse,configuration}.py`
+- `/app/backend/memory_worker/stores/mongo.py`
+- `/app/backend/tests/test_memory_worker_{foundations,warehouse,configuration,isolated_integration,report_isolated_integration,phase34_isolated_integration}.py`
+- `/app/memory/{OPERATIONAL_MEMORY_DESIGN,OPERATIONAL_MEMORY_ADVANCED_CAPABILITIES,MEMORY_PHASE3_RUNBOOK,MEMORY_PHASE4_RUNBOOK,PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Completate localmente le Fasi 3 e 4 della Memoria con collector one-shot per prodotti, stock, movimenti, richieste, carichi/DDT strutturati, inventario/carichi bevande, locali, dizionari paste, catalogo bevande e fornitori. Aggiunte versioni bitemporali e rilevazione idempotente delle cancellazioni fisiche solo dopo scansioni complete; immagini, credenziali e contatori runtime restano esclusi. I movimenti verso i locali sono classificati come logistica e mai come consumo reale.
+**Testato**: si (metodo: suite backend completa 117 test passati e 30 live gated saltati; integrazioni Mongo isolate di ordini, Report e Fasi 3-4 eseguite realmente; test dedicato con batch da un documento che impedisce false cancellazioni durante scansioni incomplete; modifiche, reset, sparizioni, quarantena, idempotenza, lock, listino default in parita e sorgente immutata; compileall, `git diff --check`, stato Fase 4 inerte e BOM changelog verificato)
+**Note per il prossimo agente**: collector ancora manuali, disabilitati e non installati sulla VPS. Nessun momento zero reale e nessun backfill. Restano snapshot giornalieri, raccolta continua, circuit breaker, limiti di processo/storage e rollout.
+
+### [2026-07-20 15:24 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | architecture | security | bugfix | test | docs
+**File toccati**:
+- `/app/backend/memory_worker/{__main__,collector,contracts}.py`
+- `/app/backend/memory_worker/sources/{__init__,report}.py`
+- `/app/backend/memory_worker/stores/mongo.py`
+- `/app/backend/tests/{test_memory_worker_foundations,test_memory_worker_isolated_integration,test_memory_worker_report,test_memory_worker_report_isolated_integration}.py`
+- `/app/memory/{OPERATIONAL_MEMORY_DESIGN,MEMORY_PHASE1_RUNBOOK,MEMORY_PHASE2_RUNBOOK,PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Completata localmente la Fase 2 della Memoria con collector Report one-shot per cassa, formule, paste, spicci, cassetto, banconote, bevande giornaliere, audit e vendite bevande definitive. Aggiunti fatti bitemporali, normalizzazione versionata con distinzione missing/invalid/zero, quarantena robusta e scansioni cicliche; escluse intenzionalmente le vendite attive stornabili. Corretto inoltre il caricamento Mongo dell'epoch con `tz_aware=True`, evitando uno spostamento locale di due ore del momento zero.
+**Testato**: si (metodo: 103 test backend passati con 32 live gated; 23 test fondazioni/formule; due integrazioni Mongo isolate passate insieme per ordini e Report con epoch, correzioni tardive, ritorno a valori precedenti, audit, arrivi tardivi, dedupe, idempotenza, quarantena, lock e sorgente immutata; compileall; `git diff --check`; comando `status` Fase 2 inerte; database temporanei eliminati)
+**Note per il prossimo agente**: nessun collector e continuo o installato sulla VPS. Il cash sera consolidato richiede il futuro snapshot giornaliero; magazzino, richieste, DDT e configurazioni sono ancora esclusi. Non attivare gli switch in produzione.
+
+### [2026-07-20 15:02 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | architecture | security | test | docs
+**File toccati**:
+- `/app/backend/memory_worker/{__main__,collector,config,contracts,preflight,sanitize}.py`
+- `/app/backend/memory_worker/sources/{__init__,orders}.py`
+- `/app/backend/memory_worker/stores/{__init__,mongo}.py`
+- `/app/backend/tests/{test_memory_worker_foundations,test_memory_worker_isolated_integration}.py`
+- `/app/memory/{OPERATIONAL_MEMORY_DESIGN,MEMORY_PHASE0_RUNBOOK,MEMORY_PHASE1_RUNBOOK,PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Implementata localmente la Fase 1 della Memoria operativa con collector manuale one-shot del ciclo vita ordini. Sono presenti epoch, watermark separati, raw sanificato e deduplicato, fatti bitemporali, quarantena, scansione ciclica degli archivi, lock anti-concorrenza e rifiuto di credenziali sorgente scrivibili o ambigue; il backend operativo non importa il worker.
+**Testato**: si (metodo: 95 test backend passati con 31 live gated; 15 test fondazioni; integrazione Mongo isolata passata con stato A-B-A, arrivo tardivo in archivio, dedupe, idempotenza, quarantena, lock e sorgente immutata; compileall; `git diff --check`; comando `status` inerte; database temporanei eliminati)
+**Note per il prossimo agente**: la Fase 1 non e in esecuzione continua, non e installata sulla VPS e non ha un momento zero reale. Non attivare gli switch in produzione; Report, magazzino, configurazioni, snapshot, circuit breaker e limiti systemd restano fasi successive.
+
+### [2026-07-20 14:41 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | architecture | security | test | docs
+**File toccati**:
+- `/app/backend/memory_worker/{__init__,__main__,config,contracts,preflight,sanitize}.py`
+- `/app/backend/memory_worker/stores/{__init__,mongo}.py`
+- `/app/backend/tests/test_memory_worker_foundations.py`
+- `/app/memory/{OPERATIONAL_MEMORY_DESIGN,MEMORY_PHASE0_RUNBOOK,PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Implementata la Fase 0 inerte della Memoria operativa: pacchetto autonomo non importato dal backend, raccolta e scritture disabilitate, database sorgente/destinazione obbligatoriamente separati, URI redatte, limiti duri, sanificazione ricorsiva e preflight Mongo esclusivamente read-only. Non sono stati creati collector, epoch, watermark, servizi systemd, endpoint o modifiche VPS.
+**Testato**: si (metodo: 90 test backend passati con 30 live gated; compileall; `git diff --check`; comando `status`; preflight locale su Mongo con `writes_performed: 0`; verificato che il database Memoria indicato non sia stato creato)
+**Note per il prossimo agente**: non aggiungere import di `memory_worker` sotto `backend/app` o `server.py`. La Fase 1 richiede decisione esplicita su credenziali Mongo separate, quota/retention e momento zero; non impostare `MEMORY_ENABLED` o `MEMORY_WRITE_ENABLED` sulla VPS.
+
+### [2026-07-20 14:10 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | security | test | docs
+**File toccati**:
+- `/app/backend/app/{bootstrap.py,routers/laboratory.py,schemas/laboratory.py,services/document_scanner.py}`
+- `/app/backend/tests/{test_document_scanner_lab.py,test_pasta_annotations_lab.py,test_phase1_foundations_contract.py,test_phase3_module_contract.py}`
+- `/app/frontend/{package.json,yarn.lock,scripts/sync-tesseract-assets.js,src/pages/ScannerDocumentiLabPage.js}`
+- `/app/.gitignore`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Reso operativo lo Scanner documenti del Laboratorio di Simone. L'OCR italiano gira nel browser con asset locali; il backend confronta il testo con fornitori e prodotti del Mongo corrente, estrae dal solo documento numero, data, quantita e prezzi e salva dopo conferma associazioni minimali in collection Lab isolate. Foto e testo OCR integrale non vengono conservati e nessuna prova crea fatture, carichi o movimenti.
+**Testato**: si (metodo: parser e feedback simulati, idempotenza e matrice ruoli; suite backend e frontend passate; build React produzione completata; fixture Mongo temporanee eliminate)
+**Note per il prossimo agente**: questa release aggiunge dipendenze frontend (`tesseract.js` e lingua italiana); al primo deploy eseguire l'installazione dipendenze prima di `npm run build`. Il prezzo osservato puo essere registrato come evidenza ma non deve mai compilare un prezzo che l'OCR non ha letto.
+
+### [2026-07-20 13:27 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: config | frontend
+**File toccati**:
+- `/app/frontend/src/pages/PastaAnnotationsLabPage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Rimosso il placeholder `NO PEPE` dal campo Cerca annotazione del Laboratorio, lasciando invariati filtro, accessibilita e logica dei dati.
+**Testato**: si (metodo: verifica statica del controllo e build React della modifica principale gia completata)
+
+### [2026-07-20 13:15 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | security | test | docs
+**File toccati**:
+- `/app/backend/app/services/pasta_annotations.py`
+- `/app/backend/app/routers/laboratory.py`
+- `/app/backend/app/bootstrap.py`
+- `/app/backend/tests/test_pasta_annotations_lab.py`
+- `/app/frontend/src/{App.js,pages/LaboratorioPage.js,pages/PastaAnnotationsLabPage.js,utils/laboratory.js,utils/laboratory.test.js}`
+- `/app/memory/{PRD,OPERATIONAL_MEMORY_DESIGN,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Aggiunto al Laboratorio di Simone l'Osservatorio annotazioni paste. Il riconoscitore operativo resta invariato e volutamente rigido; soltanto le paste gia riconosciute producono un'annotazione raw e normalizzata, mentre errori intenzionali, prefissi non validi e `XL` restano esclusi. Il nuovo endpoint read-only aggrega ordini validi attivi/archiviati per periodo, locale e dizionario storico, restituendo frequenze, incidenza, paste, locali, varianti ed esempi con contratto versionato predisposto per la futura Memoria.
+**Testato**: si (metodo: 72 test backend passati con 30 live gated; 14 test frontend passati; compileall e build React produzione completati; simulazione HTTP/Mongo con 6 ordini e cleanup; browser desktop/mobile con 9 ordini temporanei, filtri pasta/locale, layout e console senza errori; hash Simone ripristinato e fixture eliminate)
+**Note per il prossimo agente**: l'endpoint `/api/lab/pasta-annotations` e accessibile solo a Simone admin, limita l'intervallo a 366 giorni e non scrive dati. Non rendere tollerante `_pasta_recognized_sigla`: le righe volutamente non riconosciute servono per il prezzo manuale. La futura Memoria dovra conservare raw, normalizzato, versione parser e relazione con ordine/dizionario.
+
 ### [2026-07-19 17:04 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: feature | frontend | test
 **File toccati**:
@@ -248,7 +341,51 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 **Descrizione**: Allineate al repository le correzioni di compatibilita Python 3.10 gia necessarie sulla VPS: rimossa la dipendenza non pubblicata `emergentintegrations` e fissate NumPy 2.2.6 e Pandas 2.3.3. La modifica evita che un'installazione pulita del P0-B riproponga gli errori di risoluzione osservati in produzione.
 **Testato**: si (metodo: confronto con l'ambiente VPS Python 3.10 e risoluzione pip senza installazione)
 **Note per il prossimo agente**: non ripristinare NumPy 2.4.x o Pandas 3.x finche la produzione resta su Python 3.10; l'upgrade Python va eseguito come intervento separato.
+### [2026-07-17 11:50 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: security | docs | test
+**File toccati**:
+- `/app/memory/P0_B_PREFLIGHT_2026-07-17.md`
+- `/app/scripts/p0b_external_smoke.py`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Completato in sola lettura il preflight reale della VPS per P0-B: commit live, worktree, servizi, Nginx/TLS, porte, CORS, WebSocket anonimo, MongoDB, storage, upload, permessi e strumenti di backup. Documentati criticita e delta locali da preservare, sequenza operativa concreta e rollback; aggiunto smoke test esterno anonimo e non distruttivo per verificare il contenimento dopo il deploy.
+**Testato**: si (metodo: controlli SSH read-only sulla VPS, verifiche HTTP/HTTPS/TLS/CORS/porte/WSS dall'esterno, compilazione e prova baseline dello smoke script, `git diff --check`)
+**Note per il prossimo agente**: nessuna modifica e stata applicata alla VPS. Il P0-B resta da eseguire solo a locali fermi. Non fare un pull live finche upload, patch VPS di `requirements.txt`, script locali, backup e worktree sporco non sono stati preservati come descritto nel preflight.
 
+### [2026-07-17 11:11 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: docs | architecture | planning
+**File toccati**:
+- `/app/memory/OPERATIONAL_MEMORY_{DESIGN,ADVANCED_CAPABILITIES}.md`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Esteso il progetto approvato della Memoria operativa con un documento separato per le capacita avanzate: tempo bitemporale, grafo di provenienza e Spiega questo valore, replay, formule/parser in modalita ombra, gemello digitale consultivo, confronto tra modelli predittivi, incertezza esplicita, anomalie personalizzate, assistente con fonti e consapevolezza dei dati mancanti. Formalizzati campi da raccogliere dal momento zero, dipendenze unidirezionali, ordine di realizzazione, limiti di autonomia, test e criteri di accettazione. Esclusi esplicitamente dizionario semantico esteso e registro manuale degli esperimenti.
+**Testato**: si (metodo: revisione incrociata con il progetto base, verifica dei riferimenti, controllo delle esclusioni richieste, repository hygiene e `git diff --check`)
+**Note per il prossimo agente**: il documento avanzato non autorizza alcuna implementazione. Il worker e lo storage isolato del progetto base vengono prima; bitemporalita, provenienza, versioni e qualita devono pero essere previste fin dal primo schema per non rendere inutilizzabile lo storico futuro.
+
+### [2026-07-17 10:52 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: docs | reliability | planning
+**File toccati**:
+- `/app/memory/{TODO,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Inserito nella TODO un blocco compatto e ordinato per l'affidabilita di Report e mezzanotte: R1 distingue giornata vuota da archiviazione fallita e impedisce l'azzeramento dei contatori in errore; R2 uniforma e testa la valutazione delle formule tra tutte le viste e il backend; R3 introduce un lock MongoDB con scadenza contro reset concorrenti. Definiti ordine e test minimi senza duplicare l'analisi estesa.
+**Testato**: si (metodo: revisione statica della sezione, verifica assenza di duplicati equivalenti nella TODO e `git diff --check`)
+**Note per il prossimo agente**: ordine consigliato R1, R2, R3. R1 corregge un'ambiguita concreta del risultato di archiviazione; R2 deve mantenere lettura tollerante dello storico; R3 ha priorita inferiore finche la VPS usa un solo processo Uvicorn.
+
+### [2026-07-17 10:39 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: docs | product | architecture
+**File toccati**:
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Riscritto integralmente il PRD come contratto funzionale corrente dell'applicazione. Rimossi diario delle vecchie sessioni, backlog duplicati, integrazione Google Sheets non piu presente e riferimenti a credenziali/ID esterni. Formalizzati visione, principi, architettura post-refactor, matrice ruoli, isolamento tenant per scheda, ordini, mezzanotte/recovery, Report e riporti, Numeri, Analisi mensile, magazzino/DDT, documenti, diagnostica, creazione locali, fonti di verita, requisiti non funzionali, stato P0-A/P0-B, criteri di rilascio e limiti noti. I piani futuri restano nei documenti dedicati.
+**Testato**: si (metodo: verifica incrociata con router, servizi, task, controlli ruolo e documentazione corrente; riferimenti locali tutti esistenti; documento ASCII senza mojibake o riferimenti sensibili obsoleti; repository hygiene check passato su 256 file; `git diff --check` passato)
+**Note per il prossimo agente**: il PRD descrive il comportamento atteso, non sostituisce il changelog. Se codice/test e PRD divergono, segnalare la differenza come bug o decisione da chiarire; non riscrivere silenziosamente il requisito per farlo coincidere con il codice.
+
+### [2026-07-17 10:22 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: security | test | config | docs
+**File toccati**:
+- `/app/.github/workflows/lightweight-ci.yml`
+- `/app/backend/requirements-ci.txt`
+- `/app/scripts/check_repository_hygiene.py`
+- `/app/memory/{SECURITY_HARDENING_PLAN,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Aggiunta una pipeline GitHub Actions a basso consumo sul push finale a `main`, sulle pull request e su avvio manuale. Un solo runner esegue in sequenza controllo repository, compileall/F821, suite backend standard, test frontend e build senza sourcemap; cache, timeout di 15 minuti e cancellazione delle esecuzioni superate limitano tempi e risorse. Il controllo locale blocca file runtime/credenziali e token ad alta confidenza senza dipendenze esterne.
+**Testato**: sì (metodo: controllo igiene su 256 file; virtualenv Python 3.12 pulito con dipendenze CI minime; compileall e F821; 58 test backend passati con 30 live gated; 12 test frontend passati; build React produzione completata con i soli warning Hook preesistenti)
+**Note per il prossimo agente**: la baseline non esegue Mongo live, browser E2E, CodeQL, dependency audit o SBOM. Non trasformarla in una matrice di runner senza un beneficio concreto. La build usa `CI=false` soltanto per mantenere gli warning ESLint preesistenti non bloccanti, come sulla VPS; i test frontend restano in `CI=true`.
 ### [2026-07-16 15:31 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: security | refactor | config | test | docs
 **File toccati**:

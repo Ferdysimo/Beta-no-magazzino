@@ -38,6 +38,7 @@ coverage/
 # Builds and package caches
 build/
 dist/
+/frontend/public/tesseract/
 .next/
 out/
 .cache/

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, FlaskConical, ScanLine } from 'lucide-react';
+import { ArrowLeft, ChevronRight, FlaskConical, ScanLine, Tags } from 'lucide-react';
 import Header from '../components/Header';
 
 const LaboratorioPage = () => {
@@ -37,7 +37,7 @@ const LaboratorioPage = () => {
         <div className="border-y border-gray-300 py-4 mb-6 flex items-center justify-between gap-4">
           <div>
             <h2 className="font-heading text-lg font-bold text-gray-900 uppercase">Esperimenti</h2>
-            <p className="text-sm text-gray-500 mt-0.5">1 disponibile</p>
+            <p className="text-sm text-gray-500 mt-0.5">2 disponibili</p>
           </div>
           <span className="inline-flex items-center h-7 px-2.5 bg-white border border-gray-300 rounded text-xs font-bold text-gray-700 uppercase">
             Isolato
@@ -65,6 +65,36 @@ const LaboratorioPage = () => {
                 <div>
                   <h3 className="font-heading text-lg font-bold text-gray-950">Scanner documenti</h3>
                   <p className="text-sm text-gray-500 mt-1">Fatture e DDT</p>
+                </div>
+                <ChevronRight
+                  size={21}
+                  className="text-gray-400 group-hover:text-gray-900 transition-colors shrink-0"
+                  aria-hidden="true"
+                />
+              </div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            data-testid="lab-open-pasta-annotations"
+            onClick={() => navigate('/laboratorio/annotazioni-paste')}
+            className="group min-h-[156px] text-left bg-white border border-gray-300 hover:border-yellow-500 rounded-md p-5 transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-500"
+          >
+            <div className="h-full flex flex-col">
+              <div className="flex items-start justify-between gap-4">
+                <div className="h-10 w-10 flex items-center justify-center bg-gray-100 border border-gray-200 rounded-md">
+                  <Tags size={21} className="text-gray-800" aria-hidden="true" />
+                </div>
+                <span className="text-[11px] font-bold uppercase text-gray-700 bg-gray-100 border border-gray-300 rounded px-2 py-1">
+                  Sola lettura
+                </span>
+              </div>
+
+              <div className="mt-5 flex items-end justify-between gap-4">
+                <div>
+                  <h3 className="font-heading text-lg font-bold text-gray-950">Annotazioni paste</h3>
+                  <p className="text-sm text-gray-500 mt-1">Frequenze e riscontri</p>
                 </div>
                 <ChevronRight
                   size={21}

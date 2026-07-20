@@ -1,8 +1,8 @@
 # Memoria operativa isolata
 
-Ultimo aggiornamento: 2026-07-16
+Ultimo aggiornamento: 2026-07-20
 
-Stato: progettazione approvata, nessuna implementazione avviata
+Stato: Fasi 0-6 implementate e collaudate localmente; servizio non installato
 
 Motto vincolante:
 
@@ -207,7 +207,7 @@ deletion_logs / archived_deletion_logs
 modification_logs / archived_modification_logs
 cash_daily_counts / cash_audit_log
 beverage_daily_counts
-beverage_sales / archived_beverage_sales
+archived_beverage_sales (solo vendite definitive; le attive sono stornabili)
 products / stock_movements
 richieste / carichi_magazzino
 pasta_dictionary / restaurants
@@ -346,6 +346,24 @@ specializzate contengono dati normalizzati e possono essere rigenerate.
 ```
 
 Il dato originale non viene mai sostituito dal parsing.
+
+Le annotazioni successive a una pasta riconosciuta sono un fatto separato:
+
+```json
+{
+  "pasta_sigla": "CARB",
+  "annotation_raw": "No  pepe",
+  "annotation_normalized": "NO PEPE",
+  "annotation_parser_version": 1
+}
+```
+
+Il riconoscitore pasta operativo resta autoritativo e volutamente rigido. Una
+riga manuale, errata, ambigua o esclusa come `XL` non genera annotazioni. La
+normalizzazione corregge soltanto rappresentazione, spazi e maiuscole: non
+indovina errori e non unisce automaticamente significati come `NO PEPE` e
+`SENZA PEPE`. Il Laboratorio puo calcolare questi fatti in sola lettura; la
+Memoria futura li conservera versionati insieme alla descrizione originale.
 
 ### 11.2 Denaro e formule
 
@@ -616,8 +634,9 @@ questo ordine interno:
 7. Aggiungere adapter magazzino, richieste, carichi e DDT strutturati.
 8. Aggiungere versioni di configurazioni, prezzi e dizionari.
 9. Aggiungere normalizzatori versionati.
-10. Aggiungere sessioni compatte e telemetria best effort.
-11. Aggiungere contesto calendario e fonti esterne opzionali.
+10. Valutare sessioni compatte e telemetria best effort dopo il periodo di
+    osservazione.
+11. Aggiungere contesto calendario; lasciare opzionali le fonti esterne.
 12. Implementare snapshot giornalieri e report di copertura.
 13. Applicare limiti di processo, connessioni e storage.
 14. Eseguire la suite completa su database isolati.
@@ -625,6 +644,99 @@ questo ordine interno:
 16. Registrare il momento zero e attivare la raccolta.
 
 Non vengono pubblicate versioni parziali che dichiarano la Memoria completa.
+
+### Stato esecutivo delle Fasi 0-6
+
+Dal 20 luglio 2026 esiste il pacchetto autonomo `backend/memory_worker`.
+La Fase 0 ha introdotto contratti versionati, configurazione protetta,
+sanificazione, connessioni Mongo ristrette e preflight read-only.
+
+La Fase 1 aggiunge un collector manuale one-shot per il ciclo vita ordini:
+
+- epoch esplicito e immutabile;
+- watermark indipendenti per sei sorgenti;
+- scansione ciclica di ordini attivi e archivi per intercettare arrivi tardivi;
+- raw sanificato e deduplicato tra collection attive e archiviate;
+- fatti di stato bitemporali, modifiche e cancellazioni;
+- quarantena idempotente dei record malformati;
+- lease a scadenza contro due collector ordini concorrenti;
+- rifiuto delle credenziali sorgente con scrittura o ruoli ambigui.
+
+Il collector non e un servizio continuo, non e installato sulla VPS e non e
+attivo.
+
+La Fase 2 aggiunge un collector manuale one-shot per:
+
+- stato giornaliero della cassa;
+- formule monetarie, paste, prezzi manuali e snapshot del dizionario;
+- spicci aperti, cassetto e conteggio banconote;
+- stato giornaliero e vendite calcolate delle bevande;
+- audit delle correzioni Report;
+- vendite bevande definitive nell'archivio notturno.
+
+Valori mancanti, invalidi e zero restano distinti. Le formule originali sono
+conservate nel raw e l'interpretazione usa regole versionate. Le vendite bevande
+ancora attive non vengono acquisite come fatti definitivi perche possono essere
+stornate senza un evento di cancellazione.
+
+La Fase 3 aggiunge il collector one-shot del magazzino:
+
+- baseline di prodotti, stock e inventario bevande;
+- movimenti stock con prima, delta, dopo e semantica logistica;
+- richieste e relativo ciclo di vita;
+- carichi e DDT strutturati, con immagini escluse;
+- carichi bevande in casse e unita;
+- rilevazione delle cancellazioni fisiche soltanto dopo scansioni complete.
+
+La Fase 4 aggiunge il collector one-shot delle configurazioni:
+
+- locali e parametri operativi, senza credenziali o contatori runtime;
+- override dei dizionari paste e prezzi in centesimi;
+- listino paste default duplicato come regola versionata e testata in parita;
+- catalogo bevande e fornitori;
+- versioni temporali e reset/cancellazioni rilevati a scansione completa.
+
+La Fase 5 aggiunge gli snapshot giornalieri:
+
+- contesto calendario per ogni giornata chiusa;
+- snapshot per locale e snapshot globale del magazzino;
+- stato `complete` o `partial` senza inventare valori mancanti;
+- gap persistenti che vengono risolti quando la fonte torna disponibile;
+- versioni immutabili e provenienza verso fatti, raw e regole;
+- controlli di integrita registrati a ogni costruzione.
+
+La Fase 6 aggiunge il runner continuo isolato:
+
+- modalita dry-run esclusivamente read-only;
+- collector sequenziali a batch limitati;
+- backoff esponenziale e circuit breaker;
+- soglie sulla latenza del DB sorgente e sullo storage Memoria;
+- snapshot periodici senza code illimitate;
+- arresto ordinato;
+- template systemd con limiti CPU, RAM e I/O.
+
+Il runner e i template esistono soltanto nel repository. Il servizio non e
+installato o attivo sulla VPS e il momento zero reale non e stato scelto.
+
+La configurazione predefinita dichiara sempre:
+
+```text
+MEMORY_ENABLED=false
+MEMORY_WRITE_ENABLED=false
+```
+
+Il backend operativo non importa il pacchetto e non conosce le variabili della
+Memoria. I runbook delle fondazioni sono in:
+
+```text
+memory/MEMORY_PHASE0_RUNBOOK.md
+memory/MEMORY_PHASE1_RUNBOOK.md
+memory/MEMORY_PHASE2_RUNBOOK.md
+memory/MEMORY_PHASE3_RUNBOOK.md
+memory/MEMORY_PHASE4_RUNBOOK.md
+memory/MEMORY_PHASE5_RUNBOOK.md
+memory/MEMORY_PHASE6_RUNBOOK.md
+```
 
 ## 22. Test obbligatori
 
@@ -762,11 +874,14 @@ utente. Deve partire da un worker spento e innocuo:
 
 ```text
 backend/memory_worker/
-|-- main.py
+|-- __main__.py
+|-- collector.py
 |-- config.py
-|-- watermarks.py
+|-- context.py
+|-- contracts.py
+|-- preflight.py
+|-- runner.py
 |-- sanitize.py
-|-- integrity.py
 |-- snapshots.py
 |-- sources/
 |   |-- orders.py
@@ -805,8 +920,11 @@ memory_raw_versions
 memory_order_facts
 memory_report_facts
 memory_warehouse_facts
+memory_configuration_versions
+memory_context_daily
 memory_daily_snapshots
 memory_gaps
+memory_integrity_runs
 memory_quarantine
 ```
 
@@ -1001,3 +1119,16 @@ La regola di arresto resta sempre la stessa:
 
 > Raccogliere piu dati possibile, fino al punto immediatamente precedente a quello
 > in cui un guasto della Memoria potrebbe danneggiare o bloccare l'applicazione.
+
+## 29. Capacita avanzate approvate
+
+Replay, modalita ombra, grafo di provenienza, tempo bitemporale, gemello digitale,
+previsioni, anomalie e assistente con fonti sono progettati separatamente in:
+
+```text
+memory/OPERATIONAL_MEMORY_ADVANCED_CAPABILITIES.md
+```
+
+Il primo worker deve predisporre tempi, versioni, qualita e relazioni necessari
+a queste evoluzioni, ma nessuna capacita avanzata puo indebolire gli invarianti
+di isolamento definiti in questo documento.

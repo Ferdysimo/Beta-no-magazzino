@@ -41,6 +41,7 @@ import DizionarioPastePage from './pages/DizionarioPastePage';
 import CreaLocaliPage from './pages/CreaLocaliPage';
 import LaboratorioPage from './pages/LaboratorioPage';
 import ScannerDocumentiLabPage from './pages/ScannerDocumentiLabPage';
+import PastaAnnotationsLabPage from './pages/PastaAnnotationsLabPage';
 import UpdateBanner from './components/UpdateBanner';
 import FrontendDiagnostics from './components/FrontendDiagnostics';
 import RouteScrollRestoration from './components/RouteScrollRestoration';
@@ -298,6 +299,13 @@ function AppRoutes() {
         <ProtectedRoute>
           <SimoneOnlyRoute>
             <ScannerDocumentiLabPage />
+          </SimoneOnlyRoute>
+        </ProtectedRoute>
+      } />
+      <Route path="/laboratorio/annotazioni-paste" element={
+        <ProtectedRoute>
+          <SimoneOnlyRoute>
+            <PastaAnnotationsLabPage />
           </SimoneOnlyRoute>
         </ProtectedRoute>
       } />

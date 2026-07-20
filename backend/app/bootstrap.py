@@ -17,6 +17,7 @@ from app.routers.analysis import router as analysis_router
 from app.routers.beverages import router as beverages_router
 from app.routers.documents import router as documents_router
 from app.routers.invoices import router as invoices_router
+from app.routers.laboratory import router as laboratory_router
 from app.routers.orders import router as orders_router
 from app.routers.report import router as report_router
 from app.routers.system import router as system_router
@@ -102,6 +103,29 @@ async def initialize_application():
     await db.cash_audit_log.create_index([("last_at", -1)])
     await db.cash_audit_log.create_index([("restaurant_id", 1), ("date_rome", -1), ("last_at", -1)])
     await db.cash_audit_log.create_index([("category", 1), ("field", 1), ("last_at", -1)])
+    # Laboratorio scanner: isolated from operational warehouse collections.
+    # Failures here must not prevent the production application from starting.
+    try:
+        await db.lab_document_scan_feedback.create_index(
+            [("scan_id", 1)],
+            unique=True,
+            name="uniq_lab_document_scan_id",
+        )
+        await db.lab_document_scan_feedback.create_index([("created_at", -1)])
+        await db.lab_document_aliases.create_index(
+            [
+                ("kind", 1),
+                ("source_normalized", 1),
+                ("supplier_name", 1),
+            ],
+            unique=True,
+            name="uniq_lab_document_alias",
+        )
+        await db.lab_document_aliases.create_index(
+            [("target_id", 1), ("last_confirmed_at", -1)]
+        )
+    except Exception as e:
+        logger.warning(f"Could not create laboratory scanner indexes: {e}")
     logger.info("MongoDB indexes created")
 
     # Populate the in-memory restaurant->location cache used by the
@@ -145,6 +169,7 @@ api_router.include_router(invoices_router)
 api_router.include_router(warehouse_router)
 api_router.include_router(beverages_router)
 api_router.include_router(documents_router)
+api_router.include_router(laboratory_router)
 
 
 def create_app() -> FastAPI:

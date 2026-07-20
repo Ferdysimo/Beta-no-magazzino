@@ -31,6 +31,7 @@
     "@radix-ui/react-toggle": "^1.1.6",
     "@radix-ui/react-toggle-group": "^1.1.7",
     "@radix-ui/react-tooltip": "^1.2.4",
+    "@tesseract.js-data/ita": "1.0.0",
     "axios": "^1.8.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -52,12 +53,14 @@
     "sonner": "^2.0.3",
     "tailwind-merge": "^3.2.0",
     "tailwindcss-animate": "^1.0.7",
+    "tesseract.js": "7.0.0",
     "vaul": "^1.1.2",
     "zod": "^3.24.4"
   },
   "scripts": {
+    "prestart": "node scripts/sync-tesseract-assets.js",
     "start": "craco start",
-    "prebuild": "node scripts/generate-version.js",
+    "prebuild": "node scripts/sync-tesseract-assets.js && node scripts/generate-version.js",
     "build": "craco build",
     "test": "craco test"
   },

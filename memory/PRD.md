@@ -1,209 +1,563 @@
-# Pastasciutta Roma - PRD
+# PRD - Pastasciutta Roma
 
-## Problema Originale
-Sistema di gestione ordini pasta per multi-ristorante (Flaminio, Grazie, Largo di Brazzà) con ruoli diversi (Cassa, Bollitore, Generale, Magazziniere, Amministratore).
+Stato: contratto funzionale corrente
 
-## Architettura
-- **Backend**: FastAPI (Python) su porta 8001
-- **Frontend**: React.js su porta 3000
-- **Database**: MongoDB
-- **Real-time**: WebSocket con fallback polling (15s)
-- **File Storage**: immagini su filesystem runtime configurato da `UPLOADS_DIR`, fuori dalla repo in produzione
-- **Integrazione**: Google Sheets API per export automatico ordini
+Ultimo allineamento: 17 luglio 2026
 
-## Account
-| Username | Ruolo |
-|---|---|
-| Flaminio | restaurant |
-| Grazie | restaurant |
-| Brazza | restaurant |
-| Magazziniere | magazzino |
-| Admin | admin |
-| Simone | admin |
-| Federico | supervisor |
+## 1. Scopo del documento
 
-Le credenziali sono gestite fuori dal repository tramite password manager e comando offline.
+Questo PRD descrive che cosa deve fare oggi l'applicazione Pastasciutta Roma,
+quali comportamenti non devono regredire e quali limiti sono ancora aperti.
+Serve come punto di orientamento per il titolare, gli sviluppatori e gli agenti
+Codex che lavorano sul repository da postazioni diverse.
 
-## Funzionalità Implementate
+Il PRD non e:
 
-### Core
-- Autenticazione multi-ristorante con JWT + ruoli
-- CRUD ordini con numerazione incrementale
-- Timer cottura con colori (verde/rosso/grigio/blu)
-- WebSocket real-time + polling fallback 15s
-- Reset automatico a mezzanotte (ora italiana) con archiviazione ordini ATOMICA (verifica insert_many prima di delete_many)
-- Self-healing al boot: `recover_stale_orders()` archivia automaticamente ordini "stantii" se il midnight_reset non è girato
-- `delete_order` calcola counter come MAX storico del giorno (active + archived_today + deletion_logs_today) → counter monotonico, mai indietro
-- `create_order` ATOMICO via aggregation pipeline `$max(counter+1, requested)` su find_one_and_update — concorrenza-safe, immune a numeri duplicati anche con N richieste concorrenti
-- Endpoint `GET /api/orders/next-number` autoritativo per il frontend (no più calcoli dai soli pending)
-- Indice MongoDB UNIQUE su `(restaurant_id, order_number)` su `orders` come rete di sicurezza
-- Alert dashboard Admin: banner rosso quando il sistema rileva ordini stantii al boot
+- un changelog;
+- una raccolta di idee future;
+- un runbook di produzione;
+- un contenitore di password, token, chiavi, indirizzi IP o credenziali.
 
-### Pagine
-- **Cassa**: Creazione ordini, modifica numero+descrizione, stampa selezione multipla, timer, cancellazione reale
-- **Tablet Generale**: Lista ordini, soft-hide (non cancella dal DB), toggle monitor clienti, auto-off monitor
-- **Tablet Bollitore 1 & 2**: Timer cottura, kitchen complete, cancella >7min, testo nero grassetto compatto
-- **Monitor Clienti**: Display numeri pronti per clienti (Flaminio)
-- **Report Cassa**: Report giornaliero con ordini attivi + archiviati
-- **Report Excel**: Export dati
-- **Fatture/Versamenti/Chiusure**: Gestione documenti con immagini su filesystem
-- **Magazzino Fase 1**: CRUD prodotti con ruolo Magazziniere (foto, unità, fornitore, quantità stock)
-- **Magazzino Fase 2 — Richieste Merce & DDT** (19/04/2026):
-  - Ogni locale ha una pagina `/richiesta-merce` con elenco richieste da evadere + evase
-  - Pagina `/richiesta-merce/nuova` mobile-first: card prodotto con foto, −/+ grossi, tastierino numerico, filtri per fornitore + search, sticky bottom INVIA
-  - `real_quantity` = `quantity` − somma prodotti in richieste pending (multi-locale, così un locale vede cosa è già stato prenotato)
-  - Contatore DDT **globale** auto-incrementale atomico (MongoDB `$inc` + upsert)
-  - Workflow 3 stati: `pending` (locale crea) → `evasa` (magazziniere evade + decrementa stock) → `confermata` (locale conferma ricezione)
-  - Vista DDT stampabile A4 con MITTENTE (Pastasciutta Srl) + DESTINATARIO (indirizzi hardcoded per locale) + tabella articoli
-  - Magazziniere ha pagina `/magazzino/richieste-in-arrivo` con sezioni "Da evadere" / "Evase in attesa conferma" / "Storico confermate"
-  - Admin può impersonare qualsiasi locale via `X-Admin-Restaurant-Id`
-- **Magazzino Fase 2 — Carico merce dai fornitori** (19/04/2026):
-  - Magazziniere → "Carico verso il magazzino" → lista `/magazzino/carichi` con foto DDT miniatura, filtri fornitore + search full-text
-  - Nuovo carico `/magazzino/carichi/nuovo`: select fornitore (mostra solo suoi prodotti), numero DDT fornitore, **foto DDT obbligatoria** (con `capture="environment"` per camera mobile), card prodotti con +/- e keypad, preview "Stock attuale → Nuovo stock"
-  - Lightbox per zoom foto DDT in lista
-  - Edit `/magazzino/carichi/:id/modifica` calcola delta e riapplica allo stock atomicamente
-  - Delete con rollback totale delle quantità
-- **Fornitori**: lista resettata con 41 nomi ufficiali (19/04/2026)
-- **Media Locali** (Admin): Report medie giornaliere per locale (ultimo mese rolling)
+In caso di conflitto:
 
-### Account Amministratore
-- Selettore locale all'accesso
-- Accesso completo a tutte le pagine di ogni locale
-- Può fare operazioni (creare, cancellare, ecc.)
-- Cambio locale dall'header
-- Pagina "Media locali" esclusiva
+1. una decisione esplicita e recente del titolare ha la precedenza;
+2. questo PRD definisce il comportamento atteso;
+3. test e codice mostrano il comportamento implementato;
+4. una differenza tra PRD e implementazione deve essere trattata come bug o
+   decisione da chiarire, non corretta silenziosamente nel documento;
+5. il changelog spiega come e perche il sistema e arrivato allo stato corrente.
 
-### Integrazioni
-- **Google Sheets**: Ogni ordine creato viene aggiunto automaticamente al foglio (colonna A: numero, colonna B: descrizione)
-- Credenziali: `/app/backend/google_credentials.json`
-- Spreadsheet ID: `1stWnCov8ipM_KzkYJiW2Iq4HmobLBJ19jGXj3oVrdyQ`
+## 2. Visione del prodotto
 
-### Bug Fix Critici
-- Cancellazione dal Tablet Generale non elimina più ordini dal DB (usa hidden_generale)
-- Timer si congela blu in Cassa quando ordine nascosto dal Generale
-- Monitor clienti auto-off quando ordine nascosto dal Generale
-- Fix flickering polling (guardie ottimistiche rispettate)
-- Fix numero ordine sovrascitto quando modificato manualmente
-- Fix timer perdeva secondi (allineamento con ora server)
+Pastasciutta Roma e un'applicazione interna multi-locale che coordina il lavoro
+quotidiano dei ristoranti e del magazzino centrale. Deve permettere di:
 
-### Ottimizzazioni
-- Polling da 5s a 15s (WebSocket è primario)
-- Polling rispetta guardie ottimistiche (zero flickering)
-- Righe compatte nei tablet bollitore (px-2 py-1)
-- Testo nero grassetto nei bollitore per leggibilità
-- Tabella "Numeri" Admin responsive su mobile (table-fixed, padding e font ridotti, no scroll orizzontale a 375px) — 07/05/2026
+- creare e seguire gli ordini di pasta in tempo reale;
+- coordinare Cassa, Tablet Generale, Bollitori e Monitor Clienti;
+- compilare il Report giornaliero di ogni locale;
+- conservare uno storico affidabile di paste, cassa e bevande;
+- produrre Excel utilizzabili per Numeri e Analisi mensile;
+- gestire richieste merce, DDT, carichi, inventario e movimenti di stock;
+- gestire documenti operativi e relativi allegati;
+- controllare versione, dispositivi online ed errori applicativi;
+- aggiungere nuovi locali senza introdurre logica duplicata per ciascuna sede.
 
-## Self-Hosting
-- VPS OVHcloud con Ubuntu
-- Script `setup.sh` per installazione automatica
-- Aggiornamento: `git pull && cd frontend && npm run build && sudo systemctl restart pastasciutta-backend`
+L'app non e un servizio pubblico e non prevede registrazione autonoma degli
+utenti. E uno strumento operativo: continuita, isolamento dei locali e
+correttezza dei dati hanno priorita sulle funzioni decorative.
 
-## Backlog P0 - Magazzino Fase 2 (rimanenti)
-- Scarico merce verso i locali (Stock Dispatch — alternativa alle richieste dal basso)
-- Inventario (Inventory Management — forza sistema, conta fisica)
-- Analisi/Statistiche magazzino
+## 3. Principi vincolanti
 
-## Backlog P1 - Performance
-- Indici MongoDB
-- Pool connessioni MongoDB
-- Rate limiting API
-- Compressione Gzip
-- Filtraggio/paginazione server-side ordini
-- Heartbeat WebSocket server-side
-- Protezione JWT per `/api/uploads/`
-- Archiviazione ordini vecchi
-- Timeout operazioni DB
-- Logging strutturato con rotazione
-- **Ledger `stock_movements`** (BACKEND + UI COMPLETATI 07/05/2026): tracciamento atomico di ogni mutazione di `products.quantity` con timestamp, autore, causale e ref al documento sorgente. Hook su POST/PUT/DELETE /carichi, PATCH /richieste/evade, PATCH /products/quantity, POST/PUT /products. Endpoint API `GET /products/{id}/movements` e `GET /stock-movements` con filtri (date_from/date_to/cause/user_id). Backfill script `backfill_stock_ledger.py` per popolare lo storico. UI Admin/Magazziniere: pagina `/magazzino/cronologia` con filtri (prodotto, date, causale), badge colorati per tipo movimento, totali entrate/uscite, link cronologia da Inventario. Mobile responsive (375px senza scroll orizzontale).
+1. **Isolamento dei locali**: un locale vede e modifica soltanto i propri dati.
+2. **Backend autoritativo**: ruoli, tenant e operazioni sensibili sono validati
+   dal backend; nascondere un pulsante nel frontend non e sicurezza.
+3. **Continuita operativa**: un aggiornamento del codice non deve azzerare dati
+   MongoDB o upload persistenti.
+4. **Storico spiegabile**: cancellazione, correzione manuale e riporto automatico
+   devono avere semantiche distinguibili.
+5. **Giornata italiana**: i confini giornalieri usano sempre `Europe/Rome`,
+   inclusi cambio ora, mezzanotte, storico ed export.
+6. **Compatibilita dei dati**: le nuove versioni devono continuare a leggere i
+   documenti storici supportati o segnalare esplicitamente cio che manca.
+7. **Fallimento isolato**: diagnostica, export o future funzioni analitiche non
+   devono trascinare con se gli ordini e il lavoro quotidiano.
+8. **Nessuna scorciatoia nascosta**: backdoor, kill switch invisibili e bypass
+   permanenti non fanno parte del prodotto.
 
-## Backlog P2 - Futuro
-- Popolare lista fornitori
-- Backup automatico (DB + uploads su cloud)
-- Stampante termica via LAN (Star TSP100)
-- Integrazione Google Sheets automatica a fine giornata (oltre che per singolo ordine)
-- Autocompletamento/validazione dizionario paste
+## 4. Architettura corrente
 
-## Sessione fork — 28/05/2026
-- **FIX CRITICO**: PUT `/api/cash/daily` salvava su una variabile non definita `flaminio_id` (cross-tenant write/NameError). Ora usa `rid` effettivo da `_effective_restaurant_id`.
-- **Guard isAdmin** su `startEditCassetto` in `ReportBetaPage.js`: utenti non-Admin non possono più modificare lo stock del Cassetto Spicci (cursor `not-allowed`, label "solo lettura").
-- **Coerenza formule**: `cashTotal` ora usa `evaluateValue` invece di `parseFloat` puro → `=10+5` funziona anche sui count delle banconote/monete.
-- **Sezione "Magazzino Sera"** aggiunta nel Report (read-only, fonte: Magazzino Bevande): card con il solo valore "sera" per ogni bevanda, evidenziato in `amber-50` quando popolato.
-- **Test pytest aggiunto**: `/app/backend/tests/test_multi_tenancy.py` (7/7 PASS) — copre isolamento `/api/cash/daily`, `/api/beverages/daily`, `prev_cash_sera` carry-over, non-admin no-impersonation.
+### 4.1 Componenti
 
+- Frontend React, attualmente basato su Create React App/Craco.
+- Backend FastAPI in Python.
+- MongoDB come database operativo.
+- WebSocket come canale real-time principale, con polling di fallback.
+- File allegati nel filesystem configurato da `UPLOADS_DIR`, fuori dal
+  repository in produzione.
+- Nginx davanti all'applicazione sulla VPS.
 
-## Sessione fork — 09/06/2026 (ReportBetaPage UI tuning)
-Applicate 7 modifiche di layout/logica richieste dall'utente su `/app/frontend/src/pages/ReportBetaPage.js`:
-1. **CASH_FIELDS riordinati**: VERS spostato come ultimo box prima di CASH SERA; BP/SAT/POS raggruppati consecutivamente.
-2. **Colori box Riepilogo Cassa**: BP/SAT/POS condividono lo stesso azzurro chiaro (`#dbeafe`); VERS = bianco (`#ffffff`).
-3. **Riepilogo Cassa = 2ª sezione**: ora subito dopo "Cassa banconote", prima di Vendite Bevande e Magazzino Sera.
-4. **Colonna "Paste" ridotta**: layout grid passato da `1fr_3fr` (25%) a `14fr_86fr` (~14%).
-5. **Spicci + Cassetto Spicci compatti**: wrapper `max-w-[60%]`, altezze input/display da `h-11` a `h-9`, font `text-sm` → `text-xs`, `min-w` ridotti.
-6. **Breakdown costi paste rimosso**: niente più grid per sigla; restano solo TOT PASTE e TOT €.
-7. **Cap 15€** su `setManualPrice`: qualsiasi valore numerico > 15 viene troncato a 15 (formule "=..." non ammesse in input manuale comunque).
-- Testato via screenshot tool: layout corretto, ordine sezioni corretto, cap 15€ verificato (input 50→15, 20→15, 8→8).
+Il backend e stato separato per dominio:
 
-## Sessione fork — 09/06/2026 (Magazzino Sera: casse + sfuse)
-- **Sezione "Magazzino Sera" spostata come 3ª sezione** (subito dopo Riepilogo Cassa, prima di Vendite Bevande) in `/app/frontend/src/pages/ReportBetaPage.js`.
-- **UI a 2 quadratini per bevanda**: input sinistro = **casse** (moltiplicate × 24), input destro = **sfuse** (×1). Sintesi "tot N" sotto la coppia.
-- **Costante `PEZZI_PER_CASSA = 24`** (fissa, uguale per tutte le bevande).
-- **Backend**: esteso `BeverageDailyUpsert` e `GET /api/beverages/daily` con campi `sera_casse` e `sera_sfuse`. Il totale `sera` salvato a DB resta la somma `casse*24 + sfuse` (retrocompatibile con tutta la logica downstream — Vendite Bevande, prev_sera, cash_sera_full).
-- **Persistenza verificata**: refresh → casse/sfuse ricaricati correttamente, totale ricalcolato.
-- Test E2E manuale: AL: 3 casse + 4 sfuse → "tot 76" ✓ (3×24+4=76).
+```text
+backend/app/core       configurazione, sicurezza, database, tempo, file
+backend/app/schemas    contratti dati
+backend/app/services   logica di dominio
+backend/app/routers    API HTTP e WebSocket
+backend/app/tasks      mezzanotte, recovery e manutenzione
+backend/app/bootstrap  composizione FastAPI e lifecycle
+backend/server.py      entrypoint e compatibilita con import storici
+```
 
-## Sessione fork — 09/06/2026 (Scarti + Magazzino Mattina porting)
-- **Sezione "Scarti"** (rosa) aggiunta sotto Magazzino Sera: 1 quadratino unità per bevanda, sync live con `bevCounts.scarti` (campo esistente).
-- **Sezione "Magazzino Mattina"** (verde/turchese) aggiunta sotto Scarti: 2 quadratini per bevanda (Casse ×24 + Sfuse), totale `tot N`.
-- **Backend**: estesi `BeverageDailyUpsert` + GET/PUT `/api/beverages/daily` con `mattina_casse` e `mattina_sfuse`.
-- **Handler refactor**: `handleCasseSfuseChange(sigla, slot, kind, value)` parametrizzato per slot ∈ {mattina, sera}.
-- **Auto-fill prev_sera → mattina**: decomposizione automatica del totale del giorno prima in casse (×24) + sfuse (es. 76 → 3 casse + 4 sfuse).
-- **Placeholder trasparenti rimossi** da tutti gli input bevande (Magazzino Sera, Scarti, Magazzino Mattina).
-- Test E2E manuale: Mattina AL 5 casse + 12 sfuse → tot 132 ✓.
+Nuova logica di dominio non deve essere aggiunta a `server.py`.
 
-## Sessione fork — 09/06/2026 (Magazzino Mattina: read-only + forza mattina)
-- **Magazzino Mattina ora read-only di default** in ReportBetaPage. Il valore atteso allo scatto di mezzanotte verrà dal Magazzino Sera della sera prima (consistente con la logica di MagazzinoBevandePage).
-- **Pulsante "🔒 forza mattina"** accanto al titolo della sezione: cliccandolo sblocca temporaneamente gli input casse/sfuse (label → "🔓 mattina sbloccato" in rosso).
-- Stato `forceMagMattina` separato da `forceMattina` (cassa) per evitare collisione.
-- Input bloccati hanno: `readOnly`, `tabIndex=-1`, sfondo grigio, cursor `not-allowed`.
+### 4.2 Ambienti
 
-## Sessione fork — 09/06/2026 (Sezione "Ingressi" porting)
-- **Sezione "Ingressi"** (indigo) aggiunta tra Magazzino Sera e Scarti.
-- 1 quadratino unità per bevanda, sync live con `bevCounts.inUsc` (campo esistente, stesso usato da MagazzinoBevandePage).
-- Supporta formule "=..." (sfondo rosa quando formula).
-- Nessun placeholder trasparente (rispetta richiesta utente).
-- Handler `handleInUscChange(sigla, value)` con debounce 600ms.
-- Test E2E manuale: AL Ingressi=12 → persistito a reload ✓.
+L'ambiente locale di riferimento usa:
 
-## Sessione fork — 11/06/2026 (Chiusure Excel — Vista Admin a griglia + revisione UX + modalità storica)
-- **Nuova pagina Admin `/chiusure-excel`** (`ChiusureExcelPage.js`) — vista in stile foglio Excel, una riga per giorno.
-- **Colonne (rev2)**: Data, Giorno + 4 macro-header bevande (INGRESSI/USCITE verde, SCARTI rosso chiaro, MAGAZZINO SERA blu, VENDITE giallo) con 9 sotto-colonne per sigla ciascuna → TOT PIATTI → Arr/Altro/Vers/Glo/Just/Del/BP/SAT/POS/FT (€) → Spicci 5€/2€/1€/0,5€ (numero, SENZA cassetto) → CASH SERA (€ completo).
-- **Click su riga** → naviga a `/report-beta?date=YYYY-MM-DD&rid=X` aprendo la PAGINA REPORT vera (`ReportBetaPage`) in **MODALITÀ STORICA** con tutti i dati archiviati di quel giorno, modificabile dall'Admin.
-- **Modalità storica** in `ReportBetaPage`:
-  - Lettura URL `?date=` + `?rid=` con `useSearchParams`.
-  - PasswordGate bypassato per Admin in storico.
-  - Tutti i GET (`/cash/daily`, `/beverages/daily`, `/beverages/inventory`) appendono `?date=&restaurant_id=`.
-  - Tutti i PUT (cash + bev) propagano `date` + `restaurant_id` nel body.
-  - Live paste polling (`/orders/today-paste-list`) **disabilitato** in storico (si usa il `paste_text` archiviato).
-  - Sync `pasteText ← autoPasteText` disabilitato in storico per non azzerare i dati salvati.
-  - Banner "📅 MODALITÀ STORICO — gg/mm/aaaa" + pulsante "← Torna a Chiusure Excel".
-- **Backend nuovi/modificati endpoint**:
-  - `GET /api/cash/daily?date=&restaurant_id=` — accetta opzionali (Admin/Supervisor only).
-  - `GET /api/beverages/daily?date=&restaurant_id=` — accetta opzionali (Admin/Supervisor only).
-  - `PUT /api/cash/daily` — body accetta opzionali `date` + `restaurant_id`.
-  - `PUT /api/beverages/daily` — body accetta opzionali `date` + `restaurant_id`.
-  - Helper `_resolve_historical_mode()` valida formato data + ruolo + non-futuro.
-  - Audit-log loggato con `mode: "historical"` per tracciare correzioni postume.
-  - `GET /api/admin/closures/grid`; le vecchie route mock sono state rimosse dal runtime nel P0 di sicurezza.
-- **Pulsante "Chiusure Excel"** nel pannello selettore Admin in `HomePage.js`.
-- **Test E2E**:
-  - curl backend: GET storico (cash + bev) OK ✓, PUT storico salva e ricarica OK ✓, non-admin → 403 ✓.
-  - screenshot E2E: navigazione Home → Chiusure Excel → click riga 10/06/2026 → ReportBetaPage si apre con banner + dati completi (44 paste €347, CASSA mattina 173/glo 34/just 62/del 90/bp 175/sat 144/pos 307/ft 67, SPICCI 1/1/3/5, VENDITE bev €395, CASH SERA €-214) ✓.
+- Python 3.12;
+- Node.js 20;
+- Yarn 1.22.22;
+- MongoDB 8.0.
 
-## Sessione fork — 15/06/2026 (BUG CRITICO: cross-tenant leak tra tab Admin)
-- **Sintomo**: l'Admin apre due tab del browser, uno con Flaminio selezionato e uno con Grazie selezionato. Quando manda una pasta dal tab "Flaminio" l'ordine finiva nel locale "Grazie" (o viceversa).
-- **Root cause**: `admin_selected_restaurant` era salvato in `localStorage` (condiviso tra tutti i tab dello stesso browser). Il secondo tab sovrascriveva la scelta del primo. Un secondo axios interceptor leggeva `localStorage` al volo a ogni richiesta HTTP, mandando il `X-Admin-Restaurant-Id` del locale sbagliato.
-- **Fix** (`/app/frontend/src/contexts/AuthContext.js`):
-  - `admin_selected_restaurant` spostato da `localStorage` a `sessionStorage` (isolato per-tab).
-  - Rimosso il secondo axios interceptor che leggeva `localStorage` ad ogni request.
-  - L'unico interceptor rimasto usa `adminRestRef` (React ref, isolato per-tab) e manda sia `X-Restaurant-Id` sia `X-Admin-Restaurant-Id` per coprire entrambi i path backend (`verify_token` + `_effective_restaurant_id`).
-- **Test E2E**: aperti 2 tab nello stesso contesto browser come Admin → tab1 seleziona Flaminio, tab2 seleziona Grazie → tab1 manda "TAB1_FLAMINIO_CARB" → tab1 mostra l'ordine, tab2 mostra "Nessun ordine" ✓.
-- **Side-effect atteso**: aprendo un nuovo tab come Admin si dovrà ri-selezionare il locale (il vecchio comportamento "ricorda l'ultimo" era esattamente la fonte del bug). Comportamento corretto e sicuro.
+Sono supportati l'avvio Docker descritto in `LOCAL_DOCKER.md` e l'avvio nativo
+Windows descritto in `LOCAL_NATIVE.md`. Il database locale deve restare separato
+da quello di produzione.
+
+La produzione gira su VPS Ubuntu. HTTPS e attivo; redirect HTTP, firewall,
+rotazione completa dei segreti e gli altri controlli infrastrutturali P0 devono
+essere verificati durante il rollout P0-B, non dati per acquisiti.
+
+## 5. Identita, ruoli e tenant
+
+### 5.1 Matrice funzionale
+
+| Attore | Ambito | Capacita principali | Esclusioni principali |
+|---|---|---|---|
+| Anonimo | Nessun tenant | Login, endpoint tecnici pubblici minimi, apertura di un upload solo con URL firmato valido | Tutti i dati operativi |
+| Locale (`restaurant`) | Solo il proprio locale | Ordini, tablet, Report del giorno, documenti del locale, richieste merce e conferma ricezione | Impersonazione, configurazioni globali, dati di altri locali |
+| Magazziniere (`magazzino`) | Magazzino centrale | Evasione richieste, carichi, DDT, consultazione prodotti, stock e movimenti necessari al flusso operativo | Creazione/modifica/cancellazione catalogo prodotti e fornitori, forzatura quantita |
+| Federico (`supervisor`) | Locale selezionato | Selezione locale, Report e storico, Numeri, storico chiusure, audit Cassa, diagnostica e dizionario paste secondo le route abilitate | Magazzino globale, Analisi mensile completa, documenti globali, creazione locali e mutazioni globali |
+| Admin (`admin`) | Globale o locale selezionato | Amministrazione operativa, impersonazione, mutazioni globali, export e correzioni autorizzate | Creazione nuovi locali riservata a Simone |
+| Simone (`admin`) | Globale o locale selezionato | Tutte le capacita Admin e creazione/configurazione iniziale di nuovi locali | Nessun bypass fuori dalle route autorizzate |
+
+La matrice e un contratto di prodotto, ma ogni route deve applicarlo nel backend.
+Ogni nuova route deve dichiarare e testare esplicitamente l'accesso per:
+anonimo, locale, magazzino, Federico, Admin e Simone.
+
+### 5.2 Sessione e selezione locale
+
+- L'identita autenticata e trasportata in un JWT firmato.
+- Token e locale selezionato sono conservati in `sessionStorage`, quindi sono
+  isolati per scheda del browser.
+- Admin e Federico mantengono la propria identita privilegiata mentre scelgono
+  il tenant effettivo su cui lavorare.
+- Il tenant effettivo viene comunicato al backend tramite header dedicati solo
+  per ruoli autorizzati; un locale normale non puo sovrascriverlo.
+- Aprire due schede su locali diversi non deve causare scritture incrociate.
+- Gli account non vengono creati o resettati automaticamente all'avvio.
+- Gli account privilegiati si gestiscono con il comando offline
+  `backend/scripts/manage_account.py`.
+- Il logout generale e la revoca server-side completa delle sessioni restano
+  un debito di sicurezza: oggi il logout ordinario rimuove soprattutto lo stato
+  client e il JWT resta valido fino a scadenza, salvo revoche specifiche.
+
+## 6. Flussi funzionali
+
+### 6.1 Ordini e tablet
+
+La Cassa crea, modifica, stampa e cancella ordini. Ogni ordine appartiene a un
+solo locale.
+
+Contratti:
+
+- il numero ordine automatico e progressivo per locale e giornata;
+- l'allocazione automatica e concorrenza-safe;
+- un numero manuale puo riposizionare il contatore in avanti o indietro;
+- un numero manuale gia presente tra gli ordini attivi viene rifiutato;
+- l'indice univoco `(restaurant_id, order_number)` protegge gli ordini attivi;
+- una cancellazione non riduce da sola il contatore;
+- Tablet Generale nasconde un ordine dalla propria vista senza cancellarlo;
+- la cancellazione reale dalla Cassa rimuove l'ordine operativo e crea il log
+  necessario all'audit;
+- un ordine cancellato non conta in Numeri o Analisi;
+- un ordine completato o archiviato continua a far parte dello storico valido;
+- Bollitore 1 e 2 gestiscono timer e completamento cucina;
+- Monitor Clienti mostra gli ordini pronti soltanto nei locali configurati.
+
+WebSocket notifica le variazioni al tenant corretto. Se non e disponibile, il
+polling mantiene le pagine aggiornate senza cambiare la fonte di verita.
+
+### 6.2 Chiusura della giornata
+
+Alla mezzanotte di Roma il backend:
+
+1. congela il testo paste e il dizionario/prezzi del giorno appena chiuso quando
+   i dati lo consentono;
+2. copia ordini e log giornalieri nelle collection di archivio e cancella le
+   sorgenti solo dopo aver verificato la copia;
+3. azzera i contatori giornalieri dei locali;
+4. materializza i valori di apertura del nuovo Report;
+5. notifica il reset ai client connessi;
+6. esegue la manutenzione degli upload in modalita best effort.
+
+Se il backend era spento a mezzanotte, il recovery di avvio archivia gli ordini
+stale prima che contaminino la nuova giornata, ricalcola i contatori e genera un
+avviso amministrativo.
+
+### 6.3 Report giornaliero
+
+Il Report combina:
+
+- paste del giorno;
+- movimenti di cassa e canali di pagamento;
+- spicci, tubetti e cassetto;
+- magazzino bevande mattina/sera, ingressi e scarti;
+- prezzi automatici da dizionario e prezzi manuali per righe non riconosciute;
+- storico e audit delle correzioni.
+
+Contratti:
+
+- il testo paste automatico deriva dagli ordini validi del locale;
+- le cancellazioni reali sono escluse;
+- una forzatura manuale del testo paste resta protetta dagli aggiornamenti live
+  finche un utente autorizzato non la sblocca;
+- il salvataggio e parziale: un autosave non deve sovrascrivere campi modificati
+  da un'altra scheda;
+- il polling aggiorna gli altri client senza cancellare un input in modifica;
+- i campi numerici non accettano testo arbitrario; le formule sono ammesse solo
+  dove previste;
+- il Report storico usa la data e il locale richiesti, non il polling live;
+- le correzioni storiche autorizzate devono restare riconoscibili nell'audit.
+
+Riporti automatici:
+
+- `cash mattina` del nuovo giorno deriva dal `cash sera` del giorno precedente;
+- il magazzino bevande mattina deriva dal magazzino sera precedente;
+- il cassetto spicci del nuovo giorno deriva dal residuo precedente, al netto
+  degli spicci aperti/portati;
+- una correzione del giorno precedente aggiorna il riporto automatico;
+- una forzatura manuale esplicita di `mattina` non deve essere sovrascritta dal
+  successivo ricalcolo automatico.
+
+Per ciascuna bevanda, la vendita calcolata usa:
+
+```text
+(sera == 0 ? 0 : mattina + ingressi - sera) - scarti
+```
+
+Il significato di `sera = 0` resta una limitazione nota: oggi viene interpretato
+come dato non chiuso, non come vendita completa di tutto lo stock.
+
+### 6.4 Numeri
+
+La pagina Numeri mostra per giorno le paste prodotte dai locali e le relative
+medie. L'Excel Numeri:
+
+- copre dal 1 gennaio al 31 dicembre dell'anno scelto;
+- crea una colonna per ogni locale attivo;
+- calcola il totale giornaliero;
+- scrive le medie del mese soltanto sulla riga dell'ultimo giorno del mese;
+- usa gli ordini validi attivi e archiviati, escludendo quelli cancellati;
+- deduplica eventuali copie tecniche dello stesso ordine.
+
+Federico, Admin e Simone possono accedere secondo i permessi backend correnti.
+
+### 6.5 Analisi mensile
+
+La pagina Analisi mensile e volutamente essenziale: selezione anno e download
+dell'Excel. Il workbook generato contiene:
+
+- un foglio per ogni locale attivo;
+- un foglio `Totali` equivalente all'export Numeri;
+- una riga per giorno;
+- sezioni paste, movimenti finanziari, bevande e cash coerenti con il modello
+  approvato;
+- righe di totale mensile per separare e sommare i mesi.
+
+Le paste sono classificate tramite il dizionario del locale. Per ogni giorno il
+sistema usa, in ordine:
+
+1. snapshot del dizionario/prezzi salvato per quella giornata;
+2. dizionario corrente come fallback soltanto per giorni storici senza snapshot.
+
+Il fallback deve produrre avvisi nell'export: cambiare oggi un prezzo o una sigla
+non deve modificare i giorni che possiedono gia uno snapshot, ma puo influire sui
+giorni vecchi privi di snapshot. Non viene inventato un backfill retroattivo.
+
+Il conteggio usa soltanto ordini attivi e archiviati. I log di cancellazione
+servono a escludere correttamente ordini cancellati, non ad aggiungerli.
+
+### 6.6 Magazzino, richieste e DDT
+
+Il magazzino centrale gestisce un catalogo condiviso di prodotti e fornitori.
+Catalogo e forzature di quantita sono mutazioni globali riservate ad Admin e
+Simone; il Magazziniere esegue i flussi operativi.
+
+Richieste merce:
+
+```text
+pending -> evasa -> confermata
+```
+
+- il locale crea la richiesta;
+- la disponibilita mostrata tiene conto delle richieste pending degli altri
+  locali;
+- il Magazziniere evade e lo stock viene decrementato;
+- il locale conferma la ricezione o segnala un problema;
+- il numero DDT e globale e allocato atomicamente.
+
+Carichi:
+
+- registrano merce ricevuta dai fornitori;
+- collegano fornitore, numero DDT, righe prodotto e allegato;
+- modifica e cancellazione devono applicare il delta inverso corretto allo stock;
+- i documenti storici del carico restano utili alle analisi anche dopo la
+  scadenza dell'immagine.
+
+Ogni variazione di stock deve produrre un movimento nel ledger
+`stock_movements`, con prodotto, delta, saldo, causa, riferimento e autore. La
+resistenza completa a crash e retry multi-documento resta un obiettivo P2 e non
+deve essere data per garantita senza test specifici.
+
+Il DDT usa i dati anagrafici salvati nel locale; i fallback hardcoded servono
+soltanto per sedi storiche che non possiedono ancora quei campi.
+
+### 6.7 Documenti e upload
+
+L'app gestisce fatture, versamenti, chiusure e relativi allegati, oltre alle
+fatture globali collegate ai DDT. Gli upload:
+
+- vengono salvati fuori dal repository in produzione;
+- sono serviti tramite URL firmati con scadenza;
+- devono essere validati per tipo, dimensione e percorso;
+- non devono contenere credenziali o essere versionati in Git.
+
+La retention corrente e di 90 giorni:
+
+- fatture, versamenti e chiusure vecchi vengono rimossi con i loro file;
+- per carichi di magazzino e bevande vengono rimossi gli allegati vecchi, ma i
+  documenti strutturati restano per lo storico.
+
+### 6.8 Diagnostica e aggiornamenti client
+
+La Diagnostica live e una vista operativa, non una fonte contabile. Mostra:
+
+- stato e versione del backend;
+- versioni frontend rilevate;
+- dispositivi dei locali attualmente online;
+- WebSocket, latenze, chiamate ed errori recenti.
+
+I dispositivi offline non devono affollare la vista principale. Heartbeat,
+latenze ed errori frontend sono mantenuti prevalentemente in memoria e si
+azzerano al riavvio backend.
+
+Il frontend controlla la versione pubblicata e puo ricaricarsi una volta quando
+rileva un bundle nuovo. Le pagine ricordano in `sessionStorage` la posizione di
+scorrimento e, dopo un refresh, tornano al punto precedente quando il layout lo
+consente.
+
+### 6.9 Creazione di un nuovo locale
+
+Solo Simone puo creare un locale dall'interfaccia dedicata. Sono obbligatori:
+
+- username univoco;
+- nome locale univoco;
+- password iniziale;
+- sigla Excel univoca da 1 a 4 caratteri;
+- uno o due bollitori;
+- indirizzo, CAP e citta;
+- scelta opzionale per Monitor Clienti.
+
+Un locale con ruolo `restaurant` entra automaticamente in:
+
+- selettori Admin/Federico;
+- isolamento ordini e Report;
+- Numeri e relative medie;
+- workbook Analisi mensile, con un foglio dedicato e una colonna in `Totali`;
+- richieste merce e intestazione DDT;
+- configurazione generica di bollitori e Monitor Clienti.
+
+La gestione bevande non fa parte del form di creazione. Le funzioni
+specificamente legate al catalogo bevande di Flaminio non vanno considerate
+automaticamente abilitate per una nuova sede.
+
+### 6.10 Laboratorio
+
+Il Laboratorio e accessibile esclusivamente all'account Simone ed espone
+esperimenti isolati dalla logica operativa. Una prova non puo modificare ordini,
+Report, magazzino o documenti reali senza una successiva implementazione
+esplicitamente approvata e testata.
+
+L'Osservatorio annotazioni paste legge ordini validi attivi e archiviati e usa
+lo stesso riconoscitore rigido di Report e Analisi. Estrae soltanto il testo
+successivo a una pasta gia riconosciuta; righe manuali, errate o `XL` restano
+escluse come nel comportamento operativo. Mostra frequenze, incidenza, paste,
+locali e riscontri per un intervallo massimo di un anno. Non salva nuovi dati:
+il contratto raw/normalizzato/versionato prepara l'acquisizione futura nella
+Memoria operativa.
+
+Lo Scanner documenti esegue OCR italiano nel browser su fotografie di DDT,
+fatture e note di credito. La foto non viene inviata al backend e gli asset OCR
+sono inclusi nel build, senza dipendenze da servizi cloud. Il testo estratto
+viene confrontato in sola lettura con `suppliers` e `products` del Mongo
+dell'ambiente corrente; sulla VPS usa quindi automaticamente i cataloghi reali.
+Numero, data, quantita, prezzo unitario, totale riga e totale documento derivano
+esclusivamente dal testo OCR e i campi incerti restano correggibili.
+
+La conferma di una prova non crea carichi, fatture, richieste o movimenti stock.
+Scrive soltanto nelle collection isolate `lab_document_scan_feedback` e
+`lab_document_aliases`: conserva hash del testo, metadati strutturati, brevi
+righe sorgente e associazioni confermate fornitore/prodotto. Non conserva la
+foto ne il testo OCR integrale. Le associazioni confermate vengono riutilizzate
+nelle prove successive; l'ultimo prezzo osservato puo essere registrato come
+evidenza, ma non deve mai compilare un prezzo assente dal documento.
+
+## 7. Fonti di verita e semantica dei dati
+
+| Dominio | Fonte operativa | Regola |
+|---|---|---|
+| Identita e locali | `restaurants` | Password solo come hash; ruolo e metadati tenant sono autoritativi |
+| Ordini correnti | `orders` | Un solo tenant, numero attivo univoco |
+| Ordini chiusi | `archived_orders` | Contano nello storico e nelle analisi |
+| Ordini cancellati | log di cancellazione | Audit soltanto; non contano in Numeri/Analisi |
+| Report cassa | `cash_daily_counts` | Un documento per locale e data di Roma |
+| Report bevande | `beverage_daily_counts` | Una riga per locale, data e sigla |
+| Dizionario paste | dizionario per locale + snapshot giornaliero | Lo snapshot congela interpretazione e prezzi dello storico |
+| Stock | `products` | Quantita corrente, verificabile tramite ledger |
+| Movimenti stock | `stock_movements` | Registro delle variazioni, non sostituisce la quantita corrente |
+| Allegati | filesystem `UPLOADS_DIR` + riferimento Mongo | Database e filesystem devono restare coerenti |
+
+Distinzioni obbligatorie:
+
+- `hidden_generale` nasconde una pasta dal Tablet Generale ma non la cancella e
+  non la esclude dall'analisi;
+- la cancellazione reale la esclude dai conteggi e conserva l'evento di audit;
+- una correzione manuale non deve essere presentata come dato automatico;
+- un campo assente non deve essere trasformato silenziosamente in un valore
+  storico certo;
+- valori derivati devono essere ricalcolabili dalle fonti documentate.
+
+## 8. Requisiti non funzionali
+
+### 8.1 Affidabilita
+
+- Un errore WebSocket non blocca il lavoro grazie al polling.
+- Un errore di cleanup non blocca il reset notturno.
+- Un errore di export non modifica i dati operativi.
+- Un deploy non esegue seed o reset automatici degli account.
+- Il mancato reset di mezzanotte viene recuperato al boot.
+- Le future funzioni di Memoria operativa devono poter fallire senza cambiare
+  login, ordini, Report, magazzino o reset.
+- Le Fasi 0-6 della Memoria restano un pacchetto autonomo e disabilitato: il
+  backend operativo non lo importa. I collector acquisiscono ordini, Report,
+  magazzino e configurazioni, protetti da doppio interruttore, epoch, ruoli
+  Mongo read-only, lock, batch limitati, raw sanificato, watermark, versioni
+  bitemporali e quarantena. Snapshot giornalieri versionati espongono
+  provenienza, copertura e gap senza inventare dati mancanti. Il runner separato
+  applica dry-run, backoff, circuit breaker e limiti di latenza/storage.
+  Cancellazioni fisiche vengono dichiarate soltanto al termine di scansioni
+  complete. Il servizio non e ancora installato o attivo sulla VPS.
+
+### 8.2 Sicurezza
+
+La baseline P0-A lato codice comprende:
+
+- `JWT_SECRET` obbligatorio, senza fallback insicuro;
+- CORS a allowlist in produzione;
+- documentazione FastAPI disabilitata in produzione;
+- account privilegiati senza seed/reset HTTP;
+- gestione account privilegiati tramite comando offline;
+- controlli backend per mutazioni globali;
+- WebSocket con ticket monouso e controllo Origin;
+- upload con URL firmati e path controllato;
+- rate limit sul login;
+- rimozione dal runtime delle route di simulazione e dei dati di test versionati.
+
+P0-A non equivale a P0 concluso in produzione. Il rollout P0-B deve seguire
+`memory/P0_VPS_RUNBOOK.md` e comprende backup, verifica restore, migrazione
+upload, rotazione segreti, logout globale, redirect HTTPS, firewall, smoke test
+e rollback.
+
+### 8.3 Prestazioni
+
+- Le query analitiche annuali devono essere aggregate/prefetchate, non eseguite
+  una volta per giorno e locale.
+- Liste e storico devono avere limiti o filtri coerenti col volume previsto.
+- Il workbook Excel viene oggi costruito in memoria: va monitorato con la crescita
+  di anni e locali.
+- Diagnostica e future analisi non devono saturare MongoDB operativo.
+
+### 8.4 Compatibilita e UX operativa
+
+- Le pagine principali devono restare usabili su tablet e desktop.
+- Un nuovo locale non deve richiedere nuove route o copie di pagina.
+- Gli aggiornamenti live non devono far scomparire input non salvati.
+- Le pagine lunghe devono ripristinare lo scroll dopo refresh.
+- Il testo visualizzato deve usare nomi operativi comprensibili, non etichette
+  tecniche o celebrative.
+
+## 9. Test e criteri di rilascio
+
+Ogni modifica deve partire dalla lettura di questo PRD e del changelog recente.
+Il livello di test cresce col rischio.
+
+Baseline automatica:
+
+- controllo igiene repository e segreti ad alta confidenza;
+- compilazione backend e controllo errori Python evidenti;
+- suite backend isolata;
+- test frontend;
+- build frontend di produzione.
+
+Per aree sensibili servono inoltre test mirati:
+
+- auth/ruoli: matrice ruoli e isolamento tenant;
+- ordini: concorrenza, numeri manuali, cancellazioni e mezzanotte;
+- Report: giorno corrente/storico, riporti, override e piu schede;
+- Numeri/Analisi: ordini cancellati, deduplica, snapshot, mesi e nuovi locali;
+- magazzino: delta stock, retry, modifica/cancellazione e ledger;
+- upload: tipo, dimensione, firma, scadenza e path traversal;
+- deploy: backup, smoke test multi-ruolo e rollback.
+
+I dettagli dell'ultima esecuzione dei test appartengono al changelog, non a
+questo PRD.
+
+## 10. Stato sicurezza e rilascio
+
+Al 17 luglio 2026:
+
+- il refactor backend e operativo e `server.py` resta compatibile con l'entrypoint
+  esistente;
+- P0-A e implementato e testato nel codice;
+- P0-B sulla VPS non e ancora considerato completato;
+- HTTPS e attivo, ma il redirect HTTP e gli altri controlli VPS vanno verificati;
+- una release ordinaria mantiene MongoDB e upload, ma la prima release P0 non
+  deve essere trattata come un semplice `git pull + build + restart`.
+
+Nessuna modifica alla produzione deve essere eseguita mentre i locali lavorano
+se richiede logout globale, rotazione segreti, migrazione file o possibile
+interruzione.
+
+## 11. Limiti e debiti noti
+
+- P0-B infrastrutturale e ancora da eseguire.
+- Il logout JWT non offre ancora revoca server-side generale.
+- Il `PasswordGate` frontend non e un controllo di sicurezza reale.
+- Diagnostica e heartbeat non sono log persistenti.
+- Giorni storici senza snapshot del dizionario possono usare il listino corrente
+  come fallback e devono essere segnalati.
+- `sera = 0` nelle bevande e semanticamente ambiguo.
+- L'Excel annuale e costruito interamente in RAM.
+- Alcuni warning React Hook preesistenti indicano debito di manutenzione; non
+  sono stati classificati come blocchi operativi, ma vanno corretti con test
+  mirati.
+- Integrita crash-safe/idempotente delle operazioni multi-documento di stock e
+  file resta parte dell'hardening P2.
+- Create React App e dipendenze backend sovradimensionate restano debito tecnico,
+  non requisito funzionale.
+
+Questa sezione deve contenere limiti reali del prodotto corrente. Idee non
+implementate e lavori futuri vanno nei documenti dedicati.
+
+## 12. Documenti collegati
+
+- `memory/CHANGELOG_MULTI_AGENT.md`: modifiche recenti e test eseguiti.
+- `memory/CHANGELOG_MULTI_AGENT_ARCHIVE.md`: storico meno recente.
+- `memory/SECURITY_HARDENING_PLAN.md`: piano sicurezza P0-P3.
+- `memory/P0_VPS_RUNBOOK.md`: procedura esecutiva del rollout P0-B.
+- `memory/TODO.md`: idee e funzioni future.
+- `memory/OPERATIONAL_MEMORY_DESIGN.md`: contratto e stato esecutivo della
+  Memoria operativa isolata; Fasi 0-4 implementate localmente ma non attive.
+- `memory/MEMORY_PHASE0_RUNBOOK.md` ... `MEMORY_PHASE4_RUNBOOK.md`: perimetro,
+  guardie, test e limiti delle fasi gia implementate.
+- `memory/refactor_plan_server_py.md`: piano e stato del refactor backend.
+- `LOCAL_DOCKER.md` e `LOCAL_NATIVE.md`: ambienti locali.
+
+## 13. Regola di manutenzione
+
+Aggiornare questo PRD quando cambia un contratto del prodotto, un ruolo, una
+fonte di verita, un flusso operativo o un limite noto. Non aggiungere qui il
+diario di ogni fix.
+
+Ogni modifica al codice o ai documenti operativi deve comunque ricevere una voce
+nel changelog. Nessun documento del repository deve contenere credenziali reali.
