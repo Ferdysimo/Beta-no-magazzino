@@ -178,6 +178,17 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-20 16:26 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: docs | operations | resilience | security
+**File toccati**:
+- `/app/memory/MEMORY_VPS_ROLLOUT_RUNBOOK.md`
+- `/app/memory/{MEMORY_PHASE6_RUNBOOK,OPERATIONAL_MEMORY_DESIGN,CHANGELOG_MULTI_AGENT}.md`
+- `/app/backend/memory_worker/__main__.py`
+- `/app/deploy/memory.env.example`
+**Descrizione**: Preparato il runbook esecutivo completo per il rollout VPS della Memoria, destinato anche al passaggio di consegne con il Codex dell'altro PC. La procedura separa aggiornamento classico, gate SCRAM/P1, backup, utenti Mongo least-privilege, utente Linux, env root-only, unit systemd disabilitata, preflight read-only, dry-run, momento zero, prima raccolta, osservazione 24-48 ore, abilitazione e rollback. Vietata esplicitamente la scorciatoia dei ruoli Mongo non verificati. Aggiunto logging INFO al runner per rendere verificabili i cicli dry-run/attivi nel journal systemd e resi espliciti i database negli URI di esempio.
+**Testato**: si (metodo: suite backend completa `133 passed, 30 skipped`; status Fase 6 con raccolta inattiva; controllo igiene su 310 file; riferimenti runbook tutti esistenti; BOM changelog preservato; `git diff --check` senza errori)
+**Note per il prossimo agente**: nessuna operazione VPS e stata eseguita. Prima azione sulla VPS: verificare lo stato SCRAM reale. Se `security.authorization` non e attivo, fermare il rollout Memoria e completare prima la Fase 3 P1 in finestra di manutenzione; non usare `MEMORY_ALLOW_UNVERIFIED_MONGO_ROLES=true`.
+
 ### [2026-07-20 16:03 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: feature | architecture | resilience | security | test | docs
 **File toccati**:

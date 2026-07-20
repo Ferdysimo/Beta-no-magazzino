@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import json
+import logging
 import signal
 import sys
 
@@ -65,6 +66,11 @@ async def _run_service(settings: MemorySettings) -> dict:
 
 def main(argv=None) -> int:
     args = _parser().parse_args(argv)
+    if args.command == "run":
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        )
     try:
         settings = MemorySettings.from_env(
             require_connections=args.command in {

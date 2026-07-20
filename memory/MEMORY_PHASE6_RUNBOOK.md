@@ -19,6 +19,12 @@ Contratto autoritativo:
 memory/OPERATIONAL_MEMORY_DESIGN.md
 ```
 
+Procedura esecutiva VPS:
+
+```text
+memory/MEMORY_VPS_ROLLOUT_RUNBOOK.md
+```
+
 ## Obiettivo
 
 La Fase 6 esegue in sequenza i collector e gli snapshot con protezioni che
@@ -124,7 +130,8 @@ I test verificano:
 
 ## Confine delle operazioni manuali
 
-Il codice locale termina qui. Prima dell'avvio sulla VPS servono:
+Il codice locale termina qui. La sequenza completa, i comandi, i gate SCRAM,
+le verifiche e il rollback sono nel runbook VPS dedicato. In sintesi servono:
 
 1. backup e verifica dello spazio;
 2. utente Mongo read-only per `pastasciutta`;

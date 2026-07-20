@@ -811,6 +811,12 @@ Procedura futura:
 7. Avviare il worker.
 8. Verificare watermark e primo snapshot.
 
+La procedura esecutiva, da seguire senza saltare gate o controlli, e in:
+
+```text
+memory/MEMORY_VPS_ROLLOUT_RUNBOOK.md
+```
+
 Se l'attivazione fallisce, si spegne il worker. L'app non richiede rollback.
 
 ## 24. Rollback e dismissione
