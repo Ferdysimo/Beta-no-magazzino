@@ -4,6 +4,11 @@ Ultimo aggiornamento: 2026-07-17
 Stato: P0-A lato codice e P0-B VPS implementati e verificati; restano separati bonifica cronologia Git e valutazione privacy
 Riferimento: OWASP ASVS 5.0 livello 2, con controlli rafforzati per gli account privilegiati
 
+> **Perimetro P1 approvato il 2026-07-19:** il runbook operativo e
+> [`P1_SECURITY_RUNBOOK.md`](P1_SECURITY_RUNBOOK.md). In caso di conflitto con
+> la sezione P1 storica di questo documento, prevale il runbook. La Fase 0
+> riallineera questa sezione prima di qualsiasi implementazione o deploy.
+
 ## Regole operative
 
 - Questo documento e la fonte condivisa del lavoro di sicurezza tra i vari Codex.

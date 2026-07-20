@@ -178,6 +178,30 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-19 17:04 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | frontend | test
+**File toccati**:
+- `/app/frontend/src/App.js`
+- `/app/frontend/src/pages/HomePage.js`
+- `/app/frontend/src/pages/LaboratorioPage.js`
+- `/app/frontend/src/pages/ScannerDocumentiLabPage.js`
+- `/app/frontend/src/utils/laboratory.js`
+- `/app/frontend/src/utils/laboratory.test.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Creato il Laboratorio frontend riservato all'account Simone admin, raggiungibile dal suo pannello e protetto da route dedicata. Aggiunto il primo banco prova Scanner documenti con acquisizione fotocamera/upload, anteprima, bozza modificabile di fattura/DDT e righe documento; la prova resta esclusivamente nello stato della pagina e non legge o scrive dati operativi.
+**Testato**: si (metodo: test Jest accesso Simone 1/1, build React produzione completata, verifica browser desktop e mobile 390x844, upload immagine e completamento prova, console senza errori)
+**Note per il prossimo agente**: OCR, persistenza lab e backend `/api/lab/*` non sono ancora implementati. Non collegare la pagina alle collection reali; il prossimo passo corretto e progettare storage/processo OCR isolati.
+
+### [2026-07-19 16:36 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: security | docs | architecture
+**File toccati**:
+- `/app/memory/P1_SECURITY_RUNBOOK.md`
+- `/app/memory/SECURITY_HARDENING_PLAN.md`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Registrato il piano P1 di sicurezza approvato dopo revisione incrociata, preservando UX e modello account attuali. Il runbook separa backup, release atomiche con dipendenze versionate, backend non-root, Mongo SCRAM, revoca globale tramite `token_version`, audit minimo, input/upload e CI; documenta inoltre no MFA, password ristoranti condivise e rischio residuo dei WebSocket gia aperti.
+**Testato**: si (metodo: revisione contro codice auth/WebSocket/config corrente, PRD, piano sicurezza e changelog; verifica Markdown e `git diff --check`)
+**Note per il prossimo agente**: nessuna implementazione P1 e iniziata. Partire esclusivamente dalla Fase 0; non applicare Fase 2+ in produzione prima di clone isolato e restore drill riuscito.
+
 ### [2026-07-19 00:13 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: security | config
 **File toccati**:

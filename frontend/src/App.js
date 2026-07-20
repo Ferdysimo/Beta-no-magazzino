@@ -39,9 +39,12 @@ import AuditCassaPage from './pages/AuditCassaPage';
 import ChiusureExcelPage from './pages/ChiusureExcelPage';
 import DizionarioPastePage from './pages/DizionarioPastePage';
 import CreaLocaliPage from './pages/CreaLocaliPage';
+import LaboratorioPage from './pages/LaboratorioPage';
+import ScannerDocumentiLabPage from './pages/ScannerDocumentiLabPage';
 import UpdateBanner from './components/UpdateBanner';
 import FrontendDiagnostics from './components/FrontendDiagnostics';
 import RouteScrollRestoration from './components/RouteScrollRestoration';
+import { canAccessLaboratory } from './utils/laboratory';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -78,6 +81,16 @@ const PublicRoute = ({ children }) => {
     return <Navigate to="/home" replace />;
   }
   
+  return children;
+};
+
+const SimoneOnlyRoute = ({ children }) => {
+  const { restaurant } = useAuth();
+
+  if (!canAccessLaboratory(restaurant)) {
+    return <Navigate to="/home" replace />;
+  }
+
   return children;
 };
 
@@ -272,6 +285,20 @@ function AppRoutes() {
       <Route path="/simone/crea-locali" element={
         <ProtectedRoute>
           <CreaLocaliPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/laboratorio" element={
+        <ProtectedRoute>
+          <SimoneOnlyRoute>
+            <LaboratorioPage />
+          </SimoneOnlyRoute>
+        </ProtectedRoute>
+      } />
+      <Route path="/laboratorio/scanner-documenti" element={
+        <ProtectedRoute>
+          <SimoneOnlyRoute>
+            <ScannerDocumentiLabPage />
+          </SimoneOnlyRoute>
         </ProtectedRoute>
       } />
     </Routes>

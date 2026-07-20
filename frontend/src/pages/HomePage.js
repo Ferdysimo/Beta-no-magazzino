@@ -4,6 +4,8 @@ import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import SystemAlertsBanner from '../components/SystemAlertsBanner';
 import axios from 'axios';
+import { FlaskConical } from 'lucide-react';
+import { canAccessLaboratory } from '../utils/laboratory';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -13,6 +15,7 @@ const HomePage = () => {
   const navigate = useNavigate();
   const [restaurants, setRestaurants] = useState([]);
   const isSimone = restaurant?.username === 'Simone';
+  const showLaboratory = canAccessLaboratory(restaurant);
 
   // Magazziniere goes straight to magazzino
   useEffect(() => {
@@ -61,6 +64,21 @@ const HomePage = () => {
             </div>
 
             <div className="pt-6 border-t border-gray-300 space-y-3">
+              {showLaboratory && (
+              <button
+                data-testid="simone-laboratorio"
+                onClick={() => navigate('/laboratorio')}
+                className="w-full flex items-center gap-4 text-left px-6 py-4 bg-[#F5C518] hover:bg-[#E5B418] border border-yellow-600 rounded-lg transition-colors"
+              >
+                <span className="h-10 w-10 flex items-center justify-center bg-white/70 border border-yellow-700/30 rounded-md shrink-0">
+                  <FlaskConical size={21} className="text-gray-900" aria-hidden="true" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-bold text-lg text-gray-900">Laboratorio</span>
+                  <span className="block text-xs text-gray-700 mt-0.5">Esperimenti isolati</span>
+                </span>
+              </button>
+              )}
               <button
                 data-testid="simone-diagnostica"
                 onClick={() => navigate('/diagnostica')}
