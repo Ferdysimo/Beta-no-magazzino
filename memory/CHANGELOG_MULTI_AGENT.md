@@ -178,6 +178,17 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-21 11:55 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: frontend | ux | test
+**File toccati**:
+- `/app/frontend/src/pages/ReportBetaPage.js`
+- `/app/frontend/src/utils/reportArrowNavigation.js`
+- `/app/frontend/src/utils/reportArrowNavigation.test.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Reso piu leggibile ma compatto il blocco prezzi delle paste non riconosciute nel Report e aggiunto un pulsante di espansione che apre un elenco ampio, scorrevole e a colonna singola senza comprimere le sezioni contabili. Aggiunta navigazione spaziale con le quattro frecce tra tutti gli input numerici modificabili visibili, con selezione automatica del valore e salto dei campi bloccati, disabilitati o nascosti.
+**Testato**: si (metodo: 18 test frontend passati, inclusi 4 nuovi test di navigazione; build React produzione; prova browser reale a 1600/1280/1024 px e prova compatta/espansa con tre paste locali simulate; navigazione orizzontale e verticale anche nel dialog; fixture, contatore, documenti Report e audit locali ripristinati)
+**Note per il prossimo agente**: parsing, calcoli, autosalvataggio, ruoli e isolamento tenant non sono stati modificati. Il dialog si chiude con X, clic sullo sfondo o Escape. Textarea paste e campo VERS mantengono le frecce per spostare il cursore; la navigazione riguarda gli input numerici `inputMode=decimal`.
+
 ### [2026-07-20 16:26 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: docs | operations | resilience | security
 **File toccati**:

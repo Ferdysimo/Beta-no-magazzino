@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
+import { Maximize2, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrders } from '../contexts/OrderContext';
 import Header from '../components/Header';
+import { handleReportArrowNavigation } from '../utils/reportArrowNavigation';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -337,6 +339,7 @@ const ReportBetaPageInner = () => {
   // - manualPasteOverride=false (default): pasteText è sincronizzato con autoPasteText
   // - manualPasteOverride=true: l'utente ha sbloccato la modifica manuale (override)
   const [manualPasteOverride, setManualPasteOverride] = useState(false);
+  const [manualPricesExpanded, setManualPricesExpanded] = useState(false);
   const [autoPasteText, setAutoPasteText] = useState('');
   const [autoPasteCount, setAutoPasteCount] = useState(0);
   const [autoPasteLoaded, setAutoPasteLoaded] = useState(false);
@@ -1028,6 +1031,10 @@ const ReportBetaPageInner = () => {
     };
   }, [pasteText, manualPrices, pastaDict]);
 
+  useEffect(() => {
+    if (pasteAnalysis.unrecognized.length === 0) setManualPricesExpanded(false);
+  }, [pasteAnalysis.unrecognized.length]);
+
   const cashTotal = useMemo(() => {
     let sum = 0;
     for (const d of CASH_DENOMINATIONS) {
@@ -1205,6 +1212,7 @@ const ReportBetaPageInner = () => {
         </div>
       )}
       <main
+        onKeyDown={handleReportArrowNavigation}
         className={`flex-1 max-w-[1600px] w-full mx-auto px-3 py-2 flex flex-col min-h-0 ${readOnlyHistorical ? 'pointer-events-none select-text' : ''}`}
       >
         {/* Titolo compatto */}
@@ -1222,7 +1230,7 @@ const ReportBetaPageInner = () => {
         </div>
 
         {/* Layout: paste a sinistra (~14%) + tutto il resto a destra (~86%) */}
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-[14fr_86fr] gap-2 min-h-0">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-[14fr_86fr] xl:grid-cols-[minmax(250px,1fr)_4fr] gap-2 min-h-0">
           {/* ============== SINISTRA — PASTE ============== */}
           <section className="bg-white rounded border border-gray-200 p-2 flex flex-col min-h-0">
             <div className="flex items-baseline justify-center mb-1 gap-1 flex-wrap">
@@ -1281,14 +1289,26 @@ const ReportBetaPageInner = () => {
 
             {/* Non riconosciute con prezzo manuale */}
             {pasteAnalysis.unrecognized.length > 0 && (
-              <div className="mt-1 bg-rose-50 border border-rose-200 rounded p-1.5 text-[10px] flex-shrink-0 max-h-32 overflow-y-auto">
-                <div className="font-bold text-rose-700 mb-1">
-                  Non riconosciute ({pasteAnalysis.unrecognized.length}) — assegna prezzo:
+              <div className="mt-1.5 bg-rose-50 border border-rose-200 rounded p-2 text-[11px] flex-shrink-0 max-h-40 overflow-y-auto">
+                <div className="sticky top-0 z-10 flex items-center justify-between gap-2 pb-1.5 bg-rose-50">
+                  <div className="font-bold text-rose-700 leading-tight">
+                    Non riconosciute ({pasteAnalysis.unrecognized.length}) — assegna prezzo:
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setManualPricesExpanded(true)}
+                    title="Ingrandisci elenco"
+                    aria-label="Ingrandisci paste non riconosciute"
+                    className="w-7 h-7 flex-none inline-flex items-center justify-center rounded border border-rose-300 bg-white text-rose-700 hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-300"
+                  >
+                    <Maximize2 size={14} />
+                  </button>
                 </div>
-                <div className="space-y-1">
+                {!manualPricesExpanded && (
+                <div className="space-y-1.5">
                   {pasteAnalysis.unrecognized.map(u => (
-                    <div key={u.idx} className="flex items-center gap-1">
-                      <span className="font-mono text-rose-900 flex-1 truncate" title={u.text}>{u.text}</span>
+                    <div key={u.idx} className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_4rem] items-center gap-1 xl:gap-2">
+                      <span className="font-mono text-xs font-semibold leading-tight text-rose-900 break-words" title={u.text}>{u.text}</span>
                       <input
                         data-testid={`manual-price-${u.idx}`}
                         type="text"
@@ -1297,10 +1317,68 @@ const ReportBetaPageInner = () => {
                         onChange={(e) => setManualPrice(u.key, e.target.value)}
                         placeholder="€"
                         title="Max 15€"
-                        className="w-12 h-6 border border-rose-300 rounded px-1 text-center font-bold text-[11px] focus:outline-none focus:border-rose-500"
+                        aria-label={`Prezzo manuale per ${u.text}`}
+                        className="w-full xl:w-16 h-8 border border-rose-300 rounded px-1.5 text-center font-bold text-sm bg-white focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
                       />
                     </div>
                   ))}
+                </div>
+                )}
+              </div>
+            )}
+
+            {manualPricesExpanded && pasteAnalysis.unrecognized.length > 0 && (
+              <div
+                className="fixed inset-0 z-[100] bg-black/55 p-3 sm:p-6 flex items-center justify-center"
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) setManualPricesExpanded(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setManualPricesExpanded(false);
+                }}
+              >
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="manual-prices-title"
+                  className="w-full max-w-3xl max-h-[86vh] bg-white rounded-md shadow-2xl border border-rose-200 flex flex-col overflow-hidden"
+                >
+                  <div className="flex items-center justify-between gap-3 px-4 py-3 bg-rose-50 border-b border-rose-200">
+                    <div>
+                      <h3 id="manual-prices-title" className="text-base font-bold text-rose-800">
+                        Paste non riconosciute
+                      </h3>
+                      <p className="text-xs text-rose-600">{pasteAnalysis.unrecognized.length} prezzi da controllare</p>
+                    </div>
+                    <button
+                      type="button"
+                      autoFocus
+                      onClick={() => setManualPricesExpanded(false)}
+                      title="Riduci elenco"
+                      aria-label="Chiudi elenco ingrandito"
+                      className="w-9 h-9 inline-flex items-center justify-center rounded border border-rose-300 bg-white text-rose-700 hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-300"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                  <div className="overflow-y-auto p-3 sm:p-4 flex flex-col gap-3">
+                    {pasteAnalysis.unrecognized.map(u => (
+                      <div key={u.idx} className="grid grid-cols-[minmax(0,1fr)_6rem] items-center gap-3 rounded border border-rose-100 bg-rose-50/60 p-3">
+                        <span className="font-mono text-sm font-semibold leading-snug text-rose-950 break-words" title={u.text}>{u.text}</span>
+                        <input
+                          data-testid={`manual-price-expanded-${u.idx}`}
+                          type="text"
+                          inputMode="decimal"
+                          value={manualPrices[u.key] ?? manualPrices[u.idx] ?? ''}
+                          onChange={(e) => setManualPrice(u.key, e.target.value)}
+                          placeholder="€"
+                          title="Max 15€"
+                          aria-label={`Prezzo manuale ingrandito per ${u.text}`}
+                          className="w-24 h-11 border-2 border-rose-300 rounded px-2 text-center font-bold text-lg bg-white focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
