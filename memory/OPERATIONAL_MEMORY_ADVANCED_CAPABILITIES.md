@@ -472,6 +472,11 @@ Dopo lo stop:
 Non viene aggiunto un dizionario semantico esteso con ricette, ingredienti o
 nuove tassonomie gestite manualmente.
 
+E ammessa una grammatica compatta, tecnica e versionata per le annotazioni paste:
+interpreta soltanto codici confermati e costruzioni letterali, conserva i
+frammenti sconosciuti e puo essere ricalcolata dal raw. Non diventa un vocabolario
+gestionale da mantenere a mano e non trasforma ipotesi in fatti.
+
 I dizionari paste e prezzi gia presenti nell'app restano fonti necessarie e
 vengono versionati come configurazione osservata, senza trasformarli in un nuovo
 sistema gestionale.

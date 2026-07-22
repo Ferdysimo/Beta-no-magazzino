@@ -1,4 +1,10 @@
-import { canAccessLaboratory, filterPastaAnnotations } from './laboratory';
+import {
+  canAccessLaboratory,
+  filterPagerGroups,
+  filterPastaAnnotations,
+  filterSemanticSignals,
+  filterUnknownFragments,
+} from './laboratory';
 
 describe('canAccessLaboratory', () => {
   test('allows only the Simone admin account', () => {
@@ -28,5 +34,52 @@ describe('filterPastaAnnotations', () => {
     expect(filterPastaAnnotations(annotations, '', 'AMAT')).toEqual(annotations);
     expect(filterPastaAnnotations(annotations, 'asporto', 'CARB')).toEqual([]);
     expect(annotations).toHaveLength(2);
+  });
+});
+
+describe('semantic annotation filters', () => {
+  const signals = [
+    {
+      label: 'Take away',
+      dimension: 'service_mode',
+      code: 'take_away',
+      pasta_counts: { CARB: 8 },
+      source_terms: [{ value: 'TA', count: 8 }],
+    },
+    {
+      label: 'Senza pepe',
+      dimension: 'preparation_request',
+      code: 'without:pepe',
+      target: 'PEPE',
+      pasta_counts: { CACIO: 3 },
+      source_terms: [{ value: 'NO PEPE', count: 3 }],
+    },
+  ];
+
+  test('filters signals by label, source term and pasta', () => {
+    expect(filterSemanticSignals(signals, 'ta', 'CARB')).toEqual([signals[0]]);
+    expect(filterSemanticSignals(signals, 'no pepe', 'CACIO')).toEqual([signals[1]]);
+    expect(filterSemanticSignals(signals, 'pepe', 'CARB')).toEqual([]);
+  });
+
+  test('filters unknown fragments and reconstructed group examples', () => {
+    const unknowns = [
+      { fragment: 'T', pasta_counts: { CARB: 2 } },
+      { fragment: 'DEL', pasta_counts: { AMAT: 4 } },
+    ];
+    const groups = [
+      {
+        location: 'Flaminio',
+        business_date: '2026-07-22',
+        pager: 12,
+        annotations: ['C TA'],
+        pasta_counts: { CARB: 2 },
+      },
+    ];
+
+    expect(filterUnknownFragments(unknowns, 'del', '')).toEqual([unknowns[1]]);
+    expect(filterUnknownFragments(unknowns, '', 'CARB')).toEqual([unknowns[0]]);
+    expect(filterPagerGroups(groups, '12', 'CARB')).toEqual(groups);
+    expect(filterPagerGroups(groups, 'grazie', '')).toEqual([]);
   });
 });

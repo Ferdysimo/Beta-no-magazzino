@@ -11,7 +11,10 @@ from .sources import (
     collect_report_stream,
     collect_warehouse_stream,
 )
-from .sources.configuration import default_pasta_rule
+from .sources.configuration import (
+    default_annotation_semantics_rule,
+    default_pasta_rule,
+)
 from .stores import MemoryMongoStore, ReadOnlyMongoSource
 from .stores.mongo import classify_authenticated_roles
 
@@ -52,10 +55,7 @@ async def _verify_collection_permissions(
             "Ruoli Mongo non verificabili: configurare SCRAM oppure usare "
             "MEMORY_ALLOW_UNVERIFIED_MONGO_ROLES=true soltanto nei test locali"
         )
-    if (
-        target_roles["authentication_visible"]
-        and not target_roles["write_capable"]
-    ):
+    if target_roles["authentication_visible"] and not target_roles["write_capable"]:
         raise MemoryConfigurationError(
             "La credenziale Mongo Memoria non possiede privilegi di scrittura"
         )
@@ -95,14 +95,16 @@ async def collect_orders_once(settings: MemorySettings) -> dict:
         try:
             streams = []
             for stream in ORDER_STREAMS:
-                streams.append(await collect_order_stream(
-                    source,
-                    store,
-                    epoch=epoch,
-                    stream=stream,
-                    batch_size=settings.batch_size,
-                    captured_at=started_at,
-                ))
+                streams.append(
+                    await collect_order_stream(
+                        source,
+                        store,
+                        epoch=epoch,
+                        stream=stream,
+                        batch_size=settings.batch_size,
+                        captured_at=started_at,
+                    )
+                )
         finally:
             await store.release_collector_lease(
                 epoch_id=epoch["id"],
@@ -165,14 +167,16 @@ async def collect_report_once(settings: MemorySettings) -> dict:
         try:
             streams = []
             for stream in REPORT_STREAMS:
-                streams.append(await collect_report_stream(
-                    source,
-                    store,
-                    epoch=epoch,
-                    stream=stream,
-                    batch_size=settings.batch_size,
-                    captured_at=started_at,
-                ))
+                streams.append(
+                    await collect_report_stream(
+                        source,
+                        store,
+                        epoch=epoch,
+                        stream=stream,
+                        batch_size=settings.batch_size,
+                        captured_at=started_at,
+                    )
+                )
         finally:
             await store.release_collector_lease(
                 epoch_id=epoch["id"],
@@ -235,14 +239,16 @@ async def collect_warehouse_once(settings: MemorySettings) -> dict:
         try:
             streams = []
             for stream in WAREHOUSE_STREAMS:
-                streams.append(await collect_warehouse_stream(
-                    source,
-                    store,
-                    epoch=epoch,
-                    stream=stream,
-                    batch_size=settings.batch_size,
-                    captured_at=started_at,
-                ))
+                streams.append(
+                    await collect_warehouse_stream(
+                        source,
+                        store,
+                        epoch=epoch,
+                        stream=stream,
+                        batch_size=settings.batch_size,
+                        captured_at=started_at,
+                    )
+                )
         finally:
             await store.release_collector_lease(
                 epoch_id=epoch["id"],
@@ -306,29 +312,36 @@ async def collect_configuration_once(settings: MemorySettings) -> dict:
         try:
             streams = []
             for stream in CONFIGURATION_STREAMS:
-                streams.append(await collect_configuration_stream(
-                    source,
-                    store,
-                    epoch=epoch,
-                    stream=stream,
-                    batch_size=settings.batch_size,
+                streams.append(
+                    await collect_configuration_stream(
+                        source,
+                        store,
+                        epoch=epoch,
+                        stream=stream,
+                        batch_size=settings.batch_size,
+                        captured_at=started_at,
+                    )
+                )
+            rule_results = {}
+            for rule_name, rule_factory in (
+                ("default_pasta_prices", default_pasta_rule),
+                ("annotation_semantics", default_annotation_semantics_rule),
+            ):
+                source_id, source_timestamp, fact, raw = rule_factory(
                     captured_at=started_at,
-                ))
-            source_id, source_timestamp, fact, raw = default_pasta_rule(
-                captured_at=started_at,
-                activation_epoch=epoch["activated_at"],
-            )
-            rule_result = await store.save_configuration_version(
-                epoch_id=epoch["id"],
-                logical_stream="configuration_memory_rules",
-                source_collection="memory_worker_rules",
-                source_id=source_id,
-                source_timestamp=source_timestamp,
-                captured_at=started_at,
-                normalized_fact=fact,
-                raw_document=raw,
-                initial_valid_from=epoch["activated_at"],
-            )
+                    activation_epoch=epoch["activated_at"],
+                )
+                rule_results[rule_name] = await store.save_configuration_version(
+                    epoch_id=epoch["id"],
+                    logical_stream="configuration_memory_rules",
+                    source_collection="memory_worker_rules",
+                    source_id=source_id,
+                    source_timestamp=source_timestamp,
+                    captured_at=started_at,
+                    normalized_fact=fact,
+                    raw_document=raw,
+                    initial_valid_from=epoch["activated_at"],
+                )
         finally:
             await store.release_collector_lease(
                 epoch_id=epoch["id"],
@@ -346,17 +359,20 @@ async def collect_configuration_once(settings: MemorySettings) -> dict:
             "permissions": permissions,
             "streams": streams,
             "rules": {
-                "default_pasta_prices_inserted": rule_result["inserted"],
+                f"{name}_inserted": result["inserted"]
+                for name, result in rule_results.items()
             },
             "totals": {
-                "seen": sum(item["seen"] for item in streams) + 1,
+                "seen": sum(item["seen"] for item in streams) + len(rule_results),
                 "inserted": (
                     sum(item["inserted"] for item in streams)
-                    + int(rule_result["inserted"])
+                    + sum(int(result["inserted"]) for result in rule_results.values())
                 ),
                 "duplicates": (
                     sum(item["duplicates"] for item in streams)
-                    + int(not rule_result["inserted"])
+                    + sum(
+                        int(not result["inserted"]) for result in rule_results.values()
+                    )
                 ),
                 "quarantined": sum(item["quarantined"] for item in streams),
                 "disappeared": sum(item["disappeared"] for item in streams),

@@ -4,8 +4,9 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Optional
 
-from .orders import parse_utc_datetime
+from annotation_semantics import annotation_rule_manifest
 
+from .orders import parse_utc_datetime
 
 CONFIGURATION_NORMALIZER_VERSION = 1
 CONFIGURATION_RULE_VERSION = 1
@@ -129,11 +130,7 @@ def configuration_source_id(
         return str(document.get("id") or "").strip()
     if stream.event_kind == "pasta_dictionary_state":
         restaurant_id = str(document.get("restaurant_id") or "").strip()
-        return (
-            f"pasta-dictionary:{restaurant_id}"
-            if restaurant_id
-            else ""
-        )
+        return f"pasta-dictionary:{restaurant_id}" if restaurant_id else ""
     if stream.event_kind == "beverage_catalog_state":
         sigla = str(document.get("sigla") or "").strip().upper()
         return f"beverage:{sigla}" if sigla else ""
@@ -186,9 +183,7 @@ def _normalize_restaurant(
             "city": str(document.get("city") or "").strip(),
         },
         "monitor_customers": monitor,
-        "baseline_at_epoch": bool(
-            created_at is None or created_at < activation_epoch
-        ),
+        "baseline_at_epoch": bool(created_at is None or created_at < activation_epoch),
         "quality": {
             "timestamp_source": timestamp_source,
             "state_change_time_known": timestamp_source == "updated_at",
@@ -225,15 +220,17 @@ def _normalize_pasta_dictionary(
         if sigla in seen:
             raise ValueError(f"sigla duplicata: {sigla}")
         seen.add(sigla)
-        entries.append({
-            "code": sigla,
-            "price_cents": _to_cents(
-                _decimal(
-                    item.get("price"),
-                    field=f"siglas[{index}].price",
-                )
-            ),
-        })
+        entries.append(
+            {
+                "code": sigla,
+                "price_cents": _to_cents(
+                    _decimal(
+                        item.get("price"),
+                        field=f"siglas[{index}].price",
+                    )
+                ),
+            }
+        )
     entries.sort(key=lambda item: item["code"])
     fact = {
         "normalizer_version": CONFIGURATION_NORMALIZER_VERSION,
@@ -277,9 +274,7 @@ def _normalize_beverage(
         "occurred_at": timestamp,
         "present": True,
         "name": str(document.get("name") or "").strip(),
-        "price_cents": _to_cents(
-            _decimal(document.get("price"), field="price")
-        ),
+        "price_cents": _to_cents(_decimal(document.get("price"), field="price")),
         "sort_order": int(document.get("sort_order") or 0),
         "quality": {
             "timestamp_source": timestamp_source,
@@ -318,9 +313,7 @@ def _normalize_supplier(
         "occurred_at": timestamp,
         "present": True,
         "name": str(document.get("name") or "").strip(),
-        "baseline_at_epoch": bool(
-            created_at is None or created_at < activation_epoch
-        ),
+        "baseline_at_epoch": bool(created_at is None or created_at < activation_epoch),
         "quality": {
             "timestamp_source": timestamp_source,
             "state_change_time_known": timestamp_source == "updated_at",
@@ -362,9 +355,7 @@ def normalize_configuration_record(
             activation_epoch=activation_epoch,
             stream=stream,
         )
-    raise ValueError(
-        f"Tipo configurazione non supportato: {stream.event_kind}"
-    )
+    raise ValueError(f"Tipo configurazione non supportato: {stream.event_kind}")
 
 
 def initial_configuration_valid_from(
@@ -374,9 +365,7 @@ def initial_configuration_valid_from(
     activation_epoch: datetime,
     baseline_scan: bool,
 ) -> datetime:
-    timestamp_source = str(
-        (fact.get("quality") or {}).get("timestamp_source") or ""
-    )
+    timestamp_source = str((fact.get("quality") or {}).get("timestamp_source") or "")
     if timestamp_source == "captured_at":
         return activation_epoch if baseline_scan else source_timestamp
     return max(activation_epoch, source_timestamp)
@@ -416,6 +405,36 @@ def default_pasta_rule(
     return source_id, activation_epoch, fact, raw
 
 
+def default_annotation_semantics_rule(
+    *,
+    captured_at: datetime,
+    activation_epoch: datetime,
+) -> tuple[str, datetime, dict, dict]:
+    source_id = "annotation-semantics"
+    manifest = annotation_rule_manifest()
+    raw = {
+        "id": source_id,
+        "rule_kind": "annotation_semantics",
+        **manifest,
+    }
+    fact = {
+        "normalizer_version": CONFIGURATION_NORMALIZER_VERSION,
+        "fact_kind": "memory_rule_state",
+        "entity_key": "memory-rule:annotation-semantics",
+        "occurred_at": activation_epoch,
+        "present": True,
+        "rule_kind": "annotation_semantics",
+        **manifest,
+        "quality": {
+            "authoritative_source_copy": False,
+            "versioned_worker_rule_copy": True,
+            "raw_order_text_replayable": True,
+            "unknown_tokens_preserved": True,
+        },
+    }
+    return source_id, activation_epoch, fact, raw
+
+
 def _lexicographic_after_query(
     fields: tuple[str, ...],
     cursor: dict,
@@ -424,10 +443,7 @@ def _lexicographic_after_query(
         return None
     clauses = []
     for index, field in enumerate(fields):
-        clause = {
-            previous: cursor[previous]
-            for previous in fields[:index]
-        }
+        clause = {previous: cursor[previous] for previous in fields[:index]}
         clause[field] = {"$gt": cursor[field]}
         clauses.append(clause)
     return {"$or": clauses}
@@ -442,18 +458,13 @@ async def collect_configuration_stream(
     batch_size: int,
     captured_at: Optional[datetime] = None,
 ) -> dict:
-    captured = (captured_at or datetime.now(timezone.utc)).astimezone(
-        timezone.utc
-    )
+    captured = (captured_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
     activation_epoch = epoch["activated_at"].astimezone(timezone.utc)
     watermark = await store.get_watermark(epoch["id"], stream.key)
     baseline_scan = watermark.get("initial_scan_completed_at") is None
     cycle_id = str(watermark.get("cycle_id") or uuid.uuid4())
     cursor = watermark.get("cursor") or {}
-    query = (
-        _lexicographic_after_query(stream.cursor_fields, cursor)
-        or {}
-    )
+    query = _lexicographic_after_query(stream.cursor_fields, cursor) or {}
     documents = await source.find_batch(
         stream.collection,
         query,
@@ -477,13 +488,11 @@ async def collect_configuration_stream(
                 observed_at=captured,
             )
         try:
-            source_id, source_timestamp, fact = (
-                normalize_configuration_record(
-                    document,
-                    stream,
-                    captured_at=captured,
-                    activation_epoch=activation_epoch,
-                )
+            source_id, source_timestamp, fact = normalize_configuration_record(
+                document,
+                stream,
+                captured_at=captured,
+                activation_epoch=activation_epoch,
             )
             result = await store.save_configuration_version(
                 epoch_id=epoch["id"],
@@ -537,10 +546,7 @@ async def collect_configuration_stream(
     next_cursor = (
         {}
         if cycle_complete
-        else {
-            field: documents[-1].get(field)
-            for field in stream.cursor_fields
-        }
+        else {field: documents[-1].get(field) for field in stream.cursor_fields}
     )
     await store.save_watermark(
         epoch_id=epoch["id"],

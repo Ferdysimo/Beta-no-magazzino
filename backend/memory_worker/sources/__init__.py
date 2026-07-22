@@ -1,6 +1,7 @@
 from .configuration import (
     CONFIGURATION_STREAMS,
     collect_configuration_stream,
+    default_annotation_semantics_rule,
     normalize_configuration_record,
 )
 from .orders import ORDER_STREAMS, collect_order_stream, normalize_order_record
@@ -18,6 +19,7 @@ __all__ = [
     "REPORT_STREAMS",
     "WAREHOUSE_STREAMS",
     "collect_configuration_stream",
+    "default_annotation_semantics_rule",
     "collect_order_stream",
     "collect_report_stream",
     "collect_warehouse_stream",

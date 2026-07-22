@@ -5,11 +5,11 @@ from app.services.report import PASTA_PRICES_MAP
 from memory_worker.sources.configuration import (
     CONFIGURATION_STREAMS,
     DEFAULT_PASTA_PRICES,
+    default_annotation_semantics_rule,
     default_pasta_rule,
     initial_configuration_valid_from,
     normalize_configuration_record,
 )
-
 
 CAPTURED = datetime(2026, 7, 20, 15, 0, tzinfo=timezone.utc)
 ACTIVATION = datetime(2026, 7, 20, 14, 0, tzinfo=timezone.utc)
@@ -98,34 +98,56 @@ def test_default_pasta_rule_is_versioned_and_matches_operational_backend():
     assert fact["quality"]["parity_test_required"] is True
     assert raw["rule_version"] == 1
     assert {
-        code: float(price)
-        for code, price in DEFAULT_PASTA_PRICES.items()
+        code: float(price) for code, price in DEFAULT_PASTA_PRICES.items()
     } == PASTA_PRICES_MAP
     assert all(isinstance(value, Decimal) for value in DEFAULT_PASTA_PRICES.values())
+
+
+def test_annotation_semantics_rule_is_versioned_for_future_replay():
+    source_id, timestamp, fact, raw = default_annotation_semantics_rule(
+        captured_at=CAPTURED,
+        activation_epoch=ACTIVATION,
+    )
+
+    assert source_id == "annotation-semantics"
+    assert timestamp == ACTIVATION
+    assert fact["rule_kind"] == "annotation_semantics"
+    assert fact["quality"]["raw_order_text_replayable"] is True
+    assert raw["pager_grouping"]["authoritative"] is False
+    assert raw["unknown_tokens_preserved"] is True
 
 
 def test_initial_configuration_validity_distinguishes_baseline_and_later_records():
     captured_fact = {"quality": {"timestamp_source": "captured_at"}}
     later = datetime(2026, 7, 20, 16, 0, tzinfo=timezone.utc)
 
-    assert initial_configuration_valid_from(
-        captured_fact,
-        source_timestamp=CAPTURED,
-        activation_epoch=ACTIVATION,
-        baseline_scan=True,
-    ) == ACTIVATION
-    assert initial_configuration_valid_from(
-        captured_fact,
-        source_timestamp=later,
-        activation_epoch=ACTIVATION,
-        baseline_scan=False,
-    ) == later
-    assert initial_configuration_valid_from(
-        {"quality": {"timestamp_source": "updated_at"}},
-        source_timestamp=later,
-        activation_epoch=ACTIVATION,
-        baseline_scan=True,
-    ) == later
+    assert (
+        initial_configuration_valid_from(
+            captured_fact,
+            source_timestamp=CAPTURED,
+            activation_epoch=ACTIVATION,
+            baseline_scan=True,
+        )
+        == ACTIVATION
+    )
+    assert (
+        initial_configuration_valid_from(
+            captured_fact,
+            source_timestamp=later,
+            activation_epoch=ACTIVATION,
+            baseline_scan=False,
+        )
+        == later
+    )
+    assert (
+        initial_configuration_valid_from(
+            {"quality": {"timestamp_source": "updated_at"}},
+            source_timestamp=later,
+            activation_epoch=ACTIVATION,
+            baseline_scan=True,
+        )
+        == later
+    )
 
 
 def test_configuration_streams_cover_local_prices_catalog_and_suppliers():

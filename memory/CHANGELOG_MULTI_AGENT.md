@@ -178,6 +178,21 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-22 16:11 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | refactor | test | docs
+**File toccati**:
+- `/app/backend/annotation_semantics.py`
+- `/app/backend/app/services/pasta_annotations.py`
+- `/app/backend/memory_worker/{collector,snapshots}.py`
+- `/app/backend/memory_worker/sources/{__init__,configuration,orders}.py`
+- `/app/backend/tests/test_{annotation_semantics,pasta_annotations_lab,memory_worker_*}.py`
+- `/app/frontend/src/pages/PastaAnnotationsLabPage.js`
+- `/app/frontend/src/utils/{laboratory,laboratory.test}.js`
+- `/app/memory/{PRD,OPERATIONAL_MEMORY_DESIGN,OPERATIONAL_MEMORY_ADVANCED_CAPABILITIES,MEMORY_VPS_ROLLOUT_RUNBOOK,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Introdotto il parser semantico condiviso v3 per le annotazioni paste. Separa testo, pager, quantita, segnali confermati (`TA`, `C`, `S`, `F`, `CHIUSA`, `RIG`), richieste letterali e frammenti sconosciuti senza inventarne il significato; `T` resta sconosciuto. Il Laboratorio ora distingue Segnali, Da interpretare, Frasi complete e Probabili comande, ricostruite in modo non autoritativo per locale/giorno/pager con gap massimo 90 secondi e distanza ordine 8. La Memoria conserva il derivato negli order fact, registra le regole come configurazione versionata e aggiunge agli snapshot v2 aggregati semantici calcolati sullo stato finale non cancellato con il dizionario storico del locale. Corretto anche il percorso automatico degli snapshot che validava la data prima di selezionarla.
+**Testato**: si (metodo: suite backend completa `154 passed, 36 skipped`; 6 test Mongo reali su database sorgente/destinazione isolati; suite frontend `20 passed`; build React produzione completata con i soli warning Hook preesistenti; simulazione deterministica di 10.800 paste, 3 locali, 60 giorni e 3.600 gruppi pager con conteggi attesi)
+**Note per il prossimo agente**: deployare questo codice prima di scegliere il momento zero della Memoria e proseguire `memory/MEMORY_VPS_ROLLOUT_RUNBOOK.md`, che ora verifica anche regola semantica e fatti parsati. Nessuna migrazione del Mongo operativo e nessun backfill pre-attivazione. Il Laboratorio resta in sola lettura e riservato a Simone; il worker resta separato, arrestabile e non richiesto dall'app.
+
 ### [2026-07-22 10:02 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix | refactor | test | docs
 **File toccati**:

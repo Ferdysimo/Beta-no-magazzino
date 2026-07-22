@@ -4,9 +4,20 @@ from datetime import datetime, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
+from annotation_semantics import extract_pasta_annotation
 
 ROME_TZ = ZoneInfo("Europe/Rome")
-ORDER_NORMALIZER_VERSION = 1
+ORDER_NORMALIZER_VERSION = 2
+DEFAULT_MEMORY_PASTA_CODES = (
+    "AMAT",
+    "CACIO",
+    "CARB",
+    "CARZUC",
+    "PESTO",
+    "POM",
+    "RAGU",
+    "TART",
+)
 
 
 @dataclass(frozen=True)
@@ -99,6 +110,13 @@ def _order_identity(
     return f"order:{hashlib.sha256(canonical.encode('utf-8')).hexdigest()}"
 
 
+def _memory_annotation(description: str) -> Optional[dict]:
+    return extract_pasta_annotation(
+        description,
+        DEFAULT_MEMORY_PASTA_CODES,
+    )
+
+
 def normalize_order_record(
     document: dict,
     stream: OrderStream,
@@ -130,6 +148,7 @@ def normalize_order_record(
             created_at,
             order_number,
         )
+        description = str(document.get("description") or "")
         fact = {
             "normalizer_version": ORDER_NORMALIZER_VERSION,
             "fact_kind": "order_state",
@@ -139,19 +158,22 @@ def normalize_order_record(
             "business_date": _business_date(created_at),
             "occurred_at": created_at,
             "order_number": order_number,
-            "description": str(document.get("description") or ""),
+            "description": description,
+            "pasta_annotation": _memory_annotation(description),
+            "annotation_quality": {
+                "dictionary_source": "worker_default_codes",
+                "restaurant_overrides_applied": False,
+                "raw_description_replayable": True,
+            },
             "status": str(document.get("status") or ""),
             "timer_started": bool(document.get("timer_started", False)),
             "timer_paused": bool(document.get("timer_paused", False)),
             "timer_elapsed": document.get("timer_elapsed", 0),
-            "kitchen_completed": bool(
-                document.get("kitchen_completed", False)
-            ),
+            "kitchen_completed": bool(document.get("kitchen_completed", False)),
             "monitor_visible": bool(document.get("monitor_visible", False)),
             "hidden_generale": bool(document.get("hidden_generale", False)),
             "baseline_active_at_epoch": (
-                stream.baseline_active_at_epoch
-                and created_at < activation_epoch
+                stream.baseline_active_at_epoch and created_at < activation_epoch
             ),
             "quality": {
                 "state_change_time_known": False,
@@ -168,6 +190,7 @@ def normalize_order_record(
         order_number = document.get("order_number")
         if order_number in (None, ""):
             raise ValueError("order_number mancante")
+        description = str(document.get("description") or "")
         fact = {
             "normalizer_version": ORDER_NORMALIZER_VERSION,
             "fact_kind": "order_deleted",
@@ -182,7 +205,8 @@ def normalize_order_record(
             "occurred_at": source_timestamp,
             "original_created_at": original_created_at,
             "order_number": order_number,
-            "description": str(document.get("description") or ""),
+            "description": description,
+            "pasta_annotation": _memory_annotation(description),
             "quality": {"original_order_id_available": False},
         }
         return source_id, source_timestamp, fact
@@ -192,6 +216,8 @@ def normalize_order_record(
         entity_seed = related_order_id or (
             f"{restaurant_id}|{document.get('order_number')}|{source_id}"
         )
+        old_description = str(document.get("old_description") or "")
+        new_description = str(document.get("new_description") or "")
         fact = {
             "normalizer_version": ORDER_NORMALIZER_VERSION,
             "fact_kind": "order_modified",
@@ -206,8 +232,10 @@ def normalize_order_record(
             "business_date": _business_date(source_timestamp),
             "occurred_at": source_timestamp,
             "order_number": document.get("order_number"),
-            "old_description": str(document.get("old_description") or ""),
-            "new_description": str(document.get("new_description") or ""),
+            "old_description": old_description,
+            "new_description": new_description,
+            "old_pasta_annotation": _memory_annotation(old_description),
+            "new_pasta_annotation": _memory_annotation(new_description),
             "quality": {
                 "original_created_at_available": False,
                 "business_date_uses_modification_time": True,
@@ -227,9 +255,7 @@ async def collect_order_stream(
     batch_size: int,
     captured_at: Optional[datetime] = None,
 ) -> dict:
-    captured = (captured_at or datetime.now(timezone.utc)).astimezone(
-        timezone.utc
-    )
+    captured = (captured_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
     activation_epoch = epoch["activated_at"].astimezone(timezone.utc)
     watermark = await store.get_watermark(epoch["id"], stream.key)
 
@@ -239,9 +265,7 @@ async def collect_order_stream(
         if cursor_after_id:
             query["id"] = {"$gt": cursor_after_id}
         if not stream.include_pre_epoch:
-            query[stream.timestamp_field] = {
-                "$gte": activation_epoch.isoformat()
-            }
+            query[stream.timestamp_field] = {"$gte": activation_epoch.isoformat()}
         documents = await source.find_batch(
             stream.collection,
             query,
@@ -255,9 +279,7 @@ async def collect_order_stream(
             last_seen_value = last_seen_at.astimezone(timezone.utc).isoformat()
         else:
             last_seen_value = (
-                str(last_seen_at)
-                if last_seen_at
-                else activation_epoch.isoformat()
+                str(last_seen_at) if last_seen_at else activation_epoch.isoformat()
             )
         last_seen_id = str(watermark.get("last_seen_id") or "")
         query = {
@@ -314,11 +336,7 @@ async def collect_order_stream(
 
     if stream.cyclic_scan:
         cycle_complete = len(documents) < batch_size
-        next_cursor = (
-            ""
-            if cycle_complete
-            else str(documents[-1].get("id") or "")
-        )
+        next_cursor = "" if cycle_complete else str(documents[-1].get("id") or "")
         watermark_fields = {
             "cursor_after_id": next_cursor,
             "cycle_complete": cycle_complete,

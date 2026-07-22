@@ -21,7 +21,6 @@ from memory_worker.sources.orders import (
 from memory_worker.stores import MemoryMongoStore, ReadOnlyMongoSource
 from memory_worker.stores.mongo import classify_authenticated_roles
 
-
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 
@@ -60,16 +59,20 @@ def test_writes_require_both_explicit_enablement_and_activation_epoch():
         MemorySettings.from_env(_connection_env(MEMORY_WRITE_ENABLED="true"))
 
     with pytest.raises(MemoryConfigurationError, match="EPOCH"):
-        MemorySettings.from_env(_connection_env(
+        MemorySettings.from_env(
+            _connection_env(
+                MEMORY_ENABLED="true",
+                MEMORY_WRITE_ENABLED="true",
+            )
+        )
+
+    settings = MemorySettings.from_env(
+        _connection_env(
             MEMORY_ENABLED="true",
             MEMORY_WRITE_ENABLED="true",
-        ))
-
-    settings = MemorySettings.from_env(_connection_env(
-        MEMORY_ENABLED="true",
-        MEMORY_WRITE_ENABLED="true",
-        MEMORY_ACTIVATION_EPOCH_UTC="2026-07-21T04:00:00Z",
-    ))
+            MEMORY_ACTIVATION_EPOCH_UTC="2026-07-21T04:00:00Z",
+        )
+    )
     assert settings.enabled is True
     assert settings.write_enabled is True
     assert settings.activation_epoch_utc == "2026-07-21T04:00:00+00:00"
@@ -163,9 +166,7 @@ def test_source_api_exposes_no_write_primitive_and_target_has_no_generic_writes(
         "save_daily_snapshot",
         "sync_snapshot_gaps",
         "save_integrity_run",
-    } <= set(
-        dir(MemoryMongoStore)
-    )
+    } <= set(dir(MemoryMongoStore))
 
 
 def test_role_classification_detects_write_capable_source_credentials():
@@ -182,10 +183,12 @@ def test_role_classification_detects_write_capable_source_credentials():
 
     assert result["authentication_visible"] is True
     assert result["write_capable"] is True
-    assert result["write_roles"] == [{
-        "role": "readWrite",
-        "db": "pastasciutta",
-    }]
+    assert result["write_roles"] == [
+        {
+            "role": "readWrite",
+            "db": "pastasciutta",
+        }
+    ]
 
 
 def test_role_classification_flags_unknown_source_database_roles():
@@ -200,10 +203,12 @@ def test_role_classification_flags_unknown_source_database_roles():
     result = classify_authenticated_roles(status, "pastasciutta")
 
     assert result["write_capable"] is False
-    assert result["unclassified_roles"] == [{
-        "role": "customCollector",
-        "db": "pastasciutta",
-    }]
+    assert result["unclassified_roles"] == [
+        {
+            "role": "customCollector",
+            "db": "pastasciutta",
+        }
+    ]
 
 
 def test_memory_contract_starts_versioned_with_expected_domains():
@@ -234,8 +239,7 @@ def test_order_state_and_deletion_share_stable_business_identity():
     activation = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
     active_stream = next(item for item in ORDER_STREAMS if item.key == "orders_active")
     deletion_stream = next(
-        item for item in ORDER_STREAMS
-        if item.key == "order_deletions_active"
+        item for item in ORDER_STREAMS if item.key == "order_deletions_active"
     )
     state = {
         "id": "order-1",
@@ -270,13 +274,15 @@ def test_order_state_and_deletion_share_stable_business_identity():
     assert state_fact["entity_key"] == deletion_fact["entity_key"]
     assert state_fact["baseline_active_at_epoch"] is True
     assert state_fact["business_date"] == "2026-07-20"
+    assert state_fact["pasta_annotation"]["pasta_sigla"] == "CARB"
+    assert state_fact["pasta_annotation"]["semantic_status"] == "no_text"
+    assert state_fact["annotation_quality"]["raw_description_replayable"] is True
     assert deletion_fact["fact_kind"] == "order_deleted"
 
 
 def test_order_modification_declares_temporal_quality_limit():
     stream = next(
-        item for item in ORDER_STREAMS
-        if item.key == "order_modifications_active"
+        item for item in ORDER_STREAMS if item.key == "order_modifications_active"
     )
     _, timestamp, fact = normalize_order_record(
         {
@@ -295,6 +301,8 @@ def test_order_modification_declares_temporal_quality_limit():
 
     assert timestamp == datetime(2026, 7, 20, 12, 4, tzinfo=timezone.utc)
     assert fact["entity_key"] == "order-id:order-1"
+    assert fact["old_pasta_annotation"]["semantic_status"] == "no_text"
+    assert fact["new_pasta_annotation"]["signals"][0]["code"] == "without:pepe"
     assert fact["quality"] == {
         "original_created_at_available": False,
         "business_date_uses_modification_time": True,
@@ -302,11 +310,7 @@ def test_order_modification_declares_temporal_quality_limit():
 
 
 def test_archived_order_streams_use_cyclic_scans_for_late_arrivals():
-    cyclic_streams = {
-        item.key
-        for item in ORDER_STREAMS
-        if item.cyclic_scan
-    }
+    cyclic_streams = {item.key for item in ORDER_STREAMS if item.cyclic_scan}
 
     assert cyclic_streams == {
         "orders_active",

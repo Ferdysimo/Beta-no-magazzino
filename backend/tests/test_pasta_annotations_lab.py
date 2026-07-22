@@ -1,5 +1,6 @@
 import pytest
 from fastapi import HTTPException
+from datetime import datetime, timedelta, timezone
 
 from app.routers.laboratory import _parse_lab_date, _require_simone_laboratory
 from app.bootstrap import app
@@ -11,19 +12,41 @@ from app.services.pasta_annotations import (
     normalize_pasta_annotation,
 )
 
-
 PASTA_DICT = {"CARB": 8, "AMAT": 8}
 
 
 def test_extracts_only_annotations_from_pastas_recognized_by_current_parser():
-    assert extract_pasta_annotation("CARB - no  pepe", PASTA_DICT) == {
+    extracted = extract_pasta_annotation("CARB - no  pepe", PASTA_DICT)
+    assert {
+        key: extracted[key]
+        for key in (
+            "pasta_sigla",
+            "annotation_source_raw",
+            "annotation_raw",
+            "annotation_normalized",
+            "parser_version",
+        )
+    } == {
         "pasta_sigla": "CARB",
         "annotation_source_raw": "no  pepe",
         "annotation_raw": "no pepe",
         "annotation_normalized": "NO PEPE",
         "parser_version": PASTA_ANNOTATION_PARSER_VERSION,
     }
-    assert extract_pasta_annotation("42 AMAT asporto", PASTA_DICT) == {
+    assert extracted["signals"][0]["code"] == "without:pepe"
+    assert extracted["unknown_fragments"] == []
+
+    extracted = extract_pasta_annotation("42 AMAT asporto", PASTA_DICT)
+    assert {
+        key: extracted[key]
+        for key in (
+            "pasta_sigla",
+            "annotation_source_raw",
+            "annotation_raw",
+            "annotation_normalized",
+            "parser_version",
+        )
+    } == {
         "pasta_sigla": "AMAT",
         "annotation_source_raw": "asporto",
         "annotation_raw": "asporto",
@@ -71,12 +94,31 @@ def test_annotation_text_excludes_pager_numbers(value, expected):
 
 
 def test_extract_keeps_source_but_exposes_only_text_as_annotation():
-    assert extract_pasta_annotation("81 CARB pager 12 - no pepe", PASTA_DICT) == {
+    extracted = extract_pasta_annotation(
+        "81 CARB pager 12 - no pepe",
+        PASTA_DICT,
+    )
+    assert {
+        key: extracted[key]
+        for key in (
+            "pasta_sigla",
+            "annotation_source_raw",
+            "annotation_raw",
+            "annotation_normalized",
+            "parser_version",
+        )
+    } == {
         "pasta_sigla": "CARB",
         "annotation_source_raw": "pager 12 - no pepe",
         "annotation_raw": "no pepe",
         "annotation_normalized": "NO PEPE",
         "parser_version": PASTA_ANNOTATION_PARSER_VERSION,
+    }
+    assert extracted["pager"] == {
+        "value": 12,
+        "detection": "explicit_marker",
+        "confidence": "high",
+        "grouping_eligible": True,
     }
 
 
@@ -171,7 +213,16 @@ def test_build_stats_groups_annotations_and_keeps_raw_examples():
         locations_by_id={"rest-a": "Flaminio", "rest-b": "Grazie"},
     )
 
-    assert result["summary"] == {
+    assert {
+        key: result["summary"][key]
+        for key in (
+            "valid_orders",
+            "recognized_orders",
+            "annotated_orders",
+            "unrecognized_orders",
+            "annotation_rate_percent",
+        )
+    } == {
         "valid_orders": 4,
         "recognized_orders": 3,
         "annotated_orders": 2,
@@ -193,17 +244,22 @@ def test_build_stats_groups_annotations_and_keeps_raw_examples():
         "NO PEPE",
         "no pepe",
     }
+    assert result["signals"][0]["code"] == "without:pepe"
+    assert result["signals"][0]["count"] == 2
+    assert result["summary"]["fully_classified_orders"] == 2
 
 
 def test_historical_dictionary_takes_precedence_over_current_dictionary():
-    docs = [{
-        "id": "1",
-        "restaurant_id": "rest-a",
-        "date_rome": "2026-07-19",
-        "created_at": "2026-07-19T10:00:00+00:00",
-        "order_number": 1,
-        "description": "OLD NO SALE",
-    }]
+    docs = [
+        {
+            "id": "1",
+            "restaurant_id": "rest-a",
+            "date_rome": "2026-07-19",
+            "created_at": "2026-07-19T10:00:00+00:00",
+            "order_number": 1,
+            "description": "OLD NO SALE",
+        }
+    ]
     result = build_pasta_annotation_stats(
         docs,
         dictionaries_by_key={("rest-a", "2026-07-19"): {"OLD": 7}},
@@ -213,6 +269,67 @@ def test_historical_dictionary_takes_precedence_over_current_dictionary():
 
     assert result["summary"]["recognized_orders"] == 1
     assert result["annotations"][0]["annotation"] == "NO SALE"
+
+
+def test_two_month_multi_location_simulation_keeps_portions_and_groups_distinct():
+    docs = []
+    order_number = 0
+    start = datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc)
+    descriptions = (
+        "CARB RIG C S TA {pager}",
+        "CACIO NO PEPE C TA {pager}",
+        "AMAT T {pager}",
+    )
+    restaurant_ids = ("rest-a", "rest-b", "rest-c")
+    for day in range(60):
+        for restaurant_index, restaurant_id in enumerate(restaurant_ids):
+            for group_index in range(20):
+                group_start = (
+                    start
+                    + timedelta(days=day)
+                    + timedelta(minutes=group_index * 3)
+                    + timedelta(seconds=restaurant_index)
+                )
+                pager = group_index % 10 + 1
+                for row_index, template in enumerate(descriptions):
+                    order_number += 1
+                    created_at = group_start + timedelta(seconds=row_index * 5)
+                    docs.append(
+                        {
+                            "id": f"sim-{order_number}",
+                            "restaurant_id": restaurant_id,
+                            "date_rome": created_at.date().isoformat(),
+                            "created_at": created_at.isoformat(),
+                            "order_number": order_number,
+                            "description": template.format(pager=pager),
+                        }
+                    )
+
+    result = build_pasta_annotation_stats(
+        docs,
+        dictionaries_by_key={},
+        fallback_dictionaries={
+            restaurant_id: {"CARB": 8, "CACIO": 8, "AMAT": 8}
+            for restaurant_id in restaurant_ids
+        },
+        locations_by_id={
+            "rest-a": "Flaminio",
+            "rest-b": "Grazie",
+            "rest-c": "Largo di Brazza",
+        },
+    )
+
+    signals = {item["signal_key"]: item for item in result["signals"]}
+    assert result["summary"]["recognized_orders"] == 10800
+    assert result["summary"]["annotated_orders"] == 10800
+    assert result["grouping"]["pager_linked_rows"] == 10800
+    assert result["grouping"]["reconstructed_group_count"] == 3600
+    assert result["grouping"]["multi_pasta_group_count"] == 3600
+    assert signals["service_mode:take_away"]["count"] == 7200
+    assert signals["service_mode:take_away"]["reconstructed_group_count"] == 3600
+    assert signals["preparation_request:without:pepe"]["count"] == 3600
+    assert result["unknown_fragments"][0]["fragment"] == "T"
+    assert result["unknown_fragments"][0]["count"] == 3600
 
 
 @pytest.mark.parametrize(

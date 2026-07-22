@@ -347,26 +347,57 @@ specializzate contengono dati normalizzati e possono essere rigenerate.
 
 Il dato originale non viene mai sostituito dal parsing.
 
-Le annotazioni successive a una pasta riconosciuta sono un fatto separato:
+Le annotazioni successive a una pasta riconosciuta sono un fatto separato e
+versionato:
 
 ```json
 {
   "pasta_sigla": "CARB",
-  "annotation_source_raw": "12 No  pepe",
-  "annotation_raw": "No pepe",
-  "annotation_normalized": "NO PEPE",
-  "annotation_parser_version": 2
+  "annotation_source_raw": "RIG C S TA 12",
+  "annotation_raw": "RIG C S TA",
+  "annotation_normalized": "RIG C S TA",
+  "pager": {
+    "value": 12,
+    "detection": "terminal_number",
+    "grouping_eligible": true
+  },
+  "signals": [
+    {"dimension": "pasta_format", "code": "rig"},
+    {"dimension": "serving_container", "code": "cardboard_bowl"},
+    {"dimension": "kitchen_coordination", "code": "solo_customer"},
+    {"dimension": "service_mode", "code": "take_away"}
+  ],
+  "unknown_fragments": [],
+  "parser_version": 3,
+  "ruleset_version": 1
 }
 ```
 
 Il riconoscitore pasta operativo resta autoritativo e volutamente rigido. Una
 riga manuale, errata, ambigua o esclusa come `XL` non genera annotazioni. La
-normalizzazione esclude numeri ordine/pager e relativi marcatori, poi corregge
-soltanto rappresentazione, spazi e maiuscole: non indovina errori e non unisce
-automaticamente significati come `NO PEPE` e `SENZA PEPE`. Un valore composto
-solo da numeri non genera un'annotazione. Il Laboratorio puo calcolare questi
-fatti in sola lettura; la Memoria futura conservera sia la coda sorgente sia il
-testo pulito, versionati insieme alla descrizione originale.
+normalizzazione corregge soltanto rappresentazione, spazi e maiuscole: non
+corregge errori e non attribuisce significati a codici sconosciuti. Numeri pager,
+quantita e numeri contestuali restano osservazioni strutturate ma non entrano
+nelle frequenze testuali.
+
+I significati confermati iniziali sono `TA` (take away), `C` (ciotola di
+cartone), `S` (cliente da solo), `F` (tavoli fuori), `CHIUSA` (coperchio senza
+busta) e `RIG` come codice formato osservato. Le costruzioni `NO`, `SENZA`,
+`POCO`, `PIU`, `BEN COTTA` e le dichiarazioni di allergia sono strutturate in
+modo letterale, conservando il bersaglio scritto. `T` resta sconosciuto.
+
+Il pager puo collegare righe della stessa probabile comanda soltanto con regola
+versionata: stesso locale, giornata e pager, gap adiacente massimo di 90 secondi
+e distanza massima di 8 numeri ordine. I gruppi non sono fatti autoritativi e
+devono restare distinti dal conteggio certo delle paste.
+
+Il modulo neutro `backend/annotation_semantics.py` non importa ne l'app ne il
+worker. Il servizio Laboratorio usa il riconoscitore operativo e delega a questo
+modulo; il worker usa lo stesso modulo senza creare una dipendenza dell'app dalla
+Memoria. I fatti ordine conservano descrizione raw e derivato semantico. Gli
+snapshot giornalieri ricalcolano il derivato con il dizionario del locale valido
+alla data, usano solo lo stato finale non cancellato e registrano parser,
+ruleset, regola pager e fonti nella provenienza.
 
 ### 11.2 Denaro e formule
 
@@ -454,6 +485,7 @@ Per ogni locale e giornata chiusa viene prodotto uno snapshot contenente:
 
 - conteggi ordini validi, modificati e cancellati;
 - paste originali e composizione normalizzata;
+- annotazioni paste per segnale, frammenti sconosciuti e probabili gruppi pager;
 - Report completo;
 - cash e spicci per taglio;
 - bevande, scarti e valori di magazzino;
@@ -766,6 +798,8 @@ memory/MEMORY_PHASE6_RUNBOOK.md
 
 - Ordine creato, modificato, cancellato e numero riutilizzato.
 - Parsing paste con sigle, XL, Altro e parser versionato.
+- Annotazioni con raw, segnali confermati, richieste letterali, sconosciuti,
+  pager, quantita e ricostruzione prudente delle comande.
 - Report con formule, importi tondi, commenti e forzature Admin.
 - Spicci per taglio e confronto in valore monetario.
 - Carry-over cash, cassetto e bevande riconoscibile.
@@ -798,6 +832,7 @@ Dimostrare con query isolate che i dati raccolti permettono almeno:
 - consumo logistico per 1.000 paste;
 - tempi medi di evasione richieste;
 - ricostruzione di una giornata dallo snapshot e dalle fonti.
+- confronto tra paste e probabili comande per segnali come `TA`, `C`, `S` e `F`.
 
 ## 23. Attivazione
 

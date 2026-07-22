@@ -508,6 +508,14 @@ sudo -u pastasciutta-memory bash -c '
       epochs: db.memory_epochs.countDocuments({}),
       watermarks: db.memory_watermarks.countDocuments({}),
       raw_versions: db.memory_raw_versions.countDocuments({}),
+      annotation_rule: db.memory_configuration_versions.countDocuments({
+        fact_kind: \"memory_rule_state\",
+        rule_kind: \"annotation_semantics\",
+        ruleset_version: 1
+      }),
+      parsed_annotations: db.memory_order_facts.countDocuments({
+        \"pasta_annotation.parser_version\": 3
+      }),
       quarantine: db.memory_quarantine.countDocuments({}),
       storage: db.stats().storageSize + db.stats().indexSize
     })
@@ -520,6 +528,9 @@ Risultato minimo:
 - un epoch attivo;
 - watermark presenti;
 - collezioni Memoria create;
+- una regola `annotation_semantics` v1;
+- `parsed_annotations` maggiore di zero appena viene acquisita almeno una pasta
+  riconosciuta dopo il momento zero;
 - `quarantine` compresa e senza crescita anomala;
 - nessun errore ripetuto nei log;
 - backend e Mongo senza rallentamenti percepibili.

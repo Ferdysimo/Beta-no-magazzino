@@ -5,15 +5,48 @@ import {
   ArrowLeft,
   BarChart3,
   CalendarDays,
+  CircleHelp,
+  ListTree,
   RefreshCw,
   Search,
   Tags,
+  Users,
 } from 'lucide-react';
 import Header from '../components/Header';
 import { useAuth } from '../contexts/AuthContext';
-import { filterPastaAnnotations } from '../utils/laboratory';
+import {
+  filterPagerGroups,
+  filterPastaAnnotations,
+  filterSemanticSignals,
+  filterUnknownFragments,
+} from '../utils/laboratory';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+const DIMENSION_LABELS = {
+  service_mode: 'Servizio',
+  serving_container: 'Contenitore',
+  kitchen_coordination: 'Coordinamento',
+  dining_area: 'Sala',
+  packaging: 'Confezione',
+  pasta_format: 'Formato',
+  preparation_request: 'Preparazione',
+  cooking_request: 'Cottura',
+  safety_note: 'Sicurezza',
+};
+
+const CERTAINTY_LABELS = {
+  confirmed: 'Confermato',
+  literal: 'Testo letterale',
+  observed_code: 'Codice osservato',
+};
+
+const VIEWS = [
+  { id: 'signals', label: 'Segnali', Icon: BarChart3 },
+  { id: 'unknown', label: 'Da interpretare', Icon: CircleHelp },
+  { id: 'raw', label: 'Frasi complete', Icon: ListTree },
+  { id: 'groups', label: 'Probabili comande', Icon: Users },
+];
 
 const inputDate = (date) => {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
@@ -31,7 +64,25 @@ const breakdownText = (values) => (
   Object.entries(values || {})
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .map(([label, count]) => `${label} ${count}`)
-    .join(' · ')
+    .join(' / ')
+);
+
+const Examples = ({ examples }) => (
+  <details>
+    <summary className="cursor-pointer text-sm font-semibold text-gray-800">
+      {(examples || []).length} esempi
+    </summary>
+    <div className="mt-2 space-y-1.5">
+      {(examples || []).map((example, index) => (
+        <p
+          key={`${example.order_id || example.order_number}-${index}`}
+          className="text-xs text-gray-600 whitespace-nowrap"
+        >
+          {example.business_date} / {example.location} / {example.pasta_sigla} / {example.annotation_raw}
+        </p>
+      ))}
+    </div>
+  </details>
 );
 
 const PastaAnnotationsLabPage = () => {
@@ -41,6 +92,7 @@ const PastaAnnotationsLabPage = () => {
   const [restaurantId, setRestaurantId] = useState('');
   const [pasta, setPasta] = useState('');
   const [search, setSearch] = useState('');
+  const [activeView, setActiveView] = useState('signals');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -76,8 +128,20 @@ const PastaAnnotationsLabPage = () => {
     () => Object.keys(data?.pasta_counts || {}).sort(),
     [data],
   );
+  const filteredSignals = useMemo(
+    () => filterSemanticSignals(data?.signals, search, pasta),
+    [data, search, pasta],
+  );
+  const filteredUnknowns = useMemo(
+    () => filterUnknownFragments(data?.unknown_fragments, search, pasta),
+    [data, search, pasta],
+  );
   const filteredAnnotations = useMemo(
     () => filterPastaAnnotations(data?.annotations, search, pasta),
+    [data, search, pasta],
+  );
+  const filteredGroups = useMemo(
+    () => filterPagerGroups(data?.grouping?.examples, search, pasta),
     [data, search, pasta],
   );
   const displayedCount = useCallback(
@@ -85,9 +149,12 @@ const PastaAnnotationsLabPage = () => {
     [pasta],
   );
   const displayedShare = useCallback((item) => {
-    if (!pasta) return Number(item.recognized_share_percent || 0);
-    const pastaTotal = Number(data?.pasta_counts?.[pasta] || 0);
-    return pastaTotal ? displayedCount(item) / pastaTotal * 100 : 0;
+    const total = Number(
+      pasta
+        ? data?.pasta_counts?.[pasta]
+        : data?.summary?.recognized_orders,
+    ) || 0;
+    return total ? displayedCount(item) / total * 100 : 0;
   }, [data, displayedCount, pasta]);
   const displayedLocations = useCallback(
     item => (pasta ? item.pasta_location_counts?.[pasta] : item.location_counts) || {},
@@ -97,17 +164,233 @@ const PastaAnnotationsLabPage = () => {
     item => (pasta ? item.pasta_examples?.[pasta] : item.examples) || [],
     [pasta],
   );
-  const filteredOccurrences = useMemo(
-    () => filteredAnnotations.reduce((total, item) => total + displayedCount(item), 0),
-    [displayedCount, filteredAnnotations],
-  );
+
   const summary = data?.summary || {};
+  const grouping = data?.grouping || {};
+  const viewCount = {
+    signals: filteredSignals.length,
+    unknown: filteredUnknowns.length,
+    raw: filteredAnnotations.length,
+    groups: filteredGroups.length,
+  }[activeView] || 0;
+  const activeViewHasContent = (
+    activeView === 'groups'
+      ? Number(grouping.reconstructed_group_count || 0) > 0
+      : viewCount > 0
+  );
+
+  const emptyLabel = {
+    signals: 'Nessun segnale nel periodo',
+    unknown: 'Nessun testo da interpretare',
+    raw: 'Nessuna frase completa nel periodo',
+    groups: 'Nessuna comanda multipla ricostruita',
+  }[activeView];
+
+  const renderSignals = () => (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[1040px] text-left">
+        <thead className="bg-gray-100 border-b border-gray-300">
+          <tr className="text-xs uppercase text-gray-600">
+            <th className="px-4 py-3 font-bold">Tipo</th>
+            <th className="px-4 py-3 font-bold">Segnale</th>
+            <th className="px-4 py-3 font-bold text-right">Paste</th>
+            <th className="px-4 py-3 font-bold text-right">% paste</th>
+            <th className="px-4 py-3 font-bold text-right">Probabili comande</th>
+            <th className="px-4 py-3 font-bold">Paste coinvolte</th>
+            <th className="px-4 py-3 font-bold">Locali</th>
+            <th className="px-4 py-3 font-bold">Riscontri</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-200">
+          {filteredSignals.map(item => (
+            <tr key={item.signal_key} className="align-top hover:bg-gray-50">
+              <td className="px-4 py-4 text-sm font-semibold text-gray-600">
+                {DIMENSION_LABELS[item.dimension] || item.dimension}
+              </td>
+              <td className="px-4 py-4">
+                <p className="font-bold text-gray-950">{item.label}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {CERTAINTY_LABELS[item.certainty] || item.certainty}
+                </p>
+              </td>
+              <td className="px-4 py-4 text-right font-bold text-gray-950">
+                {displayedCount(item)}
+              </td>
+              <td className="px-4 py-4 text-right text-gray-700">
+                {displayedShare(item).toLocaleString('it-IT', { maximumFractionDigits: 2 })}%
+              </td>
+              <td className="px-4 py-4 text-right font-semibold text-gray-800">
+                {pasta ? '-' : item.reconstructed_group_count}
+              </td>
+              <td className="px-4 py-4 text-sm text-gray-700">
+                {breakdownText(item.pasta_counts)}
+              </td>
+              <td className="px-4 py-4 text-sm text-gray-700">
+                {breakdownText(displayedLocations(item))}
+              </td>
+              <td className="px-4 py-4">
+                <Examples examples={displayedExamples(item)} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const renderUnknowns = () => (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[900px] text-left">
+        <thead className="bg-gray-100 border-b border-gray-300">
+          <tr className="text-xs uppercase text-gray-600">
+            <th className="px-4 py-3 font-bold">Testo</th>
+            <th className="px-4 py-3 font-bold text-right">Paste</th>
+            <th className="px-4 py-3 font-bold text-right">% paste</th>
+            <th className="px-4 py-3 font-bold">Paste coinvolte</th>
+            <th className="px-4 py-3 font-bold">Locali</th>
+            <th className="px-4 py-3 font-bold">Riscontri</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-200">
+          {filteredUnknowns.map(item => (
+            <tr key={item.fragment} className="align-top hover:bg-gray-50">
+              <td className="px-4 py-4 font-bold text-gray-950">{item.fragment}</td>
+              <td className="px-4 py-4 text-right font-bold text-gray-950">
+                {displayedCount(item)}
+              </td>
+              <td className="px-4 py-4 text-right text-gray-700">
+                {displayedShare(item).toLocaleString('it-IT', { maximumFractionDigits: 2 })}%
+              </td>
+              <td className="px-4 py-4 text-sm text-gray-700">
+                {breakdownText(item.pasta_counts)}
+              </td>
+              <td className="px-4 py-4 text-sm text-gray-700">
+                {breakdownText(displayedLocations(item))}
+              </td>
+              <td className="px-4 py-4">
+                <Examples examples={displayedExamples(item)} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const renderRaw = () => (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[900px] text-left">
+        <thead className="bg-gray-100 border-b border-gray-300">
+          <tr className="text-xs uppercase text-gray-600">
+            <th className="px-4 py-3 font-bold">Annotazione</th>
+            <th className="px-4 py-3 font-bold text-right">Paste</th>
+            <th className="px-4 py-3 font-bold text-right">% paste</th>
+            <th className="px-4 py-3 font-bold">Paste coinvolte</th>
+            <th className="px-4 py-3 font-bold">Locali</th>
+            <th className="px-4 py-3 font-bold">Riscontri</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-200">
+          {filteredAnnotations.map(item => (
+            <tr key={item.annotation} className="align-top hover:bg-gray-50">
+              <td className="px-4 py-4">
+                <p className="font-bold text-gray-950">{item.annotation}</p>
+                {(item.raw_variants || []).length > 1 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {(item.raw_variants || []).map(variant => variant.value).join(' / ')}
+                  </p>
+                )}
+              </td>
+              <td className="px-4 py-4 text-right font-bold text-gray-950">
+                {displayedCount(item)}
+              </td>
+              <td className="px-4 py-4 text-right text-gray-700">
+                {displayedShare(item).toLocaleString('it-IT', { maximumFractionDigits: 2 })}%
+              </td>
+              <td className="px-4 py-4 text-sm text-gray-700">
+                {breakdownText(item.pasta_counts)}
+              </td>
+              <td className="px-4 py-4 text-sm text-gray-700">
+                {breakdownText(displayedLocations(item))}
+              </td>
+              <td className="px-4 py-4">
+                <Examples examples={displayedExamples(item)} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const renderGroups = () => (
+    <>
+      <div className="grid grid-cols-2 lg:grid-cols-4 border-b border-gray-300">
+        <div className="p-4 border-r border-gray-300">
+          <p className="text-xs font-bold uppercase text-gray-500">Righe con pager</p>
+          <p className="text-xl font-bold text-gray-950 mt-1">{grouping.pager_linked_rows || 0}</p>
+        </div>
+        <div className="p-4 lg:border-r border-gray-300">
+          <p className="text-xs font-bold uppercase text-gray-500">Comande ricostruite</p>
+          <p className="text-xl font-bold text-gray-950 mt-1">{grouping.reconstructed_group_count || 0}</p>
+        </div>
+        <div className="p-4 border-r border-t lg:border-t-0 border-gray-300">
+          <p className="text-xs font-bold uppercase text-gray-500">Con piu paste</p>
+          <p className="text-xl font-bold text-gray-950 mt-1">{grouping.multi_pasta_group_count || 0}</p>
+        </div>
+        <div className="p-4 border-t lg:border-t-0 border-gray-300">
+          <p className="text-xs font-bold uppercase text-gray-500">Paste per comanda</p>
+          <p className="text-xl font-bold text-gray-950 mt-1">
+            {Number(grouping.average_rows_per_group || 0).toLocaleString('it-IT')}
+          </p>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[920px] text-left">
+          <thead className="bg-gray-100 border-b border-gray-300">
+            <tr className="text-xs uppercase text-gray-600">
+              <th className="px-4 py-3 font-bold">Data</th>
+              <th className="px-4 py-3 font-bold">Locale</th>
+              <th className="px-4 py-3 font-bold text-right">Pager</th>
+              <th className="px-4 py-3 font-bold text-right">Paste</th>
+              <th className="px-4 py-3 font-bold">Composizione</th>
+              <th className="px-4 py-3 font-bold">Annotazioni</th>
+              <th className="px-4 py-3 font-bold">Qualita</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {filteredGroups.length === 0 ? (
+              <tr>
+                <td colSpan="7" className="px-4 py-10 text-center font-semibold text-gray-500">
+                  Nessuna comanda con piu paste nei riscontri disponibili
+                </td>
+              </tr>
+            ) : filteredGroups.map(item => (
+              <tr key={item.group_id} className="align-top hover:bg-gray-50">
+                <td className="px-4 py-4 font-semibold text-gray-800">{item.business_date}</td>
+                <td className="px-4 py-4 text-gray-700">{item.location}</td>
+                <td className="px-4 py-4 text-right font-bold text-gray-950">{item.pager}</td>
+                <td className="px-4 py-4 text-right font-bold text-gray-950">{item.row_count}</td>
+                <td className="px-4 py-4 text-sm text-gray-700">{breakdownText(item.pasta_counts)}</td>
+                <td className="px-4 py-4 text-sm text-gray-700">
+                  {(item.annotations || []).filter(Boolean).join(' / ') || '-'}
+                </td>
+                <td className="px-4 py-4 text-sm font-semibold text-gray-700">
+                  {item.confidence === 'high' ? 'Alta' : 'Media'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
       <Header />
 
-      <main className="w-full max-w-[1500px] mx-auto px-3 sm:px-6 lg:px-10 py-4 sm:py-6">
+      <main className="w-full max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-10 py-4 sm:py-6">
         <div className="bg-[#F5C518] border border-yellow-600 rounded-md px-4 py-2.5 mb-5 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 min-w-0">
             <Tags size={19} className="text-gray-950 shrink-0" aria-hidden="true" />
@@ -123,7 +406,7 @@ const PastaAnnotationsLabPage = () => {
             <h1 className="font-heading text-2xl sm:text-3xl font-bold text-gray-950 uppercase">
               Annotazioni paste
             </h1>
-            <p className="text-sm text-gray-500 mt-1">Solo testo utile · numeri pager esclusi</p>
+            <p className="text-sm text-gray-500 mt-1">Segnali, richieste e probabili comande</p>
           </div>
           <button
             type="button"
@@ -195,24 +478,22 @@ const PastaAnnotationsLabPage = () => {
             <p className="text-2xl font-bold text-gray-950 mt-1">{summary.recognized_orders || 0}</p>
           </div>
           <div className="py-4 px-3 lg:px-5 lg:border-r border-gray-300">
-            <p className="text-xs font-bold uppercase text-gray-500">Con annotazione testuale</p>
+            <p className="text-xs font-bold uppercase text-gray-500">Con testo</p>
             <p className="text-2xl font-bold text-gray-950 mt-1">{summary.annotated_orders || 0}</p>
           </div>
           <div className="py-4 pr-3 lg:px-5 border-r border-gray-300 border-t lg:border-t-0">
-            <p className="text-xs font-bold uppercase text-gray-500">Incidenza</p>
-            <p className="text-2xl font-bold text-gray-950 mt-1">
-              {Number(summary.annotation_rate_percent || 0).toLocaleString('it-IT')}%
-            </p>
+            <p className="text-xs font-bold uppercase text-gray-500">Con segnali</p>
+            <p className="text-2xl font-bold text-gray-950 mt-1">{summary.orders_with_signals || 0}</p>
           </div>
           <div className="py-4 pl-3 lg:pl-5 border-t lg:border-t-0">
-            <p className="text-xs font-bold uppercase text-gray-500">Annotazioni distinte</p>
-            <p className="text-2xl font-bold text-gray-950 mt-1">{data?.annotations?.length || 0}</p>
+            <p className="text-xs font-bold uppercase text-gray-500">Probabili comande</p>
+            <p className="text-2xl font-bold text-gray-950 mt-1">{grouping.reconstructed_group_count || 0}</p>
           </div>
         </section>
 
         <div className="mt-5 flex flex-col md:flex-row md:items-end gap-3">
           <label className="block flex-1">
-            <span className="block text-xs font-bold text-gray-600 uppercase mb-1.5">Cerca annotazione</span>
+            <span className="block text-xs font-bold text-gray-600 uppercase mb-1.5">Cerca</span>
             <div className="relative">
               <Search
                 size={18}
@@ -242,88 +523,58 @@ const PastaAnnotationsLabPage = () => {
           </label>
         </div>
 
-        <div className="mt-5 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <BarChart3 size={19} className="text-gray-700" aria-hidden="true" />
-            <h2 className="font-heading text-lg font-bold text-gray-950 uppercase">Frequenza</h2>
+        <div className="mt-5 border-b border-gray-300 flex items-end justify-between gap-4 overflow-x-auto">
+          <div className="flex min-w-max" role="tablist" aria-label="Vista annotazioni">
+            {VIEWS.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={activeView === id}
+                onClick={() => setActiveView(id)}
+                className={`h-11 px-3 sm:px-4 inline-flex items-center gap-2 border-b-2 text-sm font-bold ${
+                  activeView === id
+                    ? 'border-gray-950 text-gray-950'
+                    : 'border-transparent text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                <Icon size={17} aria-hidden="true" />
+                {label}
+              </button>
+            ))}
           </div>
-          <span className="text-sm font-semibold text-gray-500">
-            {filteredAnnotations.length} voci · {filteredOccurrences} occorrenze
+          <span className="pb-3 text-sm font-semibold text-gray-500 whitespace-nowrap">
+            {viewCount} voci
           </span>
         </div>
 
         <section className="mt-3 bg-white border border-gray-300 rounded-md overflow-hidden">
           {loading ? (
-            <div className="min-h-[260px] flex items-center justify-center">
+            <div className="min-h-[280px] flex items-center justify-center">
               <RefreshCw size={26} className="animate-spin text-gray-500" aria-label="Caricamento" />
             </div>
-          ) : filteredAnnotations.length === 0 ? (
-            <div className="min-h-[220px] flex flex-col items-center justify-center text-center px-6">
+          ) : !activeViewHasContent ? (
+            <div className="min-h-[240px] flex flex-col items-center justify-center text-center px-6">
               <CalendarDays size={30} className="text-gray-400" aria-hidden="true" />
-              <p className="mt-3 font-semibold text-gray-700">Nessuna annotazione nel periodo</p>
+              <p className="mt-3 font-semibold text-gray-700">{emptyLabel}</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[860px] text-left">
-                <thead className="bg-gray-100 border-b border-gray-300">
-                  <tr className="text-xs uppercase text-gray-600">
-                    <th className="px-4 py-3 font-bold">Annotazione</th>
-                    <th className="px-4 py-3 font-bold text-right">Uscite</th>
-                    <th className="px-4 py-3 font-bold text-right">% paste</th>
-                    <th className="px-4 py-3 font-bold">Paste</th>
-                    <th className="px-4 py-3 font-bold">Locali</th>
-                    <th className="px-4 py-3 font-bold">Riscontri</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredAnnotations.map(item => (
-                    <tr key={item.annotation} className="align-top hover:bg-gray-50">
-                      <td className="px-4 py-4">
-                        <p className="font-bold text-gray-950">{item.annotation}</p>
-                        {(item.raw_variants || []).length > 1 && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            {(item.raw_variants || []).map(variant => variant.value).join(' · ')}
-                          </p>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-right font-bold text-gray-950">{displayedCount(item)}</td>
-                      <td className="px-4 py-4 text-right text-gray-700">
-                        {displayedShare(item).toLocaleString('it-IT', { maximumFractionDigits: 2 })}%
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-700">
-                        {breakdownText(item.pasta_counts)}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-700">
-                        {breakdownText(displayedLocations(item))}
-                      </td>
-                      <td className="px-4 py-4">
-                        <details>
-                          <summary className="cursor-pointer text-sm font-semibold text-gray-800">
-                            {displayedExamples(item).length} esempi
-                          </summary>
-                          <div className="mt-2 space-y-1.5">
-                            {displayedExamples(item).map((example, index) => (
-                              <p
-                                key={`${example.order_id || example.order_number}-${index}`}
-                                className="text-xs text-gray-600 whitespace-nowrap"
-                              >
-                                {example.business_date} · {example.location} · {example.pasta_sigla} · {example.annotation_raw}
-                              </p>
-                            ))}
-                          </div>
-                        </details>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <>
+              {activeView === 'signals' && renderSignals()}
+              {activeView === 'unknown' && renderUnknowns()}
+              {activeView === 'raw' && renderRaw()}
+              {activeView === 'groups' && renderGroups()}
+            </>
           )}
         </section>
 
-        <div className="mt-4 text-xs text-gray-500 flex items-center justify-between gap-4">
-          <span>Parser annotazioni v{data?.parser_version || 1}</span>
-          <span>{data?.data_scope === 'read_only_operational_history' ? 'Storico operativo in sola lettura' : ''}</span>
+        <div className="mt-4 text-xs text-gray-500 flex flex-wrap items-center justify-between gap-3">
+          <span>
+            Parser v{data?.parser_version || 1} / regole v{data?.ruleset_version || 1}
+          </span>
+          <span>
+            Gruppi pager v{grouping.rule_version || 1} / ricostruzioni non autoritative
+          </span>
         </div>
       </main>
     </div>

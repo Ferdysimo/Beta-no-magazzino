@@ -369,13 +369,28 @@ Report, magazzino o documenti reali senza una successiva implementazione
 esplicitamente approvata e testata.
 
 L'Osservatorio annotazioni paste legge ordini validi attivi e archiviati e usa
-lo stesso riconoscitore rigido di Report e Analisi. Estrae soltanto il testo
-successivo a una pasta gia riconosciuta; numeri ordine, pager e dischetti non
-sono annotazioni e vengono esclusi dalle frequenze. Se testo e numero convivono,
-resta soltanto il testo. Righe manuali, errate o `XL` restano escluse come nel
-comportamento operativo. Mostra frequenze, incidenza, paste, locali e riscontri
-per un intervallo massimo di un anno. Non salva nuovi dati: il contratto
-raw/normalizzato/versionato prepara l'acquisizione futura nella Memoria operativa.
+lo stesso riconoscitore rigido di Report e Analisi. Righe manuali, errate o `XL`
+restano escluse come nel comportamento operativo. Il parser semantico v3 separa:
+
+- testo sorgente, sempre conservato;
+- testo utile senza numeri;
+- pager, quantita e numeri contestuali;
+- segnali confermati (`TA`, `C`, `S`, `F`, `CHIUSA` e il codice formato `RIG`);
+- richieste letterali come `NO PEPE`, `SENZA GUANCIALE` e `BEN COTTA`;
+- frammenti ancora da interpretare, ai quali non viene assegnato un significato
+  inventato. `T`, finche non viene chiarito, resta esplicitamente sconosciuto.
+
+La pagina separa Segnali, Da interpretare, Frasi complete e Probabili comande.
+Espone sia il numero di paste coinvolte sia, quando esiste un pager affidabile,
+il numero di comande ricostruite. Una comanda probabile richiede stesso locale,
+giornata e pager, massimo 90 secondi tra righe adiacenti e numeri ordine distanti
+al massimo 8. La ricostruzione e dichiarata non autoritativa.
+
+Il Laboratorio resta in sola lettura e non salva o modifica ordini. Quando la
+Memoria operativa viene attivata, lo stesso parser condiviso registra osservazioni
+versionate nei fatti ordine e aggregati negli snapshot giornalieri. Gli snapshot
+usano il dizionario del locale valido in quella data, escludono gli ordini
+cancellati e mantengono il raw necessario a ricalcolare regole future.
 
 Lo Scanner documenti esegue OCR italiano nel browser su fotografie di DDT,
 fatture e note di credito. La foto non viene inviata al backend e gli asset OCR

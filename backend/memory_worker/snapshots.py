@@ -3,6 +3,15 @@ from datetime import date, datetime, time, timedelta, timezone
 from typing import Iterable, Optional
 from zoneinfo import ZoneInfo
 
+from annotation_semantics import (
+    ANNOTATION_PARSER_VERSION,
+    ANNOTATION_RULESET_VERSION,
+    PAGER_GROUPING_RULE_VERSION,
+    extract_pasta_annotation,
+    reconstruct_probable_pager_groups,
+    semantic_signal_key,
+)
+
 from .config import MemorySettings
 from .context import CONTEXT_VERSION, build_calendar_context
 from .sources import (
@@ -14,9 +23,8 @@ from .sources import (
 from .stores import MemoryMongoStore
 from .stores.mongo import classify_authenticated_roles
 
-
 ROME_TZ = ZoneInfo("Europe/Rome")
-SNAPSHOT_VERSION = 1
+SNAPSHOT_VERSION = 2
 MAX_FACTS_PER_DOMAIN = 10000
 
 
@@ -53,9 +61,7 @@ async def _next_automatic_business_date(
         limit=10000,
     )
     built_dates = {
-        item["business_date"]
-        for item in existing
-        if item.get("business_date")
+        item["business_date"] for item in existing if item.get("business_date")
     }
     candidate = first_date
     while candidate <= last_closed:
@@ -124,9 +130,7 @@ def _coverage_for_domain(
             stale.append(key)
     return {
         "status": (
-            "covered"
-            if not missing and not incomplete and not stale
-            else "partial"
+            "covered" if not missing and not incomplete and not stale else "partial"
         ),
         "expected_streams": list(stream_keys),
         "missing_watermarks": missing,
@@ -149,17 +153,14 @@ def _paste_summary(cash: Optional[dict]) -> dict:
     paste = cash.get("paste") or {}
     lines = paste.get("lines") or []
     by_code = Counter(
-        line["recognized_sigla"]
-        for line in lines
-        if line.get("recognized_sigla")
+        line["recognized_sigla"] for line in lines if line.get("recognized_sigla")
     )
     return {
         "status": "available",
         "total_count": paste.get("total_count"),
         "recognized_count": paste.get("recognized_count"),
         "manual_count": sum(
-            1 for line in lines
-            if line.get("price_source") == "manual"
+            1 for line in lines if line.get("price_source") == "manual"
         ),
         "missing_price_count": paste.get("missing_price_count"),
         "by_code": dict(sorted(by_code.items())),
@@ -178,18 +179,14 @@ def _beverage_summary(
     revenue = 0
     unknown_revenue = []
     for fact in facts:
-        code = str(
-            fact.get("beverage_code") or fact.get("sigla") or ""
-        ).strip().upper()
+        code = str(fact.get("beverage_code") or fact.get("sigla") or "").strip().upper()
         if not code:
             continue
         rows[code] = {
             "sold_quantity_decimal": fact.get("sold_quantity_decimal"),
             "revenue_cents": fact.get("revenue_cents"),
             "unit_price_cents": fact.get("unit_price_cents"),
-            "waste": (
-                (fact.get("inventory_fields") or {}).get("scarti")
-            ),
+            "waste": ((fact.get("inventory_fields") or {}).get("scarti")),
         }
         if fact.get("revenue_cents") is None:
             unknown_revenue.append(code)
@@ -201,11 +198,7 @@ def _beverage_summary(
         missing_codes = []
     else:
         missing_codes = sorted(expected_codes - observed_codes)
-        status = (
-            "complete"
-            if not missing_codes and not unknown_revenue
-            else "partial"
-        )
+        status = "complete" if not missing_codes and not unknown_revenue else "partial"
     return {
         "status": status,
         "applicable": applicable,
@@ -218,24 +211,26 @@ def _beverage_summary(
     }
 
 
+def _valid_order_states(
+    states: list[dict],
+    deletions: list[dict],
+) -> list[dict]:
+    deleted_entities = {
+        item.get("entity_key") for item in deletions if item.get("entity_key")
+    }
+    return [item for item in states if item.get("entity_key") not in deleted_entities]
+
+
 def _orders_summary(
     states: list[dict],
     deletions: list[dict],
     modifications: list[dict],
 ) -> dict:
+    valid = _valid_order_states(states, deletions)
     deleted_entities = {
-        item.get("entity_key")
-        for item in deletions
-        if item.get("entity_key")
+        item.get("entity_key") for item in deletions if item.get("entity_key")
     }
-    valid = [
-        item for item in states
-        if item.get("entity_key") not in deleted_entities
-    ]
-    status_counts = Counter(
-        str(item.get("status") or "unknown")
-        for item in valid
-    )
+    status_counts = Counter(str(item.get("status") or "unknown") for item in valid)
     return {
         "valid_count": len(valid),
         "deleted_count": len(deleted_entities),
@@ -248,15 +243,124 @@ def _orders_summary(
     }
 
 
+def _annotation_summary(
+    states: list[dict],
+    deletions: list[dict],
+    *,
+    pasta_codes: Optional[Iterable[str]] = None,
+    dictionary_source: str = "worker_default_codes",
+) -> dict:
+    valid = _valid_order_states(states, deletions)
+    recognized = []
+    for item in valid:
+        annotation = (
+            extract_pasta_annotation(
+                item.get("description") or "",
+                pasta_codes,
+            )
+            if pasta_codes is not None
+            else item.get("pasta_annotation")
+        )
+        if isinstance(annotation, dict):
+            recognized.append((item, annotation))
+    text_rows = [
+        item for item in recognized if (item[1].get("annotation_normalized") or "")
+    ]
+    signal_counts = Counter()
+    signal_metadata = {}
+    signal_pasta_counts = defaultdict(Counter)
+    unknown_counts = Counter()
+    semantic_status_counts = Counter()
+    observations = []
+
+    for state, annotation in recognized:
+        semantic_status_counts[str(annotation.get("semantic_status") or "unknown")] += 1
+        pasta_sigla = str(annotation.get("pasta_sigla") or "")
+        for signal in annotation.get("signals") or []:
+            key = semantic_signal_key(signal)
+            signal_counts[key] += 1
+            signal_pasta_counts[key][pasta_sigla] += 1
+            signal_metadata.setdefault(
+                key,
+                {
+                    "signal_key": key,
+                    "dimension": signal.get("dimension"),
+                    "code": signal.get("code"),
+                    "label": signal.get("label"),
+                    "certainty": signal.get("certainty"),
+                    "target": signal.get("target"),
+                },
+            )
+        unknown_counts.update(set(annotation.get("unknown_fragments") or []))
+        observations.append(
+            {
+                "restaurant_id": state.get("restaurant_id"),
+                "business_date": state.get("business_date"),
+                "occurred_at": state.get("occurred_at"),
+                "order_number": state.get("order_number"),
+                "order_id": state.get("order_id"),
+                "pasta_sigla": pasta_sigla,
+                "annotation": annotation,
+            }
+        )
+
+    grouping = reconstruct_probable_pager_groups(
+        observations,
+        max_examples=5,
+    )
+    signals = []
+    for key, count in signal_counts.most_common():
+        signals.append(
+            {
+                **signal_metadata[key],
+                "pasta_row_count": count,
+                "reconstructed_group_count": (
+                    grouping["signal_group_counts"].get(key, 0)
+                ),
+                "by_pasta": dict(signal_pasta_counts[key].most_common()),
+            }
+        )
+
+    return {
+        "parser_version": ANNOTATION_PARSER_VERSION,
+        "ruleset_version": ANNOTATION_RULESET_VERSION,
+        "valid_order_count": len(valid),
+        "recognized_pasta_row_count": len(recognized),
+        "text_annotation_row_count": len(text_rows),
+        "signalized_row_count": sum(
+            1 for _, annotation in recognized if (annotation.get("signals") or [])
+        ),
+        "unknown_text_row_count": sum(
+            1
+            for _, annotation in recognized
+            if (annotation.get("unknown_fragments") or [])
+        ),
+        "semantic_status_counts": dict(sorted(semantic_status_counts.items())),
+        "signals": signals,
+        "unknown_fragments": [
+            {"fragment": fragment, "pasta_row_count": count}
+            for fragment, count in unknown_counts.most_common()
+        ],
+        "pager_groups": grouping,
+        "quality": {
+            "final_valid_state_only": True,
+            "deleted_orders_excluded": True,
+            "pasta_dictionary_source": dictionary_source,
+            "restaurant_dictionary_overrides_applied": (
+                dictionary_source == "restaurant_override"
+            ),
+            "raw_descriptions_replayable": True,
+            "pager_groups_authoritative": False,
+        },
+    }
+
+
 def _request_summary(
     states: list[dict],
     disappearances: list[dict],
     movements: list[dict],
 ) -> dict:
-    statuses = Counter(
-        str(item.get("status") or "unknown")
-        for item in states
-    )
+    statuses = Counter(str(item.get("status") or "unknown") for item in states)
     requested = defaultdict(int)
     fulfilled = defaultdict(int)
     durations = []
@@ -288,9 +392,7 @@ def _request_summary(
         "fulfilled_by_product": dict(sorted(fulfilled.items())),
         "stock_delta_by_product": dict(sorted(movement_delta.items())),
         "average_fulfillment_seconds": (
-            round(sum(durations) / len(durations))
-            if durations
-            else None
+            round(sum(durations) / len(durations)) if durations else None
         ),
         "quality": {
             "fulfilled_is_logistics_not_real_consumption": True,
@@ -323,6 +425,9 @@ async def _restaurant_snapshot(
     business_date: str,
     restaurant_id: str,
     configuration: Optional[dict],
+    pasta_dictionary: Optional[dict],
+    default_pasta_rule: Optional[dict],
+    annotation_rule: Optional[dict],
     context_id: str,
     watermarks: dict[str, dict],
     expected_beverage_codes: set[str],
@@ -435,22 +540,35 @@ async def _restaurant_snapshot(
         },
     )
 
+    if pasta_dictionary is not None:
+        annotation_pasta_codes = {
+            str(item.get("code") or "").strip().upper()
+            for item in pasta_dictionary.get("entries") or []
+            if item.get("code")
+        }
+        annotation_dictionary_source = "restaurant_override"
+    elif default_pasta_rule is not None:
+        annotation_pasta_codes = {
+            str(item.get("code") or "").strip().upper()
+            for item in default_pasta_rule.get("entries") or []
+            if item.get("code")
+        }
+        annotation_dictionary_source = "worker_default_rule"
+    else:
+        annotation_pasta_codes = None
+        annotation_dictionary_source = "worker_default_codes"
+
     username = str((configuration or {}).get("username") or "")
     location = str((configuration or {}).get("location") or "")
     beverage_applicable = (
-        username.casefold() == "flaminio"
-        or location.casefold() == "flaminio"
+        username.casefold() == "flaminio" or location.casefold() == "flaminio"
     )
     beverage_summary = _beverage_summary(
         beverages,
         expected_codes=expected_beverage_codes,
         applicable=beverage_applicable,
     )
-    cash_before_beverages = (
-        cash.get("cash_before_beverages_cents")
-        if cash
-        else None
-    )
+    cash_before_beverages = cash.get("cash_before_beverages_cents") if cash else None
     cash_sera = None
     if cash_before_beverages is not None and beverage_summary["status"] in {
         "complete",
@@ -485,46 +603,68 @@ async def _restaurant_snapshot(
     }
     gaps = []
     if configuration is None:
-        gaps.append({
-            "code": "restaurant_configuration_missing",
-            "severity": "error",
-            "details": {},
-        })
+        gaps.append(
+            {
+                "code": "restaurant_configuration_missing",
+                "severity": "error",
+                "details": {},
+            }
+        )
     if cash is None:
-        gaps.append({
-            "code": "cash_daily_missing",
-            "severity": "error",
-            "details": {},
-        })
+        gaps.append(
+            {
+                "code": "cash_daily_missing",
+                "severity": "error",
+                "details": {},
+            }
+        )
     if beverage_summary["status"] == "partial":
-        gaps.append({
-            "code": "beverage_daily_partial",
-            "severity": "warning",
-            "details": {
-                "missing_codes": beverage_summary["missing_codes"],
-                "unknown_revenue_codes": beverage_summary[
-                    "unknown_revenue_codes"
-                ],
-            },
-        })
+        gaps.append(
+            {
+                "code": "beverage_daily_partial",
+                "severity": "warning",
+                "details": {
+                    "missing_codes": beverage_summary["missing_codes"],
+                    "unknown_revenue_codes": beverage_summary["unknown_revenue_codes"],
+                },
+            }
+        )
     for domain, coverage in domain_coverage.items():
         if coverage["status"] != "covered":
-            gaps.append({
-                "code": f"{domain}_coverage_partial",
-                "severity": "warning",
-                "details": coverage,
-            })
+            gaps.append(
+                {
+                    "code": f"{domain}_coverage_partial",
+                    "severity": "warning",
+                    "details": coverage,
+                }
+            )
     activation = epoch["activated_at"].astimezone(ROME_TZ)
     if activation.date().isoformat() == business_date and activation.time() > time.min:
-        gaps.append({
-            "code": "epoch_started_during_business_day",
-            "severity": "warning",
-            "details": {"activated_at": activation.isoformat()},
-        })
+        gaps.append(
+            {
+                "code": "epoch_started_during_business_day",
+                "severity": "warning",
+                "details": {"activated_at": activation.isoformat()},
+            }
+        )
     coverage_status = "complete" if not gaps else "partial"
 
     source_facts = [
-        *_fact_references("memory_configuration_versions", [configuration] if configuration else []),
+        *_fact_references(
+            "memory_configuration_versions", [configuration] if configuration else []
+        ),
+        *_fact_references(
+            "memory_configuration_versions",
+            [pasta_dictionary] if pasta_dictionary else [],
+        ),
+        *_fact_references(
+            "memory_configuration_versions",
+            [default_pasta_rule] if default_pasta_rule else [],
+        ),
+        *_fact_references(
+            "memory_configuration_versions",
+            [annotation_rule] if annotation_rule else [],
+        ),
         *_fact_references("memory_report_facts", cash_rows),
         *_fact_references("memory_report_facts", beverages),
         *_fact_references("memory_report_facts", audit),
@@ -555,11 +695,18 @@ async def _restaurant_snapshot(
             "location": (configuration or {}).get("location"),
             "boiler_count": (configuration or {}).get("boiler_count"),
             "report_code": (configuration or {}).get("report_code"),
+            "pasta_dictionary_fact_id": (pasta_dictionary or {}).get("id"),
         },
         "orders": _orders_summary(
             order_states,
             order_deletions,
             order_modifications,
+        ),
+        "pasta_annotations": _annotation_summary(
+            order_states,
+            order_deletions,
+            pasta_codes=annotation_pasta_codes,
+            dictionary_source=annotation_dictionary_source,
         ),
         "paste": _paste_summary(cash),
         "cash": {
@@ -569,24 +716,19 @@ async def _restaurant_snapshot(
                 ((cash or {}).get("spicci") or {}).get("total_cents")
             ),
             "cassetto_total_cents": (
-                ((cash or {}).get("cassetto") or {}).get(
-                    "stock_total_cents"
-                )
+                ((cash or {}).get("cassetto") or {}).get("stock_total_cents")
             ),
             "cash_before_beverages_cents": cash_before_beverages,
             "cash_sera_cents": cash_sera,
             "cash_sera_status": (
-                "complete"
-                if cash_sera is not None
-                else "unavailable"
+                "complete" if cash_sera is not None else "unavailable"
             ),
         },
         "beverages": beverage_summary,
         "report_audit": {
             "event_count": len(audit),
             "manual_change_count": sum(
-                int(item.get("changes_count") or 1)
-                for item in audit
+                int(item.get("changes_count") or 1) for item in audit
             ),
         },
         "warehouse": {
@@ -610,6 +752,18 @@ async def _restaurant_snapshot(
                 {"name": "snapshot", "version": SNAPSHOT_VERSION},
                 {"name": "calendar_context", "version": CONTEXT_VERSION},
                 {"name": "cash_sera", "version": 1},
+                {
+                    "name": "pasta_annotation_parser",
+                    "version": ANNOTATION_PARSER_VERSION,
+                },
+                {
+                    "name": "pasta_annotation_ruleset",
+                    "version": ANNOTATION_RULESET_VERSION,
+                },
+                {
+                    "name": "pager_grouping",
+                    "version": PAGER_GROUPING_RULE_VERSION,
+                },
             ],
         },
     }
@@ -654,8 +808,7 @@ async def _warehouse_global_snapshot(
         },
     )
     meaning_counts = Counter(
-        str(item.get("movement_meaning") or "unknown")
-        for item in movements
+        str(item.get("movement_meaning") or "unknown") for item in movements
     )
     delta_by_product = defaultdict(int)
     for item in movements:
@@ -669,11 +822,13 @@ async def _warehouse_global_snapshot(
     )
     gaps = []
     if coverage["status"] != "covered":
-        gaps.append({
-            "code": "warehouse_coverage_partial",
-            "severity": "warning",
-            "details": coverage,
-        })
+        gaps.append(
+            {
+                "code": "warehouse_coverage_partial",
+                "severity": "warning",
+                "details": coverage,
+            }
+        )
     facts = [
         *_fact_references("memory_warehouse_facts", movements),
         *_fact_references("memory_warehouse_facts", loads),
@@ -724,11 +879,7 @@ async def build_daily_snapshots(
     business_date: Optional[str] = None,
 ) -> dict:
     settings.require_collection_activation()
-    selected_date = (
-        _closed_business_date(business_date)
-        if business_date
-        else None
-    )
+    selected_date = _closed_business_date(business_date) if business_date else None
     store = MemoryMongoStore(
         settings.memory_mongo_url,
         settings.memory_db_name,
@@ -741,13 +892,8 @@ async def build_daily_snapshots(
             await store.connection_status(),
             settings.memory_db_name,
         )
-        if (
-            target_roles["authentication_visible"]
-            and not target_roles["write_capable"]
-        ):
-            raise RuntimeError(
-                "La credenziale Mongo Memoria non puo scrivere snapshot"
-            )
+        if target_roles["authentication_visible"] and not target_roles["write_capable"]:
+            raise RuntimeError("La credenziale Mongo Memoria non puo scrivere snapshot")
         if (
             not target_roles["authentication_visible"]
             and not settings.allow_unverified_mongo_roles
@@ -757,10 +903,6 @@ async def build_daily_snapshots(
         activation = datetime.fromisoformat(
             settings.activation_epoch_utc.replace("Z", "+00:00")
         ).astimezone(timezone.utc)
-        if date.fromisoformat(selected_date) < activation.astimezone(
-            ROME_TZ
-        ).date():
-            raise ValueError("La giornata precede il momento zero")
         epoch = await store.ensure_epoch(
             source_database=settings.source_db_name,
             activated_at=activation,
@@ -781,6 +923,8 @@ async def build_daily_snapshots(
                     "snapshots": [],
                     "collections": await store.collection_counts(),
                 }
+        if date.fromisoformat(selected_date) < activation.astimezone(ROME_TZ).date():
+            raise ValueError("La giornata precede il momento zero")
         owner = await store.acquire_collector_lease(
             epoch_id=epoch["id"],
             collector=f"snapshots:{selected_date}",
@@ -800,28 +944,60 @@ async def build_daily_snapshots(
                 {"epoch_id": epoch["id"]},
             )
             watermarks = {
-                item["source"]: item
-                for item in watermark_docs
-                if item.get("source")
+                item["source"]: item for item in watermark_docs if item.get("source")
             }
             configurations = await _read(
                 store,
                 "memory_configuration_versions",
-                _state_at_end_of_day({
-                    "epoch_id": epoch["id"],
-                    "fact_kind": "restaurant_configuration_state",
-                }, selected_date),
+                _state_at_end_of_day(
+                    {
+                        "epoch_id": epoch["id"],
+                        "fact_kind": "restaurant_configuration_state",
+                    },
+                    selected_date,
+                ),
             )
             config_by_id = {
                 item["restaurant_id"]: item
                 for item in configurations
                 if item.get("restaurant_id")
             }
+            pasta_dictionaries = await _read(
+                store,
+                "memory_configuration_versions",
+                _state_at_end_of_day(
+                    {
+                        "epoch_id": epoch["id"],
+                        "fact_kind": "pasta_dictionary_state",
+                    },
+                    selected_date,
+                ),
+            )
+            pasta_dictionary_by_id = {
+                item["restaurant_id"]: item
+                for item in pasta_dictionaries
+                if item.get("restaurant_id")
+            }
+            memory_rules = await _read(
+                store,
+                "memory_configuration_versions",
+                _state_at_end_of_day(
+                    {
+                        "epoch_id": epoch["id"],
+                        "fact_kind": "memory_rule_state",
+                    },
+                    selected_date,
+                ),
+            )
+            memory_rules_by_kind = {
+                item["rule_kind"]: item
+                for item in memory_rules
+                if item.get("rule_kind")
+            }
             candidate_ids = {
                 item["restaurant_id"]
                 for item in configurations
-                if item.get("role") == "restaurant"
-                and item.get("restaurant_id")
+                if item.get("role") == "restaurant" and item.get("restaurant_id")
             }
             for collection in (
                 "memory_order_facts",
@@ -839,17 +1015,18 @@ async def build_daily_snapshots(
                     limit=MAX_FACTS_PER_DOMAIN,
                 )
                 candidate_ids.update(
-                    item["restaurant_id"]
-                    for item in rows
-                    if item.get("restaurant_id")
+                    item["restaurant_id"] for item in rows if item.get("restaurant_id")
                 )
             beverage_catalog = await _read(
                 store,
                 "memory_configuration_versions",
-                _state_at_end_of_day({
-                    "epoch_id": epoch["id"],
-                    "fact_kind": "beverage_catalog_state",
-                }, selected_date),
+                _state_at_end_of_day(
+                    {
+                        "epoch_id": epoch["id"],
+                        "fact_kind": "beverage_catalog_state",
+                    },
+                    selected_date,
+                ),
             )
             expected_beverage_codes = {
                 str(item.get("beverage_code") or "").strip().upper()
@@ -869,6 +1046,9 @@ async def build_daily_snapshots(
                     business_date=selected_date,
                     restaurant_id=restaurant_id,
                     configuration=config_by_id.get(restaurant_id),
+                    pasta_dictionary=pasta_dictionary_by_id.get(restaurant_id),
+                    default_pasta_rule=memory_rules_by_kind.get("default_pasta_prices"),
+                    annotation_rule=memory_rules_by_kind.get("annotation_semantics"),
                     context_id=context_result["id"],
                     watermarks=watermarks,
                     expected_beverage_codes=expected_beverage_codes,
@@ -896,13 +1076,15 @@ async def build_daily_snapshots(
                 status = snapshot["coverage"]["status"]
                 complete += int(status == "complete")
                 partial += int(status != "complete")
-                results.append({
-                    "scope_type": "restaurant",
-                    "scope_id": restaurant_id,
-                    "status": status,
-                    **saved,
-                    "gaps": gap_result,
-                })
+                results.append(
+                    {
+                        "scope_type": "restaurant",
+                        "scope_id": restaurant_id,
+                        "status": status,
+                        **saved,
+                        "gaps": gap_result,
+                    }
+                )
 
             global_snapshot, global_gaps = await _warehouse_global_snapshot(
                 store,
@@ -933,13 +1115,15 @@ async def build_daily_snapshots(
             global_status = global_snapshot["coverage"]["status"]
             complete += int(global_status == "complete")
             partial += int(global_status != "complete")
-            results.append({
-                "scope_type": "warehouse_global",
-                "scope_id": "warehouse",
-                "status": global_status,
-                **global_saved,
-                "gaps": global_gap_result,
-            })
+            results.append(
+                {
+                    "scope_type": "warehouse_global",
+                    "scope_id": "warehouse",
+                    "status": global_status,
+                    **global_saved,
+                    "gaps": global_gap_result,
+                }
+            )
         finally:
             await store.release_collector_lease(
                 epoch_id=epoch["id"],

@@ -14,3 +14,45 @@ export const filterPastaAnnotations = (annotations, search, pasta) => {
     return matchesSearch && matchesPasta;
   });
 };
+
+const hasPasta = (item, pasta) => (
+  !pasta || Number(item?.pasta_counts?.[pasta] || 0) > 0
+);
+
+export const filterSemanticSignals = (signals, search, pasta) => {
+  const normalizedSearch = String(search || '').trim().toUpperCase();
+  return (signals || []).filter((item) => {
+    const sourceTerms = (item.source_terms || []).map(term => term.value);
+    const matchesSearch = !normalizedSearch || [
+      item.label,
+      item.dimension,
+      item.code,
+      item.target,
+      ...sourceTerms,
+    ].some(value => String(value || '').toUpperCase().includes(normalizedSearch));
+    return matchesSearch && hasPasta(item, pasta);
+  });
+};
+
+export const filterUnknownFragments = (fragments, search, pasta) => {
+  const normalizedSearch = String(search || '').trim().toUpperCase();
+  return (fragments || []).filter(item => (
+    (!normalizedSearch
+      || String(item.fragment || '').toUpperCase().includes(normalizedSearch))
+    && hasPasta(item, pasta)
+  ));
+};
+
+export const filterPagerGroups = (groups, search, pasta) => {
+  const normalizedSearch = String(search || '').trim().toUpperCase();
+  return (groups || []).filter((item) => {
+    const matchesSearch = !normalizedSearch || [
+      item.location,
+      item.business_date,
+      item.pager,
+      ...(item.annotations || []),
+    ].some(value => String(value ?? '').toUpperCase().includes(normalizedSearch));
+    const matchesPasta = !pasta || Number(item.pasta_counts?.[pasta] || 0) > 0;
+    return matchesSearch && matchesPasta;
+  });
+};

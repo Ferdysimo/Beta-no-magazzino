@@ -238,8 +238,8 @@ def test_phase34_collectors_version_disappearances_and_never_write_source():
 
             first_configuration = await collect_configuration_once(settings)
             assert first_configuration["totals"] == {
-                "seen": 6,
-                "inserted": 5,
+                "seen": 7,
+                "inserted": 6,
                 "duplicates": 0,
                 "quarantined": 1,
                 "disappeared": 0,
