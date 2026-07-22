@@ -178,6 +178,17 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-22 10:02 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix | refactor | test | docs
+**File toccati**:
+- `/app/backend/app/services/pasta_annotations.py`
+- `/app/backend/tests/test_pasta_annotations_lab.py`
+- `/app/frontend/src/pages/PastaAnnotationsLabPage.js`
+- `/app/memory/{PRD,OPERATIONAL_MEMORY_DESIGN,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Portato il parser Annotazioni paste alla versione 2: i numeri ordine/pager/dischetto/disco non vengono piu conteggiati come annotazioni. Nelle comande miste viene conservato solo il testo utile (`CARB 12 NO PEPE` diventa `NO PEPE`), mentre la coda sorgente resta disponibile per tracciabilita futura senza modificare gli ordini originali. Aggiornate le etichette della pagina e il contratto della futura Memoria operativa.
+**Testato**: si (metodo: 29 test mirati del parser; simulazione con 20 pager numerici e 2 annotazioni testuali; suite backend completa `139 passed, 36 skipped`; suite frontend `18 passed`; build React produzione completata)
+**Note per il prossimo agente**: il calcolo del Laboratorio e in sola lettura e avviene a ogni richiesta, quindi il filtro si applica retroattivamente anche allo storico gia presente. Accesso e route restano invariati e riservati a Simone; nessuna migrazione dati necessaria.
+
 ### [2026-07-21 11:55 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: frontend | ux | test
 **File toccati**:

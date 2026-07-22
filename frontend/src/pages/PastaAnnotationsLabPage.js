@@ -123,7 +123,7 @@ const PastaAnnotationsLabPage = () => {
             <h1 className="font-heading text-2xl sm:text-3xl font-bold text-gray-950 uppercase">
               Annotazioni paste
             </h1>
-            <p className="text-sm text-gray-500 mt-1">Ordini validi e riconosciuti</p>
+            <p className="text-sm text-gray-500 mt-1">Solo testo utile · numeri pager esclusi</p>
           </div>
           <button
             type="button"
@@ -195,7 +195,7 @@ const PastaAnnotationsLabPage = () => {
             <p className="text-2xl font-bold text-gray-950 mt-1">{summary.recognized_orders || 0}</p>
           </div>
           <div className="py-4 px-3 lg:px-5 lg:border-r border-gray-300">
-            <p className="text-xs font-bold uppercase text-gray-500">Con annotazione</p>
+            <p className="text-xs font-bold uppercase text-gray-500">Con annotazione testuale</p>
             <p className="text-2xl font-bold text-gray-950 mt-1">{summary.annotated_orders || 0}</p>
           </div>
           <div className="py-4 pr-3 lg:px-5 border-r border-gray-300 border-t lg:border-t-0">

@@ -352,18 +352,21 @@ Le annotazioni successive a una pasta riconosciuta sono un fatto separato:
 ```json
 {
   "pasta_sigla": "CARB",
-  "annotation_raw": "No  pepe",
+  "annotation_source_raw": "12 No  pepe",
+  "annotation_raw": "No pepe",
   "annotation_normalized": "NO PEPE",
-  "annotation_parser_version": 1
+  "annotation_parser_version": 2
 }
 ```
 
 Il riconoscitore pasta operativo resta autoritativo e volutamente rigido. Una
 riga manuale, errata, ambigua o esclusa come `XL` non genera annotazioni. La
-normalizzazione corregge soltanto rappresentazione, spazi e maiuscole: non
-indovina errori e non unisce automaticamente significati come `NO PEPE` e
-`SENZA PEPE`. Il Laboratorio puo calcolare questi fatti in sola lettura; la
-Memoria futura li conservera versionati insieme alla descrizione originale.
+normalizzazione esclude numeri ordine/pager e relativi marcatori, poi corregge
+soltanto rappresentazione, spazi e maiuscole: non indovina errori e non unisce
+automaticamente significati come `NO PEPE` e `SENZA PEPE`. Un valore composto
+solo da numeri non genera un'annotazione. Il Laboratorio puo calcolare questi
+fatti in sola lettura; la Memoria futura conservera sia la coda sorgente sia il
+testo pulito, versionati insieme alla descrizione originale.
 
 ### 11.2 Denaro e formule
 

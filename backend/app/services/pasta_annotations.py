@@ -5,14 +5,33 @@ from typing import Dict, Iterable, Optional
 from app.services.report import _pasta_recognized_sigla
 
 
-PASTA_ANNOTATION_PARSER_VERSION = 1
-_LEADING_ANNOTATION_SEPARATOR = re.compile(r"^[\s\-:;,/|]+")
+PASTA_ANNOTATION_PARSER_VERSION = 2
+_LEADING_ANNOTATION_SEPARATOR = re.compile(r"^[\s\-:;,/|#°º]+")
+_TRAILING_ANNOTATION_SEPARATOR = re.compile(r"[\s\-:;,/|#°º]+$")
+_PAGER_NUMBER = re.compile(
+    r"(?<!\w)(?:(?:PAGER|DISCHETTO|DISCO)\s*(?:N(?:UM(?:ERO)?)?|NR)?|"
+    r"N(?:UM(?:ERO)?)?|NR)\s*[°º#.:/\-]*\s*\d+(?!\w)",
+    re.IGNORECASE,
+)
+_NUMBER = re.compile(r"\d+(?:[.,]\d+)*(?:[xX])?")
+
+
+def clean_pasta_annotation_text(value: str) -> str:
+    """Keep only meaningful written annotation text, excluding pager numbers."""
+    cleaned = str(value or "").strip()
+    cleaned = _PAGER_NUMBER.sub(" ", cleaned)
+    cleaned = _NUMBER.sub(" ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = _LEADING_ANNOTATION_SEPARATOR.sub("", cleaned)
+    cleaned = _TRAILING_ANNOTATION_SEPARATOR.sub("", cleaned).strip()
+    if not any(character.isalpha() for character in cleaned):
+        return ""
+    return cleaned
 
 
 def normalize_pasta_annotation(value: str) -> str:
     """Normalize presentation differences without guessing meaning or spelling."""
-    cleaned = _LEADING_ANNOTATION_SEPARATOR.sub("", str(value or "").strip())
-    return re.sub(r"\s+", " ", cleaned).strip().upper()
+    return clean_pasta_annotation_text(value).upper()
 
 
 def extract_pasta_annotation(
@@ -33,12 +52,14 @@ def extract_pasta_annotation(
     if not match:
         return None
 
-    annotation_raw = _LEADING_ANNOTATION_SEPARATOR.sub(
+    annotation_source_raw = _LEADING_ANNOTATION_SEPARATOR.sub(
         "",
         raw_description[match.end():].strip(),
     ).strip()
+    annotation_raw = clean_pasta_annotation_text(annotation_source_raw)
     return {
         "pasta_sigla": recognized_sigla,
+        "annotation_source_raw": annotation_source_raw,
         "annotation_raw": annotation_raw,
         "annotation_normalized": normalize_pasta_annotation(annotation_raw),
         "parser_version": PASTA_ANNOTATION_PARSER_VERSION,
@@ -111,6 +132,7 @@ def build_pasta_annotation_stats(
             "location": location,
             "business_date": business_date,
             "pasta_sigla": sigla,
+            "annotation_source_raw": extracted["annotation_source_raw"],
             "annotation_raw": extracted["annotation_raw"],
             "order_id": doc.get("id"),
             "order_number": doc.get("order_number"),

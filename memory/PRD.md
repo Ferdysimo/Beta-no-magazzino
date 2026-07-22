@@ -370,11 +370,12 @@ esplicitamente approvata e testata.
 
 L'Osservatorio annotazioni paste legge ordini validi attivi e archiviati e usa
 lo stesso riconoscitore rigido di Report e Analisi. Estrae soltanto il testo
-successivo a una pasta gia riconosciuta; righe manuali, errate o `XL` restano
-escluse come nel comportamento operativo. Mostra frequenze, incidenza, paste,
-locali e riscontri per un intervallo massimo di un anno. Non salva nuovi dati:
-il contratto raw/normalizzato/versionato prepara l'acquisizione futura nella
-Memoria operativa.
+successivo a una pasta gia riconosciuta; numeri ordine, pager e dischetti non
+sono annotazioni e vengono esclusi dalle frequenze. Se testo e numero convivono,
+resta soltanto il testo. Righe manuali, errate o `XL` restano escluse come nel
+comportamento operativo. Mostra frequenze, incidenza, paste, locali e riscontri
+per un intervallo massimo di un anno. Non salva nuovi dati: il contratto
+raw/normalizzato/versionato prepara l'acquisizione futura nella Memoria operativa.
 
 Lo Scanner documenti esegue OCR italiano nel browser su fotografie di DDT,
 fatture e note di credito. La foto non viene inviata al backend e gli asset OCR
