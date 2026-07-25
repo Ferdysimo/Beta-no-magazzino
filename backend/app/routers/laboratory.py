@@ -2,6 +2,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from starlette.concurrency import run_in_threadpool
 
 from app.core.database import db
 from app.core.security import verify_token
@@ -244,14 +245,16 @@ async def get_pasta_annotations_lab(
     for rid in restaurant_ids:
         fallback_dictionaries[rid] = await _get_pasta_dict_for(rid)
 
-    result = build_pasta_annotation_stats(
+    result = await run_in_threadpool(
+        build_pasta_annotation_stats,
         canonical_orders.values(),
         dictionaries_by_key=dictionaries_by_key,
         fallback_dictionaries=fallback_dictionaries,
         locations_by_id=locations_by_id,
         target_aliases=learning_state["alias_map"],
     )
-    suggestions = build_pasta_annotation_suggestions(
+    suggestions = await run_in_threadpool(
+        build_pasta_annotation_suggestions,
         result["signals"],
         dismissed_pair_keys={
             item.get("pair_key")

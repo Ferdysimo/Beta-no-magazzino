@@ -178,6 +178,17 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-25 05:17 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix | performance | test
+**File toccati**:
+- `/app/backend/app/routers/laboratory.py`
+- `/app/backend/app/services/pasta_annotation_learning.py`
+- `/app/backend/tests/test_pasta_annotation_learning.py`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Eliminato il blocco del backend osservato dopo una decisione sulle annotazioni (`/api/lab/pasta-annotations` fino a 126 secondi). Il generatore non confronta piu ogni termine con tutti gli altri: seleziona candidati per contesto, vicinanza lessicale, vocabolario fisso e firme di modifica a un carattere, mantenendo la decisione umana e le stesse soglie conservative. Statistiche e suggerimenti vengono inoltre calcolati nel thread pool, cosi il lavoro del Laboratorio non blocca ordini, Cassa, API e WebSocket serviti dall'event loop.
+**Testato**: si (metodo: `58 passed` sui test annotazioni/Laboratorio; benchmark sintetico con 1.000 profili sceso da 26,6 s e circa 500.000 confronti a 0,56 s e 12.117 confronti; coperti limite computazionale, abbreviazione e refuso sulla prima lettera)
+**Note per il prossimo agente**: Il limite e intenzionale per proteggere l'unico worker Uvicorn da calcoli CPU quadratici. Non reintrodurre scansioni all-pairs senza esecuzione fuori processo o indice dedicato.
+
 ### [2026-07-25 04:38 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: feature | architecture | security | test | docs
 **File toccati**:

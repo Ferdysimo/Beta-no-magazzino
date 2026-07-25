@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.services import pasta_annotation_learning
 from app.services.pasta_annotation_learning import (
     build_pasta_annotation_suggestions,
     delete_pasta_annotation_decision,
@@ -128,6 +129,48 @@ def test_dismissed_pair_is_not_suggested_again():
         signals,
         dismissed_pair_keys={pair_key},
     ) == []
+
+
+def test_suggestion_generation_bounds_fuzzy_comparisons(monkeypatch):
+    calls = 0
+    original_similarity = pasta_annotation_learning._similarity
+
+    def counted_similarity(left, right):
+        nonlocal calls
+        calls += 1
+        return original_similarity(left, right)
+
+    monkeypatch.setattr(
+        pasta_annotation_learning,
+        "_similarity",
+        counted_similarity,
+    )
+    signals = [
+        _signal(
+            f"GUANCIALEVARIANTE{chr(65 + first)}{chr(65 + second)}",
+            1,
+            source=f"NO GUANCIALE VARIANTE {first} {second}",
+        )
+        for first in range(26)
+        for second in range(26)
+    ]
+
+    build_pasta_annotation_suggestions(signals)
+
+    assert calls < 15000
+
+
+def test_first_character_typo_remains_a_candidate():
+    signals = [
+        _signal("GUANCIALE", 40, source="NO GUANCIALE"),
+        _signal("HUANCIALE", 2, source="NO HUANCIALE"),
+    ]
+
+    suggestions = build_pasta_annotation_suggestions(signals)
+
+    assert len(suggestions) == 1
+    assert suggestions[0]["suggested_alias"] == "HUANCIALE"
+    assert suggestions[0]["suggested_canonical"] == "GUANCIALE"
 
 
 def test_same_decision_persists_an_alias_and_can_be_undone():

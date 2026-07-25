@@ -1,6 +1,6 @@
 import hashlib
 import uuid
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from typing import Iterable
@@ -16,6 +16,8 @@ MAX_LEARNED_ALIASES = 500
 MAX_DISMISSED_PAIRS = 2000
 MAX_SUGGESTIONS = 20
 MAX_SUGGESTION_TARGET_PROFILES = 1000
+SUGGESTION_NEIGHBOR_WINDOW = 12
+MAX_DELETION_SIGNATURE_BUCKET = 16
 PASTA_ANNOTATION_LEARNING_VERSION = 1
 
 
@@ -178,6 +180,59 @@ def _preferred_canonical(left: dict, right: dict) -> tuple[str, str]:
     return canonical, alias
 
 
+def _deletion_signatures(target: str) -> set[str]:
+    compact = target.replace(" ", "")
+    if len(compact) < 4:
+        return {compact}
+    return {
+        compact[:index] + compact[index + 1 :]
+        for index in range(len(compact))
+    }
+
+
+def _suggestion_candidate_pairs(profiles: dict[str, dict]) -> set[tuple[str, str]]:
+    """Bound fuzzy comparisons while retaining nearby spellings and abbreviations."""
+    targets_by_context = defaultdict(set)
+    for target, profile in profiles.items():
+        for context in profile["contexts"]:
+            targets_by_context[context].add(target)
+
+    candidates = set()
+    static_canonicals = annotation_target_canonicals()
+    for context_targets in targets_by_context.values():
+        ordered = sorted(context_targets)
+
+        # Prefixes and abbreviations stay close in lexical order.
+        for index, left in enumerate(ordered):
+            for right in ordered[
+                index + 1 : index + 1 + SUGGESTION_NEIGHBOR_WINDOW
+            ]:
+                candidates.add((left, right))
+
+        # Always compare observed variants against fixed vocabulary.
+        fixed_targets = sorted(static_canonicals & context_targets)
+        for target in ordered:
+            for fixed_target in fixed_targets:
+                if target != fixed_target:
+                    candidates.add(tuple(sorted((target, fixed_target))))
+
+        # One-character insertions, deletions and substitutions share a deletion
+        # signature even when their first character differs.
+        targets_by_signature = defaultdict(set)
+        for target in ordered:
+            for signature in _deletion_signatures(target):
+                targets_by_signature[signature].add(target)
+        for signature_targets in targets_by_signature.values():
+            if not 2 <= len(signature_targets) <= MAX_DELETION_SIGNATURE_BUCKET:
+                continue
+            signature_ordered = sorted(signature_targets)
+            for index, left in enumerate(signature_ordered):
+                for right in signature_ordered[index + 1 :]:
+                    candidates.add((left, right))
+
+    return candidates
+
+
 def build_pasta_annotation_suggestions(
     signals: Iterable[dict],
     *,
@@ -185,46 +240,44 @@ def build_pasta_annotation_suggestions(
     max_suggestions: int = MAX_SUGGESTIONS,
 ) -> list[dict]:
     profiles = _target_profiles(signals)
-    values = [
-        item["target"]
-        for item in sorted(
-            profiles.values(),
-            key=lambda item: (-item["count"], item["target"]),
-        )[:MAX_SUGGESTION_TARGET_PROFILES]
-    ]
-    values.sort()
+    selected_profiles = sorted(
+        profiles.values(),
+        key=lambda item: (-item["count"], item["target"]),
+    )[:MAX_SUGGESTION_TARGET_PROFILES]
+    selected_profiles_by_target = {
+        item["target"]: item for item in selected_profiles
+    }
     dismissed = set(dismissed_pair_keys or [])
     static_canonicals = annotation_target_canonicals()
     suggestions = []
 
-    for left_index, left_target in enumerate(values):
-        left = profiles[left_target]
-        for right_target in values[left_index + 1 :]:
-            right = profiles[right_target]
-            shared_contexts = sorted(left["contexts"] & right["contexts"])
-            if not shared_contexts:
-                continue
-            if left_target in static_canonicals and right_target in static_canonicals:
-                continue
-            pair_key = pasta_annotation_pair_key(left_target, right_target)
-            if pair_key in dismissed:
-                continue
-            score, reason = _similarity(left_target, right_target)
-            if not score:
-                continue
-            canonical, alias = _preferred_canonical(left, right)
-            suggestions.append(
-                {
-                    "id": pair_key,
-                    "left": _profile_payload(left),
-                    "right": _profile_payload(right),
-                    "suggested_canonical": canonical,
-                    "suggested_alias": alias,
-                    "similarity_percent": round(score * 100),
-                    "reason": reason,
-                    "shared_contexts": shared_contexts,
-                }
-            )
+    for left_target, right_target in sorted(
+        _suggestion_candidate_pairs(selected_profiles_by_target)
+    ):
+        left = selected_profiles_by_target[left_target]
+        right = selected_profiles_by_target[right_target]
+        shared_contexts = sorted(left["contexts"] & right["contexts"])
+        if left_target in static_canonicals and right_target in static_canonicals:
+            continue
+        pair_key = pasta_annotation_pair_key(left_target, right_target)
+        if pair_key in dismissed:
+            continue
+        score, reason = _similarity(left_target, right_target)
+        if not score:
+            continue
+        canonical, alias = _preferred_canonical(left, right)
+        suggestions.append(
+            {
+                "id": pair_key,
+                "left": _profile_payload(left),
+                "right": _profile_payload(right),
+                "suggested_canonical": canonical,
+                "suggested_alias": alias,
+                "similarity_percent": round(score * 100),
+                "reason": reason,
+                "shared_contexts": shared_contexts,
+            }
+        )
 
     suggestions.sort(
         key=lambda item: (
