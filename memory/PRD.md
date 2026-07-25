@@ -377,10 +377,16 @@ restano escluse come nel comportamento operativo. Il parser semantico v3 separa:
 - pager, quantita e numeri contestuali;
 - segnali confermati (`TA`, `C`, `S`, `F`, `CHIUSA` e il codice formato `RIG`);
 - richieste letterali come `NO PEPE`, `SENZA GUANCIALE` e `BEN COTTA`;
+- bersagli equivalenti confermati tramite allowlist versionata: per esempio
+  `NO GUANC`, `NO GUANCIALE` e `SENZA GUANCIALE` alimentano lo stesso concetto
+  `Senza guanciale`, mantenendo visibili forme sorgente e conteggi;
 - frammenti ancora da interpretare, ai quali non viene assegnato un significato
   inventato. `T`, finche non viene chiarito, resta esplicitamente sconosciuto.
 
 La pagina separa Segnali, Da interpretare, Frasi complete e Probabili comande.
+I Segnali espongono le varianti effettivamente scritte sotto il concetto
+canonico. Non viene applicato fuzzy matching automatico: un alias entra nelle
+statistiche aggregate soltanto dopo essere stato censito nel ruleset.
 Espone sia il numero di paste coinvolte sia, quando esiste un pager affidabile,
 il numero di comande ricostruite. Una comanda probabile richiede stesso locale,
 giornata e pager, massimo 90 secondi tra righe adiacenti e numeri ordine distanti

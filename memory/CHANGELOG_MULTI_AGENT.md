@@ -178,6 +178,19 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-25 03:30 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | refactor | test | docs
+**File toccati**:
+- `/app/backend/annotation_semantics.py`
+- `/app/backend/tests/test_{annotation_semantics,pasta_annotations_lab}.py`
+- `/app/frontend/src/pages/PastaAnnotationsLabPage.js`
+- `/app/frontend/src/utils/{laboratory,laboratory.test}.js`
+- `/app/frontend/public/version.json`
+- `/app/memory/{PRD,OPERATIONAL_MEMORY_DESIGN,MEMORY_VPS_ROLLOUT_RUNBOOK,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Introdotto il ruleset annotazioni v2 con una canonicalizzazione esatta, conservativa e versionata dei bersagli confermati dallo storico: forme come `NO GUANC`, `NO GUANCIALE` e `SENZA GUANCIALE` confluiscono nello stesso segnale senza alterare il testo originale. Il Laboratorio mostra sotto ogni segnale raggruppato le forme effettivamente usate e i relativi conteggi; abbreviazioni non confermate e termini ambigui restano distinti, senza fuzzy matching.
+**Testato**: sì (metodo: suite backend completa `160 passed, 36 skipped`; suite frontend completa `21 passed`; build React produzione completata con i soli warning Hook preesistenti; simulazione retroattiva in sola lettura su export minimizzato e sanitizzato di `262.500` ordini archiviati, con verifica dei raggruppamenti e delle forme sorgente)
+**Note per il prossimo agente**: nessuna migrazione Mongo e nessuna scrittura in produzione. Il Laboratorio ricalcola lo storico in sola lettura, mentre i futuri fatti della Memoria registreranno `ruleset_version: 2`. Aggiungere nuovi alias solo dopo conferma semantica dell'utente e con test; non introdurre distanza testuale o completamenti automatici generici.
+
 ### [2026-07-22 16:11 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: feature | refactor | test | docs
 **File toccati**:

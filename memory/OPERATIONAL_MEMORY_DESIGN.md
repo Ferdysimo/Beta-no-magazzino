@@ -369,22 +369,29 @@ versionato:
   ],
   "unknown_fragments": [],
   "parser_version": 3,
-  "ruleset_version": 1
+  "ruleset_version": 2
 }
 ```
 
 Il riconoscitore pasta operativo resta autoritativo e volutamente rigido. Una
 riga manuale, errata, ambigua o esclusa come `XL` non genera annotazioni. La
-normalizzazione corregge soltanto rappresentazione, spazi e maiuscole: non
-corregge errori e non attribuisce significati a codici sconosciuti. Numeri pager,
-quantita e numeri contestuali restano osservazioni strutturate ma non entrano
-nelle frequenze testuali.
+normalizzazione di base corregge soltanto rappresentazione, spazi e maiuscole.
+Il ruleset 2 aggiunge un livello separato di canonicalizzazione lessicale per
+bersagli confermati delle richieste: per esempio `GUANC`, `GUANCIALE` e refusi
+storici esplicitamente censiti producono il concetto `GUANCIALE`, mentre il
+testo sorgente resta invariato e conteggiabile. Le regole sono una allowlist
+versionata ricavata dallo storico; non viene usato fuzzy matching automatico e
+ogni termine non censito resta letterale. Numeri pager, quantita e numeri
+contestuali restano osservazioni strutturate ma non entrano nelle frequenze
+testuali.
 
 I significati confermati iniziali sono `TA` (take away), `C` (ciotola di
 cartone), `S` (cliente da solo), `F` (tavoli fuori), `CHIUSA` (coperchio senza
 busta) e `RIG` come codice formato osservato. Le costruzioni `NO`, `SENZA`,
 `POCO`, `PIU`, `BEN COTTA` e le dichiarazioni di allergia sono strutturate in
-modo letterale, conservando il bersaglio scritto. `T` resta sconosciuto.
+modo letterale. I bersagli confermati vengono aggregati sul termine canonico e
+mantengono tutte le forme sorgente con i rispettivi conteggi. `T` resta
+sconosciuto.
 
 Il pager puo collegare righe della stessa probabile comanda soltanto con regola
 versionata: stesso locale, giornata e pager, gap adiacente massimo di 90 secondi

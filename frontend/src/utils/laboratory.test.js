@@ -4,6 +4,7 @@ import {
   filterPastaAnnotations,
   filterSemanticSignals,
   filterUnknownFragments,
+  formatSourceTerms,
 } from './laboratory';
 
 describe('canAccessLaboratory', () => {
@@ -81,5 +82,22 @@ describe('semantic annotation filters', () => {
     expect(filterUnknownFragments(unknowns, '', 'CARB')).toEqual([unknowns[0]]);
     expect(filterPagerGroups(groups, '12', 'CARB')).toEqual(groups);
     expect(filterPagerGroups(groups, 'grazie', '')).toEqual([]);
+  });
+});
+
+describe('formatSourceTerms', () => {
+  test('shows counted variants without overcrowding the signal row', () => {
+    const terms = [
+      { value: 'NO GUANC', count: 33 },
+      { value: 'NO GUANCIALE', count: 7 },
+      { value: 'SENZA GUANCIALE', count: 32 },
+      { value: 'SENZA GUANC', count: 15 },
+      { value: 'NO GUAN', count: 1 },
+    ];
+
+    expect(formatSourceTerms(terms)).toBe(
+      'NO GUANC (33) · NO GUANCIALE (7) · SENZA GUANCIALE (32) · SENZA GUANC (15) · +1',
+    );
+    expect(terms).toHaveLength(5);
   });
 });

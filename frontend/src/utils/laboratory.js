@@ -2,6 +2,15 @@ export const canAccessLaboratory = (restaurant) => (
   restaurant?.username === 'Simone' && restaurant?.role === 'admin'
 );
 
+export const formatSourceTerms = (terms, limit = 4) => {
+  const values = (terms || []).filter(term => term?.value);
+  const visible = values
+    .slice(0, limit)
+    .map(term => `${term.value} (${Number(term.count || 0).toLocaleString('it-IT')})`);
+  const remaining = Math.max(values.length - visible.length, 0);
+  return remaining ? `${visible.join(' · ')} · +${remaining}` : visible.join(' · ');
+};
+
 export const filterPastaAnnotations = (annotations, search, pasta) => {
   const normalizedSearch = String(search || '').trim().toUpperCase();
   return (annotations || []).filter((item) => {

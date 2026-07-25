@@ -1,3 +1,5 @@
+import pytest
+
 from annotation_semantics import (
     ANNOTATION_PARSER_VERSION,
     ANNOTATION_RULESET_VERSION,
@@ -84,6 +86,41 @@ def test_literal_requests_are_structured_without_correcting_the_target():
         "service_mode",
     }
     assert allergy["unknown_fragments"] == []
+
+
+@pytest.mark.parametrize(
+    ("description", "source_target"),
+    [
+        ("CARB NO GUANC 12", "GUANC"),
+        ("CARB NO GUAN 12", "GUAN"),
+        ("CARB SENZA GUIANCIEL 12", "GUIANCIEL"),
+        ("CARB NO GUANVIAALE 12", "GUANVIAALE"),
+    ],
+)
+def test_confirmed_target_aliases_share_one_canonical_concept(
+    description,
+    source_target,
+):
+    parsed = extract_pasta_annotation(description, PASTA_CODES)
+    signal = parsed["signals"][0]
+
+    assert signal["code"] == "without:guanciale"
+    assert signal["label"] == "Senza GUANCIALE"
+    assert signal["target"] == "GUANCIALE"
+    assert signal["target_source"] == source_target
+    assert signal["target_rule_id"] == "target.guanciale"
+    assert signal["source_terms"] == [f"{description.split()[1]} {source_target}"]
+    assert parsed["unknown_fragments"] == []
+
+
+def test_unknown_request_target_stays_literal_and_is_not_fuzzy_matched():
+    parsed = extract_pasta_annotation("CARB NO GUANTO 12", PASTA_CODES)
+    signal = parsed["signals"][0]
+
+    assert signal["code"] == "without:guanto"
+    assert signal["target"] == "GUANTO"
+    assert "target_source" not in signal
+    assert "target_rule_id" not in signal
 
 
 def test_quantity_and_pager_numbers_keep_different_roles():
@@ -176,6 +213,12 @@ def test_rule_manifest_is_versioned_and_does_not_assign_t():
     assert "T" not in {
         alias for rule in manifest["static_signals"] for alias in rule["aliases"]
     }
+    guanciale = next(
+        rule
+        for rule in manifest["target_aliases"]
+        if rule["canonical"] == "GUANCIALE"
+    )
+    assert {"GUANC", "GUANCIALE"} <= set(guanciale["aliases"])
 
 
 def test_isolated_recognizer_keeps_the_operational_strictness():

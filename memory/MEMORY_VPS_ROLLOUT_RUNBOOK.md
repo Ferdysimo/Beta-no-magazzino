@@ -511,7 +511,7 @@ sudo -u pastasciutta-memory bash -c '
       annotation_rule: db.memory_configuration_versions.countDocuments({
         fact_kind: \"memory_rule_state\",
         rule_kind: \"annotation_semantics\",
-        ruleset_version: 1
+        ruleset_version: 2
       }),
       parsed_annotations: db.memory_order_facts.countDocuments({
         \"pasta_annotation.parser_version\": 3

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Iterable, Optional
 
 ANNOTATION_PARSER_VERSION = 3
-ANNOTATION_RULESET_VERSION = 1
+ANNOTATION_RULESET_VERSION = 2
 PAGER_GROUPING_RULE_VERSION = 1
 PAGER_GROUP_MAX_GAP_SECONDS = 90
 PAGER_GROUP_MAX_ORDER_GAP = 8
@@ -120,6 +120,71 @@ _ALLERGY_WORDS = {
     "ALLERGIE",
 }
 _WELL_DONE_WORDS = {"COTTA", "COTTO", "COTTE", "COTTI"}
+
+_TARGET_ALIAS_RULES = (
+    {
+        "rule_id": "target.guanciale",
+        "canonical": "GUANCIALE",
+        "aliases": (
+            "GUANCIALE",
+            "GUANC",
+            "GUAN",
+            "GUIANCIEL",
+            "GUANVIAALE",
+        ),
+    },
+    {
+        "rule_id": "target.pepe",
+        "canonical": "PEPE",
+        "aliases": ("PEPE", "PEP", "PEPPE"),
+    },
+    {
+        "rule_id": "target.mantecatura",
+        "canonical": "MANTECATURA",
+        "aliases": (
+            "MANTECATURA",
+            "MANTECATA",
+            "MANTECAT",
+            "MANTEC",
+            "MANT",
+        ),
+    },
+    {
+        "rule_id": "target.parmigiano",
+        "canonical": "PARMIGIANO",
+        "aliases": ("PARMIGIANO", "PARMIGGIANO", "PARM"),
+    },
+    {
+        "rule_id": "target.pecorino",
+        "canonical": "PECORINO",
+        "aliases": ("PECORINO", "PEC"),
+    },
+    {
+        "rule_id": "target.formaggio",
+        "canonical": "FORMAGGIO",
+        "aliases": ("FORMAGGIO", "FORM", "FORAGGIO", "CHEESE"),
+    },
+    {
+        "rule_id": "target.maiale",
+        "canonical": "MAIALE",
+        "aliases": ("MAIALE", "PORK", "PORKO", "POK", "PORCK"),
+    },
+    {
+        "rule_id": "target.uovo",
+        "canonical": "UOVO",
+        "aliases": ("UOVO", "UOVA"),
+    },
+    {
+        "rule_id": "target.latte",
+        "canonical": "LATTE",
+        "aliases": ("LATTE", "MILK"),
+    },
+)
+_TARGET_ALIAS_INDEX = {
+    alias: rule
+    for rule in _TARGET_ALIAS_RULES
+    for alias in rule["aliases"]
+}
 
 
 def _ascii_upper(value: str) -> str:
@@ -306,6 +371,14 @@ def _slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", _ascii_upper(value).lower()).strip("_")
 
 
+def _canonical_target(value: str) -> tuple[str, Optional[str]]:
+    normalized = " ".join(_WORD.findall(_ascii_upper(value)))
+    rule = _TARGET_ALIAS_INDEX.get(normalized)
+    if rule is None:
+        return normalized, None
+    return rule["canonical"], rule["rule_id"]
+
+
 def _target_tokens(
     tokens: list[str],
     consumed: list[bool],
@@ -365,73 +438,89 @@ def _semantic_signals(annotation_text: str) -> tuple[list[dict], list[str], list
             consumed[index] = True
             for item in target_indexes:
                 consumed[item] = True
-            code = f"allergy_declared:{_slug(target)}" if target else "allergy_declared"
-            signals.append(
-                _signal(
-                    dimension="safety_note",
-                    code=code,
-                    label=(
-                        f"Allergia dichiarata: {target}"
-                        if target
-                        else "Allergia dichiarata"
-                    ),
-                    certainty="literal",
-                    rule_id="request.allergy_declared",
-                    source=" ".join([token, target]).strip(),
-                    target=target or None,
-                )
+            canonical_target, target_rule_id = _canonical_target(target)
+            code = (
+                f"allergy_declared:{_slug(canonical_target)}"
+                if canonical_target
+                else "allergy_declared"
             )
+            signal = _signal(
+                dimension="safety_note",
+                code=code,
+                label=(
+                    f"Allergia dichiarata: {canonical_target}"
+                    if canonical_target
+                    else "Allergia dichiarata"
+                ),
+                certainty="literal",
+                rule_id="request.allergy_declared",
+                source=" ".join([token, target]).strip(),
+                target=canonical_target or None,
+            )
+            if target_rule_id and target != canonical_target:
+                signal["target_source"] = target
+                signal["target_rule_id"] = target_rule_id
+            signals.append(signal)
             continue
 
         if token in {"NO", "SENZA"} and target:
             consumed[index] = True
             for item in target_indexes:
                 consumed[item] = True
-            signals.append(
-                _signal(
-                    dimension="preparation_request",
-                    code=f"without:{_slug(target)}",
-                    label=f"Senza {target}",
-                    certainty="literal",
-                    rule_id="request.without",
-                    source=f"{token} {target}",
-                    target=target,
-                )
+            canonical_target, target_rule_id = _canonical_target(target)
+            signal = _signal(
+                dimension="preparation_request",
+                code=f"without:{_slug(canonical_target)}",
+                label=f"Senza {canonical_target}",
+                certainty="literal",
+                rule_id="request.without",
+                source=f"{token} {target}",
+                target=canonical_target,
             )
+            if target_rule_id and target != canonical_target:
+                signal["target_source"] = target
+                signal["target_rule_id"] = target_rule_id
+            signals.append(signal)
             continue
 
         if token in {"POCO", "POCHISSIMO"} and target:
             consumed[index] = True
             for item in target_indexes:
                 consumed[item] = True
-            signals.append(
-                _signal(
-                    dimension="preparation_request",
-                    code=f"less:{_slug(target)}",
-                    label=f"Poco {target}",
-                    certainty="literal",
-                    rule_id="request.less",
-                    source=f"{token} {target}",
-                    target=target,
-                )
+            canonical_target, target_rule_id = _canonical_target(target)
+            signal = _signal(
+                dimension="preparation_request",
+                code=f"less:{_slug(canonical_target)}",
+                label=f"Poco {canonical_target}",
+                certainty="literal",
+                rule_id="request.less",
+                source=f"{token} {target}",
+                target=canonical_target,
             )
+            if target_rule_id and target != canonical_target:
+                signal["target_source"] = target
+                signal["target_rule_id"] = target_rule_id
+            signals.append(signal)
             continue
 
         if token == "PIU" and target:
             consumed[index] = True
             for item in target_indexes:
                 consumed[item] = True
-            signals.append(
-                _signal(
-                    dimension="preparation_request",
-                    code=f"more:{_slug(target)}",
-                    label=f"Piu {target}",
-                    certainty="literal",
-                    rule_id="request.more",
-                    source=f"PIU {target}",
-                    target=target,
-                )
+            canonical_target, target_rule_id = _canonical_target(target)
+            signal = _signal(
+                dimension="preparation_request",
+                code=f"more:{_slug(canonical_target)}",
+                label=f"Piu {canonical_target}",
+                certainty="literal",
+                rule_id="request.more",
+                source=f"PIU {target}",
+                target=canonical_target,
             )
+            if target_rule_id and target != canonical_target:
+                signal["target_source"] = target
+                signal["target_rule_id"] = target_rule_id
+            signals.append(signal)
             continue
 
         if (
@@ -556,6 +645,14 @@ def annotation_rule_manifest() -> dict:
             "less",
             "more",
             "well_done",
+        ],
+        "target_aliases": [
+            {
+                "rule_id": rule["rule_id"],
+                "canonical": rule["canonical"],
+                "aliases": list(rule["aliases"]),
+            }
+            for rule in _TARGET_ALIAS_RULES
         ],
         "unknown_tokens_preserved": True,
         "source_text_preserved": True,

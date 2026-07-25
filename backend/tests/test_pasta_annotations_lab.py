@@ -249,6 +249,62 @@ def test_build_stats_groups_annotations_and_keeps_raw_examples():
     assert result["summary"]["fully_classified_orders"] == 2
 
 
+def test_build_stats_merges_confirmed_aliases_and_keeps_written_variants():
+    docs = [
+        {
+            "id": "alias-1",
+            "restaurant_id": "rest-a",
+            "date_rome": "2026-07-19",
+            "created_at": "2026-07-19T10:00:00+00:00",
+            "order_number": 1,
+            "description": "CARB NO GUANC",
+        },
+        {
+            "id": "alias-2",
+            "restaurant_id": "rest-a",
+            "date_rome": "2026-07-19",
+            "created_at": "2026-07-19T10:01:00+00:00",
+            "order_number": 2,
+            "description": "CARB NO GUANCIALE",
+        },
+        {
+            "id": "alias-3",
+            "restaurant_id": "rest-b",
+            "date_rome": "2026-07-19",
+            "created_at": "2026-07-19T10:02:00+00:00",
+            "order_number": 3,
+            "description": "AMAT SENZA GUANC",
+        },
+    ]
+
+    result = build_pasta_annotation_stats(
+        docs,
+        dictionaries_by_key={},
+        fallback_dictionaries={"rest-a": PASTA_DICT, "rest-b": PASTA_DICT},
+        locations_by_id={"rest-a": "Flaminio", "rest-b": "Grazie"},
+    )
+
+    signals = {item["signal_key"]: item for item in result["signals"]}
+    guanciale = signals["preparation_request:without:guanciale"]
+    assert guanciale["count"] == 3
+    assert guanciale["target"] == "GUANCIALE"
+    assert guanciale["pasta_counts"] == {"CARB": 2, "AMAT": 1}
+    assert guanciale["location_counts"] == {"Flaminio": 2, "Grazie": 1}
+    assert {
+        item["value"]: item["count"]
+        for item in guanciale["source_terms"]
+    } == {
+        "NO GUANC": 1,
+        "NO GUANCIALE": 1,
+        "SENZA GUANC": 1,
+    }
+    assert {item["annotation"] for item in result["annotations"]} == {
+        "NO GUANC",
+        "NO GUANCIALE",
+        "SENZA GUANC",
+    }
+
+
 def test_historical_dictionary_takes_precedence_over_current_dictionary():
     docs = [
         {

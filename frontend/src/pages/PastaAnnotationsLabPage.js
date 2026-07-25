@@ -19,6 +19,7 @@ import {
   filterPastaAnnotations,
   filterSemanticSignals,
   filterUnknownFragments,
+  formatSourceTerms,
 } from '../utils/laboratory';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -212,6 +213,11 @@ const PastaAnnotationsLabPage = () => {
                 <p className="text-xs text-gray-500 mt-1">
                   {CERTAINTY_LABELS[item.certainty] || item.certainty}
                 </p>
+                {(item.source_terms || []).length > 1 && (
+                  <p className="text-xs text-gray-600 mt-1.5 max-w-[320px] leading-relaxed">
+                    Scritto come: {formatSourceTerms(item.source_terms)}
+                  </p>
+                )}
               </td>
               <td className="px-4 py-4 text-right font-bold text-gray-950">
                 {displayedCount(item)}
