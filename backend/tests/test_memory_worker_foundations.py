@@ -17,6 +17,7 @@ from memory_worker.sanitize import sanitize_memory_document
 from memory_worker.sources.orders import (
     ORDER_STREAMS,
     normalize_order_record,
+    pasta_annotation_aliases_from_documents,
 )
 from memory_worker.stores import MemoryMongoStore, ReadOnlyMongoSource
 from memory_worker.stores.mongo import classify_authenticated_roles
@@ -232,6 +233,7 @@ def test_memory_contract_starts_versioned_with_expected_domains():
     assert "beverage_carichi" in SOURCE_COLLECTIONS
     assert "beverages" in SOURCE_COLLECTIONS
     assert "suppliers" in SOURCE_COLLECTIONS
+    assert "lab_pasta_annotation_aliases" in SOURCE_COLLECTIONS
 
 
 def test_order_state_and_deletion_share_stable_business_identity():
@@ -278,6 +280,38 @@ def test_order_state_and_deletion_share_stable_business_identity():
     assert state_fact["pasta_annotation"]["semantic_status"] == "no_text"
     assert state_fact["annotation_quality"]["raw_description_replayable"] is True
     assert deletion_fact["fact_kind"] == "order_deleted"
+
+
+def test_order_normalizer_applies_confirmed_annotation_aliases():
+    stream = next(item for item in ORDER_STREAMS if item.key == "orders_active")
+    aliases = pasta_annotation_aliases_from_documents(
+        [
+            {
+                "alias_normalized": "guanci",
+                "canonical_normalized": "guanciale",
+                "active": True,
+            }
+        ]
+    )
+    _, _, fact = normalize_order_record(
+        {
+            "id": "order-learned",
+            "restaurant_id": "restaurant-1",
+            "order_number": 8,
+            "description": "CARB NO GUANCI",
+            "created_at": "2026-07-20T12:01:00+00:00",
+            "status": "pending",
+        },
+        stream,
+        captured_at=datetime(2026, 7, 20, 12, 5, tzinfo=timezone.utc),
+        activation_epoch=datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc),
+        target_aliases=aliases,
+    )
+
+    assert aliases == {"GUANCI": "GUANCIALE"}
+    assert fact["pasta_annotation"]["signals"][0]["code"] == (
+        "without:guanciale"
+    )
 
 
 def test_order_modification_declares_temporal_quality_limit():

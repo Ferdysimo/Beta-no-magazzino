@@ -14,6 +14,7 @@ from .laboratory import (
     DocumentScanAnalyzeRequest,
     DocumentScanFeedback,
     DocumentScanFeedbackRow,
+    PastaAnnotationDecision,
 )
 from .orders import DeletionLog, ModificationLog, OrderCreate, OrderResponse, OrderUpdate
 from .report import CashDailyUpsert, PastaDictionaryUpsert
@@ -44,6 +45,7 @@ __all__ = [
     "DocumentScanAnalyzeRequest",
     "DocumentScanFeedback",
     "DocumentScanFeedbackRow",
+    "PastaAnnotationDecision",
     "FatturaGlobaleCreate",
     "FatturaUpload",
     "FrontendDiagnosticsPayload",

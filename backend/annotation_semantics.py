@@ -371,12 +371,52 @@ def _slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", _ascii_upper(value).lower()).strip("_")
 
 
-def _canonical_target(value: str) -> tuple[str, Optional[str]]:
-    normalized = " ".join(_WORD.findall(_ascii_upper(value)))
-    rule = _TARGET_ALIAS_INDEX.get(normalized)
-    if rule is None:
-        return normalized, None
-    return rule["canonical"], rule["rule_id"]
+def normalize_annotation_target(value: str) -> str:
+    return " ".join(_WORD.findall(_ascii_upper(value)))
+
+
+def annotation_target_alias_map() -> dict[str, str]:
+    return {
+        alias: rule["canonical"]
+        for alias, rule in _TARGET_ALIAS_INDEX.items()
+    }
+
+
+def annotation_target_canonicals() -> set[str]:
+    return {rule["canonical"] for rule in _TARGET_ALIAS_RULES}
+
+
+def canonicalize_annotation_target(
+    value: str,
+    target_aliases: Optional[dict[str, str]] = None,
+) -> tuple[str, Optional[str]]:
+    normalized = normalize_annotation_target(value)
+    current = normalized
+    seen = set()
+    learned = False
+
+    while current:
+        if current in seen:
+            return normalized, None
+        seen.add(current)
+        static_rule = _TARGET_ALIAS_INDEX.get(current)
+        if static_rule is not None:
+            return static_rule["canonical"], (
+                f"target.learned.{_slug(normalized)}"
+                if learned
+                else static_rule["rule_id"]
+            )
+        next_target = normalize_annotation_target(
+            (target_aliases or {}).get(current) or ""
+        )
+        if not next_target:
+            break
+        current = next_target
+        learned = True
+
+    return current or normalized, (
+        f"target.learned.{_slug(normalized)}" if learned else None
+    )
 
 
 def _target_tokens(
@@ -394,7 +434,10 @@ def _target_tokens(
     return indexes
 
 
-def _semantic_signals(annotation_text: str) -> tuple[list[dict], list[str], list[str]]:
+def _semantic_signals(
+    annotation_text: str,
+    target_aliases: Optional[dict[str, str]] = None,
+) -> tuple[list[dict], list[str], list[str]]:
     tokens = _WORD.findall(_ascii_upper(annotation_text))
     consumed = [False] * len(tokens)
     signals = []
@@ -438,7 +481,10 @@ def _semantic_signals(annotation_text: str) -> tuple[list[dict], list[str], list
             consumed[index] = True
             for item in target_indexes:
                 consumed[item] = True
-            canonical_target, target_rule_id = _canonical_target(target)
+            canonical_target, target_rule_id = canonicalize_annotation_target(
+                target,
+                target_aliases,
+            )
             code = (
                 f"allergy_declared:{_slug(canonical_target)}"
                 if canonical_target
@@ -467,7 +513,10 @@ def _semantic_signals(annotation_text: str) -> tuple[list[dict], list[str], list
             consumed[index] = True
             for item in target_indexes:
                 consumed[item] = True
-            canonical_target, target_rule_id = _canonical_target(target)
+            canonical_target, target_rule_id = canonicalize_annotation_target(
+                target,
+                target_aliases,
+            )
             signal = _signal(
                 dimension="preparation_request",
                 code=f"without:{_slug(canonical_target)}",
@@ -487,7 +536,10 @@ def _semantic_signals(annotation_text: str) -> tuple[list[dict], list[str], list
             consumed[index] = True
             for item in target_indexes:
                 consumed[item] = True
-            canonical_target, target_rule_id = _canonical_target(target)
+            canonical_target, target_rule_id = canonicalize_annotation_target(
+                target,
+                target_aliases,
+            )
             signal = _signal(
                 dimension="preparation_request",
                 code=f"less:{_slug(canonical_target)}",
@@ -507,7 +559,10 @@ def _semantic_signals(annotation_text: str) -> tuple[list[dict], list[str], list
             consumed[index] = True
             for item in target_indexes:
                 consumed[item] = True
-            canonical_target, target_rule_id = _canonical_target(target)
+            canonical_target, target_rule_id = canonicalize_annotation_target(
+                target,
+                target_aliases,
+            )
             signal = _signal(
                 dimension="preparation_request",
                 code=f"more:{_slug(canonical_target)}",
@@ -571,6 +626,8 @@ def _semantic_signals(annotation_text: str) -> tuple[list[dict], list[str], list
 def parse_recognized_pasta_annotation(
     description: str,
     pasta_sigla: str,
+    *,
+    target_aliases: Optional[dict[str, str]] = None,
 ) -> Optional[dict]:
     source = _description_tail(description, pasta_sigla)
     if source is None:
@@ -579,7 +636,8 @@ def parse_recognized_pasta_annotation(
     annotation_normalized = normalize_annotation_text(annotation_raw)
     pager, numbers = _number_observations(source)
     signals, unknown_fragments, unknown_tokens = _semantic_signals(
-        annotation_normalized
+        annotation_normalized,
+        target_aliases,
     )
     if not annotation_normalized:
         semantic_status = "no_text"
@@ -608,11 +666,17 @@ def parse_recognized_pasta_annotation(
 def extract_pasta_annotation(
     description: str,
     pasta_codes: Iterable[str],
+    *,
+    target_aliases: Optional[dict[str, str]] = None,
 ) -> Optional[dict]:
     recognized = recognize_pasta_sigla(description, pasta_codes)
     if recognized is None:
         return None
-    return parse_recognized_pasta_annotation(description, recognized)
+    return parse_recognized_pasta_annotation(
+        description,
+        recognized,
+        target_aliases=target_aliases,
+    )
 
 
 def annotation_rule_manifest() -> dict:

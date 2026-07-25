@@ -501,6 +501,7 @@ class MemoryMongoStore:
             stateful_fact_kinds={
                 "restaurant_configuration_state",
                 "pasta_dictionary_state",
+                "pasta_annotation_alias_state",
                 "beverage_catalog_state",
                 "supplier_state",
                 "memory_rule_state",

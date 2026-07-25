@@ -178,6 +178,25 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-25 04:38 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | architecture | security | test | docs
+**File toccati**:
+- `/app/backend/annotation_semantics.py`
+- `/app/backend/app/{bootstrap.py,routers/laboratory.py,schemas/{__init__,laboratory}.py}`
+- `/app/backend/app/services/{pasta_annotations,pasta_annotation_learning}.py`
+- `/app/backend/memory_worker/{collector,contracts,snapshots}.py`
+- `/app/backend/memory_worker/sources/{__init__,configuration,orders}.py`
+- `/app/backend/memory_worker/stores/mongo.py`
+- `/app/backend/tests/test_{annotation_semantics,pasta_annotations_lab,pasta_annotation_learning,memory_worker_configuration,memory_worker_foundations,memory_worker_snapshots,phase1_foundations_contract,phase3_module_contract}.py`
+- `/app/frontend/src/pages/PastaAnnotationsLabPage.js`
+- `/app/frontend/src/components/laboratory/{PastaAnnotationLearningPanel,PastaAnnotationLearningPanel.test}.js`
+- `/app/frontend/src/utils/{laboratory,laboratory.test}.js`
+- `/app/frontend/public/version.json`
+- `/app/memory/{PRD,OPERATIONAL_MEMORY_DESIGN,MEMORY_VPS_ROLLOUT_RUNBOOK,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Completato il ciclo di apprendimento assistito delle annotazioni paste. Il sistema propone soltanto bersagli simili osservati nello stesso contesto, mostrando conteggi, locali e forme sorgente; Simone decide `Uguali` o `Diverse`, puo annullare la scelta e nessuna fusione avviene autonomamente. Gli alias confermati vengono applicati retroattivamente alle statistiche senza modificare gli ordini e sono conservati con versione, autore e data in collection Laboratorio isolate. La futura Memoria li acquisisce in sola lettura come configurazioni versionate e usa la versione valida nei fatti e negli snapshot.
+**Testato**: si (metodo: suite backend completa `172 passed, 36 skipped`; suite frontend completa `24 passed`; build React produzione completata con i soli warning Hook preesistenti; contratto OpenAPI aggiornato e verificato a 87 path/33 schemi; test di conferma, esclusione, annullamento, protezione delle regole fisse, ricalcolo retroattivo e integrazione worker/snapshot)
+**Note per il prossimo agente**: GET/POST/DELETE delle annotazioni restano riservate esclusivamente a Simone. Le scritture riguardano solo `lab_pasta_annotation_aliases` e `lab_pasta_annotation_dismissals`; descrizioni, ordini e dati operativi restano immutati. Il codice e pronto localmente ma non e stato deployato e il worker Memoria resta inattivo.
+
 ### [2026-07-25 03:30 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: feature | refactor | test | docs
 **File toccati**:

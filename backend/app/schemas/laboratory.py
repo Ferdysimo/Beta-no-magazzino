@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -31,3 +31,10 @@ class DocumentScanFeedback(BaseModel):
     document_date: str = Field(default="", max_length=20)
     document_total: Optional[float] = Field(default=None, ge=0, le=100_000_000)
     rows: List[DocumentScanFeedbackRow] = Field(default_factory=list, max_length=80)
+
+
+class PastaAnnotationDecision(BaseModel):
+    left_target: str = Field(min_length=3, max_length=60)
+    right_target: str = Field(min_length=3, max_length=60)
+    decision: Literal["same", "different"]
+    canonical_target: Optional[str] = Field(default=None, max_length=60)

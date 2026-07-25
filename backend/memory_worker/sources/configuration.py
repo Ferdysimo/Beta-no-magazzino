@@ -4,7 +4,10 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Optional
 
-from annotation_semantics import annotation_rule_manifest
+from annotation_semantics import (
+    annotation_rule_manifest,
+    normalize_annotation_target,
+)
 
 from .orders import parse_utc_datetime
 
@@ -65,6 +68,27 @@ CONFIGURATION_STREAMS = (
         "pasta_dictionary_state",
         ("updated_at",),
         ("restaurant_id", "_id"),
+    ),
+    ConfigurationStream(
+        "configuration_pasta_annotation_aliases",
+        "lab_pasta_annotation_aliases",
+        "configuration_pasta_annotation_aliases",
+        "pasta_annotation_alias_state",
+        ("updated_at", "created_at"),
+        ("alias_normalized", "_id"),
+        {
+            "_id": 1,
+            "id": 1,
+            "alias_normalized": 1,
+            "canonical_normalized": 1,
+            "active": 1,
+            "learning_version": 1,
+            "source": 1,
+            "created_by_id": 1,
+            "created_by_username": 1,
+            "created_at": 1,
+            "updated_at": 1,
+        },
     ),
     ConfigurationStream(
         "configuration_beverages",
@@ -131,6 +155,11 @@ def configuration_source_id(
     if stream.event_kind == "pasta_dictionary_state":
         restaurant_id = str(document.get("restaurant_id") or "").strip()
         return f"pasta-dictionary:{restaurant_id}" if restaurant_id else ""
+    if stream.event_kind == "pasta_annotation_alias_state":
+        alias = normalize_annotation_target(
+            document.get("alias_normalized") or ""
+        )
+        return f"pasta-annotation-alias:{alias}" if alias else ""
     if stream.event_kind == "beverage_catalog_state":
         sigla = str(document.get("sigla") or "").strip().upper()
         return f"beverage:{sigla}" if sigla else ""
@@ -251,6 +280,49 @@ def _normalize_pasta_dictionary(
     return source_id, timestamp, fact
 
 
+def _normalize_pasta_annotation_alias(
+    document: dict,
+    *,
+    captured_at: datetime,
+    stream: ConfigurationStream,
+) -> tuple[str, datetime, dict]:
+    source_id = configuration_source_id(document, stream)
+    alias = normalize_annotation_target(document.get("alias_normalized") or "")
+    canonical = normalize_annotation_target(
+        document.get("canonical_normalized") or ""
+    )
+    if not source_id or len(alias) < 3 or len(canonical) < 3:
+        raise ValueError("alias annotazione pasta non valido")
+    if alias == canonical:
+        raise ValueError("alias annotazione pasta identico al termine principale")
+    timestamp, timestamp_source = _source_timestamp(
+        document,
+        stream.timestamp_fields,
+        captured_at=captured_at,
+    )
+    fact = {
+        "normalizer_version": CONFIGURATION_NORMALIZER_VERSION,
+        "fact_kind": "pasta_annotation_alias_state",
+        "entity_key": source_id,
+        "occurred_at": timestamp,
+        "present": bool(document.get("active", True)),
+        "alias_normalized": alias,
+        "canonical_normalized": canonical,
+        "learning_version": int(document.get("learning_version") or 1),
+        "source": str(document.get("source") or ""),
+        "confirmed_by": {
+            "id": str(document.get("created_by_id") or ""),
+            "username": str(document.get("created_by_username") or ""),
+        },
+        "quality": {
+            "timestamp_source": timestamp_source,
+            "human_confirmation_required": True,
+            "raw_order_text_replayable": True,
+        },
+    }
+    return source_id, timestamp, fact
+
+
 def _normalize_beverage(
     document: dict,
     *,
@@ -338,6 +410,12 @@ def normalize_configuration_record(
         )
     if stream.event_kind == "pasta_dictionary_state":
         return _normalize_pasta_dictionary(
+            document,
+            captured_at=captured_at,
+            stream=stream,
+        )
+    if stream.event_kind == "pasta_annotation_alias_state":
+        return _normalize_pasta_annotation_alias(
             document,
             captured_at=captured_at,
             stream=stream,

@@ -27,6 +27,8 @@ def normalize_pasta_annotation(value: str) -> str:
 def extract_pasta_annotation(
     description: str,
     dict_map: Dict[str, float],
+    *,
+    target_aliases: Optional[Dict[str, str]] = None,
 ) -> Optional[dict]:
     """Use the operational pasta recognizer, then apply shared semantics."""
     raw_description = str(description or "").strip()
@@ -36,6 +38,7 @@ def extract_pasta_annotation(
     return parse_recognized_pasta_annotation(
         raw_description,
         recognized_sigla,
+        target_aliases=target_aliases,
     )
 
 
@@ -110,6 +113,7 @@ def build_pasta_annotation_stats(
     dictionaries_by_key: Dict[tuple, Dict[str, float]],
     fallback_dictionaries: Dict[str, Dict[str, float]],
     locations_by_id: Dict[str, str],
+    target_aliases: Optional[Dict[str, str]] = None,
     max_examples: int = 5,
 ) -> dict:
     annotation_groups: Dict[str, dict] = {}
@@ -144,6 +148,7 @@ def build_pasta_annotation_stats(
         extracted = extract_pasta_annotation(
             doc.get("description") or "",
             dict_map,
+            target_aliases=target_aliases,
         )
         if extracted is None:
             unrecognized_orders += 1

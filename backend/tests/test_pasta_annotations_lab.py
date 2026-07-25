@@ -305,6 +305,45 @@ def test_build_stats_merges_confirmed_aliases_and_keeps_written_variants():
     }
 
 
+def test_build_stats_applies_a_learned_alias_retroactively():
+    docs = [
+        {
+            "id": "learned-1",
+            "restaurant_id": "rest-a",
+            "date_rome": "2026-07-19",
+            "created_at": "2026-07-19T10:00:00+00:00",
+            "order_number": 1,
+            "description": "CARB NO GUANCI",
+        },
+        {
+            "id": "learned-2",
+            "restaurant_id": "rest-a",
+            "date_rome": "2026-07-19",
+            "created_at": "2026-07-19T10:01:00+00:00",
+            "order_number": 2,
+            "description": "CARB NO GUANCIALE",
+        },
+    ]
+
+    result = build_pasta_annotation_stats(
+        docs,
+        dictionaries_by_key={},
+        fallback_dictionaries={"rest-a": PASTA_DICT},
+        locations_by_id={"rest-a": "Flaminio"},
+        target_aliases={"GUANCI": "GUANCIALE"},
+    )
+
+    assert len(result["signals"]) == 1
+    assert result["signals"][0]["signal_key"] == (
+        "preparation_request:without:guanciale"
+    )
+    assert result["signals"][0]["count"] == 2
+    assert {item["annotation"] for item in result["annotations"]} == {
+        "NO GUANCI",
+        "NO GUANCIALE",
+    }
+
+
 def test_historical_dictionary_takes_precedence_over_current_dictionary():
     docs = [
         {
@@ -417,6 +456,14 @@ def test_lab_date_validation_is_strict():
 def test_lab_endpoint_is_part_of_the_explicit_openapi_contract():
     operations = app.openapi()["paths"]["/api/lab/pasta-annotations"]
     assert set(operations) == {"get"}
+
+
+def test_pasta_learning_endpoints_are_part_of_the_explicit_openapi_contract():
+    paths = app.openapi()["paths"]
+    assert set(paths["/api/lab/pasta-annotations/decisions"]) == {"post"}
+    assert set(
+        paths["/api/lab/pasta-annotations/decisions/{decision_id}"]
+    ) == {"delete"}
 
 
 def test_document_scanner_endpoints_are_part_of_the_explicit_openapi_contract():

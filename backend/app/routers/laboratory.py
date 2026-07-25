@@ -6,7 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.core.database import db
 from app.core.security import verify_token
 from app.core.time import ROME_TZ, _rome_date_bounds_utc
-from app.schemas import DocumentScanAnalyzeRequest, DocumentScanFeedback
+from app.schemas import (
+    DocumentScanAnalyzeRequest,
+    DocumentScanFeedback,
+    PastaAnnotationDecision,
+)
 from app.services.analysis import (
     ANALYSIS_ORDER_SOURCES,
     _analysis_order_identity,
@@ -17,6 +21,13 @@ from app.services.document_scanner import (
     build_document_scan_draft,
     load_document_scanner_catalog,
     save_document_scan_feedback,
+)
+from app.services.pasta_annotation_learning import (
+    PASTA_ANNOTATION_LEARNING_VERSION,
+    build_pasta_annotation_suggestions,
+    delete_pasta_annotation_decision,
+    load_pasta_annotation_learning,
+    save_pasta_annotation_decision,
 )
 from app.services.pasta_annotations import build_pasta_annotation_stats
 from app.services.report import _get_pasta_dict_for, _pasta_dict_from_snapshot
@@ -107,6 +118,7 @@ async def get_pasta_annotations_lab(
     token_data: dict = Depends(verify_token),
 ):
     _require_simone_laboratory(token_data)
+    learning_state = await load_pasta_annotation_learning(db)
 
     today = datetime.now(ROME_TZ).date()
     selected_end = _parse_lab_date(end_date, default=today, field="end_date")
@@ -164,6 +176,7 @@ async def get_pasta_annotations_lab(
             dictionaries_by_key={},
             fallback_dictionaries={},
             locations_by_id={},
+            target_aliases=learning_state["alias_map"],
         )
         return {
             **empty,
@@ -174,6 +187,12 @@ async def get_pasta_annotations_lab(
             "restaurants": [],
             "generated_at_utc": datetime.now(timezone.utc).isoformat(),
             "data_scope": "read_only_operational_history",
+            "learning": {
+                "version": PASTA_ANNOTATION_LEARNING_VERSION,
+                "suggestions": [],
+                "confirmed_aliases": learning_state["confirmed_aliases"],
+                "dismissed_pairs": learning_state["dismissed_pairs"],
+            },
         }
 
     start_utc, _ = _rome_date_bounds_utc(selected_start.isoformat())
@@ -230,6 +249,15 @@ async def get_pasta_annotations_lab(
         dictionaries_by_key=dictionaries_by_key,
         fallback_dictionaries=fallback_dictionaries,
         locations_by_id=locations_by_id,
+        target_aliases=learning_state["alias_map"],
+    )
+    suggestions = build_pasta_annotation_suggestions(
+        result["signals"],
+        dismissed_pair_keys={
+            item.get("pair_key")
+            for item in learning_state["dismissed_pairs"]
+            if item.get("pair_key")
+        },
     )
     return {
         **result,
@@ -240,4 +268,34 @@ async def get_pasta_annotations_lab(
         "restaurants": restaurants_payload,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "data_scope": "read_only_operational_history",
+        "learning": {
+            "version": PASTA_ANNOTATION_LEARNING_VERSION,
+            "suggestions": suggestions,
+            "confirmed_aliases": learning_state["confirmed_aliases"],
+            "dismissed_pairs": learning_state["dismissed_pairs"],
+        },
     }
+
+
+@router.post("/lab/pasta-annotations/decisions")
+async def confirm_pasta_annotation_decision(
+    data: PastaAnnotationDecision,
+    token_data: dict = Depends(verify_token),
+):
+    _require_simone_laboratory(token_data)
+    try:
+        return await save_pasta_annotation_decision(db, data, token_data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/lab/pasta-annotations/decisions/{decision_id}")
+async def undo_pasta_annotation_decision(
+    decision_id: str,
+    token_data: dict = Depends(verify_token),
+):
+    _require_simone_laboratory(token_data)
+    try:
+        return await delete_pasta_annotation_decision(db, decision_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

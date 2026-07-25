@@ -9,12 +9,15 @@ import {
   ListTree,
   RefreshCw,
   Search,
+  Sparkles,
   Tags,
   Users,
 } from 'lucide-react';
 import Header from '../components/Header';
+import PastaAnnotationLearningPanel from '../components/laboratory/PastaAnnotationLearningPanel';
 import { useAuth } from '../contexts/AuthContext';
 import {
+  filterLearningSuggestions,
   filterPagerGroups,
   filterPastaAnnotations,
   filterSemanticSignals,
@@ -43,6 +46,7 @@ const CERTAINTY_LABELS = {
 };
 
 const VIEWS = [
+  { id: 'learning', label: 'Da confermare', Icon: Sparkles },
   { id: 'signals', label: 'Segnali', Icon: BarChart3 },
   { id: 'unknown', label: 'Da interpretare', Icon: CircleHelp },
   { id: 'raw', label: 'Frasi complete', Icon: ListTree },
@@ -93,10 +97,12 @@ const PastaAnnotationsLabPage = () => {
   const [restaurantId, setRestaurantId] = useState('');
   const [pasta, setPasta] = useState('');
   const [search, setSearch] = useState('');
-  const [activeView, setActiveView] = useState('signals');
+  const [activeView, setActiveView] = useState('learning');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [learningMessage, setLearningMessage] = useState('');
+  const [savingDecision, setSavingDecision] = useState('');
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -125,6 +131,64 @@ const PastaAnnotationsLabPage = () => {
     loadData();
   }, [loadData]);
 
+  const saveLearningDecision = useCallback(async (suggestion, decision) => {
+    setSavingDecision(suggestion.id);
+    setLearningMessage('');
+    setError('');
+    try {
+      await axios.post(
+        `${API}/lab/pasta-annotations/decisions`,
+        {
+          left_target: suggestion.left.target,
+          right_target: suggestion.right.target,
+          decision,
+          ...(decision === 'same'
+            ? { canonical_target: suggestion.suggested_canonical }
+            : {}),
+        },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      await loadData();
+      setLearningMessage(
+        decision === 'same'
+          ? `${suggestion.suggested_alias} ora viene letto come ${suggestion.suggested_canonical}.`
+          : 'Coppia registrata come diversa: non verrà riproposta.',
+      );
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.detail
+        || 'Impossibile registrare la decisione.',
+      );
+    } finally {
+      setSavingDecision('');
+    }
+  }, [loadData, token]);
+
+  const undoLearningDecision = useCallback(async (decision) => {
+    const label = decision.alias_normalized
+      ? `${decision.alias_normalized} diventa ${decision.canonical_normalized}`
+      : `${decision.left_normalized} e ${decision.right_normalized} sono diversi`;
+    if (!window.confirm(`Annullare la decisione "${label}"?`)) return;
+    setSavingDecision(decision.id);
+    setLearningMessage('');
+    setError('');
+    try {
+      await axios.delete(
+        `${API}/lab/pasta-annotations/decisions/${decision.id}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      await loadData();
+      setLearningMessage('Decisione annullata.');
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.detail
+        || 'Impossibile annullare la decisione.',
+      );
+    } finally {
+      setSavingDecision('');
+    }
+  }, [loadData, token]);
+
   const pastaOptions = useMemo(
     () => Object.keys(data?.pasta_counts || {}).sort(),
     [data],
@@ -143,6 +207,14 @@ const PastaAnnotationsLabPage = () => {
   );
   const filteredGroups = useMemo(
     () => filterPagerGroups(data?.grouping?.examples, search, pasta),
+    [data, search, pasta],
+  );
+  const filteredSuggestions = useMemo(
+    () => filterLearningSuggestions(
+      data?.learning?.suggestions,
+      search,
+      pasta,
+    ),
     [data, search, pasta],
   );
   const displayedCount = useCallback(
@@ -168,24 +240,41 @@ const PastaAnnotationsLabPage = () => {
 
   const summary = data?.summary || {};
   const grouping = data?.grouping || {};
+  const learning = data?.learning || {};
   const viewCount = {
+    learning: filteredSuggestions.length,
     signals: filteredSignals.length,
     unknown: filteredUnknowns.length,
     raw: filteredAnnotations.length,
     groups: filteredGroups.length,
   }[activeView] || 0;
   const activeViewHasContent = (
-    activeView === 'groups'
+    activeView === 'learning'
+      ? true
+      : activeView === 'groups'
       ? Number(grouping.reconstructed_group_count || 0) > 0
       : viewCount > 0
   );
 
   const emptyLabel = {
+    learning: 'Nessuna proposta da verificare',
     signals: 'Nessun segnale nel periodo',
     unknown: 'Nessun testo da interpretare',
     raw: 'Nessuna frase completa nel periodo',
     groups: 'Nessuna comanda multipla ricostruita',
   }[activeView];
+
+  const renderLearning = () => (
+    <PastaAnnotationLearningPanel
+      suggestions={filteredSuggestions}
+      confirmedAliases={learning.confirmed_aliases || []}
+      dismissedPairs={learning.dismissed_pairs || []}
+      message={learningMessage}
+      saving={Boolean(savingDecision)}
+      onDecision={saveLearningDecision}
+      onUndo={undoLearningDecision}
+    />
+  );
 
   const renderSignals = () => (
     <div className="overflow-x-auto">
@@ -404,7 +493,9 @@ const PastaAnnotationsLabPage = () => {
               Laboratorio / Annotazioni paste
             </span>
           </div>
-          <span className="text-xs font-semibold text-gray-800 shrink-0">Sola lettura</span>
+          <span className="text-xs font-semibold text-gray-800 shrink-0">
+            Apprendimento assistito
+          </span>
         </div>
 
         <div className="flex items-start justify-between gap-4 mb-5">
@@ -412,7 +503,9 @@ const PastaAnnotationsLabPage = () => {
             <h1 className="font-heading text-2xl sm:text-3xl font-bold text-gray-950 uppercase">
               Annotazioni paste
             </h1>
-            <p className="text-sm text-gray-500 mt-1">Segnali, richieste e probabili comande</p>
+            <p className="text-sm text-gray-500 mt-1">
+              Il sistema propone, tu decidi cosa significa
+            </p>
           </div>
           <button
             type="button"
@@ -566,6 +659,7 @@ const PastaAnnotationsLabPage = () => {
             </div>
           ) : (
             <>
+              {activeView === 'learning' && renderLearning()}
               {activeView === 'signals' && renderSignals()}
               {activeView === 'unknown' && renderUnknowns()}
               {activeView === 'raw' && renderRaw()}
@@ -577,6 +671,7 @@ const PastaAnnotationsLabPage = () => {
         <div className="mt-4 text-xs text-gray-500 flex flex-wrap items-center justify-between gap-3">
           <span>
             Parser v{data?.parser_version || 1} / regole v{data?.ruleset_version || 1}
+            {' / '}apprendimento v{learning.version || 1}
           </span>
           <span>
             Gruppi pager v{grouping.rule_version || 1} / ricostruzioni non autoritative

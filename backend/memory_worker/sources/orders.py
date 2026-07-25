@@ -4,7 +4,10 @@ from datetime import datetime, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from annotation_semantics import extract_pasta_annotation
+from annotation_semantics import (
+    extract_pasta_annotation,
+    normalize_annotation_target,
+)
 
 ROME_TZ = ZoneInfo("Europe/Rome")
 ORDER_NORMALIZER_VERSION = 2
@@ -110,10 +113,30 @@ def _order_identity(
     return f"order:{hashlib.sha256(canonical.encode('utf-8')).hexdigest()}"
 
 
-def _memory_annotation(description: str) -> Optional[dict]:
+def pasta_annotation_aliases_from_documents(
+    documents: list[dict],
+) -> dict[str, str]:
+    aliases = {}
+    for item in documents or []:
+        if item.get("active") is False:
+            continue
+        alias = normalize_annotation_target(item.get("alias_normalized") or "")
+        canonical = normalize_annotation_target(
+            item.get("canonical_normalized") or ""
+        )
+        if alias and canonical and alias != canonical:
+            aliases[alias] = canonical
+    return aliases
+
+
+def _memory_annotation(
+    description: str,
+    target_aliases: Optional[dict[str, str]] = None,
+) -> Optional[dict]:
     return extract_pasta_annotation(
         description,
         DEFAULT_MEMORY_PASTA_CODES,
+        target_aliases=target_aliases,
     )
 
 
@@ -123,6 +146,7 @@ def normalize_order_record(
     *,
     captured_at: datetime,
     activation_epoch: datetime,
+    target_aliases: Optional[dict[str, str]] = None,
 ) -> tuple[str, datetime, dict]:
     restaurant_id = str(document.get("restaurant_id") or "").strip()
     if not restaurant_id:
@@ -159,7 +183,10 @@ def normalize_order_record(
             "occurred_at": created_at,
             "order_number": order_number,
             "description": description,
-            "pasta_annotation": _memory_annotation(description),
+            "pasta_annotation": _memory_annotation(
+                description,
+                target_aliases,
+            ),
             "annotation_quality": {
                 "dictionary_source": "worker_default_codes",
                 "restaurant_overrides_applied": False,
@@ -206,7 +233,10 @@ def normalize_order_record(
             "original_created_at": original_created_at,
             "order_number": order_number,
             "description": description,
-            "pasta_annotation": _memory_annotation(description),
+            "pasta_annotation": _memory_annotation(
+                description,
+                target_aliases,
+            ),
             "quality": {"original_order_id_available": False},
         }
         return source_id, source_timestamp, fact
@@ -234,8 +264,14 @@ def normalize_order_record(
             "order_number": document.get("order_number"),
             "old_description": old_description,
             "new_description": new_description,
-            "old_pasta_annotation": _memory_annotation(old_description),
-            "new_pasta_annotation": _memory_annotation(new_description),
+            "old_pasta_annotation": _memory_annotation(
+                old_description,
+                target_aliases,
+            ),
+            "new_pasta_annotation": _memory_annotation(
+                new_description,
+                target_aliases,
+            ),
             "quality": {
                 "original_created_at_available": False,
                 "business_date_uses_modification_time": True,
@@ -254,6 +290,7 @@ async def collect_order_stream(
     stream: OrderStream,
     batch_size: int,
     captured_at: Optional[datetime] = None,
+    target_aliases: Optional[dict[str, str]] = None,
 ) -> dict:
     captured = (captured_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
     activation_epoch = epoch["activated_at"].astimezone(timezone.utc)
@@ -309,6 +346,7 @@ async def collect_order_stream(
                 stream,
                 captured_at=captured,
                 activation_epoch=activation_epoch,
+                target_aliases=target_aliases,
             )
             result = await store.save_order_version(
                 epoch_id=epoch["id"],

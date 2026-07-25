@@ -1,5 +1,6 @@
 import {
   canAccessLaboratory,
+  filterLearningSuggestions,
   filterPagerGroups,
   filterPastaAnnotations,
   filterSemanticSignals,
@@ -99,5 +100,44 @@ describe('formatSourceTerms', () => {
       'NO GUANC (33) · NO GUANCIALE (7) · SENZA GUANCIALE (32) · SENZA GUANC (15) · +1',
     );
     expect(terms).toHaveLength(5);
+  });
+});
+
+describe('filterLearningSuggestions', () => {
+  const suggestions = [
+    {
+      left: {
+        target: 'GUANCIALE',
+        pasta_counts: { CARB: 8 },
+        source_terms: [{ value: 'NO GUANCIALE', count: 8 }],
+      },
+      right: {
+        target: 'GUANCI',
+        pasta_counts: { AMAT: 2 },
+        source_terms: [{ value: 'SENZA GUANCI', count: 2 }],
+      },
+    },
+    {
+      left: {
+        target: 'SALE',
+        pasta_counts: { CACIO: 3 },
+        source_terms: [],
+      },
+      right: {
+        target: 'SAL',
+        pasta_counts: { CACIO: 1 },
+        source_terms: [],
+      },
+    },
+  ];
+
+  test('filters assisted-learning proposals by text and pasta', () => {
+    expect(filterLearningSuggestions(suggestions, 'guanci', '')).toEqual([
+      suggestions[0],
+    ]);
+    expect(filterLearningSuggestions(suggestions, '', 'CARB')).toEqual([
+      suggestions[0],
+    ]);
+    expect(filterLearningSuggestions(suggestions, 'sale', 'AMAT')).toEqual([]);
   });
 });

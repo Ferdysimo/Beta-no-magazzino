@@ -4,7 +4,12 @@ from .configuration import (
     default_annotation_semantics_rule,
     normalize_configuration_record,
 )
-from .orders import ORDER_STREAMS, collect_order_stream, normalize_order_record
+from .orders import (
+    ORDER_STREAMS,
+    collect_order_stream,
+    normalize_order_record,
+    pasta_annotation_aliases_from_documents,
+)
 from .report import REPORT_STREAMS, collect_report_stream, normalize_report_record
 from .warehouse import (
     WAREHOUSE_STREAMS,
@@ -25,6 +30,7 @@ __all__ = [
     "collect_warehouse_stream",
     "normalize_configuration_record",
     "normalize_order_record",
+    "pasta_annotation_aliases_from_documents",
     "normalize_report_record",
     "normalize_warehouse_record",
 ]

@@ -86,6 +86,32 @@ def test_pasta_dictionary_and_beverage_prices_use_integer_cents():
     assert beverage["price_cents"] == 250
 
 
+def test_confirmed_pasta_alias_is_collected_as_versioned_configuration():
+    source_id, timestamp, fact = normalize_configuration_record(
+        {
+            "id": "alias-1",
+            "alias_normalized": "guanci",
+            "canonical_normalized": "guanciale",
+            "active": True,
+            "learning_version": 1,
+            "source": "assisted_confirmation",
+            "created_by_username": "Simone",
+            "created_at": "2026-07-20T14:10:00+00:00",
+            "updated_at": "2026-07-20T14:12:00+00:00",
+        },
+        _stream("configuration_pasta_annotation_aliases"),
+        captured_at=CAPTURED,
+        activation_epoch=ACTIVATION,
+    )
+
+    assert source_id == "pasta-annotation-alias:GUANCI"
+    assert timestamp == datetime(2026, 7, 20, 14, 12, tzinfo=timezone.utc)
+    assert fact["alias_normalized"] == "GUANCI"
+    assert fact["canonical_normalized"] == "GUANCIALE"
+    assert fact["confirmed_by"]["username"] == "Simone"
+    assert fact["quality"]["human_confirmation_required"] is True
+
+
 def test_default_pasta_rule_is_versioned_and_matches_operational_backend():
     source_id, timestamp, fact, raw = default_pasta_rule(
         captured_at=CAPTURED,
@@ -154,6 +180,7 @@ def test_configuration_streams_cover_local_prices_catalog_and_suppliers():
     assert {stream.collection for stream in CONFIGURATION_STREAMS} == {
         "restaurants",
         "pasta_dictionary",
+        "lab_pasta_annotation_aliases",
         "beverages",
         "suppliers",
     }

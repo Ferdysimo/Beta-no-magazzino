@@ -124,6 +124,22 @@ async def initialize_application():
         await db.lab_document_aliases.create_index(
             [("target_id", 1), ("last_confirmed_at", -1)]
         )
+        await db.lab_pasta_annotation_aliases.create_index(
+            [("alias_normalized", 1)],
+            unique=True,
+            name="uniq_lab_pasta_annotation_alias",
+        )
+        await db.lab_pasta_annotation_aliases.create_index(
+            [("canonical_normalized", 1), ("updated_at", -1)]
+        )
+        await db.lab_pasta_annotation_dismissals.create_index(
+            [("pair_key", 1)],
+            unique=True,
+            name="uniq_lab_pasta_annotation_dismissal",
+        )
+        await db.lab_pasta_annotation_dismissals.create_index(
+            [("updated_at", -1)]
+        )
     except Exception as e:
         logger.warning(f"Could not create laboratory scanner indexes: {e}")
     logger.info("MongoDB indexes created")

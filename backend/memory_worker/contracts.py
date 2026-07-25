@@ -57,6 +57,11 @@ SOURCE_CONTRACTS = (
     SourceContract("beverage_carichi", "warehouse", ("created_at",)),
     SourceContract("restaurants", "configuration", ("updated_at", "created_at")),
     SourceContract("pasta_dictionary", "configuration", ("updated_at", "created_at")),
+    SourceContract(
+        "lab_pasta_annotation_aliases",
+        "configuration",
+        ("updated_at", "created_at"),
+    ),
     SourceContract("beverages", "configuration", ()),
     SourceContract("suppliers", "configuration", ("updated_at", "created_at")),
 )

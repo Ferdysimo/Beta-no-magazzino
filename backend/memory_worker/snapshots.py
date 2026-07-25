@@ -248,6 +248,7 @@ def _annotation_summary(
     deletions: list[dict],
     *,
     pasta_codes: Optional[Iterable[str]] = None,
+    target_aliases: Optional[dict[str, str]] = None,
     dictionary_source: str = "worker_default_codes",
 ) -> dict:
     valid = _valid_order_states(states, deletions)
@@ -257,6 +258,7 @@ def _annotation_summary(
             extract_pasta_annotation(
                 item.get("description") or "",
                 pasta_codes,
+                target_aliases=target_aliases,
             )
             if pasta_codes is not None
             else item.get("pasta_annotation")
@@ -349,6 +351,7 @@ def _annotation_summary(
             "restaurant_dictionary_overrides_applied": (
                 dictionary_source == "restaurant_override"
             ),
+            "human_confirmed_alias_count": len(target_aliases or {}),
             "raw_descriptions_replayable": True,
             "pager_groups_authoritative": False,
         },
@@ -428,6 +431,7 @@ async def _restaurant_snapshot(
     pasta_dictionary: Optional[dict],
     default_pasta_rule: Optional[dict],
     annotation_rule: Optional[dict],
+    annotation_aliases: Optional[dict[str, str]],
     context_id: str,
     watermarks: dict[str, dict],
     expected_beverage_codes: set[str],
@@ -696,6 +700,7 @@ async def _restaurant_snapshot(
             "boiler_count": (configuration or {}).get("boiler_count"),
             "report_code": (configuration or {}).get("report_code"),
             "pasta_dictionary_fact_id": (pasta_dictionary or {}).get("id"),
+            "pasta_annotation_alias_count": len(annotation_aliases or {}),
         },
         "orders": _orders_summary(
             order_states,
@@ -706,6 +711,7 @@ async def _restaurant_snapshot(
             order_states,
             order_deletions,
             pasta_codes=annotation_pasta_codes,
+            target_aliases=annotation_aliases,
             dictionary_source=annotation_dictionary_source,
         ),
         "paste": _paste_summary(cash),
@@ -994,6 +1000,28 @@ async def build_daily_snapshots(
                 for item in memory_rules
                 if item.get("rule_kind")
             }
+            annotation_alias_states = await _read(
+                store,
+                "memory_configuration_versions",
+                _state_at_end_of_day(
+                    {
+                        "epoch_id": epoch["id"],
+                        "fact_kind": "pasta_annotation_alias_state",
+                    },
+                    selected_date,
+                ),
+            )
+            annotation_aliases = {
+                str(item.get("alias_normalized") or ""): str(
+                    item.get("canonical_normalized") or ""
+                )
+                for item in annotation_alias_states
+                if (
+                    item.get("present")
+                    and item.get("alias_normalized")
+                    and item.get("canonical_normalized")
+                )
+            }
             candidate_ids = {
                 item["restaurant_id"]
                 for item in configurations
@@ -1049,6 +1077,7 @@ async def build_daily_snapshots(
                     pasta_dictionary=pasta_dictionary_by_id.get(restaurant_id),
                     default_pasta_rule=memory_rules_by_kind.get("default_pasta_prices"),
                     annotation_rule=memory_rules_by_kind.get("annotation_semantics"),
+                    annotation_aliases=annotation_aliases,
                     context_id=context_result["id"],
                     watermarks=watermarks,
                     expected_beverage_codes=expected_beverage_codes,

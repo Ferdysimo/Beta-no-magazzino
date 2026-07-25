@@ -383,20 +383,26 @@ restano escluse come nel comportamento operativo. Il parser semantico v3 separa:
 - frammenti ancora da interpretare, ai quali non viene assegnato un significato
   inventato. `T`, finche non viene chiarito, resta esplicitamente sconosciuto.
 
-La pagina separa Segnali, Da interpretare, Frasi complete e Probabili comande.
-I Segnali espongono le varianti effettivamente scritte sotto il concetto
-canonico. Non viene applicato fuzzy matching automatico: un alias entra nelle
-statistiche aggregate soltanto dopo essere stato censito nel ruleset.
+La pagina separa Da confermare, Segnali, Da interpretare, Frasi complete e
+Probabili comande. I Segnali espongono le varianti effettivamente scritte sotto
+il concetto canonico. La similarita testuale viene usata soltanto per proporre
+a Simone coppie osservate nello stesso contesto semantico; non produce mai una
+fusione automatica. Simone puo confermare `Uguali`, registrare `Diverse` per non
+ricevere nuovamente la proposta, oppure annullare entrambe le decisioni.
+Un alias confermato viene applicato retroattivamente alle statistiche del
+periodo senza modificare le descrizioni originali.
 Espone sia il numero di paste coinvolte sia, quando esiste un pager affidabile,
 il numero di comande ricostruite. Una comanda probabile richiede stesso locale,
 giornata e pager, massimo 90 secondi tra righe adiacenti e numeri ordine distanti
 al massimo 8. La ricostruzione e dichiarata non autoritativa.
 
-Il Laboratorio resta in sola lettura e non salva o modifica ordini. Quando la
-Memoria operativa viene attivata, lo stesso parser condiviso registra osservazioni
-versionate nei fatti ordine e aggregati negli snapshot giornalieri. Gli snapshot
-usano il dizionario del locale valido in quella data, escludono gli ordini
-cancellati e mantengono il raw necessario a ricalcolare regole future.
+Lo storico operativo resta in sola lettura: il Laboratorio non salva o modifica
+ordini. Le sole scritture avvengono nelle collection isolate
+`lab_pasta_annotation_aliases` e `lab_pasta_annotation_dismissals`, con versione,
+autore e data. Le route GET, POST e DELETE restano riservate esclusivamente a
+Simone. Quando la Memoria operativa viene attivata, alias confermati e parser
+condiviso vengono raccolti come configurazioni versionate; fatti e snapshot
+mantengono il raw necessario a ricalcolare regole future.
 
 Lo Scanner documenti esegue OCR italiano nel browser su fotografie di DDT,
 fatture e note di credito. La foto non viene inviata al backend e gli asset OCR

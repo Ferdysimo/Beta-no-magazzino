@@ -380,8 +380,12 @@ Il ruleset 2 aggiunge un livello separato di canonicalizzazione lessicale per
 bersagli confermati delle richieste: per esempio `GUANC`, `GUANCIALE` e refusi
 storici esplicitamente censiti producono il concetto `GUANCIALE`, mentre il
 testo sorgente resta invariato e conteggiabile. Le regole sono una allowlist
-versionata ricavata dallo storico; non viene usato fuzzy matching automatico e
-ogni termine non censito resta letterale. Numeri pager, quantita e numeri
+versionata ricavata dallo storico. Il livello di apprendimento assistito v1 puo
+usare la similarita soltanto per generare proposte tra bersagli osservati nello
+stesso contesto; l'alias diventa effettivo esclusivamente dopo conferma di
+Simone. Le coppie dichiarate diverse vengono ricordate e ogni decisione e
+reversibile. Non esiste fuzzy matching che modifichi autonomamente i risultati:
+ogni termine non confermato resta letterale. Numeri pager, quantita e numeri
 contestuali restano osservazioni strutturate ma non entrano nelle frequenze
 testuali.
 
@@ -401,10 +405,13 @@ devono restare distinti dal conteggio certo delle paste.
 Il modulo neutro `backend/annotation_semantics.py` non importa ne l'app ne il
 worker. Il servizio Laboratorio usa il riconoscitore operativo e delega a questo
 modulo; il worker usa lo stesso modulo senza creare una dipendenza dell'app dalla
-Memoria. I fatti ordine conservano descrizione raw e derivato semantico. Gli
-snapshot giornalieri ricalcolano il derivato con il dizionario del locale valido
-alla data, usano solo lo stato finale non cancellato e registrano parser,
-ruleset, regola pager e fonti nella provenienza.
+Memoria. Gli alias confermati vivono in `lab_pasta_annotation_aliases`; il worker
+li legge in sola lettura, li conserva come `pasta_annotation_alias_state`
+versionati e applica la versione valida nel derivato e negli snapshot. I fatti
+ordine conservano descrizione raw e derivato semantico. Gli snapshot giornalieri
+ricalcolano il derivato con dizionario e alias validi alla data, usano solo lo
+stato finale non cancellato e registrano parser, ruleset, apprendimento, regola
+pager e fonti nella provenienza.
 
 ### 11.2 Denaro e formule
 

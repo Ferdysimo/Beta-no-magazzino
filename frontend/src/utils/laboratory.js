@@ -65,3 +65,20 @@ export const filterPagerGroups = (groups, search, pasta) => {
     return matchesSearch && matchesPasta;
   });
 };
+
+export const filterLearningSuggestions = (suggestions, search, pasta) => {
+  const normalizedSearch = String(search || '').trim().toUpperCase();
+  return (suggestions || []).filter((item) => {
+    const sides = [item.left, item.right];
+    const matchesSearch = !normalizedSearch || sides.some(side => (
+      String(side?.target || '').toUpperCase().includes(normalizedSearch)
+      || (side?.source_terms || []).some(term => (
+        String(term.value || '').toUpperCase().includes(normalizedSearch)
+      ))
+    ));
+    const matchesPasta = !pasta || sides.some(
+      side => Number(side?.pasta_counts?.[pasta] || 0) > 0,
+    );
+    return matchesSearch && matchesPasta;
+  });
+};

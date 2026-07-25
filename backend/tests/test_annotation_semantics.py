@@ -123,6 +123,33 @@ def test_unknown_request_target_stays_literal_and_is_not_fuzzy_matched():
     assert "target_rule_id" not in signal
 
 
+def test_confirmed_learned_alias_is_applied_without_changing_source_text():
+    parsed = extract_pasta_annotation(
+        "CARB NO GUANCI 12",
+        PASTA_CODES,
+        target_aliases={"GUANCI": "GUANCIALE"},
+    )
+    signal = parsed["signals"][0]
+
+    assert signal["code"] == "without:guanciale"
+    assert signal["target"] == "GUANCIALE"
+    assert signal["target_source"] == "GUANCI"
+    assert signal["target_rule_id"] == "target.learned.guanci"
+    assert signal["source"] == "NO GUANCI"
+    assert parsed["annotation_normalized"] == "NO GUANCI"
+
+
+def test_invalid_learned_alias_cycle_does_not_guess_a_target():
+    parsed = extract_pasta_annotation(
+        "CARB NO GUANCI 12",
+        PASTA_CODES,
+        target_aliases={"GUANCI": "GUANCIAX", "GUANCIAX": "GUANCI"},
+    )
+
+    assert parsed["signals"][0]["target"] == "GUANCI"
+    assert "target_rule_id" not in parsed["signals"][0]
+
+
 def test_quantity_and_pager_numbers_keep_different_roles():
     parsed = extract_pasta_annotation("CARB 2 COCA DEL 12", PASTA_CODES)
 

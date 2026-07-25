@@ -513,6 +513,10 @@ sudo -u pastasciutta-memory bash -c '
         rule_kind: \"annotation_semantics\",
         ruleset_version: 2
       }),
+      learned_annotation_aliases: db.memory_configuration_versions.countDocuments({
+        fact_kind: \"pasta_annotation_alias_state\",
+        present: true
+      }),
       parsed_annotations: db.memory_order_facts.countDocuments({
         \"pasta_annotation.parser_version\": 3
       }),
@@ -528,7 +532,9 @@ Risultato minimo:
 - un epoch attivo;
 - watermark presenti;
 - collezioni Memoria create;
-- una regola `annotation_semantics` v1;
+- una regola `annotation_semantics` con `ruleset_version: 2`;
+- `learned_annotation_aliases` coerente con gli alias confermati presenti
+  nell'applicazione, anche zero se Simone non ha ancora registrato decisioni;
 - `parsed_annotations` maggiore di zero appena viene acquisita almeno una pasta
   riconosciuta dopo il momento zero;
 - `quarantine` compresa e senza crescita anomala;

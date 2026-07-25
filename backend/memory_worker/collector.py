@@ -10,6 +10,7 @@ from .sources import (
     collect_order_stream,
     collect_report_stream,
     collect_warehouse_stream,
+    pasta_annotation_aliases_from_documents,
 )
 from .sources.configuration import (
     default_annotation_semantics_rule,
@@ -88,6 +89,21 @@ async def collect_orders_once(settings: MemorySettings) -> dict:
             source_database=settings.source_db_name,
             activated_at=_activation_datetime(settings),
         )
+        alias_documents = await source.find_batch(
+            "lab_pasta_annotation_aliases",
+            {"active": {"$ne": False}},
+            {
+                "_id": 0,
+                "alias_normalized": 1,
+                "canonical_normalized": 1,
+                "active": 1,
+            },
+            sort=[("alias_normalized", 1)],
+            limit=500,
+        )
+        target_aliases = pasta_annotation_aliases_from_documents(
+            alias_documents
+        )
         lease_owner = await store.acquire_collector_lease(
             epoch_id=epoch["id"],
             collector="orders",
@@ -103,6 +119,7 @@ async def collect_orders_once(settings: MemorySettings) -> dict:
                         stream=stream,
                         batch_size=settings.batch_size,
                         captured_at=started_at,
+                        target_aliases=target_aliases,
                     )
                 )
         finally:
@@ -120,6 +137,7 @@ async def collect_orders_once(settings: MemorySettings) -> dict:
                 "activated_at_utc": epoch["activated_at"].isoformat(),
             },
             "permissions": permissions,
+            "annotation_aliases_loaded": len(target_aliases),
             "streams": streams,
             "totals": {
                 "seen": sum(item["seen"] for item in streams),

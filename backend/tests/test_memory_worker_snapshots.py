@@ -132,3 +132,30 @@ def test_annotation_snapshot_can_reparse_custom_restaurant_pasta_codes():
     assert result["recognized_pasta_row_count"] == 1
     assert result["signals"][0]["signal_key"] == "service_mode:take_away"
     assert result["quality"]["restaurant_dictionary_overrides_applied"] is True
+
+
+def test_annotation_snapshot_uses_versioned_human_confirmed_aliases():
+    states = [
+        {
+            "entity_key": "order-learned",
+            "restaurant_id": "restaurant-1",
+            "business_date": "2026-07-21",
+            "occurred_at": "2026-07-21T19:00:00+00:00",
+            "order_number": 1,
+            "order_id": "order-learned",
+            "description": "CARB NO GUANCI",
+            "pasta_annotation": None,
+        }
+    ]
+
+    result = _annotation_summary(
+        states,
+        [],
+        pasta_codes={"CARB"},
+        target_aliases={"GUANCI": "GUANCIALE"},
+        dictionary_source="restaurant_override",
+    )
+
+    assert result["signals"][0]["signal_key"] == (
+        "preparation_request:without:guanciale"
+    )
