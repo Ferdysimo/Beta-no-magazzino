@@ -391,6 +391,11 @@ fusione automatica. Simone puo confermare `Uguali`, registrare `Diverse` per non
 ricevere nuovamente la proposta, oppure annullare entrambe le decisioni.
 Un alias confermato viene applicato retroattivamente alle statistiche del
 periodo senza modificare le descrizioni originali.
+Per proteggere i flussi operativi, una sola analisi annotazioni puo essere
+eseguita per processo e il backend verifica il volume prima di caricare gli
+ordini: oltre 50.000 documenti sorgente la richiesta viene rifiutata invitando
+a restringere le date o selezionare un locale. Le modifiche ai filtri restano
+in bozza finche Simone non preme il comando Aggiorna.
 Espone sia il numero di paste coinvolte sia, quando esiste un pager affidabile,
 il numero di comande ricostruite. Una comanda probabile richiede stesso locale,
 giornata e pager, massimo 90 secondi tra righe adiacenti e numeri ordine distanti

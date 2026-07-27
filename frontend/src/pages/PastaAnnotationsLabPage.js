@@ -95,6 +95,11 @@ const PastaAnnotationsLabPage = () => {
   const { token } = useAuth();
   const [period, setPeriod] = useState(initialPeriod);
   const [restaurantId, setRestaurantId] = useState('');
+  const [appliedFilters, setAppliedFilters] = useState(() => ({
+    ...initialPeriod(),
+    restaurantId: '',
+    revision: 0,
+  }));
   const [pasta, setPasta] = useState('');
   const [search, setSearch] = useState('');
   const [activeView, setActiveView] = useState('learning');
@@ -111,9 +116,11 @@ const PastaAnnotationsLabPage = () => {
       const response = await axios.get(`${API}/lab/pasta-annotations`, {
         headers: { Authorization: `Bearer ${token}` },
         params: {
-          start_date: period.start,
-          end_date: period.end,
-          ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+          start_date: appliedFilters.start,
+          end_date: appliedFilters.end,
+          ...(appliedFilters.restaurantId
+            ? { restaurant_id: appliedFilters.restaurantId }
+            : {}),
         },
       });
       setData(response.data);
@@ -125,11 +132,20 @@ const PastaAnnotationsLabPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [period.start, period.end, restaurantId, token]);
+  }, [appliedFilters, token]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const applyFilters = useCallback(() => {
+    setAppliedFilters(current => ({
+      start: period.start,
+      end: period.end,
+      restaurantId,
+      revision: current.revision + 1,
+    }));
+  }, [period.end, period.start, restaurantId]);
 
   const saveLearningDecision = useCallback(async (suggestion, decision) => {
     setSavingDecision(suggestion.id);
@@ -554,7 +570,7 @@ const PastaAnnotationsLabPage = () => {
             </label>
             <button
               type="button"
-              onClick={loadData}
+              onClick={applyFilters}
               disabled={loading}
               title="Aggiorna dati"
               aria-label="Aggiorna dati"

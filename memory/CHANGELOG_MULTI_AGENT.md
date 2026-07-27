@@ -178,6 +178,17 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-27 22:45 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix | performance | UX | test
+**File toccati**:
+- `/app/backend/app/routers/laboratory.py`
+- `/app/backend/tests/test_pasta_annotations_lab.py`
+- `/app/frontend/src/pages/PastaAnnotationsLabPage.js`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Protetta la pagina Annotazioni paste dai crash con intervalli estesi. Prima di materializzare gli ordini il backend conta i documenti tramite indici e rifiuta volumi superiori a 50.000 con un errore leggibile; inoltre consente una sola analisi per processo. Date e locale non lanciano piu richieste a ogni modifica ma vengono applicati soltanto premendo Aggiorna.
+**Testato**: si (metodo: suite backend completa `178 passed, 36 skipped`; suite frontend completa `20 passed`; build React produzione completata con soli warning Hook preesistenti; test dedicati su limite volume e analisi concorrente)
+**Note per il prossimo agente**: Il limite riguarda i documenti sorgente in `orders` + `archived_orders`, non il numero deduplicato finale. Non alzarlo senza una versione streaming/aggregata del calcolo: `canonical_orders`, ordinamento e osservazioni semantiche sono ancora materializzati in RAM.
+
 ### [2026-07-27 22:32 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: UX | cleanup | test
 **File toccati**:

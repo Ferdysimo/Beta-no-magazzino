@@ -1,8 +1,15 @@
+import asyncio
 import pytest
 from fastapi import HTTPException
 from datetime import datetime, timedelta, timezone
 
-from app.routers.laboratory import _parse_lab_date, _require_simone_laboratory
+from app.routers.laboratory import (
+    MAX_LAB_ORDER_DOCUMENTS,
+    _guard_pasta_annotation_volume,
+    _parse_lab_date,
+    _require_simone_laboratory,
+    _reserve_pasta_annotations_request,
+)
 from app.bootstrap import app
 from app.services.pasta_annotations import (
     PASTA_ANNOTATION_PARSER_VERSION,
@@ -13,6 +20,78 @@ from app.services.pasta_annotations import (
 )
 
 PASTA_DICT = {"CARB": 8, "AMAT": 8}
+
+
+class _CountCollection:
+    def __init__(self, count):
+        self.count = count
+        self.calls = []
+
+    async def count_documents(self, query, *, limit):
+        self.calls.append({"query": query, "limit": limit})
+        return min(self.count, limit)
+
+
+class _CountDatabase:
+    def __init__(self, orders, archived_orders):
+        self.collections = {
+            "orders": _CountCollection(orders),
+            "archived_orders": _CountCollection(archived_orders),
+        }
+
+    def __getitem__(self, name):
+        return self.collections[name]
+
+
+def test_annotation_volume_guard_accepts_a_bounded_result():
+    async def scenario():
+        database = _CountDatabase(1200, 3400)
+        count = await _guard_pasta_annotation_volume(
+            database,
+            restaurant_ids=["rest-a"],
+            start_utc="2026-07-01T00:00:00+00:00",
+            end_utc="2026-08-01T00:00:00+00:00",
+        )
+
+        assert count == 4600
+        assert database.collections["orders"].calls[0]["limit"] == (
+            MAX_LAB_ORDER_DOCUMENTS + 1
+        )
+
+    asyncio.run(scenario())
+
+
+def test_annotation_volume_guard_rejects_before_loading_too_many_orders():
+    async def scenario():
+        database = _CountDatabase(MAX_LAB_ORDER_DOCUMENTS, 1)
+        with pytest.raises(HTTPException) as exc_info:
+            await _guard_pasta_annotation_volume(
+                database,
+                restaurant_ids=["rest-a"],
+                start_utc="2026-01-01T00:00:00+00:00",
+                end_utc="2027-01-01T00:00:00+00:00",
+            )
+
+        assert exc_info.value.status_code == 400
+        assert "Riduci le date" in exc_info.value.detail
+        assert database.collections["archived_orders"].calls[0]["limit"] == 1
+
+    asyncio.run(scenario())
+
+
+def test_annotation_requests_do_not_run_concurrently():
+    async def scenario():
+        first = _reserve_pasta_annotations_request()
+        await first.__anext__()
+        try:
+            second = _reserve_pasta_annotations_request()
+            with pytest.raises(HTTPException) as exc_info:
+                await second.__anext__()
+            assert exc_info.value.status_code == 429
+        finally:
+            await first.aclose()
+
+    asyncio.run(scenario())
 
 
 def test_extracts_only_annotations_from_pastas_recognized_by_current_parser():

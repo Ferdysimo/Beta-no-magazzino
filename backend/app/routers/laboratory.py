@@ -1,3 +1,4 @@
+import asyncio
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
@@ -36,6 +37,8 @@ from app.services.report import _get_pasta_dict_for, _pasta_dict_from_snapshot
 
 router = APIRouter()
 MAX_LAB_RANGE_DAYS = 366
+MAX_LAB_ORDER_DOCUMENTS = 50000
+_PASTA_ANNOTATIONS_REQUEST_LOCK = asyncio.Lock()
 
 
 def _require_simone_laboratory(token_data: dict) -> None:
@@ -56,6 +59,48 @@ def _parse_lab_date(value: Optional[str], *, default: date, field: str) -> date:
             status_code=400,
             detail=f"{field} deve usare il formato YYYY-MM-DD",
         ) from exc
+
+
+async def _reserve_pasta_annotations_request():
+    if _PASTA_ANNOTATIONS_REQUEST_LOCK.locked():
+        raise HTTPException(
+            status_code=429,
+            detail="Analisi annotazioni gia in corso. Attendi il completamento.",
+        )
+    await _PASTA_ANNOTATIONS_REQUEST_LOCK.acquire()
+    try:
+        yield
+    finally:
+        _PASTA_ANNOTATIONS_REQUEST_LOCK.release()
+
+
+async def _guard_pasta_annotation_volume(
+    database,
+    *,
+    restaurant_ids: list[str],
+    start_utc: str,
+    end_utc: str,
+) -> int:
+    document_count = 0
+    for collection_name, timestamp_field in ANALYSIS_ORDER_SOURCES:
+        remaining = MAX_LAB_ORDER_DOCUMENTS - document_count
+        count = await database[collection_name].count_documents(
+            {
+                "restaurant_id": {"$in": restaurant_ids},
+                timestamp_field: {"$gte": start_utc, "$lt": end_utc},
+            },
+            limit=remaining + 1,
+        )
+        document_count += count
+        if document_count > MAX_LAB_ORDER_DOCUMENTS:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Intervallo troppo ampio per il volume di ordini. "
+                    "Riduci le date o seleziona un solo locale."
+                ),
+            )
+    return document_count
 
 
 @router.get("/lab/document-scanner/context")
@@ -117,6 +162,7 @@ async def get_pasta_annotations_lab(
     end_date: Optional[str] = Query(default=None),
     restaurant_id: Optional[str] = Query(default=None),
     token_data: dict = Depends(verify_token),
+    _request_slot: None = Depends(_reserve_pasta_annotations_request),
 ):
     _require_simone_laboratory(token_data)
     learning_state = await load_pasta_annotation_learning(db)
@@ -198,6 +244,12 @@ async def get_pasta_annotations_lab(
 
     start_utc, _ = _rome_date_bounds_utc(selected_start.isoformat())
     _, end_utc = _rome_date_bounds_utc(selected_end.isoformat())
+    await _guard_pasta_annotation_volume(
+        db,
+        restaurant_ids=restaurant_ids,
+        start_utc=start_utc,
+        end_utc=end_utc,
+    )
     projection = {
         "_id": 0,
         "id": 1,
