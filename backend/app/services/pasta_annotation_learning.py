@@ -18,6 +18,8 @@ MAX_SUGGESTIONS = 20
 MAX_SUGGESTION_TARGET_PROFILES = 1000
 SUGGESTION_NEIGHBOR_WINDOW = 12
 MAX_DELETION_SIGNATURE_BUCKET = 16
+TARGET_NGRAM_SIZE = 3
+MAX_NGRAM_SIGNATURE_BUCKET = 32
 PASTA_ANNOTATION_LEARNING_VERSION = 1
 
 
@@ -190,6 +192,31 @@ def _deletion_signatures(target: str) -> set[str]:
     }
 
 
+def _ngram_signatures(target: str) -> set[str]:
+    compact = target.replace(" ", "")
+    if len(compact) <= TARGET_NGRAM_SIZE:
+        return {compact}
+    return {
+        compact[index : index + TARGET_NGRAM_SIZE]
+        for index in range(len(compact) - TARGET_NGRAM_SIZE + 1)
+    }
+
+
+def _add_bounded_signature_pairs(
+    candidates: set[tuple[str, str]],
+    targets_by_signature: dict[str, set[str]],
+    *,
+    max_bucket_size: int,
+) -> None:
+    for signature_targets in targets_by_signature.values():
+        if not 2 <= len(signature_targets) <= max_bucket_size:
+            continue
+        signature_ordered = sorted(signature_targets)
+        for index, left in enumerate(signature_ordered):
+            for right in signature_ordered[index + 1 :]:
+                candidates.add((left, right))
+
+
 def _suggestion_candidate_pairs(profiles: dict[str, dict]) -> set[tuple[str, str]]:
     """Bound fuzzy comparisons while retaining nearby spellings and abbreviations."""
     targets_by_context = defaultdict(set)
@@ -222,13 +249,24 @@ def _suggestion_candidate_pairs(profiles: dict[str, dict]) -> set[tuple[str, str
         for target in ordered:
             for signature in _deletion_signatures(target):
                 targets_by_signature[signature].add(target)
-        for signature_targets in targets_by_signature.values():
-            if not 2 <= len(signature_targets) <= MAX_DELETION_SIGNATURE_BUCKET:
-                continue
-            signature_ordered = sorted(signature_targets)
-            for index, left in enumerate(signature_ordered):
-                for right in signature_ordered[index + 1 :]:
-                    candidates.add((left, right))
+        _add_bounded_signature_pairs(
+            candidates,
+            targets_by_signature,
+            max_bucket_size=MAX_DELETION_SIGNATURE_BUCKET,
+        )
+
+        # Shared internal fragments recover multi-edit variants that can be far
+        # apart alphabetically. Very common fragments are ignored to keep the
+        # candidate set bounded.
+        targets_by_ngram = defaultdict(set)
+        for target in ordered:
+            for signature in _ngram_signatures(target):
+                targets_by_ngram[signature].add(target)
+        _add_bounded_signature_pairs(
+            candidates,
+            targets_by_ngram,
+            max_bucket_size=MAX_NGRAM_SIGNATURE_BUCKET,
+        )
 
     return candidates
 

@@ -173,6 +173,36 @@ def test_first_character_typo_remains_a_candidate():
     assert suggestions[0]["suggested_canonical"] == "GUANCIALE"
 
 
+def test_multi_edit_variants_remain_candidates_when_lexically_distant():
+    distractors = [
+        _signal(
+            f"{letter}ESTOVOCE",
+            1,
+            source=f"NO {letter}ESTOVOCE",
+        )
+        for letter in "BCDEFGHIJKLMNO"
+    ]
+    signals = [
+        _signal("ARMIGIANO", 8, source="NO ARMIGIANO"),
+        *distractors,
+        _signal("PAMRIGIANO", 3, source="NO PAMRIGIANO"),
+    ]
+
+    suggestions = build_pasta_annotation_suggestions(
+        signals,
+        max_suggestions=1000,
+    )
+
+    assert any(
+        {
+            item["left"]["target"],
+            item["right"]["target"],
+        }
+        == {"ARMIGIANO", "PAMRIGIANO"}
+        for item in suggestions
+    )
+
+
 def test_same_decision_persists_an_alias_and_can_be_undone():
     async def scenario():
         database = _Database()

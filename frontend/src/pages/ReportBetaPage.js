@@ -5,7 +5,6 @@ import { Maximize2, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrders } from '../contexts/OrderContext';
 import Header from '../components/Header';
-import { handleReportArrowNavigation } from '../utils/reportArrowNavigation';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -1212,7 +1211,6 @@ const ReportBetaPageInner = () => {
         </div>
       )}
       <main
-        onKeyDown={handleReportArrowNavigation}
         className={`flex-1 max-w-[1600px] w-full mx-auto px-3 py-2 flex flex-col min-h-0 ${readOnlyHistorical ? 'pointer-events-none select-text' : ''}`}
       >
         {/* Titolo compatto */}

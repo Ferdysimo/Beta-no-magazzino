@@ -178,6 +178,27 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-27 22:32 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: UX | cleanup | test
+**File toccati**:
+- `/app/frontend/src/pages/ReportBetaPage.js`
+- `/app/frontend/src/utils/reportArrowNavigation.js` (rimosso)
+- `/app/frontend/src/utils/reportArrowNavigation.test.js` (rimosso)
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Rimossa integralmente la navigazione spaziale tra gli input numerici del Report tramite le quattro frecce. Gli input mantengono ora il comportamento nativo del browser; restano invariati gli handler `Invio`/`Esc` necessari per commenti, dialog e modifica del cassetto.
+**Testato**: si (metodo: suite frontend completa `20 passed`; build React produzione completata con soli warning Hook preesistenti; bundle principale ridotto di 745 B)
+**Note per il prossimo agente**: Non reintrodurre un gestore `onKeyDown` globale sul contenitore del Report senza una richiesta esplicita; le frecce devono restare disponibili per il comportamento nativo dei singoli campi.
+
+### [2026-07-25 05:29 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix | performance | test
+**File toccati**:
+- `/app/backend/app/services/pasta_annotation_learning.py`
+- `/app/backend/tests/test_pasta_annotation_learning.py`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Corretto il filtro veloce introdotto nell'hotfix prestazionale: alcune proposte valide potevano sparire anche senza una decisione quando refusi simili erano distanti nell'ordinamento alfabetico. Aggiunto un indice limitato per frammenti interni di tre caratteri, mantenendo il costo sotto controllo senza cambiare le soglie semantiche.
+**Testato**: si (metodo: suite backend completa `175 passed, 36 skipped`; confronto differenziale su 273 abbreviazioni e refusi realistici con 1.178 corrispondenze del vecchio algoritmo e zero corrispondenze perse; stress test da 1.000 profili in circa 0,6 s)
+**Note per il prossimo agente**: Fix verificato solo localmente e non pubblicato/deployato durante il servizio dei locali. Conservare sia il test sul limite dei confronti sia quello sui refusi multi-edit distanti lessicalmente.
+
 ### [2026-07-25 05:17 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix | performance | test
 **File toccati**:
