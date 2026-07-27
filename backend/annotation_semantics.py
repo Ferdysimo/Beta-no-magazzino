@@ -843,7 +843,7 @@ def reconstruct_probable_pager_groups(
         }
         signal_group_counts.update(group_signal_keys)
 
-        if len(group) > 1 and len(examples) < max_examples:
+        if len(group) > 1 and max_examples > 0:
             first = group[0]
             stable_seed = "|".join(
                 [
@@ -876,8 +876,12 @@ def reconstruct_probable_pager_groups(
                     "confidence": confidence,
                 }
             )
+            if len(examples) > max_examples * 2:
+                examples.sort(key=lambda item: item["first_at"], reverse=True)
+                del examples[max_examples:]
 
     examples.sort(key=lambda item: item["first_at"], reverse=True)
+    examples = examples[:max_examples]
     group_count = len(groups)
     return {
         "rule_version": PAGER_GROUPING_RULE_VERSION,

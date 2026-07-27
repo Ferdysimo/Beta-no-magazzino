@@ -178,6 +178,18 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-27 22:59 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix | performance | architecture | test
+**File toccati**:
+- `/app/backend/annotation_semantics.py`
+- `/app/backend/app/routers/laboratory.py`
+- `/app/backend/app/services/pasta_annotations.py`
+- `/app/backend/tests/test_pasta_annotations_lab.py`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Sostituito il limite di 50.000 documenti dell'hotfix `89411cf` con elaborazione esatta a blocchi di 7 giorni. Il range fino a 366 giorni resta sempre disponibile: ogni blocco carica, deduplica e classifica gli ordini, poi i risultati vengono fusi e i documenti sorgente liberati. Conteggi, segnali, varianti, locali e ricostruzioni pager non vengono campionati; gli esempi delle comande sono ora realmente i 30 piu recenti.
+**Testato**: si (metodo: suite backend completa `176 passed, 36 skipped`; equivalenza numerica monolitico/chunked su 10.800 ordini, 60 giorni e 3 locali; benchmark con 50.000 ordini: stessi summary e segnali, picco calcolo da 136,1 MB a 3,1 MB, riduzione 97,7%)
+**Note per il prossimo agente**: Conservare il vincolo di una sola analisi per processo e l'applicazione esplicita dei filtri. Il merger e verificato per equivalenza numerica contro il calcolo monolitico; non reintrodurre una materializzazione annuale di `canonical_orders` o `semantic_observations`.
+
 ### [2026-07-27 22:45 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix | performance | UX | test
 **File toccati**:

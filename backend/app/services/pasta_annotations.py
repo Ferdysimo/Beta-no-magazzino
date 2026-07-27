@@ -115,6 +115,7 @@ def build_pasta_annotation_stats(
     locations_by_id: Dict[str, str],
     target_aliases: Optional[Dict[str, str]] = None,
     max_examples: int = 5,
+    max_raw_variants: Optional[int] = 5,
 ) -> dict:
     annotation_groups: Dict[str, dict] = {}
     signal_groups: Dict[str, dict] = {}
@@ -165,22 +166,21 @@ def build_pasta_annotation_stats(
             business_date=business_date,
             location=location,
         )
-        semantic_observations.append(
-            {
-                "restaurant_id": restaurant_id,
-                "location": location,
-                "business_date": business_date,
-                "occurred_at": doc.get("created_at"),
-                "order_number": doc.get("order_number"),
-                "order_id": doc.get("id"),
-                "pasta_sigla": sigla,
-                "annotation": extracted,
-            }
-        )
-
         pager = extracted.get("pager") or {}
         if pager.get("grouping_eligible"):
             pager_linked_orders += 1
+            semantic_observations.append(
+                {
+                    "restaurant_id": restaurant_id,
+                    "location": location,
+                    "business_date": business_date,
+                    "occurred_at": doc.get("created_at"),
+                    "order_number": doc.get("order_number"),
+                    "order_id": doc.get("id"),
+                    "pasta_sigla": sigla,
+                    "annotation": extracted,
+                }
+            )
 
         signals = extracted.get("signals") or []
         unknown_fragments = extracted.get("unknown_fragments") or []
@@ -280,7 +280,9 @@ def build_pasta_annotation_stats(
                 ),
                 "raw_variants": [
                     {"value": value, "count": count}
-                    for value, count in group["raw_variants"].most_common(5)
+                    for value, count in group["raw_variants"].most_common(
+                        max_raw_variants
+                    )
                 ],
             }
         )
@@ -368,6 +370,311 @@ def build_pasta_annotation_stats(
         },
         "pasta_counts": dict(pasta_counts.most_common()),
         "signals": semantic_signals,
+        "unknown_fragments": unknowns,
+        "grouping": grouping,
+        "annotations": annotations,
+    }
+
+
+_SUMMARY_COUNT_KEYS = (
+    "valid_orders",
+    "recognized_orders",
+    "annotated_orders",
+    "unrecognized_orders",
+    "orders_with_signals",
+    "orders_with_unknown_text",
+    "fully_classified_orders",
+    "partially_classified_orders",
+    "pager_linked_orders",
+)
+
+
+def _merge_breakdown_result(
+    group: dict,
+    item: dict,
+    *,
+    max_examples: int,
+) -> None:
+    group["count"] += int(item.get("count") or 0)
+    group["pasta_counts"].update(item.get("pasta_counts") or {})
+    group["location_counts"].update(item.get("location_counts") or {})
+    for sigla, location_counts in (
+        item.get("pasta_location_counts") or {}
+    ).items():
+        group["pasta_location_counts"].setdefault(sigla, Counter()).update(
+            location_counts
+        )
+    remaining = max(max_examples - len(group["examples"]), 0)
+    if remaining:
+        group["examples"].extend((item.get("examples") or [])[:remaining])
+    for sigla, examples in (item.get("pasta_examples") or {}).items():
+        merged_examples = group["pasta_examples"].setdefault(sigla, [])
+        remaining = max(max_examples - len(merged_examples), 0)
+        if remaining:
+            merged_examples.extend(examples[:remaining])
+
+
+def merge_pasta_annotation_stats(
+    batch_results: Iterable[dict],
+    *,
+    max_examples: int = 5,
+    max_group_examples: int = 30,
+) -> dict:
+    """Merge newest-to-oldest bounded batches into the public statistics shape."""
+    batches = list(batch_results or [])
+    if not batches:
+        return build_pasta_annotation_stats(
+            [],
+            dictionaries_by_key={},
+            fallback_dictionaries={},
+            locations_by_id={},
+        )
+
+    summary_counts = Counter()
+    pasta_counts = Counter()
+    annotation_groups = {}
+    signal_groups = {}
+    unknown_groups = {}
+    first_grouping = batches[0]["grouping"]
+    grouping_totals = {
+        "pager_linked_rows": 0,
+        "invalid_timestamp_rows": 0,
+        "reconstructed_group_count": 0,
+        "multi_pasta_group_count": 0,
+        "pasta_rows_in_multi_groups": 0,
+        "confidence_counts": Counter(),
+        "signal_group_counts": Counter(),
+        "examples": [],
+    }
+
+    for batch in batches:
+        summary = batch.get("summary") or {}
+        summary_counts.update(
+            {
+                key: int(summary.get(key) or 0)
+                for key in _SUMMARY_COUNT_KEYS
+            }
+        )
+        pasta_counts.update(batch.get("pasta_counts") or {})
+
+        for item in batch.get("annotations") or []:
+            annotation = item["annotation"]
+            group = annotation_groups.setdefault(
+                annotation,
+                _new_breakdown_group(
+                    annotation=annotation,
+                    raw_variants=Counter(),
+                ),
+            )
+            _merge_breakdown_result(group, item, max_examples=max_examples)
+            group["raw_variants"].update(
+                {
+                    variant["value"]: int(variant.get("count") or 0)
+                    for variant in item.get("raw_variants") or []
+                    if variant.get("value")
+                }
+            )
+
+        for item in batch.get("signals") or []:
+            key = item["signal_key"]
+            group = signal_groups.setdefault(
+                key,
+                _new_breakdown_group(
+                    signal_key=key,
+                    dimension=item["dimension"],
+                    code=item["code"],
+                    label=item["label"],
+                    certainty=item["certainty"],
+                    target=item.get("target"),
+                    source_terms=Counter(),
+                    reconstructed_group_count=0,
+                ),
+            )
+            _merge_breakdown_result(group, item, max_examples=max_examples)
+            group["source_terms"].update(
+                {
+                    term["value"]: int(term.get("count") or 0)
+                    for term in item.get("source_terms") or []
+                    if term.get("value")
+                }
+            )
+            group["reconstructed_group_count"] += int(
+                item.get("reconstructed_group_count") or 0
+            )
+
+        for item in batch.get("unknown_fragments") or []:
+            fragment = item["fragment"]
+            group = unknown_groups.setdefault(
+                fragment,
+                _new_breakdown_group(fragment=fragment),
+            )
+            _merge_breakdown_result(group, item, max_examples=max_examples)
+
+        grouping = batch.get("grouping") or {}
+        for key in (
+            "pager_linked_rows",
+            "invalid_timestamp_rows",
+            "reconstructed_group_count",
+            "multi_pasta_group_count",
+            "pasta_rows_in_multi_groups",
+        ):
+            grouping_totals[key] += int(grouping.get(key) or 0)
+        grouping_totals["confidence_counts"].update(
+            grouping.get("confidence_counts") or {}
+        )
+        grouping_totals["signal_group_counts"].update(
+            grouping.get("signal_group_counts") or {}
+        )
+        grouping_totals["examples"].extend(grouping.get("examples") or [])
+
+    recognized_orders = summary_counts["recognized_orders"]
+    annotated_orders = summary_counts["annotated_orders"]
+    orders_with_signals = summary_counts["orders_with_signals"]
+
+    annotations = []
+    for group in annotation_groups.values():
+        annotations.append(
+            {
+                "annotation": group["annotation"],
+                **_serialized_breakdown(group),
+                "recognized_share_percent": round(
+                    (
+                        group["count"] / recognized_orders * 100
+                        if recognized_orders
+                        else 0
+                    ),
+                    2,
+                ),
+                "annotated_share_percent": round(
+                    (
+                        group["count"] / annotated_orders * 100
+                        if annotated_orders
+                        else 0
+                    ),
+                    2,
+                ),
+                "raw_variants": [
+                    {"value": value, "count": count}
+                    for value, count in group["raw_variants"].most_common(5)
+                ],
+            }
+        )
+    annotations.sort(key=lambda item: (-item["count"], item["annotation"]))
+
+    signals = []
+    for group in signal_groups.values():
+        signals.append(
+            {
+                "signal_key": group["signal_key"],
+                "dimension": group["dimension"],
+                "code": group["code"],
+                "label": group["label"],
+                "certainty": group["certainty"],
+                "target": group.get("target"),
+                **_serialized_breakdown(group),
+                "recognized_share_percent": round(
+                    (
+                        group["count"] / recognized_orders * 100
+                        if recognized_orders
+                        else 0
+                    ),
+                    2,
+                ),
+                "reconstructed_group_count": group[
+                    "reconstructed_group_count"
+                ],
+                "source_terms": [
+                    {"value": value, "count": count}
+                    for value, count in group["source_terms"].most_common()
+                ],
+            }
+        )
+    signals.sort(
+        key=lambda item: (-item["count"], item["dimension"], item["label"])
+    )
+
+    unknowns = []
+    for group in unknown_groups.values():
+        unknowns.append(
+            {
+                "fragment": group["fragment"],
+                **_serialized_breakdown(group),
+                "annotated_share_percent": round(
+                    (
+                        group["count"] / annotated_orders * 100
+                        if annotated_orders
+                        else 0
+                    ),
+                    2,
+                ),
+            }
+        )
+    unknowns.sort(key=lambda item: (-item["count"], item["fragment"]))
+
+    grouping_examples = sorted(
+        grouping_totals["examples"],
+        key=lambda item: item["first_at"],
+        reverse=True,
+    )[:max_group_examples]
+    reconstructed_group_count = grouping_totals["reconstructed_group_count"]
+    grouping = {
+        "rule_version": first_grouping["rule_version"],
+        "max_adjacent_gap_seconds": first_grouping[
+            "max_adjacent_gap_seconds"
+        ],
+        "max_adjacent_order_gap": first_grouping["max_adjacent_order_gap"],
+        "authoritative": first_grouping["authoritative"],
+        "pager_linked_rows": grouping_totals["pager_linked_rows"],
+        "invalid_timestamp_rows": grouping_totals["invalid_timestamp_rows"],
+        "reconstructed_group_count": reconstructed_group_count,
+        "multi_pasta_group_count": grouping_totals[
+            "multi_pasta_group_count"
+        ],
+        "pasta_rows_in_multi_groups": grouping_totals[
+            "pasta_rows_in_multi_groups"
+        ],
+        "average_rows_per_group": (
+            round(
+                grouping_totals["pager_linked_rows"]
+                / reconstructed_group_count,
+                2,
+            )
+            if reconstructed_group_count
+            else 0
+        ),
+        "confidence_counts": dict(
+            sorted(grouping_totals["confidence_counts"].items())
+        ),
+        "signal_group_counts": dict(
+            sorted(grouping_totals["signal_group_counts"].items())
+        ),
+        "examples": grouping_examples,
+    }
+
+    return {
+        "parser_version": batches[0]["parser_version"],
+        "ruleset_version": batches[0]["ruleset_version"],
+        "summary": {
+            **{key: summary_counts[key] for key in _SUMMARY_COUNT_KEYS},
+            "annotation_rate_percent": round(
+                (
+                    annotated_orders / recognized_orders * 100
+                    if recognized_orders
+                    else 0
+                ),
+                2,
+            ),
+            "semantic_coverage_percent": round(
+                (
+                    orders_with_signals / annotated_orders * 100
+                    if annotated_orders
+                    else 0
+                ),
+                2,
+            ),
+        },
+        "pasta_counts": dict(pasta_counts.most_common()),
+        "signals": signals,
         "unknown_fragments": unknowns,
         "grouping": grouping,
         "annotations": annotations,

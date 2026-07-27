@@ -31,13 +31,16 @@ from app.services.pasta_annotation_learning import (
     load_pasta_annotation_learning,
     save_pasta_annotation_decision,
 )
-from app.services.pasta_annotations import build_pasta_annotation_stats
+from app.services.pasta_annotations import (
+    build_pasta_annotation_stats,
+    merge_pasta_annotation_stats,
+)
 from app.services.report import _get_pasta_dict_for, _pasta_dict_from_snapshot
 
 
 router = APIRouter()
 MAX_LAB_RANGE_DAYS = 366
-MAX_LAB_ORDER_DOCUMENTS = 50000
+LAB_ANNOTATION_CHUNK_DAYS = 7
 _PASTA_ANNOTATIONS_REQUEST_LOCK = asyncio.Lock()
 
 
@@ -72,35 +75,6 @@ async def _reserve_pasta_annotations_request():
         yield
     finally:
         _PASTA_ANNOTATIONS_REQUEST_LOCK.release()
-
-
-async def _guard_pasta_annotation_volume(
-    database,
-    *,
-    restaurant_ids: list[str],
-    start_utc: str,
-    end_utc: str,
-) -> int:
-    document_count = 0
-    for collection_name, timestamp_field in ANALYSIS_ORDER_SOURCES:
-        remaining = MAX_LAB_ORDER_DOCUMENTS - document_count
-        count = await database[collection_name].count_documents(
-            {
-                "restaurant_id": {"$in": restaurant_ids},
-                timestamp_field: {"$gte": start_utc, "$lt": end_utc},
-            },
-            limit=remaining + 1,
-        )
-        document_count += count
-        if document_count > MAX_LAB_ORDER_DOCUMENTS:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Intervallo troppo ampio per il volume di ordini. "
-                    "Riduci le date o seleziona un solo locale."
-                ),
-            )
-    return document_count
 
 
 @router.get("/lab/document-scanner/context")
@@ -242,39 +216,6 @@ async def get_pasta_annotations_lab(
             },
         }
 
-    start_utc, _ = _rome_date_bounds_utc(selected_start.isoformat())
-    _, end_utc = _rome_date_bounds_utc(selected_end.isoformat())
-    await _guard_pasta_annotation_volume(
-        db,
-        restaurant_ids=restaurant_ids,
-        start_utc=start_utc,
-        end_utc=end_utc,
-    )
-    projection = {
-        "_id": 0,
-        "id": 1,
-        "restaurant_id": 1,
-        "created_at": 1,
-        "order_number": 1,
-        "description": 1,
-    }
-    canonical_orders = {}
-    for collection_name, timestamp_field in ANALYSIS_ORDER_SOURCES:
-        cursor = db[collection_name].find(
-            {
-                "restaurant_id": {"$in": restaurant_ids},
-                timestamp_field: {"$gte": start_utc, "$lt": end_utc},
-            },
-            projection,
-        )
-        async for raw_doc in cursor:
-            normalized = _normalize_analysis_order_doc(raw_doc, timestamp_field)
-            if normalized:
-                canonical_orders.setdefault(
-                    _analysis_order_identity(normalized),
-                    normalized,
-                )
-
     start_key = selected_start.isoformat()
     end_key = selected_end.isoformat()
     dictionaries_by_key = {}
@@ -297,13 +238,62 @@ async def get_pasta_annotations_lab(
     for rid in restaurant_ids:
         fallback_dictionaries[rid] = await _get_pasta_dict_for(rid)
 
+    projection = {
+        "_id": 0,
+        "id": 1,
+        "restaurant_id": 1,
+        "created_at": 1,
+        "order_number": 1,
+        "description": 1,
+    }
+    batch_results = []
+    chunk_end = selected_end
+    while chunk_end >= selected_start:
+        chunk_start = max(
+            selected_start,
+            chunk_end - timedelta(days=LAB_ANNOTATION_CHUNK_DAYS - 1),
+        )
+        chunk_start_utc, _ = _rome_date_bounds_utc(chunk_start.isoformat())
+        _, chunk_end_utc = _rome_date_bounds_utc(chunk_end.isoformat())
+        canonical_orders = {}
+        for collection_name, timestamp_field in ANALYSIS_ORDER_SOURCES:
+            cursor = db[collection_name].find(
+                {
+                    "restaurant_id": {"$in": restaurant_ids},
+                    timestamp_field: {
+                        "$gte": chunk_start_utc,
+                        "$lt": chunk_end_utc,
+                    },
+                },
+                projection,
+            )
+            async for raw_doc in cursor:
+                normalized = _normalize_analysis_order_doc(
+                    raw_doc,
+                    timestamp_field,
+                )
+                if normalized:
+                    canonical_orders.setdefault(
+                        _analysis_order_identity(normalized),
+                        normalized,
+                    )
+
+        batch_results.append(
+            await run_in_threadpool(
+                build_pasta_annotation_stats,
+                canonical_orders.values(),
+                dictionaries_by_key=dictionaries_by_key,
+                fallback_dictionaries=fallback_dictionaries,
+                locations_by_id=locations_by_id,
+                target_aliases=learning_state["alias_map"],
+                max_raw_variants=None,
+            )
+        )
+        chunk_end = chunk_start - timedelta(days=1)
+
     result = await run_in_threadpool(
-        build_pasta_annotation_stats,
-        canonical_orders.values(),
-        dictionaries_by_key=dictionaries_by_key,
-        fallback_dictionaries=fallback_dictionaries,
-        locations_by_id=locations_by_id,
-        target_aliases=learning_state["alias_map"],
+        merge_pasta_annotation_stats,
+        batch_results,
     )
     suggestions = await run_in_threadpool(
         build_pasta_annotation_suggestions,

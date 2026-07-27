@@ -4,8 +4,6 @@ from fastapi import HTTPException
 from datetime import datetime, timedelta, timezone
 
 from app.routers.laboratory import (
-    MAX_LAB_ORDER_DOCUMENTS,
-    _guard_pasta_annotation_volume,
     _parse_lab_date,
     _require_simone_laboratory,
     _reserve_pasta_annotations_request,
@@ -16,67 +14,11 @@ from app.services.pasta_annotations import (
     build_pasta_annotation_stats,
     clean_pasta_annotation_text,
     extract_pasta_annotation,
+    merge_pasta_annotation_stats,
     normalize_pasta_annotation,
 )
 
 PASTA_DICT = {"CARB": 8, "AMAT": 8}
-
-
-class _CountCollection:
-    def __init__(self, count):
-        self.count = count
-        self.calls = []
-
-    async def count_documents(self, query, *, limit):
-        self.calls.append({"query": query, "limit": limit})
-        return min(self.count, limit)
-
-
-class _CountDatabase:
-    def __init__(self, orders, archived_orders):
-        self.collections = {
-            "orders": _CountCollection(orders),
-            "archived_orders": _CountCollection(archived_orders),
-        }
-
-    def __getitem__(self, name):
-        return self.collections[name]
-
-
-def test_annotation_volume_guard_accepts_a_bounded_result():
-    async def scenario():
-        database = _CountDatabase(1200, 3400)
-        count = await _guard_pasta_annotation_volume(
-            database,
-            restaurant_ids=["rest-a"],
-            start_utc="2026-07-01T00:00:00+00:00",
-            end_utc="2026-08-01T00:00:00+00:00",
-        )
-
-        assert count == 4600
-        assert database.collections["orders"].calls[0]["limit"] == (
-            MAX_LAB_ORDER_DOCUMENTS + 1
-        )
-
-    asyncio.run(scenario())
-
-
-def test_annotation_volume_guard_rejects_before_loading_too_many_orders():
-    async def scenario():
-        database = _CountDatabase(MAX_LAB_ORDER_DOCUMENTS, 1)
-        with pytest.raises(HTTPException) as exc_info:
-            await _guard_pasta_annotation_volume(
-                database,
-                restaurant_ids=["rest-a"],
-                start_utc="2026-01-01T00:00:00+00:00",
-                end_utc="2027-01-01T00:00:00+00:00",
-            )
-
-        assert exc_info.value.status_code == 400
-        assert "Riduci le date" in exc_info.value.detail
-        assert database.collections["archived_orders"].calls[0]["limit"] == 1
-
-    asyncio.run(scenario())
 
 
 def test_annotation_requests_do_not_run_concurrently():
@@ -479,18 +421,20 @@ def test_two_month_multi_location_simulation_keeps_portions_and_groups_distinct(
                         }
                     )
 
+    fallback_dictionaries = {
+        restaurant_id: {"CARB": 8, "CACIO": 8, "AMAT": 8}
+        for restaurant_id in restaurant_ids
+    }
+    locations_by_id = {
+        "rest-a": "Flaminio",
+        "rest-b": "Grazie",
+        "rest-c": "Largo di Brazza",
+    }
     result = build_pasta_annotation_stats(
         docs,
         dictionaries_by_key={},
-        fallback_dictionaries={
-            restaurant_id: {"CARB": 8, "CACIO": 8, "AMAT": 8}
-            for restaurant_id in restaurant_ids
-        },
-        locations_by_id={
-            "rest-a": "Flaminio",
-            "rest-b": "Grazie",
-            "rest-c": "Largo di Brazza",
-        },
+        fallback_dictionaries=fallback_dictionaries,
+        locations_by_id=locations_by_id,
     )
 
     signals = {item["signal_key"]: item for item in result["signals"]}
@@ -504,6 +448,46 @@ def test_two_month_multi_location_simulation_keeps_portions_and_groups_distinct(
     assert signals["preparation_request:without:pepe"]["count"] == 3600
     assert result["unknown_fragments"][0]["fragment"] == "T"
     assert result["unknown_fragments"][0]["count"] == 3600
+
+    dates = sorted({doc["date_rome"] for doc in docs}, reverse=True)
+    batch_results = []
+    for index in range(0, len(dates), 7):
+        batch_dates = set(dates[index : index + 7])
+        batch_results.append(
+            build_pasta_annotation_stats(
+                [
+                    doc
+                    for doc in docs
+                    if doc["date_rome"] in batch_dates
+                ],
+                dictionaries_by_key={},
+                fallback_dictionaries=fallback_dictionaries,
+                locations_by_id=locations_by_id,
+                max_raw_variants=None,
+            )
+        )
+
+    merged = merge_pasta_annotation_stats(batch_results)
+    merged_without_group_examples = {
+        **merged,
+        "grouping": {
+            key: value
+            for key, value in merged["grouping"].items()
+            if key != "examples"
+        },
+    }
+    result_without_group_examples = {
+        **result,
+        "grouping": {
+            key: value
+            for key, value in result["grouping"].items()
+            if key != "examples"
+        },
+    }
+
+    assert merged_without_group_examples == result_without_group_examples
+    assert len(merged["grouping"]["examples"]) == 30
+    assert merged["grouping"]["examples"][0]["business_date"] == "2026-03-01"
 
 
 @pytest.mark.parametrize(
