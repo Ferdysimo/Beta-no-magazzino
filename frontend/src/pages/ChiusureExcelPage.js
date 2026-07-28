@@ -62,7 +62,56 @@ const dayName = (s) => {
 };
 
 // ─── Cell helpers ──────────────────────────────────────────────────────────
-const Th = ({ children, bg, color, sticky, top, left, width, title, colSpan, borderTop, isGroupEnd }) => (
+const isRedVersColor = (color) => {
+  const normalized = String(color || '').toLowerCase().replace(/\s+/g, '');
+  return normalized === '#dc2626'
+    || normalized === 'rgb(220,38,38)'
+    || normalized === 'red';
+};
+
+export const parseVersDisplay = (rawValue, legacyColor = '') => {
+  const raw = String(rawValue || '');
+  const legacyIsRed = String(legacyColor || '').toLowerCase() === 'red';
+  if (!raw) return { segments: [], mixed: false };
+
+  const segments = [];
+  const append = (text, red) => {
+    const safeText = String(text || '').replace(/[^0-9+\-*/.(),=\s€]/g, '');
+    if (!safeText) return;
+    const previous = segments[segments.length - 1];
+    if (previous && previous.red === red) previous.text += safeText;
+    else segments.push({ text: safeText, red });
+  };
+
+  if (typeof document === 'undefined') {
+    append(raw.replace(/<[^>]*>/g, ''), legacyIsRed);
+  } else {
+    const container = document.createElement('div');
+    container.innerHTML = raw;
+    const walk = (node, inheritedRed) => {
+      if (node.nodeType === 3) {
+        append(node.textContent, inheritedRed);
+        return;
+      }
+      if (node.nodeType !== 1) return;
+      let currentRed = inheritedRed;
+      if (node.tagName === 'SPAN' && node.style?.color) {
+        currentRed = isRedVersColor(node.style.color);
+      }
+      Array.from(node.childNodes).forEach(child => walk(child, currentRed));
+    };
+    Array.from(container.childNodes).forEach(child => walk(child, legacyIsRed));
+  }
+
+  const hasRedNumbers = segments.some(segment => segment.red && /\d/.test(segment.text));
+  const hasBlackNumbers = segments.some(segment => !segment.red && /\d/.test(segment.text));
+  return {
+    segments,
+    mixed: hasRedNumbers && hasBlackNumbers,
+  };
+};
+
+const Th = ({ children, bg, color, sticky, top, left, width, title, colSpan, borderTop, isGroupEnd, emphasis }) => (
   <th
     title={title || ''}
     colSpan={colSpan}
@@ -79,7 +128,7 @@ const Th = ({ children, bg, color, sticky, top, left, width, title, colSpan, bor
       borderBottom: '1px solid #94a3b8',
       borderTop: borderTop || undefined,
       padding: '4px 6px',
-      fontWeight: 700,
+      fontWeight: emphasis ? 900 : 700,
       fontSize: 11,
       textAlign: 'center',
       whiteSpace: 'nowrap',
@@ -90,8 +139,9 @@ const Th = ({ children, bg, color, sticky, top, left, width, title, colSpan, bor
   </th>
 );
 
-const Td = ({ children, bg, sticky, left, mono, align = 'right', bold, color, title, isGroupEnd }) => (
+const Td = ({ children, bg, sticky, left, mono, align = 'right', bold, color, title, isGroupEnd, testId }) => (
   <td
+    data-testid={testId}
     title={title || ''}
     style={{
       background: bg || '#fff',
@@ -116,9 +166,14 @@ const Td = ({ children, bg, sticky, left, mono, align = 'right', bold, color, ti
 
 const ChiusureExcelPage = () => {
   const navigate = useNavigate();
-  const { token, canImpersonate, restaurant, effectiveRestaurant } = useAuth();
+  const {
+    token,
+    canImpersonate,
+    restaurant,
+    effectiveRestaurant,
+    selectRestaurant,
+  } = useAuth();
   const [restaurants, setRestaurants] = useState([]);
-  const [selectedRestId, setSelectedRestId] = useState(() => localStorage.getItem('closures_excel_rest_id') || '');
   const [days, setDays] = useState(() => Number(localStorage.getItem('closures_excel_days')) || 30);
   const [items, setItems] = useState([]);
   const [bevSigle, setBevSigle] = useState([]);
@@ -126,9 +181,12 @@ const ChiusureExcelPage = () => {
   const [msg, setMsg] = useState('');
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
-  // Utenti non-admin: forzo il rid sul proprio locale, ignoro selector e localStorage
+  // Una sola selezione per scheda: Storico chiusure segue lo stesso locale
+  // impersonato dalla Home e dalle altre pagine Admin/Federico.
   const ownRid = effectiveRestaurant?.id || restaurant?.id || '';
-  const effectiveRestId = canImpersonate ? (selectedRestId || restaurants[0]?.id || '') : ownRid;
+  const effectiveRestId = canImpersonate
+    ? (effectiveRestaurant?.id || restaurants[0]?.id || '')
+    : ownRid;
 
   useEffect(() => {
     if (!canImpersonate || !token) return;
@@ -165,11 +223,13 @@ const ChiusureExcelPage = () => {
   useEffect(() => { loadGrid(); }, [loadGrid]);
 
   useEffect(() => {
-    if (selectedRestId) localStorage.setItem('closures_excel_rest_id', selectedRestId);
-  }, [selectedRestId]);
-  useEffect(() => {
     localStorage.setItem('closures_excel_days', String(days));
   }, [days]);
+
+  const onRestaurantChange = (restaurantId) => {
+    const selected = restaurants.find(r => r.id === restaurantId);
+    if (selected) selectRestaurant(selected);
+  };
 
   const onRowClick = (date) => {
     if (!effectiveRestId || !date) return;
@@ -243,7 +303,7 @@ const ChiusureExcelPage = () => {
               <select
                 data-testid="closures-excel-restaurant-select"
                 value={effectiveRestId}
-                onChange={(e) => setSelectedRestId(e.target.value)}
+                onChange={(e) => onRestaurantChange(e.target.value)}
                 className="min-w-[180px] border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-[#F5C518] bg-white"
               >
                 {restaurants.length === 0 && <option value="">Caricamento…</option>}
@@ -334,7 +394,16 @@ const ChiusureExcelPage = () => {
                   <Th sticky top={28} left={0} width={DATE_W} bg="#334155">YYYY-MM-DD</Th>
                   <Th sticky top={28} left={DATE_W} width={DAY_W} bg="#334155">d.s.</Th>
                   {CASH_EUR_FIELDS.map(f => (
-                    <Th key={f.key} sticky top={28} bg="#bfdbfe" color="#111827" width={EUR_W} title={f.hint}>
+                    <Th
+                      key={f.key}
+                      sticky
+                      top={28}
+                      bg="#bfdbfe"
+                      color="#111827"
+                      width={EUR_W}
+                      title={f.hint}
+                      emphasis={f.key === 'arr' || f.key === 'pos'}
+                    >
                       {f.label}
                     </Th>
                   ))}
@@ -379,11 +448,39 @@ const ChiusureExcelPage = () => {
                         {dayName(r.date)}
                       </Td>
 
-                      {CASH_EUR_FIELDS.map(f => (
-                        <Td key={f.key} bg={baseBg} mono>
-                          {fmtEur(r.cash?.[f.key] || 0)}
-                        </Td>
-                      ))}
+                      {CASH_EUR_FIELDS.map(f => {
+                        const versDisplay = f.key === 'vers'
+                          ? parseVersDisplay(r.vers_raw, r.vers_color)
+                          : null;
+                        const versHasContent = versDisplay?.segments.length > 0;
+                        const cellBg = versDisplay?.mixed ? '#fef08a' : baseBg;
+                        return (
+                          <Td
+                            key={f.key}
+                            bg={cellBg}
+                            mono
+                            bold={f.key === 'arr' || f.key === 'pos'}
+                            testId={`closure-${r.date}-cash-${f.key}`}
+                            title={f.key === 'vers' && versHasContent
+                              ? `Valore calcolato: €${fmtEur(r.cash?.vers || 0)}`
+                              : undefined}
+                          >
+                            {f.key === 'vers' && versHasContent
+                              ? versDisplay.segments.map((segment, segmentIndex) => (
+                                <span
+                                  key={`${segmentIndex}-${segment.text}`}
+                                  style={{
+                                    color: segment.red ? '#dc2626' : '#111827',
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {segment.text}
+                                </span>
+                              ))
+                              : fmtEur(r.cash?.[f.key] || 0)}
+                          </Td>
+                        );
+                      })}
 
                       {SPICCI_FIELDS.map(f => {
                         // sp_init: iniziali — non ancora tracciato dal backend, placeholder

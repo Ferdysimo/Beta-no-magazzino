@@ -163,18 +163,30 @@ PREFERRED_PASTA_EXPORT_ORDER = [
 ]
 
 
+ANALYSIS_PASTA_TYPES = [
+    "RAGU", "PESTO", "CARB", "CACIO", "POM", "CARZUC",
+    "TONNO", "TART", "AMAT",
+]
+
+
+ANALYSIS_PASTA_ALIASES = {
+    "TARTUFO": "TART",
+    "AMATRICIANA": "AMAT",
+}
+
+
 PASTA_EXPORT_LABELS = {
     "RAGU": "Ragu",
     "PESTO": "Pesto",
     "CARB": "Carb",
     "CACIO": "Cacio",
     "POM": "Pom",
-    "CARZUC": "CarZuc",
+    "CARZUC": "Carzuc",
     "TONNO": "Tonno",
-    "TART": "Tartufo",
-    "TARTUFO": "Tartufo",
-    "AMAT": "Amatriciana",
-    "AMATRICIANA": "Amatriciana",
+    "TART": "Tart",
+    "TARTUFO": "Tart",
+    "AMAT": "Amat",
+    "AMATRICIANA": "Amat",
 }
 
 
@@ -260,6 +272,32 @@ def _ordered_pasta_dict(dict_map: Dict[str, float]) -> Dict[str, float]:
     return ordered
 
 
+def _analysis_pasta_dict(dict_map: Dict[str, float]) -> Dict[str, Optional[float]]:
+    """Return the analytical pasta categories independently from their prices."""
+    priced = _ordered_pasta_dict(dict_map)
+    analytical: Dict[str, Optional[float]] = {}
+
+    for sigla in ANALYSIS_PASTA_TYPES:
+        price = priced.get(sigla)
+        if price is None:
+            alias = next(
+                (name for name, canonical in ANALYSIS_PASTA_ALIASES.items() if canonical == sigla and name in priced),
+                None,
+            )
+            price = priced.get(alias) if alias else None
+        analytical[sigla] = price
+
+    for sigla, price in priced.items():
+        canonical = ANALYSIS_PASTA_ALIASES.get(sigla, sigla)
+        if canonical in analytical:
+            if analytical[canonical] is None:
+                analytical[canonical] = price
+            continue
+        analytical[canonical] = price
+
+    return analytical
+
+
 def _compute_paste_breakdown_for_export(
     paste_text: str,
     manual_prices: Optional[dict] = None,
@@ -267,25 +305,44 @@ def _compute_paste_breakdown_for_export(
 ) -> Dict:
     if dict_map is None:
         dict_map = PASTA_PRICES_MAP
-    ordered_dict = _ordered_pasta_dict(dict_map)
+    priced_dict = _ordered_pasta_dict(dict_map)
+    analytical_dict = _analysis_pasta_dict(priced_dict)
+    recognition_dict = dict(analytical_dict)
+    for alias, canonical in ANALYSIS_PASTA_ALIASES.items():
+        recognition_dict[alias] = analytical_dict.get(canonical)
     breakdown = {
         sigla: {"count": 0, "total": 0.0, "price": price}
-        for sigla, price in ordered_dict.items()
+        for sigla, price in analytical_dict.items()
     }
+    inferred_prices: Dict[str, List[float]] = {sigla: [] for sigla in analytical_dict}
     unrecognized_count = 0
     unrecognized_eur = 0.0
     lines = [l.strip() for l in (paste_text or "").split("\n") if l.strip()]
     mp = manual_prices or {}
 
     for idx, line in enumerate(lines):
-        recognized_sigla = _pasta_recognized_sigla(line, ordered_dict)
+        recognized_sigla = _pasta_recognized_sigla(line, recognition_dict)
         if recognized_sigla is not None:
+            canonical_sigla = ANALYSIS_PASTA_ALIASES.get(recognized_sigla, recognized_sigla)
+            configured_price = analytical_dict.get(canonical_sigla)
+            raw_manual_price = _manual_price_for_paste_line(mp, idx, line)
+            try:
+                manual_price = (
+                    float(str(raw_manual_price).replace(",", ".").strip())
+                    if str(raw_manual_price).strip()
+                    else 0.0
+                )
+            except Exception:
+                manual_price = 0.0
+            applied_price = configured_price if configured_price is not None else max(manual_price, 0.0)
             breakdown.setdefault(
-                recognized_sigla,
-                {"count": 0, "total": 0.0, "price": ordered_dict.get(recognized_sigla, 0)},
+                canonical_sigla,
+                {"count": 0, "total": 0.0, "price": configured_price},
             )
-            breakdown[recognized_sigla]["count"] += 1
-            breakdown[recognized_sigla]["total"] += ordered_dict.get(recognized_sigla, 0)
+            breakdown[canonical_sigla]["count"] += 1
+            breakdown[canonical_sigla]["total"] += applied_price
+            if configured_price is None and manual_price > 0:
+                inferred_prices.setdefault(canonical_sigla, []).append(manual_price)
             continue
 
         unrecognized_count += 1
@@ -296,6 +353,12 @@ def _compute_paste_breakdown_for_export(
             value = 0.0
         if value > 0:
             unrecognized_eur += value
+
+    for sigla, prices in inferred_prices.items():
+        unique_prices = {round(price, 6) for price in prices}
+        if breakdown[sigla]["price"] is None and len(unique_prices) == 1:
+            breakdown[sigla]["price"] = prices[0]
+        breakdown[sigla]["total"] = round(breakdown[sigla]["total"], 2)
 
     recognized_count = sum(v["count"] for v in breakdown.values())
     recognized_eur = sum(v["total"] for v in breakdown.values())
@@ -523,8 +586,9 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
 
     for rest in restaurants:
         rid = rest.get("id")
-        dict_map = _ordered_pasta_dict(await _get_pasta_dict_for(rid))
-        summary_by_sigla = {sigla: 0 for sigla in dict_map.keys()}
+        price_dict = _ordered_pasta_dict(await _get_pasta_dict_for(rid))
+        analysis_dict = _analysis_pasta_dict(price_dict)
+        summary_by_sigla = {sigla: 0 for sigla in analysis_dict.keys()}
         summary_unrecognized = 0
         summary_total = 0
         days_with_paste = 0
@@ -549,14 +613,19 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
                 )
             )
             snapshot_dict = _pasta_dict_from_snapshot(cash_doc.get("pasta_dict_snapshot"))
-            row_dict_map = _ordered_pasta_dict(
-                snapshot_dict or dict_map
+            row_price_dict = _ordered_pasta_dict(
+                snapshot_dict or price_dict
             )
-            for sigla, price in row_dict_map.items():
-                if sigla not in dict_map:
-                    dict_map[sigla] = price
+            row_analysis_dict = _analysis_pasta_dict(row_price_dict)
+            for sigla, price in row_analysis_dict.items():
+                if sigla not in analysis_dict or analysis_dict[sigla] is None:
+                    analysis_dict[sigla] = price
                 summary_by_sigla.setdefault(sigla, 0)
-            paste_breakdown = _compute_paste_breakdown_for_export(paste_text, manual_prices, row_dict_map)
+            paste_breakdown = _compute_paste_breakdown_for_export(
+                paste_text,
+                manual_prices,
+                row_price_dict,
+            )
             bev_docs = beverages_by_key.get((rid, date_str), [])
             bev_by_sigla = {d.get("sigla"): d for d in bev_docs}
 
@@ -587,7 +656,7 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
             cash_values = {f: _eval_cash_value(cash_doc.get(f, "")) for f in ALL_CASH_FIELDS}
             spicci_total = round(_compute_spicci_total(cash_doc), 2)
             cassetto_total = round(_compute_cassetto_total(cash_doc), 2)
-            cash_sera = round(_compute_cash_sera_full(cash_calc, bev_docs, row_dict_map), 2) if (cash_doc or paste_text or bev_docs) else 0.0
+            cash_sera = round(_compute_cash_sera_full(cash_calc, bev_docs, row_price_dict), 2) if (cash_doc or paste_text or bev_docs) else 0.0
 
             total_count = paste_breakdown["total_count"]
             if total_count > 0:
@@ -634,7 +703,7 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
             "location": rest.get("location") or rest.get("username") or "Locale",
             "username": rest.get("username"),
             "report_code": rest.get("report_code") or "",
-            "pasta_dict": dict_map,
+            "pasta_dict": analysis_dict,
             "rows": rows,
             "summary": {
                 "total_paste": summary_total,

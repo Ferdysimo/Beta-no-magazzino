@@ -178,6 +178,50 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-28 15:27 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: UX | storico chiusure | test
+**File toccati**:
+- `/app/backend/app/routers/report.py`
+- `/app/frontend/src/pages/ChiusureExcelPage.js`
+- `/app/frontend/src/pages/ChiusureExcelPage.test.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Migliorata la leggibilita immediata delle colonne finanziarie nello Storico chiusure senza modificarne ordine o posizione. Le intestazioni e tutti i valori di `Arr.` e `POS` sono ora in grassetto. La griglia riceve inoltre il valore originale di `Vers.` e ne ricostruisce in modo sicuro i segmenti neri e rossi salvati dal Report: un valore interamente rosso resta rosso, uno nero resta nero e una formula mista conserva entrambi i colori anche sullo sfondo giallo. Supportato anche il vecchio campo globale `vers_color`.
+**Testato**: si (metodo: simulazione locale con locale temporaneo e tre chiusure nero/rosso/misto, verifica visuale browser desktop e audit stili DOM: `Arr.`/`POS` peso 700, `Vers.` misto su `rgb(254, 240, 138)` con segmenti `rgb(220, 38, 38)` e `rgb(17, 24, 39)`; dati simulati rimossi integralmente; suite frontend `26 passed`; suite backend `179 passed, 36 skipped`; build React produzione riuscito con soli warning Hook preesistenti in file non coinvolti; `git diff --check`)
+**Note per il prossimo agente**: `vers_raw` e di sola lettura e serve esclusivamente alla rappresentazione dello storico; i calcoli continuano a usare il valore numerico appiattito in `cash.vers`. Il frontend non inietta l'HTML ricevuto: estrae soltanto caratteri numerici/operatori e genera `<span>` React con i due colori consentiti.
+
+### [2026-07-28 15:08 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix | analisi dati | Excel | test
+**File toccati**:
+- `/app/backend/app/services/analysis.py`
+- `/app/backend/tests/test_report_backend_totals.py`
+- `/app/backend/tests/test_analysis_excel_isolated_integration.py`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Corretta la colonna `Altro` dell'Excel Analisi mensile separando le categorie analitiche delle paste dal listino prezzi del locale. `TONNO`, previsto nel report ufficiale ma assente dal dizionario prezzi di Flaminio, veniva sommato ad `Altro`: per questo il 20/07 il generatore mostrava 27 invece di 19 (19 Altro + 8 Tonno) e il 25/07 mostrava 34 invece di 26 (26 Altro + 8 Tonno). Ora Tonno ha sempre la propria colonna; se non ha un prezzo configurato, l'incasso continua a usare il prezzo manuale gia assegnato alla riga, senza cambiare i totali economici o la logica della pagina Report. Canonizzati anche gli alias `TARTUFO -> TART` e `AMATRICIANA -> AMAT`, e allineate al modello ufficiale le intestazioni `Carzuc`, `Tonno`, `Tart`, `Amat`.
+**Testato**: si (metodo: suite backend completa `179 passed, 36 skipped`; integrazione Mongo isolata aggiuntiva `1 passed` sull'intero export annuale con Tonno assente dallo snapshot prezzi e verifica dei fogli locale/Totali; test mirati su classificazione, prezzi manuali, alias e workbook finale; audit read-only VPS sui dati reali di Flaminio. Il 21/07 il database contiene 471 comande valide mentre il file ufficiale e fermo alla 468: le ultime tre, tutte non riconosciute, spiegano 28 contro 25 in Altro. L'11/07 il database contiene 144 CARB e 77 CACIO: il generatore e coerente con la fonte, mentre il file ufficiale ne sposta manualmente una da Carb a Cacio.)
+**Note per il prossimo agente**: la tassonomia analitica e intenzionalmente distinta dal listino operativo. Non aggiungere Tonno al calcolo automatico del Report senza una decisione sui prezzi: in Analisi viene contato come tipo noto e, se privo di prezzo configurato, conserva l'eventuale prezzo manuale. Le sigle personalizzate presenti nei dizionari dei locali continuano ad aggiungersi automaticamente dopo le categorie standard.
+
+### [2026-07-28 14:30 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: UX | refactor | test
+**File toccati**:
+- `/app/frontend/src/pages/ReportBetaPage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Reso il Report utilizzabile su telefoni in verticale con un intervento esclusivamente grafico e responsive. Lo scroll mobile non viene piu bloccato; paste, banconote, movimentazione, magazzino bevande, ingressi/uscite, scarti, vendite e spicci si dispongono in griglie leggibili da 2-3 colonne e tornano al layout compatto originale da desktop. Aumentate inoltre altezza e dimensione del testo dei controlli touch e adattata la barra di anteprima.
+**Testato**: sì (metodo: verifica visuale nel browser locale a 390x844, viewport verticale stretto e desktop 1440x900; audit DOM di 80 controlli senza elementi fuori larghezza né overflow orizzontale; suite frontend completa `24 passed`; build React produzione riuscito con soli warning Hook preesistenti in file non coinvolti; `git diff --check`)
+**Note per il prossimo agente**: nessuna logica, API, formula, persistenza, autorizzazione o isolamento tenant del Report e stata modificata. Conservare le classi `lg:*` che ripristinano il layout desktop; eventuali variazioni future vanno ricontrollate sia sotto sia sopra il breakpoint `lg`.
+
+### [2026-07-28 14:04 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix | UX | test
+**File toccati**:
+- `/app/frontend/src/pages/AuditCassaPage.js`
+- `/app/frontend/src/pages/AuditCassaPage.test.js`
+- `/app/frontend/src/pages/ChiusureExcelPage.js`
+- `/app/frontend/src/pages/ChiusureExcelPage.test.js`
+- `/app/frontend/src/pages/ReportBetaPage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Corretta una discordanza di contesto tra Check singoli movimenti e Storico chiusure. Entrambe le pagine potevano mantenere un locale separato da quello impersonato nella scheda e la griglia chiusure conservava inoltre una vecchia scelta in `localStorage`: Federico poteva quindi filtrare l'audit su un locale e aprire inconsapevolmente il Report storico di un altro. I menu ora aggiornano la selezione condivisa della sessione, Storico chiusure non usa piu una persistenza autonoma e un link storico riallinea la scheda al proprio `rid`. Il banner storico mostra anche il nome del locale.
+**Testato**: sì (metodo: diagnosi VPS esclusivamente read-only: il documento e l'endpoint storico di Brazzà restituivano correttamente `S.scarti=3`, mentre gli access log dello screenshot mostravano richieste della griglia e del Report rivolte a Flaminio; test regressivi sui due selettori con sessione Brazzà + vecchio localStorage Flaminio; suite frontend completa `24 passed`; build React produzione riuscito con soli warning Hook preesistenti)
+**Note per il prossimo agente**: nessun dato di produzione e stato modificato. `frontend/public/version.json` e stato ripristinato dopo il build. Non reintrodurre selettori locale persistenti separati dall'impersonificazione per-tab dell'AuthContext.
+
 ### [2026-07-27 22:59 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix | performance | architecture | test
 **File toccati**:

@@ -150,6 +150,49 @@ def test_export_paste_breakdown_counts_types_and_altro():
     assert result["total_eur"] == 21
 
 
+def test_export_separates_known_analytical_type_without_list_price_from_altro():
+    paste_text = "1 TONNO\n2 X UNKNOWN\n3 TONNO TA"
+    manual_prices = {
+        "1 TONNO": "8",
+        "2 X UNKNOWN": "5",
+        "3 TONNO TA": "8",
+    }
+
+    result = _compute_paste_breakdown_for_export(
+        paste_text,
+        manual_prices,
+        PASTA_DICT,
+    )
+
+    assert "TONNO" not in PASTA_DICT
+    assert result["breakdown"]["TONNO"] == {
+        "count": 2,
+        "total": 16,
+        "price": 8,
+    }
+    assert result["unrecognized_count"] == 1
+    assert result["unrecognized_eur"] == 5
+    assert result["total_count"] == 3
+    assert result["total_eur"] == 21
+
+
+def test_export_canonicalizes_long_pasta_alias_and_keeps_its_configured_price():
+    result = _compute_paste_breakdown_for_export(
+        "1 TARTUFO",
+        {},
+        {"TARTUFO": 9},
+    )
+
+    assert result["breakdown"]["TART"] == {
+        "count": 1,
+        "total": 9,
+        "price": 9,
+    }
+    assert "TARTUFO" not in result["breakdown"]
+    assert result["unrecognized_count"] == 0
+    assert result["total_eur"] == 9
+
+
 @pytest.mark.parametrize(
     ("line", "expected_sigla"),
     [
@@ -575,3 +618,50 @@ def test_analysis_locale_sheet_matches_reference_structure_and_style():
     assert ws["B8"].font.color.rgb == "FF000000"
     assert ws.sheet_view.showGridLines is True
     assert ws.sheet_view.zoomScale == 70
+
+
+def test_analysis_locale_sheet_keeps_tonno_separate_from_altro():
+    paste = _compute_paste_breakdown_for_export(
+        "1 TONNO\n2 X UNKNOWN\n3 TONNO TA",
+        {
+            "1 TONNO": "8",
+            "2 X UNKNOWN": "5",
+            "3 TONNO TA": "8",
+        },
+        PASTA_DICT,
+    )
+    rest_data = {
+        "location": "Flaminio",
+        "pasta_dict": analysis_service._analysis_pasta_dict(PASTA_DICT),
+        "rows": [{
+            "date": datetime(2026, 7, 20),
+            "paste": paste,
+            "paste_total_count": paste["total_count"],
+            "paste_total_eur": paste["total_eur"],
+            "beverages": {},
+            "bev_total_inc": 0,
+            "cash": {},
+            "spicci_total": 0,
+            "cassetto_total": 0,
+            "cash_sera": 0,
+        }],
+    }
+    wb = Workbook()
+    wb.remove(wb.active)
+
+    _write_analysis_locale_sheet(
+        wb,
+        rest_data,
+        {"bev_sigle": []},
+        set(),
+    )
+
+    ws = wb["Flaminio"]
+    headers = [cell.value for cell in ws[7]]
+    assert headers[:11] == [
+        "GIORNO", "Ragu", "Pesto", "Carb", "Cacio", "Pom",
+        "Carzuc", "Tonno", "Tart", "Amat", "Altro",
+    ]
+    assert ws.cell(8, headers.index("Tonno") + 1).value == 2
+    assert ws.cell(8, headers.index("Altro") + 1).value == 1
+    assert ws.cell(8, headers.index("TOT PIATTI") + 1).value == 3

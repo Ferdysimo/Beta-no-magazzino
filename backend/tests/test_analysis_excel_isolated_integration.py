@@ -105,6 +105,14 @@ async def _exercise_analysis_workbook():
                 "description": "RAGU",
             },
             {
+                # Analytical type intentionally absent from the price snapshot.
+                "id": "f-tonno",
+                "restaurant_id": flaminio_id,
+                "created_at": "2026-01-15T12:30:00+00:00",
+                "order_number": 5,
+                "description": "TONNO TA",
+            },
+            {
                 "id": "f-manual-source",
                 "restaurant_id": flaminio_id,
                 "created_at": "2026-01-16T09:00:00+00:00",
@@ -199,14 +207,15 @@ async def _exercise_analysis_workbook():
         )
         grazie_day = next(row for row in grazie["rows"] if row["date_str"] == day)
 
-        # Independent expected totals: only CARB, AMAT and reused RAGU remain valid.
-        assert flaminio_day["source_order_count"] == 3
+        # Independent expected totals: deleted rows stay out and TONNO is analytical.
+        assert flaminio_day["source_order_count"] == 4
         assert flaminio_day["deleted_order_count"] == 2
-        assert flaminio_day["paste_total_count"] == 3
+        assert flaminio_day["paste_total_count"] == 4
         assert flaminio_day["paste"]["breakdown"]["CARB"]["count"] == 1
         assert flaminio_day["paste"]["breakdown"]["AMAT"]["count"] == 1
         assert flaminio_day["paste"]["breakdown"]["PESTO"]["count"] == 0
         assert flaminio_day["paste"]["breakdown"]["RAGU"]["count"] == 1
+        assert flaminio_day["paste"]["breakdown"]["TONNO"]["count"] == 1
         assert flaminio_day["paste"]["unrecognized_count"] == 0
 
         assert grazie_day["source_order_count"] == 2
@@ -241,11 +250,12 @@ async def _exercise_analysis_workbook():
 
         excel_row = 8 + 14  # January 15, with January 1 at row 8.
         assert flaminio_ws.cell(excel_row, first_column("Carb")).value == 1
-        assert flaminio_ws.cell(excel_row, first_column("Amatriciana")).value == 1
+        assert flaminio_ws.cell(excel_row, first_column("Amat")).value == 1
         assert flaminio_ws.cell(excel_row, first_column("Pesto")).value is None
         assert flaminio_ws.cell(excel_row, first_column("Ragu")).value == 1
+        assert flaminio_ws.cell(excel_row, first_column("Tonno")).value == 1
         assert flaminio_ws.cell(excel_row, first_column("Altro")).value is None
-        assert flaminio_ws.cell(excel_row, first_column("TOT PIATTI")).value == 3
+        assert flaminio_ws.cell(excel_row, first_column("TOT PIATTI")).value == 4
         cancelled_excel_row = 8 + 16
         assert flaminio_ws.cell(
             cancelled_excel_row, first_column("TOT PIATTI")
@@ -254,7 +264,7 @@ async def _exercise_analysis_workbook():
         grazie_ws = wb["Grazie"]
         grazie_headers = [cell.value for cell in grazie_ws[7]]
         assert grazie_ws.cell(excel_row, grazie_headers.index("Cacio") + 1).value == 1
-        assert grazie_ws.cell(excel_row, grazie_headers.index("CarZuc") + 1).value == 1
+        assert grazie_ws.cell(excel_row, grazie_headers.index("Carzuc") + 1).value == 1
         assert grazie_ws.cell(
             excel_row, grazie_headers.index("TOT PIATTI") + 1
         ).value == 2
@@ -262,8 +272,8 @@ async def _exercise_analysis_workbook():
         totals = wb["Totali"]
         totals_headers = [cell.value for cell in totals[1]]
         totals_row = 2 + 14
-        assert totals.cell(totals_row, totals_headers.index("FLAMINIO") + 1).value == 3
+        assert totals.cell(totals_row, totals_headers.index("FLAMINIO") + 1).value == 4
         assert totals.cell(totals_row, totals_headers.index("GRAZIE") + 1).value == 2
-        assert totals.cell(totals_row, totals_headers.index("TOTALI") + 1).value == 5
+        assert totals.cell(totals_row, totals_headers.index("TOTALI") + 1).value == 6
     finally:
         await client.drop_database(db_name)

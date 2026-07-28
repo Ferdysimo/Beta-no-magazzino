@@ -760,6 +760,7 @@ async def closures_grid_admin(
             "date": date_str,
             "is_mock": bool(cash_doc.get("mock") or any(b.get("mock") for b in bev_docs)),
             "cash": cash_flat,
+            "vers_raw": str(cash_doc.get("vers", "") or "")[:2000],
             "vers_color": cash_doc.get("vers_color", ""),
             "beverages": bev_flat,
             "bev_total_qty": bev_total_qty,

@@ -65,7 +65,12 @@ const isHiddenMovement = (movement) => {
 
 const AuditCassaPage = () => {
   const navigate = useNavigate();
-  const { token, canImpersonate } = useAuth();
+  const {
+    token,
+    canImpersonate,
+    effectiveRestaurant,
+    selectRestaurant,
+  } = useAuth();
 
   const today = useMemo(() => fmtRomeISODate(), []);
   const thirtyDaysAgo = useMemo(() => {
@@ -77,7 +82,9 @@ const AuditCassaPage = () => {
   const [dateFrom, setDateFrom] = useState(thirtyDaysAgo);
   const [dateTo, setDateTo] = useState(today);
   const [restaurants, setRestaurants] = useState([]);
-  const [restaurantFilter, setRestaurantFilter] = useState('');
+  const [restaurantFilter, setRestaurantFilter] = useState(
+    () => effectiveRestaurant?.id || '',
+  );
 
   // Stato lista + selezione
   const [groups, setGroups] = useState([]);
@@ -143,6 +150,12 @@ const AuditCassaPage = () => {
 
   useEffect(() => { loadMovements(); }, [loadMovements]);
 
+  const onRestaurantFilterChange = (restaurantId) => {
+    setRestaurantFilter(restaurantId);
+    const target = restaurants.find(r => r.id === restaurantId);
+    if (target) selectRestaurant(target);
+  };
+
   if (!canImpersonate) {
     return (
       <div className="min-h-screen bg-[#F5F5F5]">
@@ -186,7 +199,7 @@ const AuditCassaPage = () => {
           </div>
           <div className="flex flex-col">
             <label className="text-[10px] font-bold text-gray-600 uppercase">Locale</label>
-            <select value={restaurantFilter} onChange={e => setRestaurantFilter(e.target.value)}
+            <select value={restaurantFilter} onChange={e => onRestaurantFilterChange(e.target.value)}
               data-testid="filter-restaurant" className="border border-gray-300 rounded px-2 py-1 text-sm bg-white">
               <option value="">Tutti</option>
               {restaurants.map(r => (

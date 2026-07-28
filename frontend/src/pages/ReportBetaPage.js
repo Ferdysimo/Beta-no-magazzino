@@ -291,7 +291,13 @@ const CommentPopover = ({ inputRef, value, onChange, onSave, onCancel }) => {
 const ReportBetaPageInner = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { token, canImpersonate, restaurant, effectiveRestaurant } = useAuth();
+  const {
+    token,
+    canImpersonate,
+    restaurant,
+    effectiveRestaurant,
+    selectRestaurant,
+  } = useAuth();
   // ───── Modalità storica: ?date=YYYY-MM-DD&rid=<restaurantId> ─────
   // - Admin/Supervisor: carica e PUÒ correggere la chiusura archiviata.
   // - Utenti normali (cassieri): carica SOLO IL PROPRIO locale in SOLA LETTURA
@@ -307,6 +313,10 @@ const ReportBetaPageInner = () => {
     () => (historicalMode ? { date: urlDate, restaurant_id: urlRid } : {}),
     [historicalMode, urlDate, urlRid],
   );
+  const historicalRestaurantLabel = historicalMode
+    && effectiveRestaurant?.id === urlRid
+    ? (effectiveRestaurant.location || effectiveRestaurant.username || '')
+    : '';
   const [pasteText, setPasteText] = useState('');
   const [cash, setCash] = useState({});
   const [manualPrices, setManualPrices] = useState({});
@@ -363,6 +373,39 @@ const ReportBetaPageInner = () => {
   const bevRevisionRef = React.useRef({});
   const bevPendingSeraUntil = React.useRef({});      // { sigla: timestamp ms } — finché non scade, il poll non sovrascrive 'sera'
   const [focusedSeraSigla, setFocusedSeraSigla] = useState(null);
+
+  // Il parametro `rid` e la sorgente autoritativa del locale storico. Mantieni
+  // allineata anche l'impersonificazione della scheda, cosi banner, header e
+  // richieste accessorie non possono mostrare il contesto di un altro locale.
+  useEffect(() => {
+    if (
+      !historicalMode
+      || !canImpersonate
+      || !token
+      || !urlRid
+      || effectiveRestaurant?.id === urlRid
+    ) return undefined;
+
+    let cancelled = false;
+    axios.get(`${API}/admin/restaurants`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then((res) => {
+      if (cancelled) return;
+      const target = (res.data || []).find(r => r.id === urlRid);
+      if (target) selectRestaurant(target);
+    }).catch((error) => {
+      console.error('historical restaurant alignment', error);
+    });
+
+    return () => { cancelled = true; };
+  }, [
+    historicalMode,
+    canImpersonate,
+    token,
+    urlRid,
+    effectiveRestaurant?.id,
+    selectRestaurant,
+  ]);
 
   // Carica il dizionario paste del ristorante effettivo (live o storico).
   useEffect(() => {
@@ -1179,8 +1222,7 @@ const ReportBetaPageInner = () => {
 
   return (
     <div
-      className="min-h-screen bg-[#F5F5F5] flex flex-col overflow-hidden"
-      style={{ zoom: 0.9 }}
+      className="min-h-screen bg-[#F5F5F5] flex flex-col overflow-x-hidden overflow-y-auto lg:h-screen lg:overflow-hidden lg:[zoom:0.9]"
     >
       <Header />
       {historicalMode && (
@@ -1191,7 +1233,9 @@ const ReportBetaPageInner = () => {
         >
           <div className="flex items-center gap-2 font-bold">
             <span style={{ fontSize: 18 }}>📅</span>
-            MODALITÀ STORICO — {(() => {
+            MODALITÀ STORICO — {historicalRestaurantLabel && (
+              <>{historicalRestaurantLabel} — </>
+            )}{(() => {
               const [y, m, d] = urlDate.split('-');
               return `${d}/${m}/${y}`;
             })()} — Le modifiche aggiornano la chiusura archiviata
@@ -1211,7 +1255,7 @@ const ReportBetaPageInner = () => {
         </div>
       )}
       <main
-        className={`flex-1 max-w-[1600px] w-full mx-auto px-3 py-2 flex flex-col min-h-0 ${readOnlyHistorical ? 'pointer-events-none select-text' : ''}`}
+        className={`max-w-[1600px] w-full mx-auto px-2 sm:px-3 py-2 flex flex-col lg:flex-1 lg:min-h-0 ${readOnlyHistorical ? 'pointer-events-none select-text' : ''}`}
       >
         {/* Titolo compatto */}
         <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
@@ -1228,9 +1272,9 @@ const ReportBetaPageInner = () => {
         </div>
 
         {/* Layout: paste a sinistra (~14%) + tutto il resto a destra (~86%) */}
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-[14fr_86fr] xl:grid-cols-[minmax(250px,1fr)_4fr] gap-2 min-h-0">
+        <div className="grid grid-cols-1 lg:grid-cols-[14fr_86fr] xl:grid-cols-[minmax(250px,1fr)_4fr] gap-3 lg:gap-2 lg:flex-1 lg:min-h-0">
           {/* ============== SINISTRA — PASTE ============== */}
-          <section className="bg-white rounded border border-gray-200 p-2 flex flex-col min-h-0">
+          <section className="bg-white rounded border border-gray-200 p-2 flex flex-col lg:min-h-0">
             <div className="flex items-baseline justify-center mb-1 gap-1 flex-wrap">
               <h2 className="text-xs font-bold text-gray-800 uppercase">Paste</h2>
             </div>
@@ -1278,7 +1322,7 @@ const ReportBetaPageInner = () => {
                 ? 'Modifica manuale attiva'
                 : 'Auto-popolato dalle paste mandate dal Cassa (live)'}
               style={readOnlyHistorical ? { pointerEvents: 'auto' } : undefined}
-              className={`w-full flex-1 min-h-[120px] p-2 border rounded text-[13px] leading-snug tracking-wide font-semibold text-gray-800 focus:outline-none resize-none ${
+              className={`w-full h-64 lg:h-auto lg:flex-1 lg:min-h-[120px] p-2 border rounded text-base lg:text-[13px] leading-snug tracking-wide font-semibold text-gray-800 focus:outline-none resize-none ${
                 manualPasteOverride
                   ? 'border-rose-300 focus:border-rose-500 bg-white'
                   : 'border-gray-200 bg-gray-50 cursor-not-allowed'
@@ -1400,12 +1444,12 @@ const ReportBetaPageInner = () => {
           </section>
 
           {/* ============== DESTRA — CASSA + AREA FUTURA ============== */}
-          <section className="flex flex-col gap-1.5 min-h-0">
+          <section className="flex flex-col gap-3 lg:gap-1.5 lg:min-h-0">
             {/* Riga banconote */}
             <div>
               <h2 className="text-sm font-bold text-gray-800 uppercase text-center mb-0.5">Cassa</h2>
               <div className="bg-white rounded p-1.5" style={{ border: '2px solid #4ade80' }}>
-              <div className="grid grid-cols-11 gap-1.5">
+              <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-11 gap-2 lg:gap-1.5">
                 {CASH_DENOMINATIONS.map(d => {
                   const raw = (cash[d.key] || '').replace(/,/g, '.');
                   const n = parseFloat(raw);
@@ -1422,7 +1466,7 @@ const ReportBetaPageInner = () => {
                         value={cash[d.key] || ''}
                         onChange={(e) => setCashValue(d.key, e.target.value)}
                         placeholder="0"
-                        className="w-full h-11 border border-gray-200 rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518]"
+                        className="w-full h-12 lg:h-11 border border-gray-200 rounded px-1 text-center font-bold text-base lg:text-sm focus:outline-none focus:border-[#F5C518]"
                       />
                       <span className="text-[10px] font-bold text-gray-700 mt-0.5 text-center leading-none">
                         {subTot > 0 ? `€${fmtEur(subTot)}` : '\u00A0'}
@@ -1434,7 +1478,7 @@ const ReportBetaPageInner = () => {
                   <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">Tot</label>
                   <div
                     data-testid="cash-total"
-                    className="w-full h-11 bg-gray-900 text-[#F5C518] rounded flex items-center justify-center font-semibold text-sm"
+                    className="w-full h-12 lg:h-11 bg-gray-900 text-[#F5C518] rounded flex items-center justify-center font-semibold text-base lg:text-sm"
                   >
                     €{fmtEur(cashTotal)}
                   </div>
@@ -1447,7 +1491,7 @@ const ReportBetaPageInner = () => {
             <div>
               <h2 className="text-sm font-bold text-gray-800 uppercase text-center mb-0.5">Movimentazione finanziaria</h2>
               <div className="bg-white rounded p-1.5 relative" style={{ border: '2px solid #9ca3af' }}>
-              <div className="absolute right-1.5 top-1.5 flex items-center gap-2 z-10">
+              <div className="flex justify-end items-center gap-2 mb-1 lg:mb-0 lg:absolute lg:right-1.5 lg:top-1.5 z-10">
                 {canImpersonate && (
                 <button
                   type="button"
@@ -1464,7 +1508,7 @@ const ReportBetaPageInner = () => {
                 </button>
                 )}
               </div>
-              <div className="flex items-stretch gap-1.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:items-stretch gap-2 lg:gap-1.5">
                 {/* Tutti i campi tranne VERS: VERS viene renderizzato come ULTIMO box DOPO CASH SERA */}
                 {CASH_FIELDS.filter(f => f.key !== 'vers').map(f => {
                   const computed = evaluateValue(cashRow[f.key]);
@@ -1482,11 +1526,11 @@ const ReportBetaPageInner = () => {
                     <div
                       key={f.key}
                       data-preview-cell={f.key}
-                      className="flex-1 min-w-[60px] flex flex-col relative rounded p-1"
+                      className="min-w-0 flex flex-col relative rounded p-1 lg:flex-1 lg:min-w-[60px]"
                       style={{ backgroundColor: boxStyle.bg }}
                     >
                       <label
-                        className="text-[10px] font-semibold text-center leading-none mb-0.5 truncate uppercase"
+                        className="text-[11px] lg:text-[10px] font-semibold text-center leading-none mb-0.5 truncate uppercase"
                         title={f.label}
                         style={{ color: boxStyle.text }}
                       >
@@ -1514,7 +1558,7 @@ const ReportBetaPageInner = () => {
                         onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
                         placeholder={f.op === 'base' ? '€' : (f.op === 'minus' ? '−' : '+')}
                         readOnly={isReadOnly}
-                        className={`w-full h-11 border rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] border-gray-200 ${
+                        className={`w-full h-12 lg:h-11 border rounded px-1 text-center font-bold text-base lg:text-sm focus:outline-none focus:border-[#F5C518] border-gray-200 ${
                           isReadOnly ? 'bg-gray-100 text-gray-700 cursor-not-allowed'
                           : (f.key === 'mattina' && forceMattina ? 'bg-yellow-50 ring-2 ring-amber-400' : 'bg-white')
                         }`}
@@ -1582,11 +1626,11 @@ const ReportBetaPageInner = () => {
                   );
                 })}
                 {/* CASH SERA — totale */}
-                <div className="flex-1 min-w-[70px] flex flex-col">
+                <div className="min-w-0 flex flex-col lg:flex-1 lg:min-w-[70px]">
                   <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">CASH SERA</label>
                   <div
                     data-testid="cash-row-sera"
-                    className="w-full h-11 bg-gray-900 text-[#F5C518] rounded flex items-center justify-center font-semibold text-sm"
+                    className="w-full h-12 lg:h-11 bg-gray-900 text-[#F5C518] rounded flex items-center justify-center font-semibold text-base lg:text-sm"
                   >
                     €{cashSera.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
@@ -1614,11 +1658,11 @@ const ReportBetaPageInner = () => {
                   return (
                     <div
                       data-preview-cell={f.key}
-                      className="flex-1 min-w-[60px] flex flex-col relative rounded p-1 transition-colors"
+                      className="min-w-0 flex flex-col relative rounded p-1 transition-colors lg:flex-1 lg:min-w-[60px]"
                       style={{ backgroundColor: cellBg }}
                     >
                       <label
-                        className="text-[10px] font-semibold text-center leading-none mb-0.5 truncate uppercase"
+                        className="text-[11px] lg:text-[10px] font-semibold text-center leading-none mb-0.5 truncate uppercase"
                         title={f.label}
                         style={{ color: cellTextColor }}
                       >
@@ -1639,7 +1683,7 @@ const ReportBetaPageInner = () => {
                         onFocus={() => setFocusedField(f.key)}
                         onBlur={() => setFocusedField(curr => curr === f.key ? null : curr)}
                         onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
-                        className={`w-full h-11 border rounded px-1 text-center font-bold text-sm focus:outline-none focus:border-[#F5C518] overflow-hidden whitespace-nowrap flex items-center justify-center transition-colors ${
+                        className={`w-full h-12 lg:h-11 border rounded px-1 text-center font-bold text-base lg:text-sm focus:outline-none focus:border-[#F5C518] overflow-hidden whitespace-nowrap flex items-center justify-center transition-colors ${
                           mixedColors ? 'bg-yellow-200 border-yellow-400' : 'bg-white border-gray-200'
                         }`}
                         title="Evidenzia il testo e clicca un colore della palette qui sotto per colorarlo"
@@ -1717,7 +1761,7 @@ const ReportBetaPageInner = () => {
 
             {/* ============ BLOCCO TOP BEVANDE — bordo arancione SENZA bottom (no linea sopra Vendite Bev), ::after disegna il "tetto" arancione SOLO sopra Spicci ============ */}
             <div
-              className="p-2 space-y-2 relative after:content-[''] after:absolute after:bottom-[-2px] after:right-0 after:h-[2px] after:w-[calc(42%+10px)] after:bg-[#F5C518]"
+              className="p-2 space-y-3 lg:space-y-2 relative after:hidden lg:after:block after:content-[''] after:absolute after:bottom-[-2px] after:right-0 after:h-[2px] after:w-[calc(42%+10px)] after:bg-[#F5C518]"
               style={{
                 border: '2px solid #F5C518',
                 borderBottom: 0,
@@ -1731,9 +1775,9 @@ const ReportBetaPageInner = () => {
 
             {/* ============ MAGAZZINO MATTINA (casse + sfuse, in sync con Magazzino Bevande) ============ */}
             <div className="bg-white rounded p-1.5">
-              <div className="relative flex items-center justify-center mb-1">
+              <div className="relative flex flex-col items-center gap-1 mb-2 sm:flex-row sm:justify-center sm:mb-1">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Magazzino Mattina</h2>
-                <div className="absolute right-0 flex items-center gap-2">
+                <div className="flex items-center gap-2 sm:absolute sm:right-0">
                   <button
                     type="button"
                     data-testid="toggle-mag-mattina"
@@ -1766,7 +1810,7 @@ const ReportBetaPageInner = () => {
                   Nessuna bevanda configurata.
                 </div>
               ) : (
-                <div className="flex items-stretch gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:items-stretch gap-2">
                   {beverages.map(b => {
                     const row = bevCounts[b.sigla] || {};
                     const casseRaw = row.mattina_casse ?? '';
@@ -1783,7 +1827,7 @@ const ReportBetaPageInner = () => {
                       <div
                         key={b.sigla}
                         data-testid={`mag-mattina-${b.sigla}`}
-                        className="flex-1 min-w-[90px] flex flex-col"
+                        className="min-w-0 flex flex-col lg:flex-1 lg:min-w-[90px]"
                       >
                         <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
                           {b.sigla}
@@ -1799,7 +1843,7 @@ const ReportBetaPageInner = () => {
                             readOnly={locked}
                             tabIndex={locked ? -1 : 0}
                             title={isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : 'Casse da 24'}
-                            className={`w-1/2 h-9 rounded text-center font-semibold text-sm border focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                            className={`w-1/2 h-10 lg:h-9 rounded text-center font-semibold text-base lg:text-sm border focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
                               locked
                                 ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-not-allowed'
                                 : casseEmpty
@@ -1817,7 +1861,7 @@ const ReportBetaPageInner = () => {
                             readOnly={locked}
                             tabIndex={locked ? -1 : 0}
                             title={isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Unità sfuse'}
-                            className={`w-1/2 h-9 rounded text-center font-semibold text-sm border focus:outline-none focus:ring-2 focus:ring-teal-400 ${
+                            className={`w-1/2 h-10 lg:h-9 rounded text-center font-semibold text-base lg:text-sm border focus:outline-none focus:ring-2 focus:ring-teal-400 ${
                               locked
                                 ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-not-allowed'
                                 : sfuseEmpty
@@ -1840,7 +1884,7 @@ const ReportBetaPageInner = () => {
             </div>
 
             {/* ============ INGRESSI / USCITE + SCARTI (stessa riga) ============ */}
-            <div className="flex items-stretch gap-2">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch lg:gap-2">
               <div className="bg-white rounded p-1 flex-1 min-w-0">
               <div className="flex items-baseline justify-center mb-0.5">
                 <h2 className="text-xs font-bold text-gray-800 uppercase">Ingressi / Uscite</h2>
@@ -1850,7 +1894,7 @@ const ReportBetaPageInner = () => {
                   Nessuna bevanda configurata.
                 </div>
               ) : (
-                <div className="flex items-stretch gap-1 justify-center">
+                <div className="grid grid-cols-3 sm:grid-cols-4 lg:flex lg:items-stretch gap-2 lg:gap-1 lg:justify-center">
                   {beverages.map(b => {
                     const row = bevCounts[b.sigla] || {};
                     const casseRaw = row.inUsc_casse ?? '';
@@ -1863,7 +1907,7 @@ const ReportBetaPageInner = () => {
                       <div
                         key={b.sigla}
                         data-testid={`ingressi-${b.sigla}`}
-                        className="w-14 flex-none flex flex-col relative"
+                        className="min-w-0 flex flex-col relative lg:w-14 lg:flex-none"
                       >
                         <label className="text-[9px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
                           {b.sigla}
@@ -1876,7 +1920,7 @@ const ReportBetaPageInner = () => {
                           onChange={(e) => handleInUscChange(b.sigla, e.target.value)}
                           onContextMenu={(e) => { e.preventDefault(); openCommentPopover(b.sigla, 'bev', 'inUsc'); }}
                           title={(hasComment ? `📝 ${(row.comments || {}).inUsc}\n\n` : '') + (isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN} casse → ${casseN * PEZZI_PER_CASSA} unità` : `Numero casse · ×${PEZZI_PER_CASSA}\n(destro per commento)`)}
-                          className={`w-full h-7 rounded text-center font-semibold text-[11px] border focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
+                          className={`w-full h-10 lg:h-7 rounded text-center font-semibold text-base lg:text-[11px] border focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
                             casseEmpty
                               ? 'bg-gray-50 border-gray-200 text-gray-700'
                               : 'bg-indigo-50 border-indigo-200 text-gray-900'
@@ -1919,7 +1963,7 @@ const ReportBetaPageInner = () => {
                     Nessuna bevanda configurata.
                   </div>
                 ) : (
-                  <div className="flex items-stretch gap-1 justify-center">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 lg:flex lg:items-stretch gap-2 lg:gap-1 lg:justify-center">
                       {beverages.map(b => {
                         const row = bevCounts[b.sigla] || {};
                         const scRaw = row.scarti ?? '';
@@ -1931,7 +1975,7 @@ const ReportBetaPageInner = () => {
                           <div
                             key={b.sigla}
                             data-testid={`scarti-${b.sigla}`}
-                            className="w-14 flex-none flex flex-col relative"
+                            className="min-w-0 flex flex-col relative lg:w-14 lg:flex-none"
                           >
                             <label className="text-[9px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>{b.sigla}</label>
                             <input
@@ -1942,7 +1986,7 @@ const ReportBetaPageInner = () => {
                               onChange={(e) => handleScartiChange(b.sigla, e.target.value)}
                               onContextMenu={(e) => { e.preventDefault(); openCommentPopover(b.sigla, 'bev', 'scarti'); }}
                               title={(hasComment ? `📝 ${(row.comments || {}).scarti}\n\n` : '') + (isFormulaSc ? `Formula: ${scRaw} = ${scN}` : 'Unità scartate (singole)\n(destro per commento)')}
-                              className={`w-full h-7 rounded text-center font-semibold text-[11px] border focus:outline-none focus:ring-2 focus:ring-rose-400 ${
+                              className={`w-full h-10 lg:h-7 rounded text-center font-semibold text-base lg:text-[11px] border focus:outline-none focus:ring-2 focus:ring-rose-400 ${
                                 scEmpty
                                   ? 'bg-gray-50 border-gray-200 text-gray-700'
                                   : 'bg-rose-50 border-rose-200 text-gray-900'
@@ -1984,7 +2028,7 @@ const ReportBetaPageInner = () => {
                   Nessuna bevanda configurata.
                 </div>
               ) : (
-                <div className="flex items-stretch gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:items-stretch gap-2">
                   {beverages.map(b => {
                     const row = bevCounts[b.sigla] || {};
                     const casseRaw = row.sera_casse ?? '';
@@ -2001,7 +2045,7 @@ const ReportBetaPageInner = () => {
                       <div
                         key={b.sigla}
                         data-testid={`mag-sera-${b.sigla}`}
-                        className="flex-1 min-w-[90px] flex flex-col"
+                        className="min-w-0 flex flex-col lg:flex-1 lg:min-w-[90px]"
                       >
                         <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
                           {b.sigla}
@@ -2017,7 +2061,7 @@ const ReportBetaPageInner = () => {
                             onFocus={() => setFocusedSeraSigla(b.sigla)}
                             onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
                             title={isFormulaCasse ? `Formula casse: ${casseRaw} = ${casseN}` : 'Casse da 24'}
-                            className={`w-1/2 h-9 rounded text-center font-semibold text-sm border focus:outline-none focus:ring-2 focus:ring-amber-400 ${
+                            className={`w-1/2 h-10 lg:h-9 rounded text-center font-semibold text-base lg:text-sm border focus:outline-none focus:ring-2 focus:ring-amber-400 ${
                               casseEmpty
                                 ? 'bg-gray-50 border-gray-200 text-gray-700'
                                 : 'bg-amber-50 border-amber-200 text-gray-900'
@@ -2033,7 +2077,7 @@ const ReportBetaPageInner = () => {
                             onFocus={() => setFocusedSeraSigla(b.sigla)}
                             onBlur={() => setFocusedSeraSigla(s => s === b.sigla ? null : s)}
                             title={isFormulaSfuse ? `Formula sfuse: ${sfuseRaw} = ${sfuseN}` : 'Unità sfuse'}
-                            className={`w-1/2 h-9 rounded text-center font-semibold text-sm border focus:outline-none focus:ring-2 focus:ring-sky-400 ${
+                            className={`w-1/2 h-10 lg:h-9 rounded text-center font-semibold text-base lg:text-sm border focus:outline-none focus:ring-2 focus:ring-sky-400 ${
                               sfuseEmpty
                                 ? 'bg-gray-50 border-gray-200 text-gray-700'
                                 : 'bg-sky-50 border-sky-200 text-gray-900'
@@ -2060,7 +2104,7 @@ const ReportBetaPageInner = () => {
             {/* ============ FINE BLOCCO TOP BEVANDE ============ */}
 
             {/* ============ VENDITE BEVANDE + SPICCI (stessa riga) — Spicci distanziato 8px sotto, si vede sia il "tetto" arancione che il bordo blu ============ */}
-            <div className="flex items-stretch gap-2">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch lg:gap-2">
               {/* --- VENDITE BEVANDE (a sinistra, no bordo top, attaccato al top wrapper senza linea) --- */}
               <div
                 className="bg-white p-1.5 flex-1 min-w-0"
@@ -2081,28 +2125,28 @@ const ReportBetaPageInner = () => {
                     Nessuna bevanda configurata.
                   </div>
                 ) : (
-                  <div className="flex items-stretch gap-1.5">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 lg:flex lg:items-stretch gap-2 lg:gap-1.5">
                     {bevSales.map(b => (
                       <div
                         key={b.sigla}
                         data-testid={`bev-sales-${b.sigla}`}
-                        className="flex-1 min-w-[60px] flex flex-col"
+                        className="min-w-0 flex flex-col lg:flex-1 lg:min-w-[60px]"
                       >
                         <label className="text-[10px] font-semibold text-gray-600 text-center leading-none mb-0.5 truncate" title={b.name}>
                           {b.sigla}
                         </label>
-                        <div className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-semibold text-base text-gray-900">
+                        <div className="w-full h-12 lg:h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-semibold text-base text-gray-900">
                           {b.qty}
                         </div>
                         <span className="text-[8px] text-gray-500 text-center leading-none mt-0.5 italic">unità</span>
                       </div>
                     ))}
                     {/* Totale — solo importo € */}
-                    <div className="flex-1 min-w-[70px] flex flex-col">
+                    <div className="min-w-0 flex flex-col lg:flex-1 lg:min-w-[70px]">
                       <label className="text-[10px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">Tot</label>
                       <div
                         data-testid="bev-sales-total-inc"
-                        className="w-full h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-semibold text-base text-gray-900"
+                        className="w-full h-12 lg:h-11 bg-gray-50 border border-gray-200 rounded flex items-center justify-center font-semibold text-base text-gray-900"
                       >
                         €{bevTotalInc.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
@@ -2112,11 +2156,11 @@ const ReportBetaPageInner = () => {
               </div>
 
               {/* --- SPICCI (rettangolo blu, distanziato 8px sotto il "tetto" arancione) --- */}
-              <div className="bg-white rounded p-1.5 w-[42%] flex-shrink-0" style={{ border: '2px solid #2563eb', marginTop: '8px' }}>
+              <div className="bg-white rounded p-2 lg:p-1.5 w-full lg:w-[42%] flex-shrink-0" style={{ border: '2px solid #2563eb', marginTop: '8px' }}>
                 <div className="flex items-baseline justify-center mb-1">
                   <h2 className="text-xs font-bold text-gray-800 uppercase">Spicci</h2>
                 </div>
-                <div className="flex items-stretch gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-stretch gap-2">
                   {/* MOVIMENTI (era "Spicci") */}
                   <div className="flex-[5] min-w-0 rounded border border-gray-200 bg-gray-50 p-1">
                     <div className="flex items-baseline justify-between mb-0.5 px-0.5">
@@ -2138,7 +2182,7 @@ const ReportBetaPageInner = () => {
                             onChange={(e) => setCashRowValue(r.key, e.target.value)}
                             onContextMenu={(e) => { e.preventDefault(); openCommentPopover(r.key); }}
                             placeholder=""
-                            className="w-full h-7 border border-gray-200 rounded px-0.5 text-center font-bold text-[11px] focus:outline-none focus:border-[#F5C518] bg-white"
+                            className="w-full h-10 lg:h-7 border border-gray-200 rounded px-0.5 text-center font-bold text-base lg:text-[11px] focus:outline-none focus:border-[#F5C518] bg-white"
                           />
                           {hasComment && (
                             <span
@@ -2148,7 +2192,7 @@ const ReportBetaPageInner = () => {
                           )}
                           <div
                             data-testid={`spicci-valore-${r.key}`}
-                            className="w-full h-7 mt-0.5 bg-yellow-50 border border-yellow-200 rounded flex items-center justify-center font-semibold text-[11px] text-gray-900"
+                            className="w-full h-8 lg:h-7 mt-0.5 bg-yellow-50 border border-yellow-200 rounded flex items-center justify-center font-semibold text-sm lg:text-[11px] text-gray-900"
                           >
                             €{r.value.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                           </div>
@@ -2167,12 +2211,12 @@ const ReportBetaPageInner = () => {
                       {/* Totale movimenti */}
                       <div className="flex-1 min-w-[40px] flex flex-col">
                         <label className="text-[9px] font-bold text-gray-800 text-center uppercase leading-none mb-0.5">TOT</label>
-                        <div className="w-full h-7 border border-transparent rounded flex items-center justify-center text-[9px] text-gray-400 italic">
+                        <div className="w-full h-10 lg:h-7 border border-transparent rounded flex items-center justify-center text-[9px] text-gray-400 italic">
                           —
                         </div>
                         <div
                           data-testid="spicci-totale"
-                          className="w-full h-7 mt-0.5 bg-white border border-gray-200 rounded flex items-center justify-center font-semibold text-[11px] text-gray-900"
+                          className="w-full h-8 lg:h-7 mt-0.5 bg-white border border-gray-200 rounded flex items-center justify-center font-semibold text-sm lg:text-[11px] text-gray-900"
                         >
                           €{spicciValues.total.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                         </div>
@@ -2221,7 +2265,7 @@ const ReportBetaPageInner = () => {
                                 }}
                                 onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
                                 placeholder="stock"
-                                className="w-full h-7 border-2 border-[#F5C518] rounded px-0.5 text-center font-bold text-[11px] focus:outline-none bg-yellow-50"
+                                className="w-full h-10 lg:h-7 border-2 border-[#F5C518] rounded px-0.5 text-center font-bold text-base lg:text-[11px] focus:outline-none bg-yellow-50"
                               />
                             ) : (
                               <button
@@ -2230,7 +2274,7 @@ const ReportBetaPageInner = () => {
                                 onClick={() => startEditCassetto(f)}
                                 onContextMenu={(e) => { e.preventDefault(); openCommentPopover(f.key); }}
                                 title={canImpersonate ? "Clicca per modificare · destro per commento" : "Solo lettura · destro per commento"}
-                                className={`w-full h-7 border rounded px-0.5 text-center font-semibold text-[11px] transition-colors ${
+                                className={`w-full h-10 lg:h-7 border rounded px-0.5 text-center font-semibold text-base lg:text-[11px] transition-colors ${
                                   canImpersonate ? 'cursor-pointer' : 'cursor-not-allowed'
                                 } ${
                                   isNegative
@@ -2295,15 +2339,15 @@ const ReportBetaPageInner = () => {
       >
         {previewInfo && (
           <div className="bg-gray-900 text-white border-t-4 border-[#F5C518] shadow-2xl px-4 py-3">
-            <div className="max-w-[1600px] mx-auto flex items-center gap-4">
+            <div className="max-w-[1600px] mx-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
               <div className="flex-shrink-0">
                 <div className="text-[10px] uppercase tracking-widest text-gray-400">Selezionato</div>
-                <div className="text-base font-bold text-[#F5C518] truncate" style={{ maxWidth: 200 }}>
+                <div className="text-base font-bold text-[#F5C518] truncate sm:max-w-[200px]">
                   {previewInfo.label}
                 </div>
               </div>
               <div className="flex-1 min-w-0 flex items-center justify-center bg-gray-800 rounded px-4 py-2 border border-gray-700">
-                <span className="text-3xl font-semibold font-mono text-white tracking-wide truncate">
+                <span className="text-xl sm:text-3xl font-semibold font-mono text-white tracking-wide truncate">
                   {previewInfo.raw || <em className="text-gray-500 italic text-xl">vuoto</em>}
                 </span>
               </div>
