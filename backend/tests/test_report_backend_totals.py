@@ -176,6 +176,36 @@ def test_export_separates_known_analytical_type_without_list_price_from_altro():
     assert result["total_eur"] == 21
 
 
+def test_export_groups_profile_excluded_pastas_in_altro_without_losing_revenue():
+    result = _compute_paste_breakdown_for_export(
+        "1 CARB\n2 AMAT\n3 CARZUC\n4 TONNO",
+        {"4 TONNO": "8"},
+        {"CARB": 8, "AMAT": 8, "CARZUC": 8},
+        analysis_service.ANALYSIS_STANDARD_PASTA_TYPES,
+    )
+
+    assert "AMAT" not in result["breakdown"]
+    assert "CARZUC" not in result["breakdown"]
+    assert result["breakdown"]["CARB"]["count"] == 1
+    assert result["breakdown"]["TONNO"]["count"] == 1
+    assert result["unrecognized_count"] == 2
+    assert result["unrecognized_eur"] == 16
+    assert result["total_count"] == 4
+    assert result["total_eur"] == 32
+
+
+def test_analysis_pasta_profile_matches_reference_workbook_by_location():
+    assert analysis_service._analysis_pasta_types_for_restaurant(
+        {"location": "Flaminio"}
+    ) == analysis_service.ANALYSIS_EXTENDED_PASTA_TYPES
+    assert analysis_service._analysis_pasta_types_for_restaurant(
+        {"location": "Largo di Brazzà"}
+    ) == analysis_service.ANALYSIS_STANDARD_PASTA_TYPES
+    assert analysis_service._analysis_pasta_types_for_restaurant(
+        {"location": "Nuovo locale", "analysis_pasta_types": ["CARB", "AMATRICIANA"]}
+    ) == ["CARB", "AMAT"]
+
+
 def test_export_canonicalizes_long_pasta_alias_and_keeps_its_configured_price():
     result = _compute_paste_breakdown_for_export(
         "1 TARTUFO",

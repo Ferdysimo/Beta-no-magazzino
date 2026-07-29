@@ -178,6 +178,18 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-29 12:07 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix | analisi dati | Excel | test
+**File toccati**:
+- `/app/backend/app/services/analysis.py`
+- `/app/backend/tests/test_report_backend_totals.py`
+- `/app/backend/tests/test_analysis_excel_isolated_integration.py`
+- `/app/memory/PRD.md`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Sostituita la tassonomia universale dell'Excel Analisi mensile con i profili del modello ufficiale `2025.xlsx`: Flaminio conserva `Carzuc` e `Amatriciana` come colonne separate, mentre Grazie, Brazzà e i nuovi locali le raggruppano in `Altro`. La classificazione visuale e il calcolo economico sono ora separati, quindi una sigla raggruppata in `Altro` continua a contribuire agli incassi con il prezzo configurato. L'audit read-only VPS sul 27/07 di Brazzà ha inoltre confermato 989 ordini validi, sei descrizioni realmente iniziate con `TONNO`, nessuna modifica/cancellazione per quelle righe e cinque `AMAT`: dopo il fix AMAT confluisce in Altro, mentre la discordanza `TONNO 6/CARB 285` contro `TONNO 5/CARB 286` appartiene al vecchio foglio ufficiale e non alla fonte Mongo.
+**Testato**: sì (metodo: modello originale `2025.xlsx` ispezionato per intestazioni per-locale; audit VPS esclusivamente read-only su ordini, snapshot Report e log del 20/07 e 27/07; test unitari export `31 passed`; integrazione Mongo isolata completa del workbook `1 passed`; suite backend completa `181 passed, 36 skipped`; `git diff --check`)
+**Note per il prossimo agente**: Non rendere di nuovo universali `AMAT` e `CARZUC`. `_analysis_pasta_types_for_restaurant` accetta un eventuale `analysis_pasta_types` esplicito nel documento locale, usa il profilo esteso per il legacy Flaminio e quello standard come default. Per dimostrare quale formula del vecchio Google Sheet riclassifica `TONNO SPAG 25` servirebbe il workbook ufficiale esportato o una sessione Google autenticata; non alterare i dati nuovi per imitare quella singola anomalia.
+
 ### [2026-07-28 15:27 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: UX | storico chiusure | test
 **File toccati**:
