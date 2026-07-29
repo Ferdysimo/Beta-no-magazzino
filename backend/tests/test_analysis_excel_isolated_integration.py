@@ -133,6 +133,13 @@ async def _exercise_analysis_workbook():
                 "order_number": 2,
                 "description": "CARZUC",
             },
+            {
+                "id": "g-amat",
+                "restaurant_id": grazie_id,
+                "created_at": "2026-01-15T11:30:00+00:00",
+                "order_number": 3,
+                "description": "AMAT",
+            },
         ])
         await db.deletion_logs.insert_many([
             {
@@ -218,10 +225,13 @@ async def _exercise_analysis_workbook():
         assert flaminio_day["paste"]["breakdown"]["TONNO"]["count"] == 1
         assert flaminio_day["paste"]["unrecognized_count"] == 0
 
-        assert grazie_day["source_order_count"] == 2
-        assert grazie_day["paste_total_count"] == 2
+        assert grazie_day["source_order_count"] == 3
+        assert grazie_day["paste_total_count"] == 3
         assert grazie_day["paste"]["breakdown"]["CACIO"]["count"] == 1
-        assert grazie_day["paste"]["breakdown"]["CARZUC"]["count"] == 1
+        assert "CARZUC" not in grazie_day["paste"]["breakdown"]
+        assert "AMAT" not in grazie_day["paste"]["breakdown"]
+        assert grazie_day["paste"]["unrecognized_count"] == 2
+        assert grazie_day["paste"]["unrecognized_eur"] == 16
 
         assert flaminio_manual["source_order_count"] == 1
         assert flaminio_manual["paste"]["breakdown"]["AMAT"]["count"] == 1
@@ -264,16 +274,18 @@ async def _exercise_analysis_workbook():
         grazie_ws = wb["Grazie"]
         grazie_headers = [cell.value for cell in grazie_ws[7]]
         assert grazie_ws.cell(excel_row, grazie_headers.index("Cacio") + 1).value == 1
-        assert grazie_ws.cell(excel_row, grazie_headers.index("Carzuc") + 1).value == 1
+        assert "Carzuc" not in grazie_headers
+        assert "Amat" not in grazie_headers
+        assert grazie_ws.cell(excel_row, grazie_headers.index("Altro") + 1).value == 2
         assert grazie_ws.cell(
             excel_row, grazie_headers.index("TOT PIATTI") + 1
-        ).value == 2
+        ).value == 3
 
         totals = wb["Totali"]
         totals_headers = [cell.value for cell in totals[1]]
         totals_row = 2 + 14
         assert totals.cell(totals_row, totals_headers.index("FLAMINIO") + 1).value == 4
-        assert totals.cell(totals_row, totals_headers.index("GRAZIE") + 1).value == 2
-        assert totals.cell(totals_row, totals_headers.index("TOTALI") + 1).value == 6
+        assert totals.cell(totals_row, totals_headers.index("GRAZIE") + 1).value == 3
+        assert totals.cell(totals_row, totals_headers.index("TOTALI") + 1).value == 7
     finally:
         await client.drop_database(db_name)
