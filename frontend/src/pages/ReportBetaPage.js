@@ -1222,7 +1222,7 @@ const ReportBetaPageInner = () => {
 
   return (
     <div
-      className="min-h-screen bg-[#F5F5F5] flex flex-col overflow-x-hidden overflow-y-auto lg:h-screen lg:overflow-hidden lg:[zoom:0.9]"
+      className="report-page-shell min-h-screen bg-[#F5F5F5] flex flex-col overflow-x-hidden overflow-y-auto"
     >
       <Header />
       {historicalMode && (
