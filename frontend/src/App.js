@@ -42,6 +42,7 @@ import CreaLocaliPage from './pages/CreaLocaliPage';
 import LaboratorioPage from './pages/LaboratorioPage';
 import ScannerDocumentiLabPage from './pages/ScannerDocumentiLabPage';
 import PastaAnnotationsLabPage from './pages/PastaAnnotationsLabPage';
+import ControlliTrasportiPage from './pages/ControlliTrasportiPage';
 import UpdateBanner from './components/UpdateBanner';
 import FrontendDiagnostics from './components/FrontendDiagnostics';
 import RouteScrollRestoration from './components/RouteScrollRestoration';
@@ -89,6 +90,16 @@ const SimoneOnlyRoute = ({ children }) => {
   const { restaurant } = useAuth();
 
   if (!canAccessLaboratory(restaurant)) {
+    return <Navigate to="/home" replace />;
+  }
+
+  return children;
+};
+
+const AdminOnlyRoute = ({ children }) => {
+  const { restaurant } = useAuth();
+
+  if (restaurant?.role !== 'admin') {
     return <Navigate to="/home" replace />;
   }
 
@@ -261,6 +272,13 @@ function AppRoutes() {
       <Route path="/admin/fatture-globale" element={
         <ProtectedRoute>
           <AdminFattureGlobaliPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/controlli-trasporti" element={
+        <ProtectedRoute>
+          <AdminOnlyRoute>
+            <ControlliTrasportiPage />
+          </AdminOnlyRoute>
         </ProtectedRoute>
       } />
       <Route path="/magazzino-bevande" element={

@@ -248,26 +248,40 @@ class TestRichiesteCRUD:
     def test_conferma_magazziniere_forbidden(self, tokens):
         flam_id = TestRichiesteCRUD.created_ids[0][1]
         r = requests.patch(f"{BASE_URL}/api/richieste/{flam_id}/conferma",
+                           json={"checker_name": "Test Magazzino"},
                            headers=_h(tokens["Magazziniere"]))
         assert r.status_code == 403
 
     def test_conferma_wrong_locale_forbidden(self, tokens):
         flam_id = TestRichiesteCRUD.created_ids[0][1]
         r = requests.patch(f"{BASE_URL}/api/richieste/{flam_id}/conferma",
+                           json={"checker_name": "Test Grazie"},
                            headers=_h(tokens["Grazie"]))
         assert r.status_code == 403
+
+    def test_conferma_requires_checker_name(self, tokens):
+        flam_id = TestRichiesteCRUD.created_ids[0][1]
+        r = requests.patch(
+            f"{BASE_URL}/api/richieste/{flam_id}/conferma",
+            json={"checker_name": " "},
+            headers=_h(tokens["Flaminio"]),
+        )
+        assert r.status_code == 400
 
     def test_conferma_ok(self, tokens):
         flam_id = TestRichiesteCRUD.created_ids[0][1]
         r = requests.patch(f"{BASE_URL}/api/richieste/{flam_id}/conferma",
+                           json={"checker_name": "Mario Test"},
                            headers=_h(tokens["Flaminio"]))
         assert r.status_code == 200
         assert r.json()["status"] == "confermata"
+        assert r.json()["transport_checked_by"] == "Mario Test"
 
     def test_conferma_must_be_evasa_first(self, tokens):
         # Second richiesta (Grazie) is still pending; conferma should fail
         gr_id = TestRichiesteCRUD.created_ids[1][1]
         r = requests.patch(f"{BASE_URL}/api/richieste/{gr_id}/conferma",
+                           json={"checker_name": "Test Grazie"},
                            headers=_h(tokens["Grazie"]))
         assert r.status_code == 400
 

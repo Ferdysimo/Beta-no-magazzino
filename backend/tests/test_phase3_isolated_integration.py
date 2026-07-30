@@ -65,6 +65,7 @@ async def _exercise_phase3_domains():
             }
             for username, name, location, role in (
                 ("Admin", "Amministratore", "Amministrazione", "admin"),
+                ("Simone", "Simone", "Amministrazione", "admin"),
                 ("Flaminio", "Pastasciutta Roma", "Flaminio", "restaurant"),
                 ("Magazziniere", "Magazziniere", "Magazzino", "magazzino"),
                 ("Federico", "Supervisore", "Supervisione", "supervisor"),
@@ -88,6 +89,7 @@ async def _exercise_phase3_domains():
                 return {"Authorization": f"Bearer {response.json()['token']}"}
 
             admin_headers = await login("Admin", TEST_PASSWORD)
+            simone_headers = await login("Simone", TEST_PASSWORD)
             flaminio_headers = await login("Flaminio", TEST_PASSWORD)
             warehouse_headers = await login("Magazziniere", TEST_PASSWORD)
             federico_headers = await login("Federico", TEST_PASSWORD)
@@ -98,7 +100,13 @@ async def _exercise_phase3_domains():
             )
             assert wrong_password.status_code == 401
 
-            for headers in (admin_headers, flaminio_headers, warehouse_headers, federico_headers):
+            for headers in (
+                admin_headers,
+                simone_headers,
+                flaminio_headers,
+                warehouse_headers,
+                federico_headers,
+            ):
                 me = await client.get("/api/auth/me", headers=headers)
                 assert me.status_code == 200
 
@@ -189,11 +197,72 @@ async def _exercise_phase3_domains():
             )
             assert evaded.status_code == 200, evaded.text
             assert evaded.json()["status"] == "evasa"
+            missing_checker = await client.patch(
+                f"/api/richieste/{request_id}/conferma",
+                headers=flaminio_headers,
+                json={"checker_name": " "},
+            )
+            assert missing_checker.status_code == 400
             confirmed = await client.patch(
-                f"/api/richieste/{request_id}/conferma", headers=flaminio_headers
+                f"/api/richieste/{request_id}/conferma",
+                headers=flaminio_headers,
+                json={"checker_name": "Mario Controllo"},
             )
             assert confirmed.status_code == 200
             assert confirmed.json()["status"] == "confermata"
+            assert confirmed.json()["transport_checked_by"] == "Mario Controllo"
+            assert confirmed.json()["transport_check_outcome"] == "confermata"
+
+            dispatch_day = request.json()["dispatch_date"][:10]
+            transport_checks = await client.get(
+                "/api/admin/transport-checks",
+                headers=admin_headers,
+                params={
+                    "restaurant_id": request.json()["restaurant_id"],
+                    "date_from": dispatch_day,
+                    "date_to": dispatch_day,
+                },
+            )
+            assert transport_checks.status_code == 200, transport_checks.text
+            assert any(
+                row["id"] == request_id
+                and row["transport_checked_by"] == "Mario Controllo"
+                for row in transport_checks.json()
+            )
+            simone_transport_checks = await client.get(
+                "/api/admin/transport-checks",
+                headers=simone_headers,
+                params={
+                    "restaurant_id": request.json()["restaurant_id"],
+                    "date_from": dispatch_day,
+                    "date_to": dispatch_day,
+                },
+            )
+            assert simone_transport_checks.status_code == 200
+            for forbidden_headers in (
+                flaminio_headers,
+                warehouse_headers,
+                federico_headers,
+            ):
+                forbidden_transport_checks = await client.get(
+                    "/api/admin/transport-checks",
+                    headers=forbidden_headers,
+                    params={
+                        "restaurant_id": request.json()["restaurant_id"],
+                        "date_from": dispatch_day,
+                        "date_to": dispatch_day,
+                    },
+                )
+                assert forbidden_transport_checks.status_code == 403
+            anonymous_transport_checks = await client.get(
+                "/api/admin/transport-checks",
+                params={
+                    "restaurant_id": request.json()["restaurant_id"],
+                    "date_from": dispatch_day,
+                    "date_to": dispatch_day,
+                },
+            )
+            assert anonymous_transport_checks.status_code in (401, 403)
 
             product_doc = await server.db.products.find_one({"id": product_id})
             assert product_doc["quantity"] == 7
@@ -202,6 +271,46 @@ async def _exercise_phase3_domains():
                 "cause": "evasione",
                 "delta": -3,
             }) == 1
+
+            error_request = await client.post(
+                "/api/richieste",
+                headers=flaminio_headers,
+                json={
+                    "items": [{
+                        "product_id": product_id,
+                        "product_name": "Prodotto fase 3",
+                        "unit": "pz",
+                        "supplier": "Test supplier",
+                        "quantity": 1,
+                    }],
+                    "extra_note": "gate controllo errore",
+                },
+            )
+            assert error_request.status_code == 200, error_request.text
+            error_request_id = error_request.json()["id"]
+            error_evaded = await client.patch(
+                f"/api/richieste/{error_request_id}/evade",
+                headers=warehouse_headers,
+            )
+            assert error_evaded.status_code == 200, error_evaded.text
+            missing_error_checker = await client.patch(
+                f"/api/richieste/{error_request_id}/errore",
+                headers=flaminio_headers,
+                json={"checker_name": " ", "reason": "Collo mancante"},
+            )
+            assert missing_error_checker.status_code == 400
+            reported_error = await client.patch(
+                f"/api/richieste/{error_request_id}/errore",
+                headers=flaminio_headers,
+                json={
+                    "checker_name": "Anna Controllo",
+                    "reason": "Collo mancante",
+                },
+            )
+            assert reported_error.status_code == 200, reported_error.text
+            assert reported_error.json()["status"] == "errore"
+            assert reported_error.json()["transport_checked_by"] == "Anna Controllo"
+            assert reported_error.json()["transport_check_outcome"] == "errore"
 
             invoice = await client.post(
                 "/api/invoices",

@@ -36,8 +36,13 @@ class RichiestaCreate(BaseModel):
     extra_note: Optional[str] = None
 
 
+class RichiestaReceptionConfirm(BaseModel):
+    checker_name: str
+
+
 class RichiestaErrorReport(BaseModel):
     reason: str
+    checker_name: str
 
 
 class CaricoItem(BaseModel):

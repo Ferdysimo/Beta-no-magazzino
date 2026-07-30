@@ -28,6 +28,7 @@ from .warehouse import (
     RichiestaCreate,
     RichiestaErrorReport,
     RichiestaItem,
+    RichiestaReceptionConfirm,
 )
 
 
@@ -68,5 +69,6 @@ __all__ = [
     "RichiestaCreate",
     "RichiestaErrorReport",
     "RichiestaItem",
+    "RichiestaReceptionConfirm",
     "VersamentoCreate",
 ]

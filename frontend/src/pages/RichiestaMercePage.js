@@ -14,8 +14,12 @@ const RichiestaMercePage = () => {
   const navigate = useNavigate();
   const [richieste, setRichieste] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [confirmModal, setConfirmModal] = useState(null); // {id, ddt_number}
+  const [confirmCheckerName, setConfirmCheckerName] = useState('');
+  const [submittingConfirm, setSubmittingConfirm] = useState(false);
   const [errorModal, setErrorModal] = useState(null); // {id, ddt_number}
   const [errorReason, setErrorReason] = useState('');
+  const [errorCheckerName, setErrorCheckerName] = useState('');
   const [submittingError, setSubmittingError] = useState(false);
 
   const headers = () => {
@@ -48,35 +52,51 @@ const RichiestaMercePage = () => {
   const daEvadere = richieste.filter(r => r.status === 'pending' || r.status === 'evasa');
   const evase = richieste.filter(r => r.status === 'confermata' || r.status === 'errore');
 
-  const handleConferma = async (id) => {
-    if (!window.confirm('Confermi di aver ricevuto la merce?')) return;
+  const openConfirmModal = (r) => {
+    setConfirmModal({ id: r.id, ddt_number: r.ddt_number });
+    setConfirmCheckerName('');
+  };
+
+  const submitConferma = async () => {
+    if (confirmCheckerName.trim().length < 2) return;
+    setSubmittingConfirm(true);
     try {
-      await axios.patch(`${API}/richieste/${id}/conferma`, {}, { headers: headers() });
+      await axios.patch(
+        `${API}/richieste/${confirmModal.id}/conferma`,
+        { checker_name: confirmCheckerName.trim() },
+        { headers: headers() }
+      );
+      setConfirmModal(null);
+      setConfirmCheckerName('');
       fetchRichieste();
     } catch (e) {
       alert(e.response?.data?.detail || 'Errore conferma');
+    } finally {
+      setSubmittingConfirm(false);
     }
   };
 
   const openErrorModal = (r) => {
     setErrorModal({ id: r.id, ddt_number: r.ddt_number });
     setErrorReason('');
+    setErrorCheckerName('');
   };
 
   const submitError = async () => {
-    if (!errorReason.trim()) {
-      alert('Spiega il motivo dell\'errore');
-      return;
-    }
+    if (errorCheckerName.trim().length < 2 || !errorReason.trim()) return;
     setSubmittingError(true);
     try {
       await axios.patch(
         `${API}/richieste/${errorModal.id}/errore`,
-        { reason: errorReason.trim() },
+        {
+          reason: errorReason.trim(),
+          checker_name: errorCheckerName.trim(),
+        },
         { headers: headers() }
       );
       setErrorModal(null);
       setErrorReason('');
+      setErrorCheckerName('');
       fetchRichieste();
     } catch (e) {
       alert(e.response?.data?.detail || 'Errore segnalazione');
@@ -140,7 +160,7 @@ const RichiestaMercePage = () => {
                     <>
                       <button
                         data-testid={`btn-conferma-${r.ddt_number}`}
-                        onClick={() => handleConferma(r.id)}
+                        onClick={() => openConfirmModal(r)}
                         className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-semibold"
                       >
                         Conferma ricezione
@@ -193,6 +213,9 @@ const RichiestaMercePage = () => {
                     <div>Richiesta del <strong>{formatItalianDateTime(r.created_at)}</strong></div>
                     {r.evasa_at && <div>Evasa il <strong>{formatItalianDateTime(r.evasa_at)}</strong></div>}
                     {r.confermata_at && <div>Confermata il <strong>{formatItalianDateTime(r.confermata_at)}</strong></div>}
+                    {r.transport_checked_by && (
+                      <div>Controllata da <strong>{r.transport_checked_by}</strong></div>
+                    )}
                     {isError && (
                       <>
                         <div className="font-bold">⚠ Segnalata come errata il <strong>{formatItalianDateTime(r.error_reported_at)}</strong></div>
@@ -207,6 +230,60 @@ const RichiestaMercePage = () => {
         </section>
       </main>
 
+      {/* Reception confirmation modal */}
+      {confirmModal && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => !submittingConfirm && setConfirmModal(null)}
+        >
+          <form
+            className="bg-white rounded-lg w-full max-w-md p-5"
+            onClick={e => e.stopPropagation()}
+            onSubmit={(e) => {
+              e.preventDefault();
+              submitConferma();
+            }}
+          >
+            <div className="mb-4">
+              <div className="font-bold text-gray-900">Conferma ricezione</div>
+              <div className="text-xs text-gray-500">DDT n° {confirmModal.ddt_number}</div>
+            </div>
+            <label htmlFor="confirm-checker-name" className="block text-sm font-medium text-gray-700 mb-1">
+              Nome di chi ha controllato la merce
+            </label>
+            <input
+              id="confirm-checker-name"
+              data-testid="confirm-checker-name"
+              type="text"
+              minLength={2}
+              maxLength={80}
+              value={confirmCheckerName}
+              onChange={e => setConfirmCheckerName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              autoFocus
+            />
+            <div className="flex gap-2 mt-4 justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmModal(null)}
+                disabled={submittingConfirm}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-50"
+              >
+                Annulla
+              </button>
+              <button
+                type="submit"
+                data-testid="btn-submit-conferma"
+                disabled={submittingConfirm || confirmCheckerName.trim().length < 2}
+                className="px-5 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold rounded"
+              >
+                {submittingConfirm ? 'Conferma...' : 'Conferma ricezione'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* Error reason modal */}
       {errorModal && (
         <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4" onClick={() => !submittingError && setErrorModal(null)}>
@@ -218,6 +295,20 @@ const RichiestaMercePage = () => {
                 <div className="text-xs text-gray-500">DDT n° {errorModal.ddt_number}</div>
               </div>
             </div>
+            <label htmlFor="error-checker-name" className="block text-sm text-gray-700 mb-1">
+              Nome di chi ha controllato la merce
+            </label>
+            <input
+              id="error-checker-name"
+              data-testid="error-checker-name"
+              type="text"
+              minLength={2}
+              maxLength={80}
+              value={errorCheckerName}
+              onChange={e => setErrorCheckerName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent mb-3"
+              autoFocus
+            />
             <label className="block text-sm text-gray-700 mb-1">Motivo dell'errore</label>
             <textarea
               data-testid="error-reason-input"
@@ -225,7 +316,6 @@ const RichiestaMercePage = () => {
               value={errorReason}
               onChange={e => setErrorReason(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
-              autoFocus
             />
             <div className="flex gap-2 mt-4 justify-end">
               <button
@@ -238,7 +328,7 @@ const RichiestaMercePage = () => {
               <button
                 data-testid="btn-submit-errore"
                 onClick={submitError}
-                disabled={submittingError || !errorReason.trim()}
+                disabled={submittingError || errorCheckerName.trim().length < 2 || !errorReason.trim()}
                 className="px-5 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-semibold rounded-lg"
               >
                 {submittingError ? 'Invio...' : 'Segnala errore'}

@@ -2,7 +2,7 @@
 
 Stato: contratto funzionale corrente
 
-Ultimo allineamento: 17 luglio 2026
+Ultimo allineamento: 30 luglio 2026
 
 ## 1. Scopo del documento
 
@@ -290,6 +290,12 @@ pending -> evasa -> confermata
   locali;
 - il Magazziniere evade e lo stock viene decrementato;
 - il locale conferma la ricezione o segnala un problema;
+- conferma ed errore richiedono il nome della persona che ha controllato la
+  merce; sul DDT vengono conservati nome, orario, esito e account utilizzato;
+- Admin e Simone consultano i controlli per locale e mese nella pagina
+  `Controlli trasporti`; Federico, Magazziniere e locali non vi accedono;
+- i DDT precedenti all'introduzione del controllo restano leggibili e mostrano
+  esplicitamente che il nome non era registrato;
 - il numero DDT e globale e allocato atomicamente.
 
 Carichi:

@@ -18,6 +18,7 @@ from app.schemas import (
     ProductUpdate,
     RichiestaCreate,
     RichiestaErrorReport,
+    RichiestaReceptionConfirm,
 )
 
 
@@ -36,6 +37,7 @@ __all__ = [
     "list_richieste",
     "list_all_pending",
     "list_history_all",
+    "list_transport_checks",
     "get_richiesta",
     "update_richiesta",
     "evade_richiesta",
@@ -68,6 +70,15 @@ MITTENTE_INFO = {
     "postal_code": "00118",
     "city": "Roma",
 }
+
+
+def _clean_transport_checker_name(value: str) -> str:
+    checker_name = " ".join((value or "").split())
+    if len(checker_name) < 2:
+        raise HTTPException(status_code=400, detail="Inserisci il nome di chi ha controllato la merce")
+    if len(checker_name) > 80:
+        raise HTTPException(status_code=400, detail="Il nome del controllore è troppo lungo")
+    return checker_name
 
 
 # ==================== PRODUCTS (WAREHOUSE) ====================
@@ -484,6 +495,63 @@ async def list_history_all(token_data: dict = Depends(verify_token)):
                 d["restaurant_location"] = rest.get("location", "")
     return docs
 
+
+@router.get("/admin/transport-checks")
+async def list_transport_checks(
+    restaurant_id: str,
+    date_from: str,
+    date_to: str,
+    token_data: dict = Depends(verify_token),
+):
+    """Admin-only transport checks read directly from existing DDT requests."""
+    require_admin(token_data)
+    try:
+        start_day = datetime.strptime(date_from, "%Y-%m-%d").date()
+        end_day = datetime.strptime(date_to, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Periodo non valido")
+    if end_day < start_day:
+        raise HTTPException(status_code=400, detail="Periodo non valido")
+    if (end_day - start_day).days > 370:
+        raise HTTPException(status_code=400, detail="Il periodo massimo è di 371 giorni")
+
+    start_iso = datetime.combine(
+        start_day,
+        datetime.min.time(),
+        tzinfo=ROME_TZ,
+    ).astimezone(timezone.utc).isoformat()
+    end_iso = datetime.combine(
+        end_day + timedelta(days=1),
+        datetime.min.time(),
+        tzinfo=ROME_TZ,
+    ).astimezone(timezone.utc).isoformat()
+    docs = await db.richieste.find(
+        {
+            "restaurant_id": restaurant_id,
+            "dispatch_date": {"$gte": start_iso, "$lt": end_iso},
+            "status": {"$in": ["evasa", "confermata", "errore"]},
+        },
+        {
+            "_id": 0,
+            "id": 1,
+            "ddt_number": 1,
+            "restaurant_id": 1,
+            "restaurant_location": 1,
+            "dispatch_date": 1,
+            "status": 1,
+            "evasa_at": 1,
+            "confermata_at": 1,
+            "error_reported_at": 1,
+            "error_reason": 1,
+            "transport_checked_by": 1,
+            "transport_checked_at": 1,
+            "transport_check_outcome": 1,
+            "transport_checked_account": 1,
+        },
+    ).sort([("dispatch_date", 1), ("ddt_number", 1)]).to_list(500)
+    return docs
+
+
 @router.get("/richieste/{richiesta_id}")
 async def get_richiesta(richiesta_id: str, token_data: dict = Depends(verify_token)):
     """Get single request with MITTENTE/DESTINATARIO populated for DDT view."""
@@ -572,7 +640,11 @@ async def evade_richiesta(richiesta_id: str, token_data: dict = Depends(verify_t
     return await _enrich_richiesta(updated)
 
 @router.patch("/richieste/{richiesta_id}/conferma")
-async def conferma_richiesta(richiesta_id: str, token_data: dict = Depends(verify_token)):
+async def conferma_richiesta(
+    richiesta_id: str,
+    data: RichiestaReceptionConfirm,
+    token_data: dict = Depends(verify_token),
+):
     """Locale (or admin) confirms reception of the goods."""
     doc = await db.richieste.find_one({"id": richiesta_id})
     if not doc:
@@ -584,10 +656,18 @@ async def conferma_richiesta(richiesta_id: str, token_data: dict = Depends(verif
         raise HTTPException(status_code=403, detail="Non autorizzato")
     if doc.get("status") != "evasa":
         raise HTTPException(status_code=400, detail="La richiesta deve essere evasa prima di confermarla")
+    checker_name = _clean_transport_checker_name(data.checker_name)
     now_iso = datetime.now(timezone.utc).isoformat()
     updated = await db.richieste.find_one_and_update(
         {"id": richiesta_id},
-        {"$set": {"status": "confermata", "confermata_at": now_iso}},
+        {"$set": {
+            "status": "confermata",
+            "confermata_at": now_iso,
+            "transport_checked_by": checker_name,
+            "transport_checked_at": now_iso,
+            "transport_check_outcome": "confermata",
+            "transport_checked_account": token_data.get("username", ""),
+        }},
         return_document=True,
     )
     return await _enrich_richiesta(updated)
@@ -607,6 +687,7 @@ async def segnala_errore_richiesta(richiesta_id: str, data: RichiestaErrorReport
         raise HTTPException(status_code=400, detail="Puoi segnalare l'errore solo su richieste evase")
     if not data.reason or not data.reason.strip():
         raise HTTPException(status_code=400, detail="Spiega il motivo dell'errore")
+    checker_name = _clean_transport_checker_name(data.checker_name)
     now_iso = datetime.now(timezone.utc).isoformat()
     updated = await db.richieste.find_one_and_update(
         {"id": richiesta_id},
@@ -614,6 +695,10 @@ async def segnala_errore_richiesta(richiesta_id: str, data: RichiestaErrorReport
             "status": "errore",
             "error_reason": data.reason.strip(),
             "error_reported_at": now_iso,
+            "transport_checked_by": checker_name,
+            "transport_checked_at": now_iso,
+            "transport_check_outcome": "errore",
+            "transport_checked_account": token_data.get("username", ""),
         }},
         return_document=True,
     )

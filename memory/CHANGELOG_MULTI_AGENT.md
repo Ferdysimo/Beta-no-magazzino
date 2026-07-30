@@ -178,6 +178,19 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-30 13:25 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | DDT | controllo operativo | test
+**File toccati**:
+- `/app/backend/app/routers/warehouse.py`
+- `/app/backend/app/schemas/{__init__,warehouse}.py`
+- `/app/backend/tests/{test_phase1_foundations_contract,test_phase3_isolated_integration,test_phase3_module_contract,test_richieste_merce}.py`
+- `/app/frontend/src/App.js`
+- `/app/frontend/src/pages/{ControlliTrasportiPage,HomePage,RichiestaMercePage}.js`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Aggiunto un controllo nominativo senza cambiare il flusso richieste merce: `pending -> evasa -> confermata/errore` resta invariato. Conferma ricezione richiede ora il nome di chi ha verificato la merce; la segnalazione errore richiede sia nome sia motivo. I dati vengono salvati sul DDT esistente con orario, esito e account autenticato. La nuova pagina essenziale `Controlli trasporti` permette ad Admin e Simone di filtrare per locale e mese; anonimo, locali, Magazziniere e Federico sono rifiutati dal backend. I documenti storici privi del nuovo campo restano compatibili.
+**Testato**: sì (metodo: contratto API `6 passed`; integrazione Mongo isolata completa su conferma, errore e matrice ruoli `1 passed`; suite backend `181 passed, 36 skipped`; suite frontend `26 passed`; build React produzione riuscita senza nuovi warning; prova browser locale con due DDT temporanei, pulsanti disabilitati senza nome, conferma `Mario Prova`, errore `Anna Prova`, verifica pagina Admin e rimozione integrale dei dati simulati; `git diff --check`)
+**Note per il prossimo agente**: non separare questi controlli in una nuova collezione: i campi `transport_checked_*` appartengono alla richiesta/DDT. La nuova route `/api/admin/transport-checks` è intenzionalmente admin-only; il frontend `AdminOnlyRoute` è soltanto UX e non sostituisce il controllo backend.
+
 ### [2026-07-29 12:07 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix | analisi dati | Excel | test
 **File toccati**:
