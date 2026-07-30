@@ -1313,3 +1313,9 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 
 
 <!-- Le voci più vecchie vanno archiviate in CHANGELOG_MULTI_AGENT_ARCHIVE.md dopo 30 giorni -->
+# 2026-07-30 - Report desktop interamente visibile senza scorrimento
+
+- Corretto il contenitore della pagina Report che, alle risoluzioni desktop con altezza utile ridotta da scala Windows o barre del browser, nascondeva la parte inferiore destra.
+- L'altezza desktop ora compensa lo zoom della pagina: `Spicci` e il collegamento `Storico chiusure` restano visibili senza scorrimento.
+- Sotto i 700 px di altezza utile viene applicata automaticamente una compattezza desktop leggermente maggiore; la visualizzazione mobile resta verticale e scorrevole.
+- Modifica esclusivamente grafica: nessuna variazione a salvataggi, calcoli o logica del Report.

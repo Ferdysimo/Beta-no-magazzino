@@ -35,6 +35,25 @@ h1, h2, h3, h4, h5, h6 {
   font-family: 'DM Sans', sans-serif;
 }
 
+/* Il Report desktop deve entrare interamente nello schermo senza scorrere.
+   L'altezza compensa lo zoom, che altrimenti ridurrebbe anche il 100vh. */
+@media (min-width: 1024px) {
+  .report-page-shell {
+    height: calc(100vh / 0.9);
+    min-height: calc(100vh / 0.9);
+    overflow-y: hidden;
+    zoom: 0.9;
+  }
+}
+
+@media (min-width: 1024px) and (max-height: 700px) {
+  .report-page-shell {
+    height: calc(100vh / 0.85);
+    min-height: calc(100vh / 0.85);
+    zoom: 0.85;
+  }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
