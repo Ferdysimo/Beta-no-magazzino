@@ -254,6 +254,21 @@ dell'Excel. Il workbook generato contiene:
   approvato;
 - righe di totale mensile per separare e sommare i mesi.
 
+Nei fogli dei locali, le celle provenienti dai campi numerici del Report
+conservano l'espressione aritmetica originale come formula Excel. Se, per
+esempio, `FT` e stato compilato con `500+300-20`, la cella mostra il risultato
+ma mantiene `=500+300-20` nella barra delle formule. Le celle calcolate di
+bevande, incassi e cash espongono formule coerenti con le stesse regole del
+Report. Le espressioni vengono esportate soltanto dopo la validazione della
+whitelist aritmetica gia usata dall'applicazione.
+
+Gli eventuali commenti inseriti dai cassieri con il tasto destro nel Report
+diventano note Excel sulla cella corrispondente. La funzione e retroattiva sui
+dati conservati: usa commento finale ed espressione grezza presenti in
+`cash_daily_counts` e `beverage_daily_counts`. Se storicamente era stato
+digitato soltanto il totale, il sistema conserva quel numero senza inventare
+operazioni mancanti.
+
 Le paste sono classificate tramite il dizionario del locale. Per ogni giorno il
 sistema usa, in ordine:
 

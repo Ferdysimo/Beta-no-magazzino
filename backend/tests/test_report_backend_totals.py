@@ -1,11 +1,12 @@
 import asyncio
 import sys
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -695,3 +696,117 @@ def test_analysis_locale_sheet_keeps_tonno_separate_from_altro():
     assert ws.cell(8, headers.index("Tonno") + 1).value == 2
     assert ws.cell(8, headers.index("Altro") + 1).value == 1
     assert ws.cell(8, headers.index("TOT PIATTI") + 1).value == 3
+
+
+def test_analysis_locale_sheet_preserves_report_formulas_and_comments():
+    rest_data = {
+        "location": "Flaminio",
+        "pasta_dict": {"RAGU": 8},
+        "rows": [{
+            "date": datetime(2026, 7, 30),
+            "paste": {
+                "breakdown": {"RAGU": {"count": 0, "price": 8, "total": 0}},
+                "unrecognized_count": 0,
+                "unrecognized_eur": 0,
+            },
+            "paste_total_count": 0,
+            "paste_total_eur": 0,
+            "beverages": {
+                "AL": {
+                    "mattina": 12,
+                    "inUsc": 4,
+                    "scarti": 1,
+                    "sera": 7,
+                    "qty": 8,
+                    "price": 2.5,
+                    "incasso": 20,
+                    "raw": {
+                        "mattina": "10+2",
+                        "inUsc": "3+1",
+                        "scarti": "1",
+                        "sera": "5+2",
+                    },
+                    "comments": {
+                        "inUsc": "Consegna extra",
+                        "scarti": "Bottiglia rotta",
+                    },
+                },
+            },
+            "bev_total_inc": 20,
+            "cash": {
+                "mattina": 100,
+                "altro": 15,
+                "ft": 780,
+                "sp2": 2,
+            },
+            "cash_raw": {
+                "mattina": "100",
+                "altro": "10+5",
+                "ft": "500+300-20",
+                "sp2": "1+1",
+                "cd1": "20+5",
+            },
+            "cash_comments": {
+                "ft": "Tre fatture controllate",
+                "sp2": "Due rotolini aperti",
+                "cd1": "Conteggio cassetto verificato",
+            },
+            "spicci_total": 100,
+            "cassetto_total": 25,
+            "cash_sera": -545,
+        }],
+    }
+    wb = Workbook()
+    wb.remove(wb.active)
+
+    _write_analysis_locale_sheet(
+        wb,
+        rest_data,
+        {"bev_sigle": ["AL"]},
+        set(),
+    )
+
+    ws = wb["Flaminio"]
+    headers = [cell.value for cell in ws[7]]
+    groups = [cell.value for cell in ws[6]]
+    ft_col = headers.index("FT") + 1
+    ft_cell = ws.cell(8, ft_col)
+    sp2_cell = ws.cell(8, ft_col + 3)
+    spicci_total_cell = ws.cell(8, headers.index("Valori tubetti") + 1)
+    spicci_open_cell = ws.cell(8, headers.index("Spicci aperti / portati") + 1)
+    cash_sera_cell = ws.cell(8, headers.index("Cash in cassa sera") + 1)
+    scarichi_cell = ws.cell(8, groups.index("SCARICHI") + 1)
+    scarti_cell = ws.cell(8, groups.index("Altri utilizzi / scarti") + 1)
+    vendite_cell = ws.cell(8, groups.index("VENDITE") + 1)
+    incasso_cell = ws.cell(8, groups.index("INCASSO") + 1)
+
+    assert ft_cell.value == "=500+300-20"
+    assert ft_cell.comment.text == "Tre fatture controllate"
+    assert sp2_cell.value == "=1+1"
+    assert sp2_cell.comment.text == "Due rotolini aperti"
+    assert spicci_total_cell.value.startswith("=")
+    assert spicci_open_cell.value == "=(20+5)*1"
+    assert "Conteggio cassetto verificato" in spicci_open_cell.comment.text
+    assert cash_sera_cell.value.startswith("=")
+    assert scarichi_cell.value == "=3+1"
+    assert scarichi_cell.comment.text == "Consegna extra"
+    assert scarti_cell.value == "=1"
+    assert scarti_cell.comment.text == "Bottiglia rotta"
+    assert vendite_cell.value.startswith("=IF(")
+    assert incasso_cell.value.startswith("=")
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    reloaded = load_workbook(output, data_only=False)
+    reloaded_ft = reloaded["Flaminio"].cell(8, ft_col)
+    assert reloaded_ft.value == "=500+300-20"
+    assert reloaded_ft.comment.text == "Tre fatture controllate"
+
+
+def test_excel_report_formula_rejects_non_arithmetic_content():
+    assert analysis_service._excel_formula_from_report_value("10,50+3,20") == "=10.50+3.20"
+    assert analysis_service._excel_formula_from_report_value(
+        '<span style="color:red">500</span>+20'
+    ) == "=500+20"
+    assert analysis_service._excel_formula_from_report_value("1+CMD()") is None

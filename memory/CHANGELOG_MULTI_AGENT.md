@@ -178,6 +178,17 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-31 11:44 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | Analisi mensile | Excel | tracciabilita | test
+**File toccati**:
+- `/app/backend/app/services/analysis.py`
+- `/app/backend/app/routers/analysis.py`
+- `/app/backend/tests/{test_report_backend_totals,test_analysis_excel_isolated_integration}.py`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: L'Excel Analisi mensile conserva ora nei fogli locale le espressioni aritmetiche originali inserite nel Report come formule Excel e trasferisce i commenti del tasto destro come note sulla cella corrispondente. Sono coperte movimentazione finanziaria, valori spicci/cassetto e campi bevande; i totali derivati espongono formule coerenti con i calcoli correnti. Le giornate vuote restano vuote, `VERS` viene ripulito dai soli tag di colore e ogni formula grezza passa la stessa whitelist numerica del Report. La modifica e retroattiva sui valori grezzi e sui commenti gia presenti, senza backfill e senza ricostruzioni inventate quando storicamente e stato salvato soltanto un totale.
+**Testato**: si (metodo: audit VPS esclusivamente read-only su 117 Report e 679 righe bevande; confermati 139 commenti cassa, commenti su 118 righe bevande e 66 espressioni FT storiche su 76 valori; test unitari export `33 passed`, compresi salvataggio/riapertura reale `.xlsx`, formule, note e blocco contenuti non aritmetici; integrazione Mongo isolata del workbook `1 passed` con formula/commento FT e bevande caricati dal database; suite backend completa `183 passed, 36 skipped`)
+**Note per il prossimo agente**: le formule provengono esclusivamente dai raw gia salvati in `cash_daily_counts` e `beverage_daily_counts`; non usare `cash_audit_log` per ricostruire formule, perche contiene anche i singoli autosalvataggi durante la digitazione. Le note Excel devono riportare il commento finale corrente del Report.
+
 ### [2026-07-30 13:25 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: feature | DDT | controllo operativo | test
 **File toccati**:

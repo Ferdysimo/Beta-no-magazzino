@@ -1,9 +1,11 @@
+import math
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
 from openpyxl import Workbook
+from openpyxl.comments import Comment
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
@@ -17,6 +19,7 @@ from app.core.time import (
 from app.services.report import (
     ALL_CASH_FIELDS,
     PASTA_PRICES_MAP,
+    SPICCI_MULTIPLIERS,
     _compute_cash_sera_full,
     _compute_cassetto_total,
     _compute_paste_total_eur,
@@ -700,6 +703,13 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
                     "qty": int(qty),
                     "incasso": inc,
                     "price": bev_prices.get(sigla, 0),
+                    "raw": {
+                        "mattina": row.get("mattina", ""),
+                        "inUsc": row.get("inUsc", ""),
+                        "scarti": row.get("scarti", ""),
+                        "sera": row.get("sera", ""),
+                    },
+                    "comments": row.get("comments") or {},
                 }
                 bev_total_qty += int(qty)
                 bev_total_inc += inc
@@ -741,6 +751,10 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
                 "bev_total_qty": bev_total_qty,
                 "bev_total_inc": round(bev_total_inc, 2),
                 "cash": cash_values,
+                "cash_raw": {
+                    field: cash_doc.get(field, "") for field in ALL_CASH_FIELDS
+                },
+                "cash_comments": cash_doc.get("comments") or {},
                 "spicci_total": spicci_total,
                 "cassetto_total": cassetto_total,
                 "cash_sera": cash_sera,
@@ -927,6 +941,225 @@ def _analysis_money_number_format(value) -> str:
     return "0.##"
 
 
+def _excel_arithmetic_expression(value) -> Optional[str]:
+    """Return a safe Excel arithmetic expression preserving the Report input."""
+    if value is None:
+        return None
+    expression = str(value)
+    if "<" in expression:
+        expression = re.sub(r"<[^>]*>", "", expression)
+    expression = expression.strip().replace(",", ".")
+    if expression.startswith("="):
+        expression = expression[1:].strip()
+    if not expression or not re.fullmatch(r"[\d+\-*/.() \t\r\n]+", expression):
+        return None
+    try:
+        result = eval(expression, {"__builtins__": {}}, {})  # noqa: S307
+        if not isinstance(result, (int, float)) or not math.isfinite(float(result)):
+            return None
+    except Exception:
+        return None
+    return expression
+
+
+def _excel_formula_from_report_value(value) -> Optional[str]:
+    expression = _excel_arithmetic_expression(value)
+    return f"={expression}" if expression else None
+
+
+def _analysis_formula_positions(columns: List[Dict]) -> Dict:
+    positions = {
+        "paste_incasso": {},
+        "beverage": {},
+        "cash": {},
+    }
+    for col_idx, column in enumerate(columns, start=1):
+        kind = column.get("kind")
+        if kind == "paste_incasso":
+            positions["paste_incasso"][column.get("sigla")] = col_idx
+        elif kind == "beverage":
+            positions["beverage"][(column.get("sigla"), column.get("field"))] = col_idx
+        elif kind == "cash_export":
+            positions["cash"][column.get("field")] = col_idx
+        elif kind == "paste_unrecognized_eur":
+            positions[kind] = col_idx
+    return positions
+
+
+def _analysis_excel_formula(
+    *,
+    row_idx: int,
+    column: Dict,
+    row_data: Dict,
+    positions: Dict,
+    value,
+) -> Optional[str]:
+    try:
+        numeric_value = float(value or 0)
+    except (TypeError, ValueError):
+        numeric_value = 0.0
+    if abs(numeric_value) < 0.000000001:
+        return None
+
+    def cell_ref(col_idx: Optional[int]) -> Optional[str]:
+        if not col_idx:
+            return None
+        return f"{get_column_letter(col_idx)}{row_idx}"
+
+    def sum_refs(refs: List[Optional[str]]) -> Optional[str]:
+        clean = [ref for ref in refs if ref]
+        return f"={'+'.join(clean)}" if clean else None
+
+    kind = column.get("kind")
+    if kind == "beverage":
+        sigla = column.get("sigla")
+        field = column.get("field")
+        beverage = row_data.get("beverages", {}).get(sigla, {})
+        if field in ("mattina", "inUsc", "scarti", "sera"):
+            return _excel_formula_from_report_value(
+                (beverage.get("raw") or {}).get(field)
+            )
+        if field == "qty":
+            mattina_ref = cell_ref(positions["beverage"].get((sigla, "mattina")))
+            in_usc_ref = cell_ref(positions["beverage"].get((sigla, "inUsc")))
+            scarti_ref = cell_ref(positions["beverage"].get((sigla, "scarti")))
+            sera_ref = cell_ref(positions["beverage"].get((sigla, "sera")))
+            if all((mattina_ref, in_usc_ref, scarti_ref, sera_ref)):
+                return (
+                    f"=IF({sera_ref}=0,0,{mattina_ref}+{in_usc_ref}-{sera_ref})"
+                    f"-{scarti_ref}"
+                )
+        if field == "incasso":
+            qty_ref = cell_ref(positions["beverage"].get((sigla, "qty")))
+            price_ref = cell_ref(positions["beverage"].get((sigla, "price")))
+            return f"={qty_ref}*{price_ref}" if qty_ref and price_ref else None
+        return None
+
+    if kind != "cash_export":
+        return None
+
+    field = column.get("field")
+    cash_raw = row_data.get("cash_raw") or {}
+    if field in ALL_CASH_FIELDS:
+        return _excel_formula_from_report_value(cash_raw.get(field))
+
+    if field == "paste_total_eur":
+        refs = [
+            cell_ref(col_idx)
+            for col_idx in positions["paste_incasso"].values()
+        ]
+        refs.append(cell_ref(positions.get("paste_unrecognized_eur")))
+        return sum_refs(refs)
+
+    if field == "bev_total_inc":
+        refs = [
+            cell_ref(col_idx)
+            for (sigla, bev_field), col_idx in positions["beverage"].items()
+            if bev_field == "incasso"
+        ]
+        return sum_refs(refs)
+
+    if field == "sales_total":
+        return sum_refs([
+            cell_ref(positions["cash"].get("paste_total_eur")),
+            cell_ref(positions["cash"].get("bev_total_inc")),
+            cell_ref(positions["cash"].get("altro")),
+        ])
+
+    if field == "spicci_total":
+        terms = []
+        for source_field, multiplier in SPICCI_MULTIPLIERS.items():
+            source_ref = cell_ref(positions["cash"].get(source_field))
+            if source_ref:
+                terms.append(f"{source_ref}*{multiplier}")
+        return f"={'+'.join(terms)}" if terms else None
+
+    if field == "spicci_open":
+        terms = []
+        for source_field, multiplier in (
+            ("cd5", 5),
+            ("cd2", 2),
+            ("cd1", 1),
+            ("cd05", 0.5),
+        ):
+            expression = _excel_arithmetic_expression(cash_raw.get(source_field))
+            if expression:
+                terms.append(f"({expression})*{multiplier}")
+        return f"={'+'.join(terms)}" if terms else None
+
+    if field == "cash_sera":
+        plus_refs = [
+            cell_ref(positions["cash"].get(source_field))
+            for source_field in ("mattina", "altro", "arr")
+        ]
+        plus_refs.extend([
+            cell_ref(positions["cash"].get("spicci_total")),
+            cell_ref(positions["cash"].get("paste_total_eur")),
+            cell_ref(positions["cash"].get("bev_total_inc")),
+        ])
+        minus_refs = [
+            cell_ref(positions["cash"].get(source_field))
+            for source_field in ("glo", "just", "delv", "bp", "sat", "ft", "pos", "vers")
+        ]
+        positive = [ref for ref in plus_refs if ref]
+        negative = [ref for ref in minus_refs if ref]
+        if not positive and not negative:
+            return None
+        expression = "+".join(positive) if positive else "0"
+        if negative:
+            expression += "-" + "-".join(negative)
+        return f"={expression}"
+
+    return None
+
+
+def _analysis_cell_comment(column: Dict, row_data: Dict) -> Optional[str]:
+    kind = column.get("kind")
+    if kind == "beverage":
+        beverage = row_data.get("beverages", {}).get(column.get("sigla"), {})
+        comment = (beverage.get("comments") or {}).get(column.get("field"))
+        return str(comment).strip() if comment and str(comment).strip() else None
+
+    if kind != "cash_export":
+        return None
+
+    field = column.get("field")
+    comments = row_data.get("cash_comments") or {}
+    direct_comment = comments.get(field)
+    if direct_comment and str(direct_comment).strip():
+        return str(direct_comment).strip()
+
+    aggregate_sources = {
+        "spicci_total": (
+            ("sp5", "5 euro"),
+            ("sp2", "2 euro"),
+            ("sp1", "1 euro"),
+            ("sp05", "0,50 euro"),
+        ),
+        "spicci_open": (
+            ("cd5", "5 euro"),
+            ("cd2", "2 euro"),
+            ("cd1", "1 euro"),
+            ("cd05", "0,50 euro"),
+        ),
+    }
+    entries = []
+    for source_field, label in aggregate_sources.get(field, ()):
+        text = comments.get(source_field)
+        if text and str(text).strip():
+            entries.append(f"{label}: {str(text).strip()}")
+    return "\n\n".join(entries) if entries else None
+
+
+def _set_analysis_cell_comment(cell, text: Optional[str]) -> None:
+    if not text:
+        return
+    comment = Comment(text, "Pastasciutta Roma")
+    comment.width = 320
+    comment.height = 120
+    cell.comment = comment
+
+
 def _write_analysis_locale_sheet(wb: Workbook, rest_data: Dict, data: Dict, used_titles: set):
     title = _safe_sheet_title(rest_data["location"], used_titles)
     ws = wb.create_sheet(title=title)
@@ -987,6 +1220,7 @@ def _write_analysis_locale_sheet(wb: Workbook, rest_data: Dict, data: Dict, used
         (idx for idx, col in enumerate(columns, start=1) if col.get("kind") == "cash_export"),
         None,
     )
+    formula_positions = _analysis_formula_positions(columns)
 
     for col_idx in range(2, len(columns) + 1):
         ws.cell(2, col_idx).fill = PatternFill("solid", fgColor="FFF4F5C1")
@@ -1115,7 +1349,19 @@ def _write_analysis_locale_sheet(wb: Workbook, rest_data: Dict, data: Dict, used
                     value = row_data["cash_sera"]
                 else:
                     value = row_data["cash"].get(field, 0)
-            cell = ws.cell(row_idx, col_idx, value if value not in (0, 0.0) else None)
+            formula = _analysis_excel_formula(
+                row_idx=row_idx,
+                column=col,
+                row_data=row_data,
+                positions=formula_positions,
+                value=value,
+            )
+            cell_value = formula or (value if value not in (0, 0.0) else None)
+            cell = ws.cell(row_idx, col_idx, cell_value)
+            _set_analysis_cell_comment(
+                cell,
+                _analysis_cell_comment(col, row_data),
+            )
             fill_color = _analysis_cash_body_fill(col.get("field") or "") if kind == "cash_export" else _analysis_body_fill(kind, col.get("group") or "")
             if fill_color:
                 cell.fill = PatternFill("solid", fgColor=fill_color)

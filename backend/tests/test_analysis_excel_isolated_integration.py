@@ -180,6 +180,8 @@ async def _exercise_analysis_workbook():
                 "paste_text": "1 POM",
                 "paste_manual_override": False,
                 "pasta_dict_snapshot": dictionary_snapshot,
+                "ft": "500+300-20",
+                "comments": {"ft": "Tre fatture controllate"},
             },
             {
                 "restaurant_id": flaminio_id,
@@ -198,6 +200,19 @@ async def _exercise_analysis_workbook():
                 "pasta_dict_snapshot": dictionary_snapshot,
             },
         ])
+        await db.beverage_daily_counts.insert_one({
+            "restaurant_id": flaminio_id,
+            "date_rome": day,
+            "sigla": "AL",
+            "mattina": "8+2",
+            "inUsc": "1+1",
+            "scarti": "1",
+            "sera": "4",
+            "comments": {
+                "inUsc": "Consegna extra",
+                "scarti": "Bottiglia rotta",
+            },
+        })
 
         data = await _build_annual_analysis_data(2026)
         _ensure_analysis_integrity(data)
@@ -224,6 +239,13 @@ async def _exercise_analysis_workbook():
         assert flaminio_day["paste"]["breakdown"]["RAGU"]["count"] == 1
         assert flaminio_day["paste"]["breakdown"]["TONNO"]["count"] == 1
         assert flaminio_day["paste"]["unrecognized_count"] == 0
+        assert flaminio_day["cash_raw"]["ft"] == "500+300-20"
+        assert flaminio_day["cash_comments"]["ft"] == "Tre fatture controllate"
+        assert flaminio_day["beverages"]["AL"]["raw"]["inUsc"] == "1+1"
+        assert (
+            flaminio_day["beverages"]["AL"]["comments"]["scarti"]
+            == "Bottiglia rotta"
+        )
 
         assert grazie_day["source_order_count"] == 3
         assert grazie_day["paste_total_count"] == 3
@@ -266,6 +288,16 @@ async def _exercise_analysis_workbook():
         assert flaminio_ws.cell(excel_row, first_column("Tonno")).value == 1
         assert flaminio_ws.cell(excel_row, first_column("Altro")).value is None
         assert flaminio_ws.cell(excel_row, first_column("TOT PIATTI")).value == 4
+        ft_cell = flaminio_ws.cell(excel_row, first_column("FT"))
+        assert ft_cell.value == "=500+300-20"
+        assert ft_cell.comment.text == "Tre fatture controllate"
+        group_headers = [cell.value for cell in flaminio_ws[6]]
+        scarichi_cell = flaminio_ws.cell(
+            excel_row,
+            group_headers.index("SCARICHI") + 1,
+        )
+        assert scarichi_cell.value == "=1+1"
+        assert scarichi_cell.comment.text == "Consegna extra"
         cancelled_excel_row = 8 + 16
         assert flaminio_ws.cell(
             cancelled_excel_row, first_column("TOT PIATTI")

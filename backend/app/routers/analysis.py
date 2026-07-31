@@ -108,6 +108,9 @@ async def export_analisi_mensile_excel(year: int = None, token_data: dict = Depe
     _ensure_analysis_integrity(data)
 
     wb = Workbook()
+    wb.calculation.calcMode = "auto"
+    wb.calculation.fullCalcOnLoad = True
+    wb.calculation.forceFullCalc = True
     default_sheet = wb.active
     wb.remove(default_sheet)
     used_titles = set()
