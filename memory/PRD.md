@@ -209,6 +209,20 @@ Contratti:
 - il Report storico usa la data e il locale richiesti, non il polling live;
 - le correzioni storiche autorizzate devono restare riconoscibili nell'audit.
 
+Lo Storico chiusure mantiene la griglia sintetica, ma le celle che derivano da
+un input del Report sono ispezionabili con doppio clic. Il dettaglio mostra il
+risultato calcolato, l'espressione aritmetica originale e l'eventuale commento
+finale inserito con il tasto destro. Sono coperti i movimenti finanziari, gli
+spicci aperti e i campi Report delle bevande; i totali puramente derivati
+restano riepiloghi. La funzione usa i valori grezzi e i commenti gia conservati
+in `cash_daily_counts` e `beverage_daily_counts`, quindi e retroattiva quando
+questi dati storici esistono e non tenta ricostruzioni quando mancano.
+
+Nella stessa griglia, lo sfondo della cella `Arr.` e verde chiaro quando il
+valore e compreso nell'intervallo inclusivo da `-5` a `+5`; per qualunque valore
+esterno e rosso. Il colore riguarda soltanto lo sfondo e non altera il numero,
+i calcoli o la posizione della colonna.
+
 Riporti automatici:
 
 - `cash mattina` del nuovo giorno deriva dal `cash sera` del giorno precedente;
@@ -263,8 +277,11 @@ Report. Le espressioni vengono esportate soltanto dopo la validazione della
 whitelist aritmetica gia usata dall'applicazione.
 
 Gli eventuali commenti inseriti dai cassieri con il tasto destro nel Report
-diventano note Excel sulla cella corrispondente. La funzione e retroattiva sui
-dati conservati: usa commento finale ed espressione grezza presenti in
+diventano note contestuali sulla cella corrispondente: selezionando la cella
+Excel mostra il testo, che resta inoltre leggibile per intero nella barra della
+formula senza usare i commenti XML che alcune versioni di Excel rimuovono in
+fase di compatibilita. La funzione e retroattiva sui dati conservati: usa il
+commento finale e l'espressione grezza presenti in
 `cash_daily_counts` e `beverage_daily_counts`. Se storicamente era stato
 digitato soltanto il totale, il sistema conserva quel numero senza inventare
 operazioni mancanti.

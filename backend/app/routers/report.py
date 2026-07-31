@@ -47,6 +47,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+_CLOSURE_GRID_CASH_DETAIL_FIELDS = (
+    "arr", "altro", "vers", "glo", "just", "delv", "bp", "sat", "pos", "ft",
+    "sp5", "sp2", "sp1", "sp05",
+)
+_CLOSURE_GRID_BEVERAGE_DETAIL_FIELDS = ("inUsc", "scarti", "sera")
+
+
+def _closure_grid_report_metadata(doc: Dict, fields) -> Dict[str, Dict[str, str]]:
+    source = doc or {}
+    raw_comments = source.get("comments") or {}
+    comments = raw_comments if isinstance(raw_comments, dict) else {}
+    return {
+        "raw": {
+            field: str(source.get(field, "") or "")[:2000]
+            for field in fields
+        },
+        "comments": {
+            field: str(comments.get(field) or "").strip()[:500]
+            for field in fields
+            if str(comments.get(field) or "").strip()
+        },
+    }
+
+
 @router.get("/beverages/daily")
 async def get_beverage_daily_counts(
     request: Request,
@@ -724,6 +748,10 @@ async def closures_grid_admin(
         bev_docs = await db.beverage_daily_counts.find(bev_q, {"_id": 0}).to_list(50)
         bev_by_sigla = {b["sigla"]: b for b in bev_docs}
         dmap_row = await _dict_for_grid(restaurant_id or cash_doc.get("restaurant_id"))
+        cash_metadata = _closure_grid_report_metadata(
+            cash_doc,
+            _CLOSURE_GRID_CASH_DETAIL_FIELDS,
+        )
 
         cash_flat: Dict[str, float] = {}
         for f in ALL_CASH_FIELDS:
@@ -734,6 +762,10 @@ async def closures_grid_admin(
         bev_total_inc = 0.0
         for sigla in bev_sigle_sorted:
             r = bev_by_sigla.get(sigla, {})
+            beverage_metadata = _closure_grid_report_metadata(
+                r,
+                _CLOSURE_GRID_BEVERAGE_DETAIL_FIELDS,
+            )
             m = _eval_cash_value(r.get("mattina"))
             u = _eval_cash_value(r.get("inUsc"))
             s = _eval_cash_value(r.get("scarti"))
@@ -743,6 +775,8 @@ async def closures_grid_admin(
             bev_flat[sigla] = {
                 "mattina": m, "inUsc": u, "scarti": s, "sera": e,
                 "qty": int(qty), "incasso": round(inc, 2),
+                "raw": beverage_metadata["raw"],
+                "comments": beverage_metadata["comments"],
             }
             bev_total_qty += int(qty)
             bev_total_inc += inc
@@ -760,6 +794,8 @@ async def closures_grid_admin(
             "date": date_str,
             "is_mock": bool(cash_doc.get("mock") or any(b.get("mock") for b in bev_docs)),
             "cash": cash_flat,
+            "cash_raw": cash_metadata["raw"],
+            "cash_comments": cash_metadata["comments"],
             "vers_raw": str(cash_doc.get("vers", "") or "")[:2000],
             "vers_color": cash_doc.get("vers_color", ""),
             "beverages": bev_flat,

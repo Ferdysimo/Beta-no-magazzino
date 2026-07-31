@@ -1,7 +1,11 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import axios from 'axios';
-import ChiusureExcelPage, { parseVersDisplay } from './ChiusureExcelPage';
+import ChiusureExcelPage, {
+  arrCellBackground,
+  parseVersDisplay,
+  reportExpressionText,
+} from './ChiusureExcelPage';
 
 const mockNavigate = jest.fn();
 const mockUseAuth = jest.fn();
@@ -74,14 +78,33 @@ describe('ChiusureExcelPage restaurant selection', () => {
                 arr: 12,
                 pos: 6299,
                 vers: 80,
+                ft: 780,
+              },
+              cash_raw: {
+                arr: '10+2',
+                pos: '6200+99',
+                vers: '<span style="color: rgb(220, 38, 38)">50</span>+30',
+                ft: '500+300-20',
+              },
+              cash_comments: {
+                ft: 'Tre fatture controllate',
               },
               vers_raw: '<span style="color: rgb(220, 38, 38)">50</span>+30',
               vers_color: '',
-              beverages: {},
+              beverages: {
+                AL: {
+                  inUsc: 3,
+                  scarti: 1,
+                  sera: 8,
+                  qty: 4,
+                  raw: { inUsc: '1+2', scarti: '1', sera: '5+3' },
+                  comments: { scarti: 'Bottiglia rotta' },
+                },
+              },
               paste_count: 10,
               cash_sera: 100,
             }],
-            bev_sigle: [],
+            bev_sigle: ['AL'],
           },
         });
       }
@@ -158,6 +181,7 @@ describe('ChiusureExcelPage restaurant selection', () => {
     );
 
     expect(arrCell.style.fontWeight).toBe('700');
+    expect(arrCell.style.background).toBe('rgb(254, 226, 226)');
     expect(posCell.style.fontWeight).toBe('700');
     expect(versCell.style.background).toBe('rgb(254, 240, 138)');
     expect(versCell.textContent).toBe('50+30');
@@ -166,6 +190,41 @@ describe('ChiusureExcelPage restaurant selection', () => {
     expect(segments).toHaveLength(2);
     expect(segments[0].style.color).toBe('rgb(220, 38, 38)');
     expect(segments[1].style.color).toBe('rgb(17, 24, 39)');
+  });
+
+  test('mostra operazione e commento con doppio clic senza aprire il Report', async () => {
+    await renderPage();
+
+    const ftCell = container.querySelector(
+      '[data-testid="closure-2026-07-27-cash-ft"]',
+    );
+    act(() => {
+      ftCell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      ftCell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    });
+
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-testid="closure-cell-detail-dialog"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="closure-cell-detail-expression"]').textContent)
+      .toBe('500+300-20');
+    expect(container.querySelector('[data-testid="closure-cell-detail-comment"]').textContent)
+      .toBe('Tre fatture controllate');
+
+    act(() => {
+      container.querySelector('[data-testid="closure-cell-detail-close"]')
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const scartiCell = container.querySelector(
+      '[data-testid="closure-2026-07-27-bev-scarti-AL"]',
+    );
+    act(() => {
+      scartiCell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    });
+    expect(container.querySelector('[data-testid="closure-cell-detail-expression"]').textContent)
+      .toBe('1');
+    expect(container.querySelector('[data-testid="closure-cell-detail-comment"]').textContent)
+      .toBe('Bottiglia rotta');
   });
 
   test('interpreta anche Vers interamente nero, rosso e il colore rosso storico', () => {
@@ -183,5 +242,14 @@ describe('ChiusureExcelPage restaurant selection', () => {
       segments: [{ text: '40', red: true }],
       mixed: false,
     });
+  });
+
+  test('colora Arr in verde tra -5 e +5 inclusi e in rosso fuori intervallo', () => {
+    expect(arrCellBackground(-5)).toBe('#dcfce7');
+    expect(arrCellBackground(0)).toBe('#dcfce7');
+    expect(arrCellBackground(5)).toBe('#dcfce7');
+    expect(arrCellBackground(-5.01)).toBe('#fee2e2');
+    expect(arrCellBackground(5.01)).toBe('#fee2e2');
+    expect(reportExpressionText('<span style="color:red">50</span>+30')).toBe('50+30');
   });
 });

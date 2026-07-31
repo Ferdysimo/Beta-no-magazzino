@@ -289,15 +289,24 @@ async def _exercise_analysis_workbook():
         assert flaminio_ws.cell(excel_row, first_column("Altro")).value is None
         assert flaminio_ws.cell(excel_row, first_column("TOT PIATTI")).value == 4
         ft_cell = flaminio_ws.cell(excel_row, first_column("FT"))
-        assert ft_cell.value == "=500+300-20"
-        assert ft_cell.comment.text == "Tre fatture controllate"
+        assert ft_cell.value.startswith("=500+300-20")
+        assert 'N("Tre fatture controllate")' in ft_cell.value
+        assert any(
+            ft_cell.coordinate in validation.cells
+            and validation.prompt == "Tre fatture controllate"
+            for validation in flaminio_ws.data_validations.dataValidation
+        )
         group_headers = [cell.value for cell in flaminio_ws[6]]
         scarichi_cell = flaminio_ws.cell(
             excel_row,
             group_headers.index("SCARICHI") + 1,
         )
-        assert scarichi_cell.value == "=1+1"
-        assert scarichi_cell.comment.text == "Consegna extra"
+        assert scarichi_cell.value.startswith("=1+1")
+        assert any(
+            scarichi_cell.coordinate in validation.cells
+            and validation.prompt == "Consegna extra"
+            for validation in flaminio_ws.data_validations.dataValidation
+        )
         cancelled_excel_row = 8 + 16
         assert flaminio_ws.cell(
             cancelled_excel_row, first_column("TOT PIATTI")

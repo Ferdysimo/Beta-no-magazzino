@@ -3,6 +3,7 @@ import sys
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
+from zipfile import ZipFile
 
 import pytest
 from fastapi import HTTPException
@@ -15,6 +16,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 import app.services.analysis as analysis_service
 import app.services.report_snapshots as report_snapshots_service
+from app.routers import report as report_router
 from server import (
     _analysis_row_integrity,
     _compute_cash_sera_full,
@@ -748,6 +750,7 @@ def test_analysis_locale_sheet_preserves_report_formulas_and_comments():
             },
             "cash_comments": {
                 "ft": "Tre fatture controllate",
+                "bp": "Nessun buono cartaceo",
                 "sp2": "Due rotolini aperti",
                 "cd1": "Conteggio cassetto verificato",
             },
@@ -771,6 +774,7 @@ def test_analysis_locale_sheet_preserves_report_formulas_and_comments():
     groups = [cell.value for cell in ws[6]]
     ft_col = headers.index("FT") + 1
     ft_cell = ws.cell(8, ft_col)
+    bp_cell = ws.cell(8, headers.index("Buoni Pasto") + 1)
     sp2_cell = ws.cell(8, ft_col + 3)
     spicci_total_cell = ws.cell(8, headers.index("Valori tubetti") + 1)
     spicci_open_cell = ws.cell(8, headers.index("Spicci aperti / portati") + 1)
@@ -780,28 +784,71 @@ def test_analysis_locale_sheet_preserves_report_formulas_and_comments():
     vendite_cell = ws.cell(8, groups.index("VENDITE") + 1)
     incasso_cell = ws.cell(8, groups.index("INCASSO") + 1)
 
-    assert ft_cell.value == "=500+300-20"
-    assert ft_cell.comment.text == "Tre fatture controllate"
-    assert sp2_cell.value == "=1+1"
-    assert sp2_cell.comment.text == "Due rotolini aperti"
+    def note_prompt(sheet, cell):
+        return next(
+            validation.prompt
+            for validation in sheet.data_validations.dataValidation
+            if cell.coordinate in validation.cells
+        )
+
+    assert ft_cell.value.startswith("=500+300-20")
+    assert 'N("Tre fatture controllate")' in ft_cell.value
+    assert note_prompt(ws, ft_cell) == "Tre fatture controllate"
+    assert bp_cell.value == '=N("Nessun buono cartaceo")'
+    assert bp_cell.number_format == "0.##;-0.##;;"
+    assert note_prompt(ws, bp_cell) == "Nessun buono cartaceo"
+    assert sp2_cell.value.startswith("=1+1")
+    assert 'N("Due rotolini aperti")' in sp2_cell.value
+    assert note_prompt(ws, sp2_cell) == "Due rotolini aperti"
     assert spicci_total_cell.value.startswith("=")
-    assert spicci_open_cell.value == "=(20+5)*1"
-    assert "Conteggio cassetto verificato" in spicci_open_cell.comment.text
+    assert spicci_open_cell.value.startswith("=(20+5)*1")
+    assert "Conteggio cassetto verificato" in spicci_open_cell.value
+    assert "Conteggio cassetto verificato" in note_prompt(ws, spicci_open_cell)
     assert cash_sera_cell.value.startswith("=")
-    assert scarichi_cell.value == "=3+1"
-    assert scarichi_cell.comment.text == "Consegna extra"
-    assert scarti_cell.value == "=1"
-    assert scarti_cell.comment.text == "Bottiglia rotta"
+    assert scarichi_cell.value.startswith("=3+1")
+    assert note_prompt(ws, scarichi_cell) == "Consegna extra"
+    assert scarti_cell.value.startswith("=1")
+    assert note_prompt(ws, scarti_cell) == "Bottiglia rotta"
     assert vendite_cell.value.startswith("=IF(")
     assert incasso_cell.value.startswith("=")
 
     output = BytesIO()
     wb.save(output)
     output.seek(0)
+    with ZipFile(output) as archive:
+        assert not any(
+            name.startswith("xl/comments/")
+            for name in archive.namelist()
+        )
+    output.seek(0)
     reloaded = load_workbook(output, data_only=False)
-    reloaded_ft = reloaded["Flaminio"].cell(8, ft_col)
-    assert reloaded_ft.value == "=500+300-20"
-    assert reloaded_ft.comment.text == "Tre fatture controllate"
+    reloaded_ws = reloaded["Flaminio"]
+    reloaded_ft = reloaded_ws.cell(8, ft_col)
+    assert reloaded_ft.value.startswith("=500+300-20")
+    assert note_prompt(reloaded_ws, reloaded_ft) == "Tre fatture controllate"
+    assert reloaded_ft.comment is None
+
+
+def test_analysis_excel_note_handles_long_text_without_comment_xml():
+    note = f'Controllo "speciale"\n{"x" * 480}'
+    wb = Workbook()
+    ws = wb.active
+    cell = ws["A1"]
+    cell.value = analysis_service._analysis_value_with_note(None, note)
+    analysis_service._set_analysis_cell_note_prompt(ws, cell, note)
+
+    assert cell.value.startswith("=N(")
+    assert '""speciale""' in cell.value
+    assert cell.value.count("N(") == 3
+    validation = ws.data_validations.dataValidation[0]
+    assert len(validation.prompt) == 255
+    assert validation.prompt.endswith("...")
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    with ZipFile(output) as archive:
+        assert not any("comment" in name.lower() for name in archive.namelist())
 
 
 def test_excel_report_formula_rejects_non_arithmetic_content():
@@ -810,3 +857,23 @@ def test_excel_report_formula_rejects_non_arithmetic_content():
         '<span style="color:red">500</span>+20'
     ) == "=500+20"
     assert analysis_service._excel_formula_from_report_value("1+CMD()") is None
+
+
+def test_closure_grid_report_metadata_exposes_only_allowed_raw_values_and_comments():
+    metadata = report_router._closure_grid_report_metadata(
+        {
+            "ft": "500+300-20",
+            "arr": "2+1",
+            "hidden": "non esportare",
+            "comments": {
+                "ft": "  Tre fatture controllate  ",
+                "hidden": "commento non esportato",
+            },
+        },
+        ("ft", "arr"),
+    )
+
+    assert metadata == {
+        "raw": {"ft": "500+300-20", "arr": "2+1"},
+        "comments": {"ft": "Tre fatture controllate"},
+    }

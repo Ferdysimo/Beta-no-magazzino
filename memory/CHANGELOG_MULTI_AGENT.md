@@ -178,6 +178,27 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-07-31 13:31 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | storico chiusure | Report | tracciabilita | UX
+**File toccati**:
+- `/app/backend/app/routers/report.py`
+- `/app/backend/tests/test_report_backend_totals.py`
+- `/app/frontend/src/pages/{ChiusureExcelPage,ChiusureExcelPage.test}.js`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Lo Storico chiusure espone ora, con doppio clic sulla cella, il risultato, l'espressione aritmetica originale e il commento finale salvati dal Report. Sono coperti i campi finanziari, il dettaglio degli spicci aperti e gli input delle bevande; i riepiloghi puramente calcolati restano invariati. I commenti sono segnalati da un piccolo indicatore e il dettaglio si puo chiudere con il pulsante, cliccando fuori o con `Esc`. La cella `Arr.` ha sfondo verde chiaro nell'intervallo inclusivo `-5..+5` e rosso in tutti gli altri casi, senza cambiare numero, calcoli o posizione della colonna. L'endpoint esistente aggiunge soltanto raw e commenti gia presenti nei documenti autorizzati, senza nuove query, scritture o ampliamento del tenant visibile.
+**Testato**: si (metodo: test helper backend sui soli campi consentiti; suite backend completa `185 passed, 36 skipped`; suite frontend completa `28 passed`, inclusi doppio clic finanziario/bevande, commenti, mancata navigazione della riga e limiti ARR `-5/+5`; build React produzione riuscita con soli warning Hook preesistenti in file non coinvolti; prova browser locale autenticata su `/chiusure-excel`, modalita dettaglio verificata e `ARR = 0` osservato con sfondo `rgb(220, 252, 231)`).
+**Note per il prossimo agente**: Non ricostruire formule mancanti dall'audit: il dettaglio deve mostrare esclusivamente il raw finale conservato nel documento Report. Le celle calcolate senza un input diretto restano non interattive; la selezione del locale continua a essere imposta e validata dal backend secondo ruolo e tenant.
+
+### [2026-07-31 12:22 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix | Analisi mensile | Excel | compatibilita
+**File toccati**:
+- `/app/backend/app/services/analysis.py`
+- `/app/backend/tests/{test_report_backend_totals,test_analysis_excel_isolated_integration}.py`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Corretto il caso in cui Excel segnalava un errore di compatibilita e rimuoveva tutte le note del workbook Analisi mensile. Il testo finale del commento Report viene ora associato alla stessa cella come messaggio contestuale mostrato alla selezione e conservato per intero anche nella formula tramite `N(...)`, senza modificare il risultato numerico. Il file non dipende piu dalle parti XML dei commenti classici che Excel aveva riparato eliminandole.
+**Testato**: si (metodo: riproduzione del file scaricato e lettura del log di riparazione Excel; `34 passed` sui test export, inclusi commento massimo con virgolette e casella zero; integrazione Mongo isolata `1 passed`; suite backend completa `184 passed, 36 skipped`; apertura automatizzata con Microsoft Excel 16, risultato formula `780`, nota contestuale presente, zero commenti XML e nessun nuovo log di riparazione; una cella zero con nota resta vuota a video ma vale `0` nei calcoli dipendenti).
+**Note per il prossimo agente**: il messaggio visuale di Excel ha un limite di 255 caratteri; l'eventuale testo eccedente resta comunque completo nella barra della formula, suddiviso in piu termini `N(...)` senza effetto sul calcolo.
+
 ### [2026-07-31 11:44 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: feature | Analisi mensile | Excel | tracciabilita | test
 **File toccati**:

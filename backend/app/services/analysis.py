@@ -5,9 +5,9 @@ from typing import Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
 from openpyxl import Workbook
-from openpyxl.comments import Comment
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.datavalidation import DataValidation
 
 from app.core.catalogs import BEVERAGES_CATALOG
 from app.core.database import db
@@ -1151,13 +1151,48 @@ def _analysis_cell_comment(column: Dict, row_data: Dict) -> Optional[str]:
     return "\n\n".join(entries) if entries else None
 
 
-def _set_analysis_cell_comment(cell, text: Optional[str]) -> None:
-    if not text:
+def _analysis_note_formula_terms(text: Optional[str]) -> str:
+    """Keep the complete cashier note visible in Excel's formula bar."""
+    normalized = " ".join(str(text or "").split())
+    if not normalized:
+        return ""
+    escaped = normalized.replace('"', '""')
+    return "".join(
+        f'+N("{escaped[start:start + 240]}")'
+        for start in range(0, len(escaped), 240)
+    )
+
+
+def _analysis_value_with_note(value, text: Optional[str]):
+    terms = _analysis_note_formula_terms(text)
+    if not terms:
+        return value
+    if isinstance(value, str) and value.startswith("="):
+        return f"{value}{terms}"
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        numeric = format(float(value), ".15g")
+        return f"={numeric}{terms}"
+    return f"={terms[1:]}"
+
+
+def _set_analysis_cell_note_prompt(ws, cell, text: Optional[str]) -> None:
+    normalized = str(text or "").strip()
+    if not normalized:
         return
-    comment = Comment(text, "Pastasciutta Roma")
-    comment.width = 320
-    comment.height = 120
-    cell.comment = comment
+    prompt = normalized
+    if len(prompt) > 255:
+        prompt = f"{prompt[:252]}..."
+    validation = DataValidation(
+        type="custom",
+        formula1="TRUE",
+        allow_blank=True,
+        showInputMessage=True,
+        showErrorMessage=False,
+        promptTitle="Nota cassiere",
+        prompt=prompt,
+    )
+    ws.add_data_validation(validation)
+    validation.add(cell)
 
 
 def _write_analysis_locale_sheet(wb: Workbook, rest_data: Dict, data: Dict, used_titles: set):
@@ -1356,12 +1391,12 @@ def _write_analysis_locale_sheet(wb: Workbook, rest_data: Dict, data: Dict, used
                 positions=formula_positions,
                 value=value,
             )
+            note_text = _analysis_cell_comment(col, row_data)
             cell_value = formula or (value if value not in (0, 0.0) else None)
+            note_only_zero = cell_value is None and bool(note_text)
+            cell_value = _analysis_value_with_note(cell_value, note_text)
             cell = ws.cell(row_idx, col_idx, cell_value)
-            _set_analysis_cell_comment(
-                cell,
-                _analysis_cell_comment(col, row_data),
-            )
+            _set_analysis_cell_note_prompt(ws, cell, note_text)
             fill_color = _analysis_cash_body_fill(col.get("field") or "") if kind == "cash_export" else _analysis_body_fill(kind, col.get("group") or "")
             if fill_color:
                 cell.fill = PatternFill("solid", fgColor=fill_color)
@@ -1371,7 +1406,9 @@ def _write_analysis_locale_sheet(wb: Workbook, rest_data: Dict, data: Dict, used
                 bold=kind == "cash_export" and col.get("field") == "sales_total",
                 color="FF000000",
             )
-            if kind == "date":
+            if note_only_zero:
+                cell.number_format = "0.##;-0.##;;"
+            elif kind == "date":
                 cell.number_format = "dd/mm/yyyy"
             elif kind in money_kinds or (kind == "beverage" and col.get("field") in ("price", "incasso")):
                 cell.number_format = _analysis_money_number_format(value)

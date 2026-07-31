@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
-import { ArrowLeft, RefreshCw } from 'lucide-react';
+import { ArrowLeft, RefreshCw, X } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -59,6 +59,21 @@ const dayName = (s) => {
     const dt = new Date(`${s}T12:00:00`);
     return dt.toLocaleDateString('it-IT', { weekday: 'short' });
   } catch (e) { return ''; }
+};
+
+export const arrCellBackground = (value) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= -5 && numeric <= 5
+    ? '#dcfce7'
+    : '#fee2e2';
+};
+
+export const reportExpressionText = (value) => {
+  const raw = String(value ?? '');
+  return raw
+    .replace(/<[^>]*>/g, '')
+    .replace(/[^0-9+\-*/.(),=\s€]/g, '')
+    .trim();
 };
 
 // ─── Cell helpers ──────────────────────────────────────────────────────────
@@ -139,14 +154,35 @@ const Th = ({ children, bg, color, sticky, top, left, width, title, colSpan, bor
   </th>
 );
 
-const Td = ({ children, bg, sticky, left, mono, align = 'right', bold, color, title, isGroupEnd, testId }) => (
+const Td = ({
+  children,
+  bg,
+  sticky,
+  left,
+  mono,
+  align = 'right',
+  bold,
+  color,
+  title,
+  isGroupEnd,
+  testId,
+  interactive,
+  onClick,
+  onDoubleClick,
+  onKeyDown,
+}) => (
   <td
     data-testid={testId}
     title={title || ''}
+    role={interactive ? 'button' : undefined}
+    tabIndex={interactive ? 0 : undefined}
+    onClick={onClick}
+    onDoubleClick={onDoubleClick}
+    onKeyDown={onKeyDown}
     style={{
       background: bg || '#fff',
       color: color || '#111827',
-      position: sticky ? 'sticky' : undefined,
+      position: sticky ? 'sticky' : (interactive ? 'relative' : undefined),
       left: left !== undefined ? left : undefined,
       zIndex: sticky ? 10 : undefined,
       borderRight: isGroupEnd ? '3px solid #334155' : '1px solid #e5e7eb',
@@ -158,6 +194,8 @@ const Td = ({ children, bg, sticky, left, mono, align = 'right', bold, color, ti
       textAlign: align,
       whiteSpace: 'nowrap',
       fontWeight: bold ? 700 : 400,
+      cursor: interactive ? 'zoom-in' : undefined,
+      outlineOffset: interactive ? -2 : undefined,
     }}
   >
     {children}
@@ -179,6 +217,7 @@ const ChiusureExcelPage = () => {
   const [bevSigle, setBevSigle] = useState([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
+  const [cellDetail, setCellDetail] = useState(null);
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
   // Una sola selezione per scheda: Storico chiusure segue lo stesso locale
@@ -226,6 +265,15 @@ const ChiusureExcelPage = () => {
     localStorage.setItem('closures_excel_days', String(days));
   }, [days]);
 
+  useEffect(() => {
+    if (!cellDetail) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setCellDetail(null);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [cellDetail]);
+
   const onRestaurantChange = (restaurantId) => {
     const selected = restaurants.find(r => r.id === restaurantId);
     if (selected) selectRestaurant(selected);
@@ -235,6 +283,21 @@ const ChiusureExcelPage = () => {
     if (!effectiveRestId || !date) return;
     navigate(`/report-beta?date=${date}&rid=${effectiveRestId}`);
   };
+
+  const detailCellProps = (detail) => ({
+    interactive: true,
+    onClick: (event) => event.stopPropagation(),
+    onDoubleClick: (event) => {
+      event.stopPropagation();
+      setCellDetail(detail);
+    },
+    onKeyDown: (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      event.stopPropagation();
+      setCellDetail(detail);
+    },
+  });
 
   // Totali colonna
   const totals = useMemo(() => {
@@ -453,7 +516,20 @@ const ChiusureExcelPage = () => {
                           ? parseVersDisplay(r.vers_raw, r.vers_color)
                           : null;
                         const versHasContent = versDisplay?.segments.length > 0;
-                        const cellBg = versDisplay?.mixed ? '#fef08a' : baseBg;
+                        const rawValue = r.cash_raw?.[f.key]
+                          ?? (f.key === 'vers' ? r.vers_raw : '');
+                        const comment = String(r.cash_comments?.[f.key] || '').trim();
+                        const cellBg = f.key === 'arr'
+                          ? arrCellBackground(r.cash?.arr)
+                          : (versDisplay?.mixed ? '#fef08a' : baseBg);
+                        const detail = {
+                          date: r.date,
+                          label: f.label,
+                          title: f.hint,
+                          result: `€${fmtEur(r.cash?.[f.key] || 0)}`,
+                          expression: reportExpressionText(rawValue),
+                          comment,
+                        };
                         return (
                           <Td
                             key={f.key}
@@ -461,9 +537,8 @@ const ChiusureExcelPage = () => {
                             mono
                             bold={f.key === 'arr' || f.key === 'pos'}
                             testId={`closure-${r.date}-cash-${f.key}`}
-                            title={f.key === 'vers' && versHasContent
-                              ? `Valore calcolato: €${fmtEur(r.cash?.vers || 0)}`
-                              : undefined}
+                            title="Doppio clic per vedere operazione e commento"
+                            {...detailCellProps(detail)}
                           >
                             {f.key === 'vers' && versHasContent
                               ? versDisplay.segments.map((segment, segmentIndex) => (
@@ -478,6 +553,13 @@ const ChiusureExcelPage = () => {
                                 </span>
                               ))
                               : fmtEur(r.cash?.[f.key] || 0)}
+                            {comment && (
+                              <span
+                                aria-hidden="true"
+                                title={comment}
+                                className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500"
+                              />
+                            )}
                           </Td>
                         );
                       })}
@@ -486,14 +568,56 @@ const ChiusureExcelPage = () => {
                         // sp_init: iniziali — non ancora tracciato dal backend, placeholder
                         // sp_open: aperti durante la giornata = sp5+sp2+sp1+sp05 (somma mazzette)
                         let val;
+                        let detail = null;
                         if (f.key === 'sp_init') {
                           val = '—';
                         } else {
                           const open = (Number(r.cash?.sp5) || 0) + (Number(r.cash?.sp2) || 0) + (Number(r.cash?.sp1) || 0) + (Number(r.cash?.sp05) || 0);
                           val = open === 0 ? '' : String(open);
+                          const sources = [
+                            ['sp5', '5 €'], ['sp2', '2 €'], ['sp1', '1 €'], ['sp05', '0,50 €'],
+                          ];
+                          const expression = sources
+                            .map(([key, label]) => {
+                              const raw = reportExpressionText(r.cash_raw?.[key]);
+                              return raw ? `${label}: ${raw}` : '';
+                            })
+                            .filter(Boolean)
+                            .join('\n');
+                          const comment = sources
+                            .map(([key, label]) => {
+                              const text = String(r.cash_comments?.[key] || '').trim();
+                              return text ? `${label}: ${text}` : '';
+                            })
+                            .filter(Boolean)
+                            .join('\n');
+                          detail = {
+                            date: r.date,
+                            label: f.label,
+                            title: 'Rotolini aperti',
+                            result: val || '0',
+                            expression,
+                            comment,
+                          };
                         }
                         return (
-                          <Td key={f.key} bg={baseBg} mono align="center">{val}</Td>
+                          <Td
+                            key={f.key}
+                            bg={baseBg}
+                            mono
+                            align="center"
+                            title={detail ? 'Doppio clic per vedere operazioni e commenti' : undefined}
+                            {...(detail ? detailCellProps(detail) : {})}
+                          >
+                            {val}
+                            {detail?.comment && (
+                              <span
+                                aria-hidden="true"
+                                title={detail.comment}
+                                className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500"
+                              />
+                            )}
+                          </Td>
                         );
                       })}
 
@@ -511,12 +635,34 @@ const ChiusureExcelPage = () => {
                           const v = b[g.key];
                           const cellBg = r.is_mock ? baseBg : g.cellBg;
                           const isVendita = g.key === 'qty';
+                          const canInspect = !isVendita;
+                          const comment = canInspect
+                            ? String(b.comments?.[g.key] || '').trim()
+                            : '';
+                          const detail = canInspect ? {
+                            date: r.date,
+                            label: `${sigla} · ${g.label}`,
+                            title: BEV_NAMES[sigla] || sigla,
+                            result: fmtInt(v) || '0',
+                            expression: reportExpressionText(b.raw?.[g.key]),
+                            comment,
+                          } : null;
                           return (
                             <Td key={`${g.key}-${sigla}`} bg={cellBg} mono align="center"
                                 bold={isVendita}
+                                testId={`closure-${r.date}-bev-${g.key}-${sigla}`}
                                 isGroupEnd={si === bevSigle.length - 1}
-                                color={isVendita ? (Number(v) > 0 ? '#15803d' : '#cbd5e1') : '#374151'}>
+                                color={isVendita ? (Number(v) > 0 ? '#15803d' : '#cbd5e1') : '#374151'}
+                                title={detail ? 'Doppio clic per vedere operazione e commento' : undefined}
+                                {...(detail ? detailCellProps(detail) : {})}>
                               {fmtInt(v)}
+                              {comment && (
+                                <span
+                                  aria-hidden="true"
+                                  title={comment}
+                                  className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500"
+                                />
+                              )}
                             </Td>
                           );
                         })
@@ -560,6 +706,69 @@ const ChiusureExcelPage = () => {
             </table>
           )}
         </div>
+
+        {cellDetail && (
+          <div
+            className="fixed inset-0 z-[100] bg-black/45 flex items-center justify-center p-4"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setCellDetail(null);
+            }}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="closure-cell-detail-title"
+              data-testid="closure-cell-detail-dialog"
+              className="w-full max-w-lg bg-white border border-gray-300 shadow-2xl rounded-lg overflow-hidden"
+            >
+              <header className="flex items-start justify-between gap-4 px-5 py-4 border-b border-gray-200 bg-gray-50">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-gray-500 uppercase">{fmtDateIT(cellDetail.date)}</p>
+                  <h2 id="closure-cell-detail-title" className="text-lg font-bold text-gray-900">
+                    {cellDetail.label}
+                  </h2>
+                  <p className="text-sm text-gray-600">{cellDetail.title}</p>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Chiudi dettaglio"
+                  data-testid="closure-cell-detail-close"
+                  onClick={() => setCellDetail(null)}
+                  className="w-9 h-9 flex items-center justify-center border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 rounded"
+                >
+                  <X size={18} />
+                </button>
+              </header>
+
+              <div className="px-5 py-4">
+                <div className="flex items-baseline justify-between gap-4 pb-4 border-b border-gray-200">
+                  <span className="text-sm font-semibold text-gray-600">Risultato</span>
+                  <strong className="font-mono text-xl text-gray-900">{cellDetail.result}</strong>
+                </div>
+
+                <div className="py-4 border-b border-gray-200">
+                  <p className="text-xs font-bold text-gray-500 uppercase mb-2">Operazione inserita nel Report</p>
+                  <div
+                    data-testid="closure-cell-detail-expression"
+                    className="font-mono text-base font-semibold text-gray-900 whitespace-pre-wrap break-words"
+                  >
+                    {cellDetail.expression || 'Nessuna operazione salvata'}
+                  </div>
+                </div>
+
+                <div className="pt-4">
+                  <p className="text-xs font-bold text-gray-500 uppercase mb-2">Commento</p>
+                  <div
+                    data-testid="closure-cell-detail-comment"
+                    className={`text-sm whitespace-pre-wrap break-words ${cellDetail.comment ? 'text-gray-900' : 'text-gray-400 italic'}`}
+                  >
+                    {cellDetail.comment || 'Nessun commento inserito'}
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
       </main>
     </div>
   );
