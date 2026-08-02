@@ -217,6 +217,9 @@ spicci aperti e i campi Report delle bevande; i totali puramente derivati
 restano riepiloghi. La funzione usa i valori grezzi e i commenti gia conservati
 in `cash_daily_counts` e `beverage_daily_counts`, quindi e retroattiva quando
 questi dati storici esistono e non tenta ricostruzioni quando mancano.
+La colonna `Spicci / Aperti` mostra inoltre direttamente il numero complessivo
+di rotolini e la ripartizione per taglio, per esempio `2€×2 · 1€×1`, senza
+richiedere l'apertura del dettaglio.
 
 Nella stessa griglia, lo sfondo della cella `Arr.` e verde chiaro quando il
 valore e compreso nell'intervallo inclusivo da `-5` a `+5`; per qualunque valore

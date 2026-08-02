@@ -178,6 +178,15 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-08-02 02:02 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: UX | storico chiusure | tracciabilita | test
+**File toccati**:
+- `/app/frontend/src/pages/{ChiusureExcelPage,ChiusureExcelPage.test}.js`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: La colonna `Spicci / Aperti` dello Storico chiusure mostra ora, senza richiedere il doppio clic, sia il totale dei rotolini aperti sia la ripartizione per taglio, per esempio `2€×2 · 1€×1`. La stessa ripartizione e disponibile nel totale del periodo; il dettaglio esistente continua a mostrare formule originali e commenti senza nuove API o modifiche ai dati.
+**Testato**: si (metodo: test frontend mirato `7 passed`, inclusi riepilogo visibile e dettaglio formule per taglio; suite frontend completa `29 passed`; build React produzione riuscita con soli warning Hook preesistenti in file non coinvolti).
+**Note per il prossimo agente**: I valori derivano esclusivamente dai campi gia presenti `sp5`, `sp2`, `sp1` e `sp05`. `Spicci / Iniziali` resta intenzionalmente `-` perche quel dato non e ancora tracciato dal backend.
+
 ### [2026-07-31 13:31 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: feature | storico chiusure | Report | tracciabilita | UX
 **File toccati**:

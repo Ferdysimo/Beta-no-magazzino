@@ -44,11 +44,33 @@ const SPICCI_FIELDS = [
   { key: 'sp_init',  label: 'Iniziali' },
   { key: 'sp_open',  label: 'Aperti'   },
 ];
+const SPICCI_OPEN_SOURCES = [
+  { key: 'sp5', label: '5€' },
+  { key: 'sp2', label: '2€' },
+  { key: 'sp1', label: '1€' },
+  { key: 'sp05', label: '0,50€' },
+];
 
 const fmtEur = (n) => (Number(n) || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtInt = (n) => {
   const v = Number(n) || 0;
   return v === 0 ? '' : String(Math.round(v));
+};
+const fmtSpicciCount = (value) => {
+  const numeric = Number(value) || 0;
+  return Number.isInteger(numeric)
+    ? String(numeric)
+    : numeric.toLocaleString('it-IT', { maximumFractionDigits: 2 });
+};
+
+export const spicciOpenedBreakdown = (cash = {}) => {
+  const parts = SPICCI_OPEN_SOURCES
+    .map(({ key, label }) => ({ label, count: Number(cash?.[key]) || 0 }))
+    .filter(({ count }) => count !== 0);
+  return {
+    total: parts.reduce((sum, { count }) => sum + count, 0),
+    text: parts.map(({ label, count }) => `${label}×${fmtSpicciCount(count)}`).join(' · '),
+  };
 };
 const fmtDateIT = (s) => {
   if (!s) return '';
@@ -311,6 +333,7 @@ const ChiusureExcelPage = () => {
     });
     CASH_EUR_FIELDS.forEach(f => { t.cash[f.key] = 0; });
     SPICCI_FIELDS.forEach(f => { t.spicci[f.key] = 0; });
+    SPICCI_OPEN_SOURCES.forEach(({ key }) => { t.spicci[key] = 0; });
 
     items.forEach(r => {
       bevSigle.forEach(sigla => {
@@ -324,7 +347,11 @@ const ChiusureExcelPage = () => {
       // SPICCI: 2 colonne aggregate
       // sp_init: 0 (placeholder finché non tracciato dal backend)
       // sp_open: somma di sp5+sp2+sp1+sp05 del giorno
-      t.spicci.sp_open += (Number(r.cash?.sp5) || 0) + (Number(r.cash?.sp2) || 0) + (Number(r.cash?.sp1) || 0) + (Number(r.cash?.sp05) || 0);
+      SPICCI_OPEN_SOURCES.forEach(({ key }) => {
+        const count = Number(r.cash?.[key]) || 0;
+        t.spicci[key] += count;
+        t.spicci.sp_open += count;
+      });
       t.cash_sera += Number(r.cash_sera || 0);
     });
     return t;
@@ -337,6 +364,7 @@ const ChiusureExcelPage = () => {
   const PASTE_W = 50;
   const EUR_W = 64;       // colonne €
   const SPICCI_W = 46;
+  const SPICCI_OPEN_W = 118;
   const SERA_W = 76;
 
   return (
@@ -471,7 +499,14 @@ const ChiusureExcelPage = () => {
                     </Th>
                   ))}
                   {SPICCI_FIELDS.map(f => (
-                    <Th key={f.key} sticky top={28} bg="#fde68a" color="#111827" width={SPICCI_W}>
+                    <Th
+                      key={f.key}
+                      sticky
+                      top={28}
+                      bg="#fde68a"
+                      color="#111827"
+                      width={f.key === 'sp_open' ? SPICCI_OPEN_W : SPICCI_W}
+                    >
                       {f.label}
                     </Th>
                   ))}
@@ -572,20 +607,17 @@ const ChiusureExcelPage = () => {
                         if (f.key === 'sp_init') {
                           val = '—';
                         } else {
-                          const open = (Number(r.cash?.sp5) || 0) + (Number(r.cash?.sp2) || 0) + (Number(r.cash?.sp1) || 0) + (Number(r.cash?.sp05) || 0);
-                          val = open === 0 ? '' : String(open);
-                          const sources = [
-                            ['sp5', '5 €'], ['sp2', '2 €'], ['sp1', '1 €'], ['sp05', '0,50 €'],
-                          ];
-                          const expression = sources
-                            .map(([key, label]) => {
+                          const breakdown = spicciOpenedBreakdown(r.cash);
+                          val = breakdown.total === 0 ? '' : fmtSpicciCount(breakdown.total);
+                          const expression = SPICCI_OPEN_SOURCES
+                            .map(({ key, label }) => {
                               const raw = reportExpressionText(r.cash_raw?.[key]);
                               return raw ? `${label}: ${raw}` : '';
                             })
                             .filter(Boolean)
                             .join('\n');
-                          const comment = sources
-                            .map(([key, label]) => {
+                          const comment = SPICCI_OPEN_SOURCES
+                            .map(({ key, label }) => {
                               const text = String(r.cash_comments?.[key] || '').trim();
                               return text ? `${label}: ${text}` : '';
                             })
@@ -595,9 +627,12 @@ const ChiusureExcelPage = () => {
                             date: r.date,
                             label: f.label,
                             title: 'Rotolini aperti',
-                            result: val || '0',
+                            result: breakdown.text
+                              ? `${val} rotolini · ${breakdown.text}`
+                              : '0 rotolini',
                             expression,
                             comment,
+                            breakdown: breakdown.text,
                           };
                         }
                         return (
@@ -606,10 +641,23 @@ const ChiusureExcelPage = () => {
                             bg={baseBg}
                             mono
                             align="center"
+                            testId={`closure-${r.date}-spicci-${f.key}`}
                             title={detail ? 'Doppio clic per vedere operazioni e commenti' : undefined}
                             {...(detail ? detailCellProps(detail) : {})}
                           >
-                            {val}
+                            {f.key === 'sp_open' && detail ? (
+                              <span className="flex flex-col items-center leading-tight">
+                                <strong>{val}</strong>
+                                {detail.breakdown && (
+                                  <span
+                                    data-testid={`closure-${r.date}-spicci-breakdown`}
+                                    className="mt-0.5 text-[10px] font-semibold text-gray-600"
+                                  >
+                                    {detail.breakdown}
+                                  </span>
+                                )}
+                              </span>
+                            ) : val}
                             {detail?.comment && (
                               <span
                                 aria-hidden="true"
@@ -683,7 +731,16 @@ const ChiusureExcelPage = () => {
 
                   {SPICCI_FIELDS.map(f => (
                     <Td key={f.key} bg="#0f172a" color="#fff" mono bold align="center">
-                      {f.key === 'sp_init' ? '—' : (totals.spicci.sp_open || '')}
+                      {f.key === 'sp_init' ? '—' : (
+                        <span className="flex flex-col items-center leading-tight">
+                          <strong>{totals.spicci.sp_open || ''}</strong>
+                          {spicciOpenedBreakdown(totals.spicci).text && (
+                            <span className="mt-0.5 text-[10px] font-semibold text-gray-300">
+                              {spicciOpenedBreakdown(totals.spicci).text}
+                            </span>
+                          )}
+                        </span>
+                      )}
                     </Td>
                   ))}
 

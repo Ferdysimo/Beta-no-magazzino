@@ -79,12 +79,16 @@ describe('ChiusureExcelPage restaurant selection', () => {
                 pos: 6299,
                 vers: 80,
                 ft: 780,
+                sp2: 2,
+                sp1: 1,
               },
               cash_raw: {
                 arr: '10+2',
                 pos: '6200+99',
                 vers: '<span style="color: rgb(220, 38, 38)">50</span>+30',
                 ft: '500+300-20',
+                sp2: '1+1',
+                sp1: '1',
               },
               cash_comments: {
                 ft: 'Tre fatture controllate',
@@ -225,6 +229,26 @@ describe('ChiusureExcelPage restaurant selection', () => {
       .toBe('1');
     expect(container.querySelector('[data-testid="closure-cell-detail-comment"]').textContent)
       .toBe('Bottiglia rotta');
+  });
+
+  test('mostra direttamente quanti rotolini sono stati aperti per ogni taglio', async () => {
+    await renderPage();
+
+    const openedCell = container.querySelector(
+      '[data-testid="closure-2026-07-27-spicci-sp_open"]',
+    );
+    const breakdown = container.querySelector(
+      '[data-testid="closure-2026-07-27-spicci-breakdown"]',
+    );
+
+    expect(openedCell.textContent).toContain('3');
+    expect(breakdown.textContent).toBe('2€×2 · 1€×1');
+
+    act(() => {
+      openedCell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    });
+    expect(container.querySelector('[data-testid="closure-cell-detail-expression"]').textContent)
+      .toBe('2€: 1+1\n1€: 1');
   });
 
   test('interpreta anche Vers interamente nero, rosso e il colore rosso storico', () => {
