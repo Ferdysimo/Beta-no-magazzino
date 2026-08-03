@@ -19,6 +19,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 import server
 from app.core import files as files_module
+from app.core import security as security_module
 from app.core.config import ALGORITHM, SECRET_KEY
 from app.core.database import db
 from app.core.security import can_impersonate, create_token, require_admin, verify_token
@@ -27,7 +28,7 @@ from app.schemas import OrderCreate
 from app.routers import websocket as websocket_router
 
 
-EXPECTED_OPENAPI_SHA256 = "786d61ac548cc4191dffa2fb27c5a13ac41605b0155057bc9d1a0435b75295f4"
+EXPECTED_OPENAPI_SHA256 = "b9feff868734230fad2568af439bef5c3072ee44447b97dfe50f2e8de4ce28fe"
 
 
 def _request(headers=None) -> Request:
@@ -65,7 +66,7 @@ def test_openapi_contract_is_unchanged():
     ).encode()
 
     assert hashlib.sha256(encoded).hexdigest() == EXPECTED_OPENAPI_SHA256
-    assert len(spec["paths"]) == 88
+    assert len(spec["paths"]) == 89
     assert len(spec.get("components", {}).get("schemas", {})) == 34
 
 
@@ -139,6 +140,37 @@ def test_old_simone_token_is_rejected():
 
     assert exc_info.value.status_code == 401
     assert exc_info.value.detail == "Token revoked"
+
+
+def test_admin_minimum_version_revokes_only_old_admin_tokens(monkeypatch):
+    monkeypatch.setattr(security_module, "ADMIN_MIN_TOKEN_VERSION", 0)
+    legacy_admin = verify_token(
+        _credentials(_raw_token(role="admin", username="Admin", token_version=None)),
+        _request(),
+    )
+    assert legacy_admin["username"] == "Admin"
+
+    monkeypatch.setattr(security_module, "ADMIN_MIN_TOKEN_VERSION", 3)
+
+    with pytest.raises(HTTPException) as exc_info:
+        verify_token(
+            _credentials(_raw_token(role="admin", username="Admin", token_version=2)),
+            _request(),
+        )
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Token revoked"
+
+    current_admin = verify_token(
+        _credentials(_raw_token(role="admin", username="Admin", token_version=3)),
+        _request(),
+    )
+    restaurant = verify_token(
+        _credentials(_raw_token(username="Flaminio", token_version=None)),
+        _request(),
+    )
+    assert current_admin["username"] == "Admin"
+    assert restaurant["username"] == "Flaminio"
 
 
 def test_rome_day_bounds_keep_dst_semantics():

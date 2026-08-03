@@ -50,8 +50,8 @@ async def _set_password(username: str) -> None:
         },
     )
     print(
-        f"Password aggiornata per {username}. I JWT gia emessi restano validi "
-        "fino a scadenza o alla rotazione di JWT_SECRET."
+        f"Password aggiornata per {username}; token_version={next_version}. "
+        "Per la revoca mirata, il backend deve rifiutare le versioni precedenti."
     )
 
 

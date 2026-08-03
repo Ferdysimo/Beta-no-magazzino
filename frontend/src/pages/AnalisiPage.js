@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { FileText, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
+import NavLinkSpa from '../components/NavLinkSpa';
 import { compareProductsByCanonicalOrder } from '../utils/productOrder';
+import { formatItalianDateTime } from '../utils/formatDate';
 import ZoomableImage from '../components/ZoomableImage';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -23,6 +26,14 @@ const toISODate = (d) => {
   return `${y}-${m}-${day}`;
 };
 
+const REQUEST_STATUS_LABELS = {
+  pending: 'Da evadere',
+  evasa: 'Evasa',
+  confermata: 'Confermata',
+  errore: 'Errore',
+};
+const EMPTY_LOCATIONS = [];
+
 const AnalisiPage = () => {
   const { token, restaurant } = useAuth();
   const navigate = useNavigate();
@@ -37,6 +48,12 @@ const AnalisiPage = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [extraModalOpen, setExtraModalOpen] = useState(false);
+  const [extraDateFrom, setExtraDateFrom] = useState(toISODate(monthAgo));
+  const [extraDateTo, setExtraDateTo] = useState(toISODate(today));
+  const [extraRequests, setExtraRequests] = useState([]);
+  const [extraLoading, setExtraLoading] = useState(false);
+  const [extraError, setExtraError] = useState('');
 
   // Role guard
   useEffect(() => {
@@ -75,7 +92,39 @@ const AnalisiPage = () => {
     load(dateFrom, dateTo);
   };
 
-  const locations = data?.locations || [];
+  const loadExtraRequests = async (from, to) => {
+    setExtraLoading(true);
+    setExtraError('');
+    try {
+      const res = await axios.get(`${API}/richieste/extra-notes`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { date_from: from, date_to: to },
+      });
+      setExtraRequests(res.data || []);
+    } catch (e) {
+      setExtraError(e.response?.data?.detail || 'Errore caricamento campi extra');
+      setExtraRequests([]);
+    } finally {
+      setExtraLoading(false);
+    }
+  };
+
+  const openExtraModal = () => {
+    setExtraDateFrom(dateFrom);
+    setExtraDateTo(dateTo);
+    setExtraModalOpen(true);
+    loadExtraRequests(dateFrom, dateTo);
+  };
+
+  const applyExtraDates = () => {
+    if (new Date(extraDateTo) < new Date(extraDateFrom)) {
+      setExtraError('La data finale deve essere uguale o successiva a quella iniziale');
+      return;
+    }
+    loadExtraRequests(extraDateFrom, extraDateTo);
+  };
+
+  const locations = data?.locations || EMPTY_LOCATIONS;
   const products = useMemo(
     () => [...(data?.products || [])].sort(compareProductsByCanonicalOrder),
     [data]
@@ -96,16 +145,27 @@ const AnalisiPage = () => {
     <div className="min-h-screen bg-[#F5F5F5]">
       <Header />
       <main className="max-w-6xl mx-auto p-4 sm:p-6">
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
           <h1 className="font-heading text-2xl sm:text-3xl font-bold text-gray-900 uppercase tracking-wide">
             Analisi magazzino
           </h1>
-          <button
-            onClick={() => navigate('/magazzino')}
-            className="text-sm text-gray-600 hover:text-gray-900 underline"
-          >
-            ← Torna al magazzino
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              data-testid="open-extra-notes"
+              onClick={openExtraModal}
+              className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 text-sm font-semibold text-gray-800 rounded hover:bg-gray-50"
+            >
+              <FileText size={16} aria-hidden="true" />
+              Campi extra
+            </button>
+            <button
+              onClick={() => navigate('/magazzino')}
+              className="text-sm text-gray-600 hover:text-gray-900 underline"
+            >
+              ← Torna al magazzino
+            </button>
+          </div>
         </div>
 
         {/* Date range */}
@@ -223,6 +283,124 @@ const AnalisiPage = () => {
           • Trasporti a [locale] = somma delle richieste <strong>evase</strong> nel periodo (la merce è fisicamente uscita dal magazzino)
         </p>
       </main>
+
+      {extraModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3 sm:p-6"
+          onClick={() => setExtraModalOpen(false)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="extra-notes-title"
+            data-testid="extra-notes-dialog"
+            className="bg-white w-full max-w-5xl max-h-[90vh] rounded border border-gray-300 shadow-xl flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <header className="flex items-center justify-between gap-4 px-4 py-3 border-b border-gray-200">
+              <div>
+                <h2 id="extra-notes-title" className="text-lg font-bold text-gray-900">
+                  Campi extra
+                </h2>
+                <div className="text-xs text-gray-500">Richieste con indicazioni aggiuntive</div>
+              </div>
+              <button
+                type="button"
+                aria-label="Chiudi campi extra"
+                onClick={() => setExtraModalOpen(false)}
+                className="w-9 h-9 inline-flex items-center justify-center border border-gray-300 rounded text-gray-600 hover:bg-gray-100"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </header>
+
+            <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-end gap-3">
+              <label className="text-xs font-semibold text-gray-700">
+                <span className="block mb-1">Dal</span>
+                <input
+                  type="date"
+                  data-testid="extra-date-from"
+                  value={extraDateFrom}
+                  onChange={e => setExtraDateFrom(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded text-sm font-normal"
+                />
+              </label>
+              <label className="text-xs font-semibold text-gray-700">
+                <span className="block mb-1">Al</span>
+                <input
+                  type="date"
+                  data-testid="extra-date-to"
+                  value={extraDateTo}
+                  onChange={e => setExtraDateTo(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded text-sm font-normal"
+                />
+              </label>
+              <button
+                type="button"
+                data-testid="extra-apply"
+                onClick={applyExtraDates}
+                disabled={extraLoading}
+                className="px-4 py-2 bg-[#F5C518] hover:bg-[#E5B418] disabled:opacity-50 text-gray-900 text-sm font-bold rounded"
+              >
+                {extraLoading ? 'Caricamento...' : 'Filtra'}
+              </button>
+              {extraError && <div className="text-sm text-red-600">{extraError}</div>}
+            </div>
+
+            <div className="overflow-auto flex-1">
+              {extraLoading ? (
+                <div className="p-8 text-center text-gray-400">Caricamento...</div>
+              ) : extraRequests.length === 0 ? (
+                <div className="p-8 text-center text-gray-400 text-sm">
+                  Nessun campo extra nel periodo selezionato.
+                </div>
+              ) : (
+                <table className="w-full min-w-[720px] text-sm">
+                  <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 text-left">
+                    <tr>
+                      <th className="px-4 py-3 text-xs uppercase text-gray-600">Richiesta</th>
+                      <th className="px-4 py-3 text-xs uppercase text-gray-600">Locale</th>
+                      <th className="px-4 py-3 text-xs uppercase text-gray-600">Data</th>
+                      <th className="px-4 py-3 text-xs uppercase text-gray-600">Stato</th>
+                      <th className="px-4 py-3 text-xs uppercase text-gray-600">Campo extra</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {extraRequests.map(request => (
+                      <tr
+                        key={request.id}
+                        data-testid={`extra-request-${request.id}`}
+                        className="border-b border-gray-100 align-top"
+                      >
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <NavLinkSpa
+                            to={`/ddt/${request.id}`}
+                            className="font-bold text-gray-900 underline"
+                          >
+                            DDT {request.ddt_number}
+                          </NavLinkSpa>
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-gray-800 whitespace-nowrap">
+                          {request.restaurant_location || 'Locale non indicato'}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                          {formatItalianDateTime(request.created_at)}
+                        </td>
+                        <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                          {REQUEST_STATUS_LABELS[request.status] || request.status || '—'}
+                        </td>
+                        <td className="px-4 py-3 text-gray-900 whitespace-pre-wrap break-words min-w-[280px]">
+                          {request.extra_note}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 };

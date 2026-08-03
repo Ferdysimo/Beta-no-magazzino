@@ -192,6 +192,39 @@ async def _exercise_phase3_domains():
             assert request.status_code == 200, request.text
             request_id = request.json()["id"]
 
+            extra_note_params = {
+                "date_from": "2020-01-01",
+                "date_to": "2030-12-31",
+            }
+            for allowed_headers in (
+                admin_headers,
+                simone_headers,
+                warehouse_headers,
+            ):
+                extra_notes = await client.get(
+                    "/api/richieste/extra-notes",
+                    headers=allowed_headers,
+                    params=extra_note_params,
+                )
+                assert extra_notes.status_code == 200, extra_notes.text
+                assert any(
+                    row["id"] == request_id
+                    and row["extra_note"] == "gate fase 3"
+                    for row in extra_notes.json()
+                )
+            for forbidden_headers in (flaminio_headers, federico_headers):
+                forbidden_extra_notes = await client.get(
+                    "/api/richieste/extra-notes",
+                    headers=forbidden_headers,
+                    params=extra_note_params,
+                )
+                assert forbidden_extra_notes.status_code == 403
+            anonymous_extra_notes = await client.get(
+                "/api/richieste/extra-notes",
+                params=extra_note_params,
+            )
+            assert anonymous_extra_notes.status_code in (401, 403)
+
             evaded = await client.patch(
                 f"/api/richieste/{request_id}/evade", headers=warehouse_headers
             )

@@ -37,6 +37,7 @@ __all__ = [
     "list_richieste",
     "list_all_pending",
     "list_history_all",
+    "list_extra_notes",
     "list_transport_checks",
     "get_richiesta",
     "update_richiesta",
@@ -493,6 +494,56 @@ async def list_history_all(token_data: dict = Depends(verify_token)):
             rest = await db.restaurants.find_one({"id": d.get("restaurant_id")}, {"_id": 0})
             if rest:
                 d["restaurant_location"] = rest.get("location", "")
+    return docs
+
+
+@router.get("/richieste/extra-notes")
+async def list_extra_notes(
+    date_from: str,
+    date_to: str,
+    token_data: dict = Depends(verify_token),
+):
+    """Warehouse/admin read-only list of requests containing an extra note."""
+    if token_data.get("role") not in ("magazzino", "admin"):
+        raise HTTPException(status_code=403, detail="Solo magazziniere/admin")
+
+    try:
+        start_day = datetime.strptime(date_from, "%Y-%m-%d").date()
+        end_day = datetime.strptime(date_to, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Periodo non valido")
+    if end_day < start_day:
+        raise HTTPException(status_code=400, detail="Periodo non valido")
+
+    start_iso = datetime.combine(
+        start_day,
+        datetime.min.time(),
+        tzinfo=ROME_TZ,
+    ).astimezone(timezone.utc).isoformat()
+    end_iso = datetime.combine(
+        end_day + timedelta(days=1),
+        datetime.min.time(),
+        tzinfo=ROME_TZ,
+    ).astimezone(timezone.utc).isoformat()
+
+    docs = await db.richieste.find(
+        {
+            "created_at": {"$gte": start_iso, "$lt": end_iso},
+            "extra_note": {"$type": "string", "$regex": r"\S"},
+        },
+        {
+            "_id": 0,
+            "id": 1,
+            "ddt_number": 1,
+            "restaurant_location": 1,
+            "created_at": 1,
+            "status": 1,
+            "extra_note": 1,
+        },
+    ).sort("created_at", -1).to_list(5000)
+
+    for doc in docs:
+        doc["extra_note"] = str(doc.get("extra_note") or "").strip()
     return docs
 
 

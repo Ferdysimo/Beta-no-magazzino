@@ -34,6 +34,10 @@ if not SECRET_KEY:
 
 ALGORITHM = "HS256"
 SIMONE_MIN_TOKEN_VERSION = 2
+ADMIN_MIN_TOKEN_VERSION = max(
+    0,
+    int(os.environ.get("ADMIN_MIN_TOKEN_VERSION", "0")),
+)
 
 _DEFAULT_PRODUCTION_ORIGINS = (
     "https://pasta-app.it",

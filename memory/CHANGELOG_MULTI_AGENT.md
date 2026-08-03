@@ -178,6 +178,40 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-08-03 16:15 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: security | auth | revoca mirata | config | docs | test
+**File toccati**:
+- `/app/backend/app/core/{config,security}.py`
+- `/app/backend/scripts/manage_account.py`
+- `/app/backend/tests/test_phase1_foundations_contract.py`
+- `/app/memory/{ADMIN_PASSWORD_ROTATION_RUNBOOK,PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Preparata nel repository, ma non applicata sulla VPS, la revoca mirata dei JWT dell'account `Admin`. La nuova variabile `ADMIN_MIN_TOKEN_VERSION`, inattiva con default `0`, permette di rifiutare esclusivamente i token Admin precedenti alla versione scelta senza disconnettere Simone, Federico, Magazziniere o i locali. Il comando offline di cambio password continua a incrementare `token_version` e ora stampa la nuova versione necessaria alla revoca, senza esporre la password. Aggiunto un runbook operativo separato per il futuro aggiornamento autorizzato.
+**Testato**: si (metodo: test mirato auth `14 passed`, compresi vecchio Admin rifiutato, nuovo Admin accettato e locale non coinvolto; compilazione Python dei tre moduli modificati; suite backend completa `191 passed, 36 skipped`).
+**Note per il prossimo agente**: al 03/08/2026 non sono stati cambiati password, `.env`, account o servizi sulla VPS. Non inserire mai la password in Git o nei comandi salvati. Durante la futura finestra seguire `/app/memory/ADMIN_PASSWORD_ROTATION_RUNBOOK.md` e non abbassare la soglia dopo la revoca.
+
+### [2026-08-03 14:57 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | magazzino | richieste merce | UX | sicurezza | test
+**File toccati**:
+- `/app/backend/app/routers/warehouse.py`
+- `/app/backend/tests/{test_warehouse_extra_notes,test_phase1_foundations_contract,test_phase3_isolated_integration,test_phase3_module_contract}.py`
+- `/app/frontend/src/pages/{AnalisiPage,AnalisiPage.test}.js`
+- `/app/frontend/src/utils/{productOrder,productOrder.test}.js`
+- `/app/frontend/public/version.json`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: L'ordine canonico condiviso colloca ora `Cinghiale`, `Ragu di cinghiale` e `Ragù di cinghiale` tra pomodori secchi e pesto di pistacchi in tutti gli elenchi prodotti che usano il catalogo comune: inventario, prodotti, richieste, carichi, DDT, cronologia e Analisi magazzino. In Analisi magazzino e stato aggiunto il pulsante `Campi extra`: apre una finestra sola lettura, filtrabile per data di creazione, con testo extra, locale, data, stato e collegamento al DDT originale. La nuova API restituisce solo i campi necessari e non modifica o duplica le richieste esistenti.
+**Testato**: si (metodo: test unitari backend mirati `5 passed`; contratti modulari `6 passed`; integrazione Mongo isolata `1 passed` con matrice ruoli completa; suite backend completa `190 passed, 36 skipped`; suite frontend completa `35 passed`, inclusi ordine prodotti, apertura finestra, collegamento DDT e filtro date; build React produzione riuscita; endpoint presente e server locale attivo su porta 8001).
+**Note per il prossimo agente**: `/api/richieste/extra-notes` e intenzionalmente sola lettura e globale soltanto per ruoli `magazzino` e `admin`; anonimo, locali e Federico devono restare esclusi. Il filtro usa il giorno locale di Roma sulla data `created_at` della richiesta e il dettaglio completo continua a vivere nel DDT originale.
+
+### [2026-08-03 11:14 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix | Report storico | sola lettura | UX | test
+**File toccati**:
+- `/app/frontend/src/pages/{ReportBetaPage,ReportBetaPage.test}.js`
+- `/app/frontend/public/version.json`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Nei Report aperti dallo Storico chiusure in modalita sola lettura, il pannello sinistro delle paste resta ora utilizzabile per consultazione: si possono scorrere il testo incollato e l'elenco dei prezzi delle righe non riconosciute, oltre ad aprire e scorrere la vista ingrandita. Testo paste, prezzi manuali e comando di blocco aggiornamenti rimangono esplicitamente non modificabili; una guardia aggiuntiva impedisce aggiornamenti dei prezzi anche in caso di evento imprevisto. Nessun flusso backend, dato o permesso e stato modificato.
+**Testato**: si (metodo: test frontend dedicato su Report storico in sola lettura, inclusa assenza di richieste `PUT`; suite frontend completa `29 passed`; build React produzione riuscita con soli warning Hook preesistenti in file non coinvolti; prova browser locale autenticata sulla chiusura del 14/07/2026 con 11 paste e 2 righe non riconosciute, pannelli compatti e ingranditi scorrevoli, input `readOnly`, toggle disabilitato e nessun errore console).
+**Note per il prossimo agente**: il contenitore generale del Report storico resta non interattivo; soltanto il pannello paste viene riattivato e ogni controllo che potrebbe scrivere deve continuare ad avere un blocco esplicito.
+
 ### [2026-08-02 02:02 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: UX | storico chiusure | tracciabilita | test
 **File toccati**:

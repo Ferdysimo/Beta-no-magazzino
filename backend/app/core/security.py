@@ -5,7 +5,12 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from passlib.context import CryptContext
 
-from .config import ALGORITHM, SECRET_KEY, SIMONE_MIN_TOKEN_VERSION
+from .config import (
+    ADMIN_MIN_TOKEN_VERSION,
+    ALGORITHM,
+    SECRET_KEY,
+    SIMONE_MIN_TOKEN_VERSION,
+)
 
 
 security = HTTPBearer()
@@ -58,8 +63,18 @@ def verify_token(
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         payload["authenticated_restaurant_id"] = payload.get("restaurant_id", "")
-        if payload.get("username") == "Simone" and int(payload.get("token_version") or 0) < SIMONE_MIN_TOKEN_VERSION:
-            raise HTTPException(status_code=401, detail="Token revoked")
+        username = payload.get("username")
+        minimum_version = {
+            "Admin": ADMIN_MIN_TOKEN_VERSION,
+            "Simone": SIMONE_MIN_TOKEN_VERSION,
+        }.get(username)
+        if minimum_version is not None:
+            try:
+                token_version = int(payload.get("token_version") or 0)
+            except (TypeError, ValueError):
+                token_version = 0
+            if token_version < minimum_version:
+                raise HTTPException(status_code=401, detail="Token revoked")
         if can_impersonate(payload) and request:
             admin_restaurant_id = request.headers.get("X-Admin-Restaurant-Id")
             if admin_restaurant_id:

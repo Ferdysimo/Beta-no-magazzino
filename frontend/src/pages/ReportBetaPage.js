@@ -1190,6 +1190,7 @@ const ReportBetaPageInner = () => {
     });
   };
   const setManualPrice = (priceKey, v) => {
+    if (readOnlyHistorical) return;
     // Cap manuale: massimo 15€ per una pasta sconosciuta (vale per
     // qualsiasi cifra numerica digitata; le formule "=" non sono ammesse qui).
     const raw = (v ?? '').toString();
@@ -1274,13 +1275,19 @@ const ReportBetaPageInner = () => {
         {/* Layout: paste a sinistra (~14%) + tutto il resto a destra (~86%) */}
         <div className="grid grid-cols-1 lg:grid-cols-[14fr_86fr] xl:grid-cols-[minmax(250px,1fr)_4fr] gap-3 lg:gap-2 lg:flex-1 lg:min-h-0">
           {/* ============== SINISTRA — PASTE ============== */}
-          <section className="bg-white rounded border border-gray-200 p-2 flex flex-col lg:min-h-0">
+          <section
+            data-testid="report-paste-panel"
+            className={`bg-white rounded border border-gray-200 p-2 flex flex-col lg:min-h-0 ${
+              readOnlyHistorical ? 'pointer-events-auto' : ''
+            }`}
+          >
             <div className="flex items-baseline justify-center mb-1 gap-1 flex-wrap">
               <h2 className="text-xs font-bold text-gray-800 uppercase">Paste</h2>
             </div>
             <button
               type="button"
               data-testid="toggle-paste-manual"
+              disabled={readOnlyHistorical}
               onClick={() => {
                 if (manualPasteOverride) {
                   // Torna ad auto: ricarica dal server (azzera modifiche manuali)
@@ -1300,7 +1307,9 @@ const ReportBetaPageInner = () => {
                 ? 'Aggiornamenti automatici BLOCCATI — clicca per riattivare'
                 : 'Blocca gli aggiornamenti automatici (le paste live dal Cassa non sovrascriveranno più questo box)'}
               className={`text-[11px] font-bold px-2 py-1 rounded mb-1 transition-colors uppercase tracking-wide ${
-                manualPasteOverride
+                readOnlyHistorical
+                  ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
+                  : manualPasteOverride
                   ? 'bg-red-600 text-white border border-red-700 hover:bg-red-700'
                   : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
               }`}
@@ -1323,7 +1332,9 @@ const ReportBetaPageInner = () => {
                 : 'Auto-popolato dalle paste mandate dal Cassa (live)'}
               style={readOnlyHistorical ? { pointerEvents: 'auto' } : undefined}
               className={`w-full h-64 lg:h-auto lg:flex-1 lg:min-h-[120px] p-2 border rounded text-base lg:text-[13px] leading-snug tracking-wide font-semibold text-gray-800 focus:outline-none resize-none ${
-                manualPasteOverride
+                readOnlyHistorical
+                  ? 'border-gray-200 bg-gray-50 cursor-auto'
+                  : manualPasteOverride
                   ? 'border-rose-300 focus:border-rose-500 bg-white'
                   : 'border-gray-200 bg-gray-50 cursor-not-allowed'
               }`}
@@ -1331,7 +1342,10 @@ const ReportBetaPageInner = () => {
 
             {/* Non riconosciute con prezzo manuale */}
             {pasteAnalysis.unrecognized.length > 0 && (
-              <div className="mt-1.5 bg-rose-50 border border-rose-200 rounded p-2 text-[11px] flex-shrink-0 max-h-40 overflow-y-auto">
+              <div
+                data-testid="manual-prices-scroll-area"
+                className="mt-1.5 bg-rose-50 border border-rose-200 rounded p-2 text-[11px] flex-shrink-0 max-h-40 overflow-y-auto pointer-events-auto"
+              >
                 <div className="sticky top-0 z-10 flex items-center justify-between gap-2 pb-1.5 bg-rose-50">
                   <div className="font-bold text-rose-700 leading-tight">
                     Non riconosciute ({pasteAnalysis.unrecognized.length}) — assegna prezzo:
@@ -1357,6 +1371,7 @@ const ReportBetaPageInner = () => {
                         inputMode="decimal"
                         value={manualPrices[u.key] ?? manualPrices[u.idx] ?? ''}
                         onChange={(e) => setManualPrice(u.key, e.target.value)}
+                        readOnly={readOnlyHistorical}
                         placeholder="€"
                         title="Max 15€"
                         aria-label={`Prezzo manuale per ${u.text}`}
@@ -1413,6 +1428,7 @@ const ReportBetaPageInner = () => {
                           inputMode="decimal"
                           value={manualPrices[u.key] ?? manualPrices[u.idx] ?? ''}
                           onChange={(e) => setManualPrice(u.key, e.target.value)}
+                          readOnly={readOnlyHistorical}
                           placeholder="€"
                           title="Max 15€"
                           aria-label={`Prezzo manuale ingrandito per ${u.text}`}

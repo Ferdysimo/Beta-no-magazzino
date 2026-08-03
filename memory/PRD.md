@@ -137,6 +137,10 @@ anonimo, locale, magazzino, Federico, Admin e Simone.
 - Gli account non vengono creati o resettati automaticamente all'avvio.
 - Gli account privilegiati si gestiscono con il comando offline
   `backend/scripts/manage_account.py`.
+- La revoca mirata dell'account `Admin` puo essere attivata in produzione
+  impostando `ADMIN_MIN_TOKEN_VERSION` alla versione stampata dal comando di
+  cambio password. La variabile vale `0` per default, quindi preparare il codice
+  non disconnette nessuno finche la soglia non viene autorizzata sulla VPS.
 - Il logout generale e la revoca server-side completa delle sessioni restano
   un debito di sicurezza: oggi il logout ordinario rimuove soprattutto lo stato
   client e il JWT resta valido fino a scadenza, salvo revoche specifiche.
@@ -207,6 +211,11 @@ Contratti:
 - i campi numerici non accettano testo arbitrario; le formule sono ammesse solo
   dove previste;
 - il Report storico usa la data e il locale richiesti, non il polling live;
+- quando il Report storico e in sola lettura, il pannello paste resta
+  consultabile: si possono scorrere sia il testo incollato sia l'elenco dei
+  prezzi delle righe non riconosciute, anche nella vista ingrandita, ma testo,
+  prezzi e blocco degli aggiornamenti restano non modificabili e non generano
+  autosalvataggi;
 - le correzioni storiche autorizzate devono restare riconoscibili nell'audit.
 
 Lo Storico chiusure mantiene la griglia sintetica, ma le celle che derivano da
@@ -329,9 +338,19 @@ pending -> evasa -> confermata
   merce; sul DDT vengono conservati nome, orario, esito e account utilizzato;
 - Admin e Simone consultano i controlli per locale e mese nella pagina
   `Controlli trasporti`; Federico, Magazziniere e locali non vi accedono;
+- il campo libero `extra` resta salvato nella richiesta originale. Dalla pagina
+  `Analisi magazzino`, Admin, Simone e Magazziniere possono aprire la finestra
+  sola lettura `Campi extra`, filtrarla per data di creazione e raggiungere il
+  DDT a cui ogni annotazione appartiene; locali e Federico non accedono alla
+  lettura globale;
 - i DDT precedenti all'introduzione del controllo restano leggibili e mostrano
   esplicitamente che il nome non era registrato;
 - il numero DDT e globale e allocato atomicamente.
+
+Tutti gli elenchi prodotti del frontend usano lo stesso ordine canonico. Le
+voci `Ragu di cinghiale`, `Cinghiale` e `Ragù di cinghiale` devono comparire tra
+`Pomodori secchi` e `Pesto di pistacchi` in inventario, catalogo, nuova
+richiesta, carichi, DDT, cronologia e Analisi magazzino.
 
 Carichi:
 

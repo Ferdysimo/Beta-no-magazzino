@@ -25,14 +25,14 @@ from app.core.ws_manager import manager
 from app.routers import beverages, documents, invoices, system, warehouse, websocket
 
 
-EXPECTED_OPENAPI_SHA256 = "786d61ac548cc4191dffa2fb27c5a13ac41605b0155057bc9d1a0435b75295f4"
+EXPECTED_OPENAPI_SHA256 = "b9feff868734230fad2568af439bef5c3072ee44447b97dfe50f2e8de4ce28fe"
 
 
 def test_phase3_keeps_exact_openapi_contract_and_unique_routes():
     schema = server.app.openapi()
     payload = json.dumps(schema, sort_keys=True, separators=(",", ":")).encode()
     assert hashlib.sha256(payload).hexdigest() == EXPECTED_OPENAPI_SHA256
-    assert len(schema["paths"]) == 88
+    assert len(schema["paths"]) == 89
 
     route_pairs = [
         (method, route.path)
@@ -46,7 +46,7 @@ def test_phase3_keeps_exact_openapi_contract_and_unique_routes():
 def test_phase3_router_ownership_counts_are_stable():
     assert len(system.router.routes) == 12
     assert len(invoices.router.routes) == 9
-    assert len(warehouse.router.routes) == 26
+    assert len(warehouse.router.routes) == 27
     assert len(beverages.router.routes) == 8
     assert len(documents.router.routes) == 16
     assert len(websocket.router.routes) == 2
