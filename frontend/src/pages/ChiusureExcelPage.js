@@ -37,6 +37,8 @@ const CASH_EUR_FIELDS = [
   { key: 'pos',     label: 'POS',   hint: 'Cassa POS' },
   { key: 'ft',      label: 'FT',    hint: 'Fatture' },
 ];
+const TOTAL_CASH_FIELDS = new Set(['arr', 'altro']);
+const TOTAL_BEV_GROUPS = new Set(['scarti']);
 // Rotolini aperti visibili per taglio.
 const SPICCI_FIELDS = [
   { key: 'sp5', label: '5 €' },
@@ -671,30 +673,30 @@ const ChiusureExcelPage = () => {
 
               <tfoot>
                 <tr style={{ background: '#0f172a', color: '#fff' }}>
-                  <Td sticky left={0} bg="#0f172a" color="#fff" bold align="center">TOTALE</Td>
-                  <Td sticky left={DATE_W} bg="#0f172a" color="#cbd5e1" align="center">{items.length}gg</Td>
+                  <Td testId="closure-total-label" sticky left={0} bg="#0f172a" color="#fff" bold align="center">TOTALE</Td>
+                  <Td testId="closure-total-days" sticky left={DATE_W} bg="#0f172a" color="#cbd5e1" align="center" />
 
                   {CASH_EUR_FIELDS.map(f => (
-                    <Td key={f.key} bg="#0f172a" color="#fff" mono bold>{fmtEur(totals.cash[f.key])}</Td>
-                  ))}
-
-                  {SPICCI_FIELDS.map(f => (
-                    <Td key={f.key} bg="#0f172a" color="#fff" mono bold align="center">
-                      {fmtSpicciCount(totals.spicci[f.key])}
+                    <Td key={f.key} testId={`closure-total-cash-${f.key}`} bg="#0f172a" color="#fff" mono bold>
+                      {TOTAL_CASH_FIELDS.has(f.key) ? fmtEur(totals.cash[f.key]) : ''}
                     </Td>
                   ))}
 
-                  <Td bg="#0f172a" color="#a7f3d0" mono bold align="center">{totals.paste_count}</Td>
+                  {SPICCI_FIELDS.map(f => (
+                    <Td key={f.key} testId={`closure-total-spicci-${f.key}`} bg="#0f172a" color="#fff" mono bold align="center" />
+                  ))}
 
-                  <Td bg="#0f172a" color="#facc15" mono bold>{fmtEur(totals.cash_sera)}</Td>
+                  <Td testId="closure-total-paste" bg="#0f172a" color="#a7f3d0" mono bold align="center" />
+
+                  <Td testId="closure-total-cash-sera" bg="#0f172a" color="#facc15" mono bold />
 
                   {BEV_GROUPS.map(g => (
                     bevSigle.map((sigla, si) => (
-                      <Td key={`${g.key}-${sigla}`} bg="#0f172a"
+                      <Td key={`${g.key}-${sigla}`} testId={`closure-total-bev-${g.key}-${sigla}`} bg="#0f172a"
                           color={g.key === 'qty' ? '#fde68a' : '#fff'} mono align="center"
                           bold={g.key === 'qty'}
                           isGroupEnd={si === bevSigle.length - 1}>
-                        {fmtInt(totals.bev[g.key][sigla])}
+                        {TOTAL_BEV_GROUPS.has(g.key) ? fmtInt(totals.bev[g.key][sigla]) : ''}
                       </Td>
                     ))
                   ))}

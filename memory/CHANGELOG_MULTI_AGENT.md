@@ -178,6 +178,15 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-08-05 14:01 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: UX | Storico chiusure | totali | test
+**File toccati**:
+- `/app/frontend/src/pages/{ChiusureExcelPage,ChiusureExcelPage.test}.js`
+- `/app/frontend/public/version.json`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: La barra nera `TOTALE` dello Storico chiusure mostra ora valori esclusivamente sotto `Arr.`, `Altro` e le colonne bevande `SCARTI`. Le celle di giorni, altri movimenti finanziari, spicci, paste, cash sera, ingressi/uscite, magazzino sera e vendite restano presenti ma vuote, preservando perfettamente l'allineamento della griglia e senza cambiare righe o dati giornalieri.
+**Testato**: si (metodo: test frontend dedicato `8 passed`, compresa verifica dei tre gruppi valorizzati e di tutte le celle da lasciare vuote; build React produzione riuscita con soli warning Hook preesistenti; `git diff --check`).
+
 ### [2026-08-05 13:01 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: feature | Report storico | magazzino | UX | test
 **File toccati**:

@@ -76,6 +76,7 @@ describe('ChiusureExcelPage restaurant selection', () => {
               date: '2026-07-27',
               cash: {
                 arr: 12,
+                altro: 7,
                 pos: 6299,
                 vers: 80,
                 ft: 780,
@@ -249,6 +250,42 @@ describe('ChiusureExcelPage restaurant selection', () => {
     });
     expect(container.querySelector('[data-testid="closure-cell-detail-expression"]').textContent)
       .toBe('1+1');
+  });
+
+  test('nella barra Totale mostra soltanto Arr, Altro e Scarti', async () => {
+    await renderPage();
+
+    expect(container.querySelector('[data-testid="closure-total-label"]').textContent)
+      .toBe('TOTALE');
+    expect(container.querySelector('[data-testid="closure-total-cash-arr"]').textContent)
+      .toBe('12,00');
+    expect(container.querySelector('[data-testid="closure-total-cash-altro"]').textContent)
+      .toBe('7,00');
+    expect(container.querySelector('[data-testid="closure-total-bev-scarti-AL"]').textContent)
+      .toBe('1');
+
+    [
+      'closure-total-days',
+      'closure-total-cash-vers',
+      'closure-total-cash-glo',
+      'closure-total-cash-just',
+      'closure-total-cash-delv',
+      'closure-total-cash-bp',
+      'closure-total-cash-sat',
+      'closure-total-cash-pos',
+      'closure-total-cash-ft',
+      'closure-total-spicci-sp5',
+      'closure-total-spicci-sp2',
+      'closure-total-spicci-sp1',
+      'closure-total-spicci-sp05',
+      'closure-total-paste',
+      'closure-total-cash-sera',
+      'closure-total-bev-inUsc-AL',
+      'closure-total-bev-sera-AL',
+      'closure-total-bev-qty-AL',
+    ].forEach(testId => {
+      expect(container.querySelector(`[data-testid="${testId}"]`).textContent).toBe('');
+    });
   });
 
   test('interpreta anche Vers interamente nero, rosso e il colore rosso storico', () => {

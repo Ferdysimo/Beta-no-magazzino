@@ -231,6 +231,9 @@ Il gruppo `Spicci` mostra direttamente quattro colonne separate per i rotolini
 aperti da `5 €`, `2 €`, `1 €` e `0,50 €`. Ogni valore resta ispezionabile per
 formula e commento, ma non serve piu aprire il dettaglio per conoscere il
 taglio utilizzato.
+La barra nera `TOTALE` in fondo alla griglia mantiene l'allineamento di tutte le
+colonne, ma mostra valori aggregati soltanto per `Arr.`, `Altro` e per le
+colonne del gruppo `SCARTI`; tutte le altre celle del totale restano vuote.
 
 Nella stessa griglia, lo sfondo della cella `Arr.` e verde chiaro quando il
 valore e compreso nell'intervallo inclusivo da `-5` a `+5`; per qualunque valore
