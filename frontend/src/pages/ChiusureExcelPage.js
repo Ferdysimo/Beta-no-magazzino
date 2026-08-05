@@ -37,12 +37,12 @@ const CASH_EUR_FIELDS = [
   { key: 'pos',     label: 'POS',   hint: 'Cassa POS' },
   { key: 'ft',      label: 'FT',    hint: 'Fatture' },
 ];
-// Spicci: 2 colonne compatte
-// - "Iniziali": numero di mazzette presenti in cassa all'inizio della giornata (NON ancora tracciato dal backend → mostriamo '—')
-// - "Aperti":   somma totale delle mazzette aperte durante la giornata (sp5+sp2+sp1+sp05)
+// Rotolini aperti visibili per taglio.
 const SPICCI_FIELDS = [
-  { key: 'sp_init',  label: 'Iniziali' },
-  { key: 'sp_open',  label: 'Aperti'   },
+  { key: 'sp5', label: '5 €' },
+  { key: 'sp2', label: '2 €' },
+  { key: 'sp1', label: '1 €' },
+  { key: 'sp05', label: '0,50 €' },
 ];
 const SPICCI_OPEN_SOURCES = [
   { key: 'sp5', label: '5€' },
@@ -63,15 +63,6 @@ const fmtSpicciCount = (value) => {
     : numeric.toLocaleString('it-IT', { maximumFractionDigits: 2 });
 };
 
-export const spicciOpenedBreakdown = (cash = {}) => {
-  const parts = SPICCI_OPEN_SOURCES
-    .map(({ key, label }) => ({ label, count: Number(cash?.[key]) || 0 }))
-    .filter(({ count }) => count !== 0);
-  return {
-    total: parts.reduce((sum, { count }) => sum + count, 0),
-    text: parts.map(({ label, count }) => `${label}×${fmtSpicciCount(count)}`).join(' · '),
-  };
-};
 const fmtDateIT = (s) => {
   if (!s) return '';
   try { const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; } catch (e) { return s; }
@@ -333,7 +324,6 @@ const ChiusureExcelPage = () => {
     });
     CASH_EUR_FIELDS.forEach(f => { t.cash[f.key] = 0; });
     SPICCI_FIELDS.forEach(f => { t.spicci[f.key] = 0; });
-    SPICCI_OPEN_SOURCES.forEach(({ key }) => { t.spicci[key] = 0; });
 
     items.forEach(r => {
       bevSigle.forEach(sigla => {
@@ -344,13 +334,10 @@ const ChiusureExcelPage = () => {
       });
       t.paste_count += Number(r.paste_count || 0);
       CASH_EUR_FIELDS.forEach(f => { t.cash[f.key] += Number(r.cash?.[f.key] || 0); });
-      // SPICCI: 2 colonne aggregate
-      // sp_init: 0 (placeholder finché non tracciato dal backend)
-      // sp_open: somma di sp5+sp2+sp1+sp05 del giorno
+      // Rotolini aperti, conteggiati separatamente per taglio.
       SPICCI_OPEN_SOURCES.forEach(({ key }) => {
         const count = Number(r.cash?.[key]) || 0;
         t.spicci[key] += count;
-        t.spicci.sp_open += count;
       });
       t.cash_sera += Number(r.cash_sera || 0);
     });
@@ -364,7 +351,6 @@ const ChiusureExcelPage = () => {
   const PASTE_W = 50;
   const EUR_W = 64;       // colonne €
   const SPICCI_W = 46;
-  const SPICCI_OPEN_W = 118;
   const SERA_W = 76;
 
   return (
@@ -462,7 +448,7 @@ const ChiusureExcelPage = () => {
                     MOVIMENTAZIONE FINANZIARIA
                   </Th>
                   <Th sticky top={0} colSpan={SPICCI_FIELDS.length} bg="#fde68a" color="#111827"
-                      title="Spicci: iniziali (a inizio giornata) + aperti (durante la giornata)">
+                      title="Rotolini aperti durante la giornata, separati per taglio">
                     SPICCI
                   </Th>
                   <Th sticky top={0} bg="#facc15" color="#111827" title="Numero totale di paste mandate quel giorno">
@@ -505,7 +491,7 @@ const ChiusureExcelPage = () => {
                       top={28}
                       bg="#fde68a"
                       color="#111827"
-                      width={f.key === 'sp_open' ? SPICCI_OPEN_W : SPICCI_W}
+                      width={SPICCI_W}
                     >
                       {f.label}
                     </Th>
@@ -600,41 +586,16 @@ const ChiusureExcelPage = () => {
                       })}
 
                       {SPICCI_FIELDS.map(f => {
-                        // sp_init: iniziali — non ancora tracciato dal backend, placeholder
-                        // sp_open: aperti durante la giornata = sp5+sp2+sp1+sp05 (somma mazzette)
-                        let val;
-                        let detail = null;
-                        if (f.key === 'sp_init') {
-                          val = '—';
-                        } else {
-                          const breakdown = spicciOpenedBreakdown(r.cash);
-                          val = breakdown.total === 0 ? '' : fmtSpicciCount(breakdown.total);
-                          const expression = SPICCI_OPEN_SOURCES
-                            .map(({ key, label }) => {
-                              const raw = reportExpressionText(r.cash_raw?.[key]);
-                              return raw ? `${label}: ${raw}` : '';
-                            })
-                            .filter(Boolean)
-                            .join('\n');
-                          const comment = SPICCI_OPEN_SOURCES
-                            .map(({ key, label }) => {
-                              const text = String(r.cash_comments?.[key] || '').trim();
-                              return text ? `${label}: ${text}` : '';
-                            })
-                            .filter(Boolean)
-                            .join('\n');
-                          detail = {
-                            date: r.date,
-                            label: f.label,
-                            title: 'Rotolini aperti',
-                            result: breakdown.text
-                              ? `${val} rotolini · ${breakdown.text}`
-                              : '0 rotolini',
-                            expression,
-                            comment,
-                            breakdown: breakdown.text,
-                          };
-                        }
+                        const comment = String(r.cash_comments?.[f.key] || '').trim();
+                        const val = fmtSpicciCount(r.cash?.[f.key]);
+                        const detail = {
+                          date: r.date,
+                          label: f.label,
+                          title: 'Rotolini aperti',
+                          result: val || '0',
+                          expression: reportExpressionText(r.cash_raw?.[f.key]),
+                          comment,
+                        };
                         return (
                           <Td
                             key={f.key}
@@ -645,19 +606,7 @@ const ChiusureExcelPage = () => {
                             title={detail ? 'Doppio clic per vedere operazioni e commenti' : undefined}
                             {...(detail ? detailCellProps(detail) : {})}
                           >
-                            {f.key === 'sp_open' && detail ? (
-                              <span className="flex flex-col items-center leading-tight">
-                                <strong>{val}</strong>
-                                {detail.breakdown && (
-                                  <span
-                                    data-testid={`closure-${r.date}-spicci-breakdown`}
-                                    className="mt-0.5 text-[10px] font-semibold text-gray-600"
-                                  >
-                                    {detail.breakdown}
-                                  </span>
-                                )}
-                              </span>
-                            ) : val}
+                            {val}
                             {detail?.comment && (
                               <span
                                 aria-hidden="true"
@@ -731,16 +680,7 @@ const ChiusureExcelPage = () => {
 
                   {SPICCI_FIELDS.map(f => (
                     <Td key={f.key} bg="#0f172a" color="#fff" mono bold align="center">
-                      {f.key === 'sp_init' ? '—' : (
-                        <span className="flex flex-col items-center leading-tight">
-                          <strong>{totals.spicci.sp_open || ''}</strong>
-                          {spicciOpenedBreakdown(totals.spicci).text && (
-                            <span className="mt-0.5 text-[10px] font-semibold text-gray-300">
-                              {spicciOpenedBreakdown(totals.spicci).text}
-                            </span>
-                          )}
-                        </span>
-                      )}
+                      {fmtSpicciCount(totals.spicci[f.key])}
                     </Td>
                   ))}
 

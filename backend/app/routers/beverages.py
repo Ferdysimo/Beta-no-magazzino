@@ -552,6 +552,20 @@ async def analisi_magazzino(
     ]).to_list(5000)
     incoming_map = {r["_id"]: int(r["total"]) for r in incoming_agg}
 
+    # New warehouse waste is stored in the stock ledger with a negative delta.
+    waste_agg = await db.stock_movements.aggregate([
+        {"$match": {
+            "cause": "scarto_admin",
+            "delta": {"$lt": 0},
+            "timestamp": {"$gte": from_iso, "$lt": to_iso_excl},
+        }},
+        {"$group": {
+            "_id": "$product_id",
+            "total": {"$sum": {"$multiply": ["$delta", -1]}},
+        }},
+    ]).to_list(5000)
+    waste_map = {r["_id"]: int(r["total"]) for r in waste_agg}
+
     # Outgoing: from richieste — attribuite al giorno di CREAZIONE della
     # richiesta (non più al giorno di evasione). Una richiesta entra nel
     # report solo dopo che è passata 1 ora dalla sua creazione (grace
@@ -585,7 +599,7 @@ async def analisi_magazzino(
         outgoing_map.setdefault(pid, {})[loc] = int(r["total"])
 
     # Union of product_ids with activity
-    active_ids = set(incoming_map.keys()) | set(outgoing_map.keys())
+    active_ids = set(incoming_map.keys()) | set(outgoing_map.keys()) | set(waste_map.keys())
 
     # Fetch ALL products (with or without activity in this range).
     # NB: il frontend mostra tutto, righe senza movimenti = totali a zero.
@@ -610,6 +624,7 @@ async def analisi_magazzino(
             "incoming": incoming_map.get(pid, 0),
             "outgoing": {loc: out.get(loc, 0) for loc in locations},
             "outgoing_total": sum(out.values()),
+            "waste": waste_map.get(pid, 0),
             "has_activity": pid in active_ids,
         })
 

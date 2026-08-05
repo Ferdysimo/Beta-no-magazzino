@@ -642,10 +642,8 @@ def test_analysis_locale_sheet_matches_reference_structure_and_style():
     assert ws.cell(8, price_group_start).fill.fgColor.rgb == "FFF4F5C1"
     assert ws.cell(8, price_group_start).number_format == "0"
 
-    spicci_open_col = row7.index("Spicci aperti / portati") + 1
     cash_sera_col = row7.index("Cash in cassa sera") + 1
-    assert ws.cell(8, spicci_open_col).value == 22.5
-    assert ws.cell(8, spicci_open_col).number_format == "0.##"
+    assert "Spicci aperti / portati" not in row7
     assert ws.cell(8, cash_sera_col).fill.fgColor.rgb == "FFF4F5C1"
     assert ws["B7"].font.name == "Calibri"
     assert ws["B8"].font.color.rgb == "FF000000"
@@ -777,7 +775,6 @@ def test_analysis_locale_sheet_preserves_report_formulas_and_comments():
     bp_cell = ws.cell(8, headers.index("Buoni Pasto") + 1)
     sp2_cell = ws.cell(8, ft_col + 3)
     spicci_total_cell = ws.cell(8, headers.index("Valori tubetti") + 1)
-    spicci_open_cell = ws.cell(8, headers.index("Spicci aperti / portati") + 1)
     cash_sera_cell = ws.cell(8, headers.index("Cash in cassa sera") + 1)
     scarichi_cell = ws.cell(8, groups.index("SCARICHI") + 1)
     scarti_cell = ws.cell(8, groups.index("Altri utilizzi / scarti") + 1)
@@ -801,9 +798,7 @@ def test_analysis_locale_sheet_preserves_report_formulas_and_comments():
     assert 'N("Due rotolini aperti")' in sp2_cell.value
     assert note_prompt(ws, sp2_cell) == "Due rotolini aperti"
     assert spicci_total_cell.value.startswith("=")
-    assert spicci_open_cell.value.startswith("=(20+5)*1")
-    assert "Conteggio cassetto verificato" in spicci_open_cell.value
-    assert "Conteggio cassetto verificato" in note_prompt(ws, spicci_open_cell)
+    assert "Spicci aperti / portati" not in headers
     assert cash_sera_cell.value.startswith("=")
     assert scarichi_cell.value.startswith("=3+1")
     assert note_prompt(ws, scarichi_cell) == "Consegna extra"

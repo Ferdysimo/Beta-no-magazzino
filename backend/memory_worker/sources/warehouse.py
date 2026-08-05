@@ -18,6 +18,7 @@ MOVEMENT_MEANINGS = {
     "carico_cancellato": "annullamento_carico",
     "evasione": "evaso_al_locale",
     "forzatura_admin": "rettifica_amministrativa",
+    "scarto_admin": "scarto_magazzino",
 }
 
 
@@ -242,10 +243,11 @@ def _normalize_stock_movement(
             "role": str(document.get("user_role") or "").strip(),
         },
         "note": str(document.get("note") or ""),
+        "waste_reason": str(document.get("reason") or ""),
         "quality": {
             "timestamp_source": timestamp_source,
             "authoritative_stock_ledger": True,
-            "is_real_consumption": False,
+            "is_real_consumption": cause == "scarto_admin",
             "logistic_consumption_proxy_eligible": cause == "evasione",
         },
     }

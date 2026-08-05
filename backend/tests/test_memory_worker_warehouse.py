@@ -73,6 +73,32 @@ def test_stock_movement_reconstructs_before_delta_after_and_semantics():
     assert fact["quality"]["logistic_consumption_proxy_eligible"] is True
 
 
+def test_warehouse_waste_is_real_consumption_with_reason():
+    _, _, fact = normalize_warehouse_record(
+        {
+            "id": "waste-1",
+            "product_id": "product-1",
+            "product_name": "Pomodori",
+            "delta": -2,
+            "balance_after": 10,
+            "cause": "scarto_admin",
+            "ref_type": "scarto",
+            "ref_id": "waste-1",
+            "reason": "Confezione rotta",
+            "note": "Confezione rotta",
+            "timestamp": "2026-08-05T08:00:00+00:00",
+        },
+        _stream("warehouse_stock_movements"),
+        captured_at=CAPTURED,
+        activation_epoch=ACTIVATION,
+    )
+
+    assert fact["movement_meaning"] == "scarto_magazzino"
+    assert fact["waste_reason"] == "Confezione rotta"
+    assert fact["quality"]["is_real_consumption"] is True
+    assert fact["quality"]["logistic_consumption_proxy_eligible"] is False
+
+
 def test_request_tracks_lifecycle_without_calling_it_real_consumption():
     _, _, fact = normalize_warehouse_record(
         {

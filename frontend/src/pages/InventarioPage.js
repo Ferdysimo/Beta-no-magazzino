@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
-import { Search, Check, X, Pencil, History } from 'lucide-react';
+import { Search, Check, X, Pencil, History, Trash2 } from 'lucide-react';
 import { compareProductsByCanonicalOrder } from '../utils/productOrder';
 import ZoomableImage from '../components/ZoomableImage';
 
@@ -26,6 +26,13 @@ const InventarioPage = () => {
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [savingId, setSavingId] = useState(null);
+  const [wasteOpen, setWasteOpen] = useState(false);
+  const [wasteProductId, setWasteProductId] = useState('');
+  const [wasteQuantity, setWasteQuantity] = useState('');
+  const [wasteReason, setWasteReason] = useState('');
+  const [wasteSaving, setWasteSaving] = useState(false);
+  const [wasteError, setWasteError] = useState('');
+  const [notice, setNotice] = useState('');
 
   const isAdmin = restaurant?.role === 'admin';
 
@@ -71,6 +78,52 @@ const InventarioPage = () => {
     () => filtered.reduce((s, p) => s + (Number(p.quantity) || 0), 0),
     [filtered]
   );
+  const selectedWasteProduct = products.find(p => p.id === wasteProductId);
+
+  const openWaste = () => {
+    const firstProduct = [...products].sort(compareProductsByCanonicalOrder)[0];
+    setWasteProductId(firstProduct?.id || '');
+    setWasteQuantity('');
+    setWasteReason('');
+    setWasteError('');
+    setWasteOpen(true);
+  };
+
+  const closeWaste = () => {
+    if (wasteSaving) return;
+    setWasteOpen(false);
+    setWasteError('');
+  };
+
+  const saveWaste = async (event) => {
+    event.preventDefault();
+    const quantity = Number(wasteQuantity);
+    const reason = wasteReason.trim();
+    if (!wasteProductId || !Number.isInteger(quantity) || quantity < 1 || reason.length < 2) {
+      setWasteError('Seleziona un prodotto, una quantità valida e inserisci il motivo.');
+      return;
+    }
+    setWasteSaving(true);
+    setWasteError('');
+    try {
+      const res = await axios.post(
+        `${API}/products/${wasteProductId}/waste`,
+        { quantity, reason },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setProducts(list => list.map(product => (
+        product.id === wasteProductId
+          ? { ...product, quantity: res.data.balance_after }
+          : product
+      )));
+      setNotice(`${res.data.product_name}: registrato scarto di ${quantity}.`);
+      setWasteOpen(false);
+    } catch (err) {
+      setWasteError(err.response?.data?.detail || 'Errore durante la registrazione dello scarto');
+    } finally {
+      setWasteSaving(false);
+    }
+  };
 
   const startEdit = (p) => {
     setEditingId(p.id);
@@ -106,17 +159,37 @@ const InventarioPage = () => {
     <div className="min-h-screen bg-[#F5F5F5]">
       <Header />
       <main className="max-w-5xl mx-auto p-4 sm:p-6">
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center justify-between gap-3 mb-5">
           <h1 className="font-heading text-2xl sm:text-3xl font-bold text-gray-900 uppercase tracking-wide">
             Inventario / Forza il sistema
           </h1>
-          <button
-            onClick={() => navigate('/magazzino')}
-            className="text-sm text-gray-600 hover:text-gray-900 underline"
-          >
-            ← Torna al magazzino
-          </button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button
+                type="button"
+                data-testid="open-waste-dialog"
+                onClick={openWaste}
+                disabled={products.length === 0}
+                className="inline-flex items-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded disabled:opacity-50"
+              >
+                <Trash2 size={16} aria-hidden="true" />
+                Scarti
+              </button>
+            )}
+            <button
+              onClick={() => navigate('/magazzino')}
+              className="text-sm text-gray-600 hover:text-gray-900 underline"
+            >
+              ← Torna al magazzino
+            </button>
+          </div>
         </div>
+
+        {notice && (
+          <div className="mb-4 border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 rounded">
+            {notice}
+          </div>
+        )}
 
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
@@ -257,6 +330,110 @@ const InventarioPage = () => {
             : 'Sola visualizzazione — la modifica delle quantità è riservata all\'Admin.'}
         </p>
       </main>
+
+      {wasteOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) closeWaste();
+          }}
+        >
+          <form
+            data-testid="waste-dialog"
+            onSubmit={saveWaste}
+            className="w-full max-w-md bg-white border border-gray-300 rounded-lg shadow-xl"
+          >
+            <header className="flex items-center justify-between gap-4 px-4 py-3 border-b border-gray-200">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Registra scarto</h2>
+                <p className="text-xs text-gray-500">La quantità verrà sottratta dal magazzino.</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeWaste}
+                className="w-8 h-8 inline-flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded"
+                aria-label="Chiudi"
+              >
+                <X size={18} />
+              </button>
+            </header>
+
+            <div className="p-4 space-y-4">
+              <label className="block">
+                <span className="block mb-1 text-xs font-bold uppercase text-gray-600">Prodotto</span>
+                <select
+                  data-testid="waste-product"
+                  value={wasteProductId}
+                  onChange={event => {
+                    setWasteProductId(event.target.value);
+                    setWasteError('');
+                  }}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded bg-white text-sm"
+                >
+                  {[...products].sort(compareProductsByCanonicalOrder).map(product => (
+                    <option
+                      key={product.id}
+                      value={product.id}
+                      label={`${product.name} (${product.quantity ?? 0} disponibili)`}
+                    />
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="block mb-1 text-xs font-bold uppercase text-gray-600">Quantità</span>
+                <input
+                  data-testid="waste-quantity"
+                  type="number"
+                  min="1"
+                  max={selectedWasteProduct?.quantity ?? undefined}
+                  step="1"
+                  value={wasteQuantity}
+                  onChange={event => setWasteQuantity(event.target.value.replace(/[^0-9]/g, ''))}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded text-sm"
+                  autoFocus
+                />
+              </label>
+
+              <label className="block">
+                <span className="block mb-1 text-xs font-bold uppercase text-gray-600">Motivo</span>
+                <textarea
+                  data-testid="waste-reason"
+                  value={wasteReason}
+                  onChange={event => setWasteReason(event.target.value)}
+                  maxLength={300}
+                  rows={3}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded text-sm resize-y"
+                />
+              </label>
+
+              {wasteError && (
+                <div data-testid="waste-error" className="text-sm text-red-700 bg-red-50 border border-red-200 px-3 py-2 rounded">
+                  {wasteError}
+                </div>
+              )}
+            </div>
+
+            <footer className="flex justify-end gap-2 px-4 py-3 border-t border-gray-200 bg-gray-50">
+              <button
+                type="button"
+                onClick={closeWaste}
+                className="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-300 bg-white rounded hover:bg-gray-100"
+              >
+                Annulla
+              </button>
+              <button
+                type="submit"
+                data-testid="save-waste"
+                disabled={wasteSaving}
+                className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded disabled:opacity-50"
+              >
+                {wasteSaving ? 'Registrazione...' : 'Registra scarto'}
+              </button>
+            </footer>
+          </form>
+        </div>
+      )}
     </div>
   );
 };

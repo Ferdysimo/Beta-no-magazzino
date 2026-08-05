@@ -132,10 +132,11 @@ const AnalisiPage = () => {
 
   // Column totals
   const totals = useMemo(() => {
-    const t = { incoming: 0, outgoing: {} };
+    const t = { incoming: 0, outgoing: {}, waste: 0 };
     locations.forEach(l => { t.outgoing[l] = 0; });
     products.forEach(p => {
       t.incoming += p.incoming || 0;
+      t.waste += p.waste || 0;
       locations.forEach(l => { t.outgoing[l] += (p.outgoing?.[l] || 0); });
     });
     return t;
@@ -218,13 +219,16 @@ const AnalisiPage = () => {
                     Trasporti a {loc}
                   </th>
                 ))}
+                <th className="px-3 py-3 font-bold text-gray-700 uppercase text-xs tracking-wide text-center">
+                  Scarti
+                </th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={3 + locations.length} className="p-8 text-center text-gray-400">Caricamento dati...</td></tr>
+                <tr><td colSpan={4 + locations.length} className="p-8 text-center text-gray-400">Caricamento dati...</td></tr>
               ) : products.length === 0 ? (
-                <tr><td colSpan={3 + locations.length} className="p-8 text-center text-gray-400 text-sm">
+                <tr><td colSpan={4 + locations.length} className="p-8 text-center text-gray-400 text-sm">
                   Nessun movimento di magazzino nel periodo selezionato.
                 </td></tr>
               ) : (
@@ -262,6 +266,11 @@ const AnalisiPage = () => {
                           </td>
                         );
                       })}
+                      <td className="px-3 py-3 text-center">
+                        <span className={`inline-block min-w-[52px] px-2 py-1 rounded font-bold ${p.waste > 0 ? 'bg-red-50 text-red-700 border border-red-100' : 'text-gray-400'}`}>
+                          {p.waste || 0}
+                        </span>
+                      </td>
                     </tr>
                   ))}
                   {/* Totals row */}
@@ -271,6 +280,7 @@ const AnalisiPage = () => {
                     {locations.map(loc => (
                       <td key={loc} className="px-3 py-3 text-center">{totals.outgoing[loc] || 0}</td>
                     ))}
+                    <td className="px-3 py-3 text-center text-red-700">{totals.waste || 0}</td>
                   </tr>
                 </>
               )}
@@ -280,7 +290,8 @@ const AnalisiPage = () => {
 
         <p className="mt-4 text-xs text-gray-400">
           • Quantità entrate = somma dai carichi effettuati nel periodo<br />
-          • Trasporti a [locale] = somma delle richieste <strong>evase</strong> nel periodo (la merce è fisicamente uscita dal magazzino)
+          • Trasporti a [locale] = somma delle richieste <strong>evase</strong> nel periodo (la merce è fisicamente uscita dal magazzino)<br />
+          • Scarti = quantità registrate dall'Admin in Inventario / Forza il sistema
         </p>
       </main>
 

@@ -221,7 +221,6 @@ ANALYSIS_CASH_EXPORT_COLUMNS = [
     ("sp2", "€ 2"),
     ("sp5", "€ 5"),
     ("spicci_total", "Valori tubetti"),
-    ("spicci_open", "Spicci aperti / portati"),
     ("cash_sera", "Cash in cassa sera"),
 ]
 
@@ -236,7 +235,6 @@ ANALYSIS_CASH_HEADER_FONT_SIZES = {
     "sp2": 9,
     "sp5": 9,
     "spicci_total": 9,
-    "spicci_open": 9,
     "cash_sera": 9,
 }
 
@@ -890,7 +888,6 @@ ANALYSIS_CASH_HEADER_STYLES = {
     "sp2": ("FFEAD1DC", "FF000000"),
     "sp5": ("FFD9EAD3", "FF000000"),
     "spicci_total": ("FFFCE5CD", "FF000000"),
-    "spicci_open": ("FFE5B8B7", "FF000000"),
     "cash_sera": ("FFFFFF00", "FF000000"),
 }
 
@@ -1074,19 +1071,6 @@ def _analysis_excel_formula(
                 terms.append(f"{source_ref}*{multiplier}")
         return f"={'+'.join(terms)}" if terms else None
 
-    if field == "spicci_open":
-        terms = []
-        for source_field, multiplier in (
-            ("cd5", 5),
-            ("cd2", 2),
-            ("cd1", 1),
-            ("cd05", 0.5),
-        ):
-            expression = _excel_arithmetic_expression(cash_raw.get(source_field))
-            if expression:
-                terms.append(f"({expression})*{multiplier}")
-        return f"={'+'.join(terms)}" if terms else None
-
     if field == "cash_sera":
         plus_refs = [
             cell_ref(positions["cash"].get(source_field))
@@ -1135,12 +1119,6 @@ def _analysis_cell_comment(column: Dict, row_data: Dict) -> Optional[str]:
             ("sp2", "2 euro"),
             ("sp1", "1 euro"),
             ("sp05", "0,50 euro"),
-        ),
-        "spicci_open": (
-            ("cd5", "5 euro"),
-            ("cd2", "2 euro"),
-            ("cd1", "1 euro"),
-            ("cd05", "0,50 euro"),
         ),
     }
     entries = []
@@ -1337,7 +1315,7 @@ def _write_analysis_locale_sheet(wb: Workbook, rest_data: Dict, data: Dict, used
         )
         for col_idx in range(total_end_col + 1, len(columns) + 1):
             field = columns[col_idx - 1].get("field")
-            fill = "FF632523" if field in ("pos", "sat", "ft", "sp05", "sp1", "sp2", "sp5", "spicci_total", "spicci_open", "cash_sera") else "FF953735"
+            fill = "FF632523" if field in ("pos", "sat", "ft", "sp05", "sp1", "sp2", "sp5", "spicci_total", "cash_sera") else "FF953735"
             ws.cell(6, col_idx).fill = PatternFill("solid", fgColor=fill)
 
     money_kinds = {"paste_price", "paste_incasso", "paste_unrecognized_eur", "cash_export"}
@@ -1378,8 +1356,6 @@ def _write_analysis_locale_sheet(wb: Workbook, rest_data: Dict, data: Dict, used
                     )
                 elif field == "spicci_total":
                     value = row_data["spicci_total"]
-                elif field == "spicci_open":
-                    value = row_data.get("cassetto_total", 0)
                 elif field == "cash_sera":
                     value = row_data["cash_sera"]
                 else:
@@ -1432,7 +1408,6 @@ def _write_analysis_locale_sheet(wb: Workbook, rest_data: Dict, data: Dict, used
         "sp2": 5,
         "sp5": 5,
         "spicci_total": 8,
-        "spicci_open": 10,
         "cash_sera": 10.5,
     }
     for col_idx, col in enumerate(columns[1:], start=2):

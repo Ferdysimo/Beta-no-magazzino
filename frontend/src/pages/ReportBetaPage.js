@@ -123,6 +123,8 @@ const CASH_FIELDS = [
   { key: 'vers',    label: 'VERS',         op: 'minus', readonly: false },
 ];
 
+const DELIVERY_DETAIL_FIELDS = new Set(['glo', 'just', 'delv']);
+
 // Colore di SFONDO per ogni quadratino del Riepilogo Cassa (label resta nera).
 // BP/SAT/POS condividono lo stesso blu chiaro per essere riconosciuti come "trio".
 export const CASH_BOX_STYLE = {
@@ -1597,7 +1599,7 @@ const ReportBetaPageInner = () => {
                       <div className="flex items-center justify-center gap-1 mt-0.5 leading-none">
                         <span className="text-[9px] text-gray-500">
                           {(() => {
-                            const useCount = ['glo', 'just', 'delv'].includes(f.key);
+                            const useCount = DELIVERY_DETAIL_FIELDS.has(f.key);
                             if (useCount) {
                               // Conta gli operandi: spezzo su operatori e parentesi, scarto i pezzi vuoti
                               const t = String(rawVal || '').trim();
@@ -1614,13 +1616,13 @@ const ReportBetaPageInner = () => {
                             data-testid={`preview-toggle-${f.key}`}
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => setPreviewKey(curr => curr === f.key ? null : f.key)}
-                            title="Mostra dettaglio in basso"
-                            aria-label="Apri preview"
+                            title="Mostra tutti i valori inseriti"
+                            aria-label={`Apri dettaglio ${f.label}`}
                             className={`w-3 h-3 flex-none flex items-center justify-center rounded-full transition-colors ${
                               previewKey === f.key
                                 ? 'bg-amber-400 text-white ring-1 ring-amber-300'
                                 : 'bg-white border border-gray-400 text-gray-500 hover:bg-gray-100'
-                            }`}
+                            } ${readOnlyHistorical && DELIVERY_DETAIL_FIELDS.has(f.key) ? 'pointer-events-auto' : ''}`}
                           >
                             <svg width="7" height="7" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                               <circle cx="7" cy="7" r="4.5"/>

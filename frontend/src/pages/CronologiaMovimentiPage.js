@@ -15,6 +15,11 @@ const CAUSE_LABELS = {
   carico_cancellato: { label: 'Carico cancellato', color: 'bg-rose-50 text-rose-700 border-rose-200' },
   evasione: { label: 'Evasione richiesta', color: 'bg-blue-50 text-blue-700 border-blue-200' },
   forzatura_admin: { label: 'Forzatura Admin', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+  scarto_admin: {
+    label: 'Scarto',
+    color: 'bg-red-100 text-red-800 border-red-300',
+    rowColor: 'bg-red-50 hover:bg-red-100/80',
+  },
   stock_iniziale: { label: 'Stock iniziale', color: 'bg-gray-100 text-gray-700 border-gray-200' },
 };
 
@@ -244,7 +249,7 @@ const CronologiaMovimentiPage = () => {
                     <tr
                       key={m.id}
                       data-testid={`mov-row-${m.id}`}
-                      className="border-b border-gray-100 hover:bg-gray-50/50"
+                      className={`border-b border-gray-100 ${meta.rowColor || 'hover:bg-gray-50/50'}`}
                     >
                       <td className="px-2 sm:px-3 py-2 text-gray-700 text-[11px] sm:text-sm whitespace-nowrap">
                         {formatTs(m.timestamp)}

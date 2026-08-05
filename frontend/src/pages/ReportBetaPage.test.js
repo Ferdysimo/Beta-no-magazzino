@@ -74,7 +74,11 @@ describe('ReportBetaPage storico in sola lettura', () => {
       if (url.includes('/cash/daily')) {
         return Promise.resolve({
           data: {
-            data: {},
+            data: {
+              glo: '10+20+30',
+              just: '12+8',
+              delv: '7+3',
+            },
             paste_text: [
               '1 CARB',
               '2 PASTA STRANA',
@@ -165,6 +169,29 @@ describe('ReportBetaPage storico in sola lettura', () => {
     expect(expandedPrices).toHaveLength(2);
     expandedPrices.forEach(input => expect(input.readOnly).toBe(true));
     expect(expandedPrices[0].value).toBe('9');
+    expect(axios.put).not.toHaveBeenCalled();
+  });
+
+  test('consente al cassiere di consultare GLO, JUST e DEL tramite le lenti', async () => {
+    await renderPage();
+
+    const details = ['GLO', 'JUST', 'DEL'].map(label => (
+      container.querySelector(`[aria-label="Apri dettaglio ${label}"]`)
+    ));
+
+    details.forEach(button => {
+      expect(button).not.toBeNull();
+      expect(button.classList.contains('pointer-events-auto')).toBe(true);
+    });
+
+    act(() => {
+      details[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const preview = container.querySelector('[data-testid="preview-bar"]');
+    expect(preview.textContent).toContain('GLO');
+    expect(preview.textContent).toContain('10+20+30');
+    expect(preview.textContent).toContain('60,00');
     expect(axios.put).not.toHaveBeenCalled();
   });
 });

@@ -53,7 +53,18 @@ describe('AnalisiPage campi extra', () => {
     axios.get.mockImplementation((url) => {
       if (url.includes('/analisi/magazzino')) {
         return Promise.resolve({
-          data: { locations: ['Flaminio'], products: [] },
+          data: {
+            locations: ['Flaminio'],
+            products: [{
+              product_id: 'product-1',
+              name: 'Farina test',
+              supplier: 'Test',
+              unit: 'pz',
+              incoming: 10,
+              outgoing: { Flaminio: 4 },
+              waste: 3,
+            }],
+          },
         });
       }
       if (url.includes('/richieste/extra-notes')) {
@@ -130,5 +141,20 @@ describe('AnalisiPage campi extra', () => {
       date_from: '2026-07-01',
       date_to: '2026-07-31',
     });
+  });
+
+  test('mostra gli scarti come ultima colonna dell analisi', async () => {
+    await act(async () => {
+      root.render(<AnalisiPage />);
+    });
+    await flush();
+
+    const headers = Array.from(container.querySelectorAll('thead th'))
+      .map(cell => cell.textContent.trim());
+    const row = container.querySelector('[data-testid="analisi-row-product-1"]');
+
+    expect(headers[headers.length - 1]).toBe('Scarti');
+    expect(row.textContent).toContain('Farina test');
+    expect(row.lastElementChild.textContent.trim()).toBe('3');
   });
 });

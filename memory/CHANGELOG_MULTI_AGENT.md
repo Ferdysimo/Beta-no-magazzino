@@ -178,6 +178,30 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-08-05 13:01 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | Report storico | magazzino | UX | test
+**File toccati**:
+- `/app/frontend/src/pages/{ReportBetaPage,ReportBetaPage.test,CronologiaMovimentiPage,CronologiaMovimentiPage.test}.js`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Nei Report storici in sola lettura, i cassieri possono ora usare le lenti di `GLO`, `JUST` e `DEL` per consultare tutti i valori dell'espressione originale e il risultato, mentre input e autosalvataggi restano bloccati. La Cronologia movimenti include `Scarto` tra i filtri e rende in rosso l'intera riga `scarto_admin`, conservando motivo, autore, delta e saldo gia registrati dal ledger.
+**Testato**: si (metodo: suite frontend completa `39 passed`; test dedicati su tre lenti in sola lettura senza richieste `PUT` e su filtro/riga rossa degli scarti; build React produzione riuscita con soli warning Hook preesistenti; `git diff --check`).
+**Note per il prossimo agente**: nessuna API o autorizzazione backend e stata ampliata. La lente legge il raw gia presente nel Report del solo locale autorizzato; gli scarti erano gia restituiti dalla cronologia globale e questa modifica ne aggiunge soltanto classificazione e resa visiva.
+
+### [2026-08-05 12:52 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | magazzino | storico chiusure | Analisi | Excel | sicurezza | test
+**File toccati**:
+- `/app/backend/app/routers/{warehouse,beverages}.py`
+- `/app/backend/app/schemas/{__init__,warehouse}.py`
+- `/app/backend/app/services/analysis.py`
+- `/app/backend/memory_worker/sources/warehouse.py`
+- `/app/backend/tests/{test_warehouse_waste,test_memory_worker_warehouse,test_report_backend_totals,test_phase1_foundations_contract,test_phase3_module_contract}.py`
+- `/app/frontend/src/pages/{InventarioPage,InventarioPage.test,AnalisiPage,AnalisiPage.test,ChiusureExcelPage,ChiusureExcelPage.test}.js`
+- `/app/frontend/public/version.json`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: In `Inventario / Forza il sistema` e stato aggiunto il comando Admin `Scarti`: richiede prodotto, quantita intera e motivo, impedisce saldi negativi, decrementa la giacenza e registra nel ledger autore, causale `scarto_admin`, motivo e saldo risultante. `Analisi magazzino` mostra gli scarti come ultima colonna, aggregati per prodotto e intervallo di date; la memoria operativa li classifica come consumo reale. Nello Storico chiusure il gruppo Spicci mostra direttamente quattro colonne per i rotolini da `5 €`, `2 €`, `1 €` e `0,50 €`, conservando il dettaglio formula/commento sul singolo taglio. Dall'Excel Analisi mensile e stata eliminata soltanto la colonna `Spicci aperti / portati`.
+**Testato**: si (metodo: suite backend completa `197 passed, 36 skipped`; matrice nuova route con anonimo, locale, Magazziniere e Federico rifiutati, Admin e Simone ammessi; suite frontend completa `37 passed`; build React produzione riuscita con soli warning Hook preesistenti in file non coinvolti; prova browser e Mongo locale con `TEST - Farina` da 25 a 23, motivo `Prova locale Codex`, movimento ledger e valore `Scarti = 2` verificato in Analisi; intestazioni dei quattro tagli verificate nello Storico chiusure; `git diff --check`).
+**Note per il prossimo agente**: i tre prodotti `TEST - Farina`, `TEST - Olio` e `TEST - Pomodori` e il movimento di prova esistono soltanto nel DB locale `pastasciutta_local`; l'account Admin temporaneo usato per il collaudo e stato eliminato. In produzione non servono backfill o comandi manuali: gli scarti iniziano a essere raccolti dal deploy. Il decremento e condizionato atomicamente alla giacenza disponibile; come per il ledger magazzino esistente, stock e inserimento del movimento restano due scritture Mongo separate e condividono il limite P2 gia documentato sulla resistenza a crash fra scritture.
+
 ### [2026-08-03 16:15 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: security | auth | revoca mirata | config | docs | test
 **File toccati**:

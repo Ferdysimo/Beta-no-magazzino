@@ -2,7 +2,7 @@
 
 Stato: contratto funzionale corrente
 
-Ultimo allineamento: 30 luglio 2026
+Ultimo allineamento: 5 agosto 2026
 
 ## 1. Scopo del documento
 
@@ -215,7 +215,8 @@ Contratti:
   consultabile: si possono scorrere sia il testo incollato sia l'elenco dei
   prezzi delle righe non riconosciute, anche nella vista ingrandita, ma testo,
   prezzi e blocco degli aggiornamenti restano non modificabili e non generano
-  autosalvataggi;
+  autosalvataggi. Le lenti dei campi `GLO`, `JUST` e `DEL` restano cliccabili
+  per mostrare l'espressione originale e il risultato senza abilitare scritture;
 - le correzioni storiche autorizzate devono restare riconoscibili nell'audit.
 
 Lo Storico chiusure mantiene la griglia sintetica, ma le celle che derivano da
@@ -226,9 +227,10 @@ spicci aperti e i campi Report delle bevande; i totali puramente derivati
 restano riepiloghi. La funzione usa i valori grezzi e i commenti gia conservati
 in `cash_daily_counts` e `beverage_daily_counts`, quindi e retroattiva quando
 questi dati storici esistono e non tenta ricostruzioni quando mancano.
-La colonna `Spicci / Aperti` mostra inoltre direttamente il numero complessivo
-di rotolini e la ripartizione per taglio, per esempio `2€×2 · 1€×1`, senza
-richiedere l'apertura del dettaglio.
+Il gruppo `Spicci` mostra direttamente quattro colonne separate per i rotolini
+aperti da `5 €`, `2 €`, `1 €` e `0,50 €`. Ogni valore resta ispezionabile per
+formula e commento, ma non serve piu aprire il dettaglio per conoscere il
+taglio utilizzato.
 
 Nella stessa griglia, lo sfondo della cella `Arr.` e verde chiaro quando il
 valore e compreso nell'intervallo inclusivo da `-5` a `+5`; per qualunque valore
@@ -280,6 +282,10 @@ dell'Excel. Il workbook generato contiene:
   approvato;
 - righe di totale mensile per separare e sommare i mesi.
 
+La vecchia colonna `Spicci aperti / portati` non viene esportata: i campi
+elementari degli spicci restano invariati e continuano a partecipare ai calcoli
+previsti dal modello.
+
 Nei fogli dei locali, le celle provenienti dai campi numerici del Report
 conservano l'espressione aritmetica originale come formula Excel. Se, per
 esempio, `FT` e stato compilato con `500+300-20`, la cella mostra il risultato
@@ -323,6 +329,14 @@ Il magazzino centrale gestisce un catalogo condiviso di prodotti e fornitori.
 Catalogo e forzature di quantita sono mutazioni globali riservate ad Admin e
 Simone; il Magazziniere esegue i flussi operativi.
 
+Da `Inventario / Forza il sistema`, gli account con ruolo Admin possono inoltre
+registrare uno scarto scegliendo prodotto, quantita intera e motivo
+obbligatorio. Lo scarto decrementa atomicamente la giacenza senza permettere un
+saldo negativo e produce un movimento `scarto_admin` con autore, causale e
+saldo risultante. Locali, Magazziniere e Federico non possono eseguire questa
+operazione. `Analisi magazzino` espone gli scarti come ultima colonna e li somma
+per prodotto nel periodo selezionato.
+
 Richieste merce:
 
 ```text
@@ -362,6 +376,8 @@ Carichi:
 
 Ogni variazione di stock deve produrre un movimento nel ledger
 `stock_movements`, con prodotto, delta, saldo, causa, riferimento e autore. La
+cronologia include gli scarti nel filtro causale e li evidenzia in rosso,
+continuando a mostrare il motivo registrato dall'Admin. La
 resistenza completa a crash e retry multi-documento resta un obiettivo P2 e non
 deve essere data per garantita senza test specifici.
 

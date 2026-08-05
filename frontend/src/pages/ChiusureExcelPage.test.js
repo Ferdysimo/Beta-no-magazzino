@@ -231,24 +231,24 @@ describe('ChiusureExcelPage restaurant selection', () => {
       .toBe('Bottiglia rotta');
   });
 
-  test('mostra direttamente quanti rotolini sono stati aperti per ogni taglio', async () => {
+  test('mostra una colonna separata per ogni taglio dei rotolini aperti', async () => {
     await renderPage();
 
-    const openedCell = container.querySelector(
-      '[data-testid="closure-2026-07-27-spicci-sp_open"]',
+    const twoEuroCell = container.querySelector(
+      '[data-testid="closure-2026-07-27-spicci-sp2"]',
     );
-    const breakdown = container.querySelector(
-      '[data-testid="closure-2026-07-27-spicci-breakdown"]',
+    const oneEuroCell = container.querySelector(
+      '[data-testid="closure-2026-07-27-spicci-sp1"]',
     );
 
-    expect(openedCell.textContent).toContain('3');
-    expect(breakdown.textContent).toBe('2€×2 · 1€×1');
+    expect(twoEuroCell.textContent).toBe('2');
+    expect(oneEuroCell.textContent).toBe('1');
 
     act(() => {
-      openedCell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      twoEuroCell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
     });
     expect(container.querySelector('[data-testid="closure-cell-detail-expression"]').textContent)
-      .toBe('2€: 1+1\n1€: 1');
+      .toBe('1+1');
   });
 
   test('interpreta anche Vers interamente nero, rosso e il colore rosso storico', () => {

@@ -16,6 +16,7 @@ from app.schemas import (
     ProductCreate,
     ProductQuantityUpdate,
     ProductUpdate,
+    ProductWasteCreate,
     RichiestaCreate,
     RichiestaErrorReport,
     RichiestaReceptionConfirm,
@@ -29,6 +30,7 @@ __all__ = [
     "create_product",
     "update_product",
     "update_product_quantity",
+    "create_product_waste",
     "get_product_movements",
     "list_stock_movements",
     "delete_product",
@@ -249,6 +251,70 @@ async def update_product_quantity(product_id: str, data: ProductQuantityUpdate, 
     return {"id": product_id, "quantity": result.get("quantity", 0)}
 
 
+@router.post("/products/{product_id}/waste")
+async def create_product_waste(
+    product_id: str,
+    data: ProductWasteCreate,
+    token_data: dict = Depends(verify_token),
+):
+    """Register warehouse waste, decrementing stock. Admin only."""
+    require_admin(token_data)
+    reason = " ".join(data.reason.split())
+    if len(reason) < 2:
+        raise HTTPException(status_code=400, detail="Inserisci il motivo dello scarto")
+
+    quantity = int(data.quantity)
+    movement_id = str(uuid.uuid4())
+    timestamp = datetime.now(timezone.utc).isoformat()
+    updated = await db.products.find_one_and_update(
+        {"id": product_id, "quantity": {"$gte": quantity}},
+        {
+            "$inc": {"quantity": -quantity},
+            "$set": {"updated_at": timestamp},
+        },
+        return_document=True,
+        projection={"_id": 0, "id": 1, "name": 1, "quantity": 1},
+    )
+    if not updated:
+        product = await db.products.find_one(
+            {"id": product_id},
+            {"_id": 0, "quantity": 1},
+        )
+        if not product:
+            raise HTTPException(status_code=404, detail="Prodotto non trovato")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Quantita insufficiente: disponibili {int(product.get('quantity', 0))}",
+        )
+
+    balance_after = int(updated.get("quantity", 0))
+    await db.stock_movements.insert_one({
+        "id": movement_id,
+        "product_id": product_id,
+        "product_name": updated.get("name", ""),
+        "delta": -quantity,
+        "balance_after": balance_after,
+        "cause": "scarto_admin",
+        "ref_type": "scarto",
+        "ref_id": movement_id,
+        "user_id": token_data.get("restaurant_id", ""),
+        "user_name": token_data.get("restaurant_name", ""),
+        "user_role": token_data.get("role", ""),
+        "reason": reason,
+        "note": reason,
+        "timestamp": timestamp,
+    })
+    return {
+        "id": movement_id,
+        "product_id": product_id,
+        "product_name": updated.get("name", ""),
+        "quantity": quantity,
+        "reason": reason,
+        "balance_after": balance_after,
+        "timestamp": timestamp,
+    }
+
+
 # ==================== STOCK MOVEMENTS LEDGER - QUERY ENDPOINTS ====================
 
 @router.get("/products/{product_id}/movements")
@@ -265,7 +331,7 @@ async def get_product_movements(
     Filtri opzionali:
       - date_from / date_to (YYYY-MM-DD, inclusivi)
       - cause: carico | carico_modifica | carico_cancellato | evasione |
-               forzatura_admin | stock_iniziale
+               forzatura_admin | scarto_admin | stock_iniziale
     """
     if token_data.get("role") not in ("magazzino", "admin"):
         raise HTTPException(status_code=403, detail="Solo magazziniere/admin")
@@ -791,7 +857,8 @@ async def _apply_stock_delta(
     Returns the new balance (post-mutation) or None if product not found.
 
     `cause`:    one of "carico", "carico_modifica", "carico_cancellato",
-                       "evasione", "forzatura_admin", "stock_iniziale".
+                       "evasione", "forzatura_admin", "scarto_admin",
+                       "stock_iniziale".
     `ref_type`: "carico" | "richiesta" | "admin" | "backfill".
     `ref_id`:   id of the source document (carico_id, richiesta_id, etc).
     """

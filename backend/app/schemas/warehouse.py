@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ProductCreate(BaseModel):
@@ -21,6 +21,11 @@ class ProductUpdate(BaseModel):
 
 class ProductQuantityUpdate(BaseModel):
     quantity: int
+
+
+class ProductWasteCreate(BaseModel):
+    quantity: int = Field(ge=1)
+    reason: str = Field(min_length=2, max_length=300)
 
 
 class RichiestaItem(BaseModel):
