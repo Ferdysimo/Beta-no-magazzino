@@ -288,6 +288,16 @@ describe('ChiusureExcelPage restaurant selection', () => {
     });
   });
 
+  test('mostra Scarti prima di Ingressi / Uscite', async () => {
+    await renderPage();
+
+    const groupHeaders = Array.from(container.querySelectorAll('th'))
+      .map(header => header.textContent.trim())
+      .filter(label => ['SCARTI', 'INGRESSI / USCITE'].includes(label));
+
+    expect(groupHeaders).toEqual(['SCARTI', 'INGRESSI / USCITE']);
+  });
+
   test('interpreta anche Vers interamente nero, rosso e il colore rosso storico', () => {
     expect(parseVersDisplay('90')).toEqual({
       segments: [{ text: '90', red: false }],

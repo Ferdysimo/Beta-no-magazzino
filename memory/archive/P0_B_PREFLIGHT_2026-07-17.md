@@ -4,7 +4,7 @@ Stato: verifica completata in sola lettura. Nessuna configurazione, servizio,
 file o dato della VPS e stato modificato.
 
 Questo documento fotografa la produzione prima della finestra P0-B e integra
-`memory/P0_VPS_RUNBOOK.md`. Non contiene password, token, chiavi private o valori
+`memory/security/P0_VPS_RUNBOOK.md`. Non contiene password, token, chiavi private o valori
 del file `.env`.
 
 ## Identita del rilascio

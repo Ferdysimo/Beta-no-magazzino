@@ -778,13 +778,13 @@ Il backend operativo non importa il pacchetto e non conosce le variabili della
 Memoria. I runbook delle fondazioni sono in:
 
 ```text
-memory/MEMORY_PHASE0_RUNBOOK.md
-memory/MEMORY_PHASE1_RUNBOOK.md
-memory/MEMORY_PHASE2_RUNBOOK.md
-memory/MEMORY_PHASE3_RUNBOOK.md
-memory/MEMORY_PHASE4_RUNBOOK.md
-memory/MEMORY_PHASE5_RUNBOOK.md
-memory/MEMORY_PHASE6_RUNBOOK.md
+memory/operational-memory/MEMORY_PHASE0_RUNBOOK.md
+memory/operational-memory/MEMORY_PHASE1_RUNBOOK.md
+memory/operational-memory/MEMORY_PHASE2_RUNBOOK.md
+memory/operational-memory/MEMORY_PHASE3_RUNBOOK.md
+memory/operational-memory/MEMORY_PHASE4_RUNBOOK.md
+memory/operational-memory/MEMORY_PHASE5_RUNBOOK.md
+memory/operational-memory/MEMORY_PHASE6_RUNBOOK.md
 ```
 
 ## 22. Test obbligatori
@@ -866,7 +866,7 @@ Procedura futura:
 La procedura esecutiva, da seguire senza saltare gate o controlli, e in:
 
 ```text
-memory/MEMORY_VPS_ROLLOUT_RUNBOOK.md
+memory/operational-memory/MEMORY_VPS_ROLLOUT_RUNBOOK.md
 ```
 
 Se l'attivazione fallisce, si spegne il worker. L'app non richiede rollback.
@@ -1184,7 +1184,7 @@ Replay, modalita ombra, grafo di provenienza, tempo bitemporale, gemello digital
 previsioni, anomalie e assistente con fonti sono progettati separatamente in:
 
 ```text
-memory/OPERATIONAL_MEMORY_ADVANCED_CAPABILITIES.md
+memory/operational-memory/OPERATIONAL_MEMORY_ADVANCED_CAPABILITIES.md
 ```
 
 Il primo worker deve predisporre tempi, versioni, qualita e relazioni necessari

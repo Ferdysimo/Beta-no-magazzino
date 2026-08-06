@@ -5,7 +5,7 @@ Data: 2026-07-20
 Documento storico della fondazione inerte. Lo stato corrente della Fase 1 e in:
 
 ```text
-memory/MEMORY_PHASE1_RUNBOOK.md
+memory/operational-memory/MEMORY_PHASE1_RUNBOOK.md
 ```
 
 Stato:
@@ -29,7 +29,7 @@ database Memoria non creato
 Contratto autoritativo:
 
 ```text
-memory/OPERATIONAL_MEMORY_DESIGN.md
+memory/operational-memory/OPERATIONAL_MEMORY_DESIGN.md
 ```
 
 ## Obiettivo

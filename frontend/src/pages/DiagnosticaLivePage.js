@@ -8,15 +8,14 @@ import {
   Clock,
   Database,
   HardDrive,
-  Monitor,
   RefreshCw,
   Server,
-  Smartphone,
   Wifi,
   WifiOff,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
+import DiagnosticsDevicesView from '../components/diagnostics/DiagnosticsDevicesView';
 import { formatItalianDateTime } from '../utils/formatDate';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -56,28 +55,6 @@ const formatAgo = (iso) => {
   if (minutes < 60) return `${minutes}m fa`;
   const hours = Math.floor(minutes / 60);
   return `${hours}h fa`;
-};
-
-const formatVersion = (version) => {
-  if (!version) return '-';
-  return String(version);
-};
-
-const formatVersionDate = (version) => {
-  if (!version) return '';
-  const asNumber = Number(version);
-  if (!Number.isFinite(asNumber) || String(version).length < 10) return '';
-  try {
-    return new Date(asNumber).toLocaleString('it-IT', {
-      timeZone: 'Europe/Rome',
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return '';
-  }
 };
 
 const numberOrDash = (value) => (
@@ -153,26 +130,14 @@ const TabButton = ({ active, children, onClick }) => (
   </button>
 );
 
-const riskRank = { critical: 3, warning: 2, ok: 1, neutral: 0 };
-
-const compactPath = (path) => {
-  if (!path) return '-';
-  const clean = String(path).split('?')[0] || '/';
-  if (clean === '/') return 'Home';
-  const last = clean.split('/').filter(Boolean).pop();
-  return last ? last.replace(/-/g, ' ') : clean;
-};
-
 const DiagnosticaLivePage = () => {
-  const { token, canImpersonate } = useAuth();
+  const { token, canImpersonate, isAdmin } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [filterPath, setFilterPath] = useState('');
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
-  const [deviceLocationFilter, setDeviceLocationFilter] = useState('all');
-  const [deviceSearch, setDeviceSearch] = useState('');
   const [activeTab, setActiveTab] = useState('devices');
 
   const fetchData = async () => {
@@ -277,162 +242,11 @@ const DiagnosticaLivePage = () => {
     return visibleReasons;
   }, [data, systemHealth]);
 
-  const frontendSummary = useMemo(() => {
-    const devices = data?.frontend?.devices || [];
-    const onlineDevices = devices.filter(device => device.status === 'online');
+  const expectedFrontendVersion = useMemo(() => {
     const versions = data?.deployment?.frontend_versions || [];
-    const locations = data?.frontend?.locations || [];
     const sortedVersions = versions.slice().sort((a, b) => Number(a) - Number(b));
-    const latestVersion = sortedVersions[sortedVersions.length - 1] || '';
-    return {
-      devices,
-      onlineDevices,
-      locations,
-      online: onlineDevices.length,
-      versions,
-      latestVersion,
-      visible: onlineDevices.filter(d => d.visibility === 'visible').length,
-    };
+    return sortedVersions[sortedVersions.length - 1] || '';
   }, [data]);
-
-  const filteredDevices = useMemo(() => {
-    const search = deviceSearch.trim().toLowerCase();
-    return frontendSummary.onlineDevices.filter(device => {
-      const locationKey = device.restaurant_id || device.restaurant_location || 'unknown';
-      if (deviceLocationFilter !== 'all' && locationKey !== deviceLocationFilter) return false;
-      if (!search) return true;
-      const haystack = [
-        device.restaurant_location,
-        device.username,
-        device.path,
-        device.browser,
-        device.os,
-        device.device_type,
-        device.ip,
-        device.frontend_version,
-        device.device_id,
-      ].filter(Boolean).join(' ').toLowerCase();
-      return haystack.includes(search);
-    });
-  }, [frontendSummary.onlineDevices, deviceLocationFilter, deviceSearch]);
-
-  const deviceStats = useMemo(() => {
-    const expectedVersion = frontendSummary.latestVersion;
-    const stale = frontendSummary.onlineDevices.filter(device => (
-      expectedVersion && device.frontend_version && device.frontend_version !== expectedVersion
-    )).length;
-    const withErrors = frontendSummary.onlineDevices.filter(device => (device.recent_errors_count || 0) > 0).length;
-    return {
-      expectedVersion,
-      stale,
-      withErrors,
-    };
-  }, [frontendSummary]);
-
-  const getDeviceIssue = (device) => {
-    const isStale = deviceStats.expectedVersion && device.frontend_version && device.frontend_version !== deviceStats.expectedVersion;
-    if (isStale) {
-      return {
-        level: 'warning',
-        label: 'Build vecchia',
-        action: 'Aggiorna o riapri il browser.',
-      };
-    }
-    if ((device.recent_errors_count || 0) > 0) {
-      return {
-        level: 'warning',
-        label: 'Errori browser',
-        action: 'Aggiorna la pagina.',
-      };
-    }
-    return {
-      level: 'ok',
-      label: 'Online',
-      action: 'Nessun intervento.',
-    };
-  };
-
-  const locationOperations = useMemo(() => {
-    const expectedVersion = deviceStats.expectedVersion;
-    const byLocation = new Map();
-    frontendSummary.locations.forEach(loc => {
-      const key = loc.restaurant_id || loc.location || 'unknown';
-      byLocation.set(key, { ...loc, key, devices: [] });
-    });
-    frontendSummary.onlineDevices.forEach(device => {
-      const key = device.restaurant_id || device.restaurant_location || 'unknown';
-      const current = byLocation.get(key) || {
-        key,
-        location: device.restaurant_location || device.username || key,
-        role: 'restaurant',
-        devices: [],
-      };
-      current.devices = [...(current.devices || []), device];
-      if (!current.location) {
-        current.location = device.restaurant_location || device.username || key;
-      }
-      byLocation.set(key, current);
-    });
-
-    return Array.from(byLocation.values()).map(loc => {
-      const devices = loc.devices || [];
-      const stale = devices.filter(device => (
-        expectedVersion && device.frontend_version && device.frontend_version !== expectedVersion
-      )).length;
-      const errors = devices.reduce((sum, device) => sum + (device.recent_errors_count || 0), 0);
-      const online = devices.length;
-      const pages = Array.from(new Set(devices.map(device => compactPath(device.path)).filter(Boolean)));
-      const versions = Array.from(new Set(devices.map(device => device.frontend_version).filter(Boolean)));
-      const lastSeen = devices
-        .map(device => device.last_seen || '')
-        .filter(Boolean)
-        .sort()
-        .pop() || '';
-      let level = 'ok';
-      let action = 'Online';
-      if (stale > 0) {
-        level = 'warning';
-        action = 'Build da aggiornare';
-      } else if (errors > 0) {
-        level = 'warning';
-        action = 'Errori browser recenti';
-      }
-      return {
-        ...loc,
-        key: loc.key,
-        devices,
-        stale,
-        online,
-        total: online,
-        errors,
-        lastSeen,
-        pages,
-        versions,
-        level,
-        action,
-      };
-    }).filter(loc => loc.online > 0).sort((a, b) => (
-      (riskRank[b.level] - riskRank[a.level])
-      || (b.stale - a.stale)
-      || (b.errors - a.errors)
-      || String(a.location).localeCompare(String(b.location), 'it')
-    ));
-  }, [frontendSummary, deviceStats.expectedVersion]);
-
-  const onlineLocationIssueCount = useMemo(() => (
-    locationOperations.filter(loc => loc.level !== 'ok').length
-  ), [locationOperations]);
-
-  useEffect(() => {
-    if (deviceLocationFilter !== 'all' && !locationOperations.some(loc => loc.key === deviceLocationFilter)) {
-      setDeviceLocationFilter('all');
-    }
-  }, [locationOperations, deviceLocationFilter]);
-
-  const selectedLocation = useMemo(() => {
-    if (deviceLocationFilter === 'all') return null;
-    return locationOperations.find(loc => loc.key === deviceLocationFilter) || null;
-  }, [locationOperations, deviceLocationFilter]);
 
   if (!canImpersonate) {
     return (
@@ -531,7 +345,7 @@ const DiagnosticaLivePage = () => {
             <nav className="mb-6 bg-white border border-gray-200 rounded-lg px-2 overflow-x-auto">
               <div className="flex items-center gap-1 min-w-max">
                 <TabButton active={activeTab === 'devices'} onClick={() => setActiveTab('devices')}>
-                  Dispositivi locali
+                  Locali online
                 </TabButton>
                 <TabButton active={activeTab === 'backend'} onClick={() => setActiveTab('backend')}>
                   Backend
@@ -640,204 +454,14 @@ const DiagnosticaLivePage = () => {
             )}
 
             {activeTab === 'devices' && (
-            <section className="mb-8">
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between mb-4">
-                <div>
-                  <SectionTitle>Dispositivi locali online</SectionTitle>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <select
-                    value={deviceLocationFilter}
-                    onChange={e => setDeviceLocationFilter(e.target.value)}
-                    className="h-10 px-3 border border-gray-300 rounded-md text-sm bg-white"
-                    data-testid="diag-device-location-filter"
-                  >
-                    <option value="all">Tutti i locali online</option>
-                    {locationOperations.map(loc => (
-                      <option key={loc.key} value={loc.key}>{loc.location}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    value={deviceSearch}
-                    onChange={e => setDeviceSearch(e.target.value)}
-                    placeholder="Cerca"
-                    className="h-10 px-3 border border-gray-300 rounded-md text-sm w-full sm:w-80 xl:w-96"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
-                <MetricTile
-                  icon={CheckCircle2}
-                  label="Locali online"
-                  value={locationOperations.length}
-                  detail={`${frontendSummary.online} dispositivi attivi`}
-                  level={onlineLocationIssueCount > 0 ? 'warning' : 'ok'}
-                  testId="diag-location-issues"
-                />
-                <MetricTile
-                  icon={Activity}
-                  label="Dispositivi online"
-                  value={frontendSummary.online}
-                  detail={`${frontendSummary.visible} schede visibili`}
-                  level="ok"
-                  testId="diag-devices-online"
-                />
-                <MetricTile
-                  icon={AlertTriangle}
-                  label="Build vecchie"
-                  value={deviceStats.stale}
-                  detail={deviceStats.stale > 0 ? `Attesa ${formatVersion(deviceStats.expectedVersion)}` : 'Versione uniforme'}
-                  level={deviceStats.stale > 0 ? 'warning' : 'ok'}
-                  testId="diag-stale-builds"
-                />
-                <MetricTile
-                  icon={AlertCircle}
-                  label="Errori browser"
-                  value={deviceStats.withErrors}
-                  detail={deviceStats.withErrors > 0 ? 'Dispositivi con segnali recenti' : 'Nessun errore browser recente'}
-                  level={deviceStats.withErrors > 0 ? 'warning' : 'ok'}
-                  testId="diag-device-errors"
-                />
-              </div>
-
-              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden mb-5">
-                <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <div className="text-sm font-bold text-gray-900 uppercase">Locali online</div>
-                    <div className="text-xs text-gray-500">
-                      {selectedLocation ? selectedLocation.location : 'Tutti i locali online'}
-                    </div>
-                  </div>
-                  <HealthPill level={onlineLocationIssueCount > 0 ? 'warning' : 'ok'}>
-                    {onlineLocationIssueCount > 0 ? `${onlineLocationIssueCount} da controllare` : 'ok'}
-                  </HealthPill>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1040px] text-sm">
-                    <thead className="bg-white text-gray-600 border-b border-gray-200">
-                      <tr>
-                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px]">Locale</th>
-                        <th className="text-center px-4 py-3 font-semibold uppercase text-[11px]">Online</th>
-                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px]">Pagine aperte</th>
-                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px]">Build</th>
-                        <th className="text-center px-4 py-3 font-semibold uppercase text-[11px]">Alert</th>
-                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px]">Ultimo segnale</th>
-                        <th className="text-left px-4 py-3 font-semibold uppercase text-[11px]">Stato</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {locationOperations.length === 0 ? (
-                        <tr>
-                          <td colSpan={7} className="px-4 py-10 text-center text-gray-400">
-                            Nessun dispositivo online
-                          </td>
-                        </tr>
-                      ) : locationOperations.map(loc => {
-                        const selected = deviceLocationFilter === loc.key;
-                        return (
-                          <tr
-                            key={loc.key}
-                            className={`${selected ? 'bg-gray-900 text-white' : loc.level === 'warning' ? 'bg-amber-50' : 'bg-white'} cursor-pointer`}
-                            onClick={() => setDeviceLocationFilter(loc.key)}
-                          >
-                            <td className="px-4 py-3 align-top">
-                              <div className={`font-bold truncate ${selected ? 'text-white' : 'text-gray-950'}`}>{loc.location}</div>
-                              <div className={`text-xs mt-1 ${selected ? 'text-gray-300' : 'text-gray-500'}`}>{loc.role || 'restaurant'}</div>
-                            </td>
-                            <td className="px-4 py-3 text-center align-top font-bold">{loc.online}</td>
-                            <td className="px-4 py-3 align-top">
-                              <div className={`font-mono text-xs leading-relaxed ${selected ? 'text-gray-100' : 'text-gray-800'}`}>
-                                {loc.pages.slice(0, 4).join(', ') || '-'}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 align-top">
-                              <div className={`font-mono text-xs leading-relaxed ${selected ? 'text-gray-100' : 'text-gray-800'}`}>
-                                {loc.versions.slice(0, 3).map(formatVersion).join(', ') || '-'}
-                              </div>
-                            </td>
-                            <td className={`px-4 py-3 text-center align-top font-bold ${loc.stale + loc.errors > 0 && !selected ? 'text-amber-800' : ''}`}>
-                              {loc.stale + loc.errors}
-                            </td>
-                            <td className="px-4 py-3 align-top">
-                              <div className="font-semibold">{formatAgo(loc.lastSeen)}</div>
-                              <div className={`text-xs mt-1 ${selected ? 'text-gray-300' : 'text-gray-500'}`}>{loc.lastSeen ? formatTime(loc.lastSeen) : '-'}</div>
-                            </td>
-                            <td className="px-4 py-3 align-top">
-                              <div className={`font-semibold ${selected ? 'text-white' : loc.level === 'warning' ? 'text-amber-900' : 'text-green-700'}`}>{loc.action}</div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <div className="text-sm font-bold text-gray-900 uppercase">Dispositivi online</div>
-                    <div className="text-xs text-gray-500">
-                      {filteredDevices.length} visibili su {frontendSummary.online}
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    Locale: <span className="font-semibold text-gray-800">
-                      {deviceLocationFilter === 'all'
-                        ? 'tutti online'
-                        : (selectedLocation?.location || deviceLocationFilter)}
-                    </span>
-                  </div>
-                </div>
-                <div className="divide-y divide-gray-100">
-                  {filteredDevices.length === 0 ? (
-                    <div className="px-4 py-10 text-center text-gray-400">
-                      Nessun dispositivo online per questi filtri
-                    </div>
-                  ) : filteredDevices.map(device => {
-                    const versionDate = formatVersionDate(device.frontend_version);
-                    const issue = getDeviceIssue(device);
-                    const isStale = deviceStats.expectedVersion && device.frontend_version && device.frontend_version !== deviceStats.expectedVersion;
-                    const DeviceIcon = (device.device_type || '').toLowerCase().includes('mobile') ? Smartphone : Monitor;
-                    return (
-                      <div key={device.device_id} className={`px-4 py-3 ${issue.level === 'warning' ? 'bg-amber-50' : 'bg-white'}`}>
-                        <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)_240px_220px] gap-3">
-                          <div className="flex items-start gap-3 min-w-0">
-                            <div className={`w-9 h-9 rounded-md flex items-center justify-center shrink-0 ${issue.level === 'warning' ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-700'}`}>
-                              <DeviceIcon size={18} />
-                            </div>
-                            <div className="min-w-0">
-                              <HealthPill level={issue.level}>{issue.label}</HealthPill>
-                              <div className="text-xs text-gray-500 mt-2">{formatAgo(device.last_seen)} · {device.last_seen ? formatTime(device.last_seen) : '-'}</div>
-                            </div>
-                          </div>
-                          <div className="min-w-0">
-                            <div className="font-bold text-gray-950 truncate">{device.restaurant_location || device.username || device.device_id.slice(0, 10)}</div>
-                            <div className="text-sm text-gray-700 truncate mt-1">{device.browser || 'Browser'} / {device.os || 'OS'} · {device.viewport || device.screen || '-'}</div>
-                            <div className="text-xs text-gray-500 font-mono truncate mt-1">IP {device.ip || '-'} · ID {(device.device_id || '').slice(0, 18)}</div>
-                          </div>
-                          <div className="min-w-0">
-                            <div className="text-xs font-semibold text-gray-500 uppercase">Pagina</div>
-                            <div className="font-mono text-sm text-gray-900 truncate">{compactPath(device.path)}</div>
-                            <div className="text-xs text-gray-500 truncate mt-1">{device.visibility || '-'}</div>
-                          </div>
-                          <div className="min-w-0">
-                            <div className="text-xs font-semibold text-gray-500 uppercase">Build</div>
-                            <div className="font-mono text-sm font-bold text-gray-950 truncate">{formatVersion(device.frontend_version)}</div>
-                            {versionDate ? <div className="text-xs text-gray-500 mt-1">build {versionDate}</div> : null}
-                            {isStale ? <div className="text-xs text-amber-800 font-semibold mt-1">attesa {formatVersion(deviceStats.expectedVersion)}</div> : null}
-                            <div className={`text-sm font-semibold mt-2 ${issue.level === 'warning' ? 'text-amber-900' : 'text-green-700'}`}>{issue.action}</div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-            </section>
+              <DiagnosticsDevicesView
+                devices={data?.frontend?.devices || []}
+                recentErrors={data?.frontend?.recent_errors || []}
+                expectedVersion={expectedFrontendVersion}
+                token={token}
+                canEdit={isAdmin}
+                onRefresh={fetchData}
+              />
             )}
 
             {activeTab === 'backend' && (

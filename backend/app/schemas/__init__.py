@@ -1,6 +1,10 @@
 from .auth import LoginRequest, LoginResponse, LocalRestaurantCreate, RestaurantCreate, RestaurantResponse
 from .beverages import BeverageCaricoCreate, BeverageCaricoItem, BeverageDailyUpsert
-from .diagnostics import FrontendDiagnosticsPayload, FrontendErrorPayload
+from .diagnostics import (
+    DiagnosticDeviceRegistryUpdate,
+    FrontendDiagnosticsPayload,
+    FrontendErrorPayload,
+)
 from .documents import (
     ChiusuraCreate,
     ChiusuraPiattiUpload,
@@ -50,6 +54,7 @@ __all__ = [
     "PastaAnnotationDecision",
     "FatturaGlobaleCreate",
     "FatturaUpload",
+    "DiagnosticDeviceRegistryUpdate",
     "FrontendDiagnosticsPayload",
     "FrontendErrorPayload",
     "InvoiceCreate",

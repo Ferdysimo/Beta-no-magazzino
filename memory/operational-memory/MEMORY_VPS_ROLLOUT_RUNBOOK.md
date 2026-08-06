@@ -26,7 +26,7 @@ Prima di eseguire comandi:
 
 1. lavorare sul branch `main` aggiornato;
 2. leggere questo file, `MEMORY_PHASE6_RUNBOOK.md`,
-   `P1_SECURITY_RUNBOOK.md` Fase 3 e il changelog recente;
+   `memory/security/P1_SECURITY_RUNBOOK.md` Fase 3 e il changelog recente;
 3. verificare lo stato reale della VPS, senza assumere che coincida col
    preflight del 17 luglio;
 4. procedere un blocco alla volta e mostrare l'esito all'utente;
@@ -40,9 +40,10 @@ Prima di eseguire comandi:
 Messaggio breve da dare al Codex di casa:
 
 ```text
-Aggiorna main con pull --ff-only e leggi memory/MEMORY_VPS_ROLLOUT_RUNBOOK.md,
-memory/MEMORY_PHASE6_RUNBOOK.md, la Fase 3 di
-memory/P1_SECURITY_RUNBOOK.md e il changelog recente. Assistimi un checkpoint
+Aggiorna main con pull --ff-only e leggi
+memory/operational-memory/MEMORY_VPS_ROLLOUT_RUNBOOK.md,
+memory/operational-memory/MEMORY_PHASE6_RUNBOOK.md, la Fase 3 di
+memory/security/P1_SECURITY_RUNBOOK.md e il changelog recente. Assistimi un checkpoint
 alla volta. Non mostrare ne salvare credenziali. Non attivare la Memoria se
 Mongo SCRAM, backup, dry-run o controlli ruoli non sono superati. Non rendere
 mai il backend dipendente da pastasciutta-memory.
@@ -154,7 +155,8 @@ Procedere soltanto se:
 
 `STOP`: se SCRAM non e attivo, non impostare
 `MEMORY_ALLOW_UNVERIFIED_MONGO_ROLES=true` come scorciatoia. Eseguire prima la
-Fase 3 di `P1_SECURITY_RUNBOOK.md` in una finestra di manutenzione, verificando
+Fase 3 di `memory/security/P1_SECURITY_RUNBOOK.md` in una finestra di
+manutenzione, verificando
 backup, utente amministrativo offline, utente backend, utente backup,
 riavvio Mongo e smoke test applicativo. Tornare qui solo a P1 Fase 3 conclusa.
 

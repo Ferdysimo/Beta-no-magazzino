@@ -5,9 +5,12 @@ disconnettere Simone, Federico, Magazziniere o i locali.
 
 ## Stato
 
-- La modifica codice puo essere preparata e testata in anticipo.
-- Nessuna operazione su password, `.env` o servizi VPS va eseguita finche
-  l'utente non autorizza esplicitamente la finestra di aggiornamento.
+- Applicata in produzione il 6 agosto 2026 durante una finestra autorizzata.
+- L'account `Admin` e `ADMIN_MIN_TOKEN_VERSION` sono entrambi alla versione `6`.
+- Backup pre-rotazione root-only verificato in
+  `/var/backups/pastasciutta/admin-rotation-20260806T074401Z`.
+- I token Admin con versione precedente ricevono `401`; un token locale non e
+  coinvolto. Nuovo login Admin e `/api/auth/me` sono stati verificati con `200`.
 - La nuova password non deve comparire in Git, nei comandi salvati, nei log o
   in questo documento.
 
@@ -25,7 +28,7 @@ Il comando offline di cambio password:
 Impostando la stessa versione in `ADMIN_MIN_TOKEN_VERSION`, tutti i JWT Admin
 precedenti vengono rifiutati con `401`; gli altri account non vengono toccati.
 
-## Procedura VPS futura
+## Procedura VPS riutilizzabile
 
 Eseguire soltanto durante una finestra autorizzata e dalla directory
 `/opt/pastasciutta/backend`.

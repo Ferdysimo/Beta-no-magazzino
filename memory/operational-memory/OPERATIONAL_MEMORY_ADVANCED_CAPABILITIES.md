@@ -8,7 +8,7 @@ localmente, servizio non installato, capacita avanzate non implementate
 Documento base:
 
 ```text
-memory/OPERATIONAL_MEMORY_DESIGN.md
+memory/operational-memory/OPERATIONAL_MEMORY_DESIGN.md
 ```
 
 Questo documento definisce che cosa potra diventare la Memoria dopo che il

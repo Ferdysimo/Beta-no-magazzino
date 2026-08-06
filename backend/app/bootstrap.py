@@ -103,6 +103,14 @@ async def initialize_application():
     await db.cash_audit_log.create_index([("last_at", -1)])
     await db.cash_audit_log.create_index([("restaurant_id", 1), ("date_rome", -1), ("last_at", -1)])
     await db.cash_audit_log.create_index([("category", 1), ("field", 1), ("last_at", -1)])
+    try:
+        await db.diagnostic_device_registry.create_index(
+            [("device_id", 1)],
+            unique=True,
+            name="uniq_diagnostic_device_id",
+        )
+    except Exception as e:
+        logger.warning(f"Could not create diagnostic device registry index: {e}")
     # Laboratorio scanner: isolated from operational warehouse collections.
     # Failures here must not prevent the production application from starting.
     try:

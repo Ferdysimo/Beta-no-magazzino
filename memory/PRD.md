@@ -2,7 +2,7 @@
 
 Stato: contratto funzionale corrente
 
-Ultimo allineamento: 5 agosto 2026
+Ultimo allineamento: 6 agosto 2026
 
 ## 1. Scopo del documento
 
@@ -137,10 +137,10 @@ anonimo, locale, magazzino, Federico, Admin e Simone.
 - Gli account non vengono creati o resettati automaticamente all'avvio.
 - Gli account privilegiati si gestiscono con il comando offline
   `backend/scripts/manage_account.py`.
-- La revoca mirata dell'account `Admin` puo essere attivata in produzione
-  impostando `ADMIN_MIN_TOKEN_VERSION` alla versione stampata dal comando di
-  cambio password. La variabile vale `0` per default, quindi preparare il codice
-  non disconnette nessuno finche la soglia non viene autorizzata sulla VPS.
+- La revoca mirata dell'account `Admin` e attiva in produzione dal 6 agosto
+  2026: account e `ADMIN_MIN_TOKEN_VERSION` sono alla versione `6`. La soglia
+  non deve essere abbassata; una futura rotazione deve incrementare nuovamente
+  il `token_version` e aggiornare la variabile allo stesso valore.
 - Il logout generale e la revoca server-side completa delle sessioni restano
   un debito di sicurezza: oggi il logout ordinario rimuove soprattutto lo stato
   client e il JWT resta valido fino a scadenza, salvo revoche specifiche.
@@ -231,6 +231,8 @@ Il gruppo `Spicci` mostra direttamente quattro colonne separate per i rotolini
 aperti da `5 €`, `2 €`, `1 €` e `0,50 €`. Ogni valore resta ispezionabile per
 formula e commento, ma non serve piu aprire il dettaglio per conoscere il
 taglio utilizzato.
+Nei gruppi bevande, `SCARTI` precede visivamente `INGRESSI / USCITE`, seguito da
+`MAGAZZINO SERA` e `VENDITE`; l'ordine non modifica calcoli o dati salvati.
 La barra nera `TOTALE` in fondo alla griglia mantiene l'allineamento di tutte le
 colonne, ma mostra valori aggregati soltanto per `Arr.`, `Altro` e per le
 colonne del gruppo `SCARTI`; tutte le altre celle del totale restano vuote.
@@ -412,9 +414,23 @@ La Diagnostica live e una vista operativa, non una fonte contabile. Mostra:
 - dispositivi dei locali attualmente online;
 - WebSocket, latenze, chiamate ed errori recenti.
 
-I dispositivi offline non devono affollare la vista principale. Heartbeat,
-latenze ed errori frontend sono mantenuti prevalentemente in memoria e si
-azzerano al riavvio backend.
+I dispositivi offline non devono affollare la vista principale e non devono
+generare da soli un avviso sullo stato generale. I locali online sono mostrati
+come elenco compatto espandibile; selezionando un dispositivo si apre il
+dettaglio con attivita, versione, pagina corrente, errori, rete, batteria e dati
+tecnici disponibili. In condizioni normali la vista non mostra badge positivi:
+l'assenza di avvisi indica che non sono state rilevate anomalie.
+
+Modello preciso, batteria e stime di rete sono telemetria best-effort: vengono
+raccolti solo quando il browser li espone e la loro assenza non e un errore. La
+posizione fisica non viene raccolta. Admin e Simone possono assegnare un nome e
+un modello descrittivo persistenti al dispositivo; Federico consulta gli stessi
+dettagli in sola lettura. L'identita del locale viene risolta lato backend a
+partire dall'account autenticato.
+
+Heartbeat, latenze ed errori frontend sono mantenuti prevalentemente in memoria
+e si azzerano al riavvio backend. Solo i nomi/modelli assegnati manualmente sono
+conservati nella collezione Mongo dedicata.
 
 Il frontend controlla la versione pubblicata e puo ricaricarsi una volta quando
 rileva un bundle nuovo. Le pagine ricordano in `sessionStorage` la posizione di
@@ -573,10 +589,9 @@ La baseline P0-A lato codice comprende:
 - rate limit sul login;
 - rimozione dal runtime delle route di simulazione e dei dati di test versionati.
 
-P0-A non equivale a P0 concluso in produzione. Il rollout P0-B deve seguire
-`memory/P0_VPS_RUNBOOK.md` e comprende backup, verifica restore, migrazione
-upload, rotazione segreti, logout globale, redirect HTTPS, firewall, smoke test
-e rollback.
+P0-A e P0-B sono operativi in produzione dal 17 luglio 2026. Stato, verifiche e
+procedura di riferimento sono conservati in
+`memory/security/P0_VPS_RUNBOOK.md`.
 
 ### 8.3 Prestazioni
 
@@ -624,15 +639,16 @@ questo PRD.
 
 ## 10. Stato sicurezza e rilascio
 
-Al 17 luglio 2026:
+Al 6 agosto 2026:
 
 - il refactor backend e operativo e `server.py` resta compatibile con l'entrypoint
   esistente;
-- P0-A e implementato e testato nel codice;
-- P0-B sulla VPS non e ancora considerato completato;
-- HTTPS e attivo, ma il redirect HTTP e gli altri controlli VPS vanno verificati;
-- una release ordinaria mantiene MongoDB e upload, ma la prima release P0 non
-  deve essere trattata come un semplice `git pull + build + restart`.
+- P0-A e P0-B sono implementati e verificati in produzione;
+- HTTPS, redirect HTTP, backend su bind locale, firewall e WSS autenticato sono
+  operativi secondo il runbook P0;
+- il P1 e approvato ma il rollout ordinato delle sue fasi non e ancora iniziato;
+- la revoca mirata Admin e attiva dal 6 agosto 2026, senza rendere completa la
+  Fase 4 P1 generale.
 
 Nessuna modifica alla produzione deve essere eseguita mentre i locali lavorano
 se richiede logout globale, rotazione segreti, migrazione file o possibile
@@ -640,8 +656,8 @@ interruzione.
 
 ## 11. Limiti e debiti noti
 
-- P0-B infrastrutturale e ancora da eseguire.
-- Il logout JWT non offre ancora revoca server-side generale.
+- Il logout JWT non offre ancora una revoca server-side generale per ogni
+  account; Admin dispone della soglia mirata attiva dal 6 agosto 2026.
 - Il `PasswordGate` frontend non e un controllo di sicurezza reale.
 - Diagnostica e heartbeat non sono log persistenti.
 - Giorni storici senza snapshot del dizionario possono usare il listino corrente
@@ -661,16 +677,21 @@ implementate e lavori futuri vanno nei documenti dedicati.
 
 ## 12. Documenti collegati
 
+- `memory/INDEX.md`: mappa, ordine di lettura e stato sintetico.
 - `memory/CHANGELOG_MULTI_AGENT.md`: modifiche recenti e test eseguiti.
 - `memory/CHANGELOG_MULTI_AGENT_ARCHIVE.md`: storico meno recente.
-- `memory/SECURITY_HARDENING_PLAN.md`: piano sicurezza P0-P3.
-- `memory/P0_VPS_RUNBOOK.md`: procedura esecutiva del rollout P0-B.
-- `memory/TODO.md`: idee e funzioni future.
-- `memory/OPERATIONAL_MEMORY_DESIGN.md`: contratto e stato esecutivo della
-  Memoria operativa isolata; Fasi 0-4 implementate localmente ma non attive.
-- `memory/MEMORY_PHASE0_RUNBOOK.md` ... `MEMORY_PHASE4_RUNBOOK.md`: perimetro,
-  guardie, test e limiti delle fasi gia implementate.
-- `memory/refactor_plan_server_py.md`: piano e stato del refactor backend.
+- `memory/TODO.md`: coda sintetica dei lavori aperti.
+- `memory/plans/FEATURE_BACKLOG_DETAILS.md`: analisi estese del backlog.
+- `memory/security/P1_SECURITY_RUNBOOK.md`: piano operativo P1 approvato.
+- `memory/security/SECURITY_HARDENING_PLAN.md`: quadro sicurezza P0-P3.
+- `memory/security/P0_VPS_RUNBOOK.md`: stato e riferimento del P0 concluso.
+- `memory/operational-memory/OPERATIONAL_MEMORY_DESIGN.md`: contratto della
+  Memoria operativa isolata; Fasi 0-6 implementate localmente ma non attive.
+- `memory/operational-memory/MEMORY_PHASE0_RUNBOOK.md` ...
+  `MEMORY_PHASE6_RUNBOOK.md`: perimetro, guardie, test e limiti delle fasi.
+- `memory/operational-memory/MEMORY_VPS_ROLLOUT_RUNBOOK.md`: rollout futuro,
+  subordinato al gate MongoDB SCRAM P1.
+- `memory/archive/refactor_plan_server_py.md`: piano completato del refactor.
 - `LOCAL_DOCKER.md` e `LOCAL_NATIVE.md`: ambienti locali.
 
 ## 13. Regola di manutenzione

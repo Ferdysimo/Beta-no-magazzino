@@ -9,6 +9,52 @@ const TAB_KEY = 'pastasciutta_tab_id';
 const HEARTBEAT_MS = 30000;
 const BUNDLE_VERSION = process.env.REACT_APP_BUILD_VERSION || '';
 
+const finiteNumber = (value) => (
+  typeof value === 'number' && Number.isFinite(value) ? value : null
+);
+
+export const readConnectionTelemetry = () => {
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (!connection) {
+    return {
+      connection_type: '',
+      connection_effective_type: '',
+      connection_downlink_mbps: null,
+      connection_rtt_ms: null,
+      connection_save_data: null,
+    };
+  }
+  return {
+    connection_type: connection.type || '',
+    connection_effective_type: connection.effectiveType || '',
+    connection_downlink_mbps: finiteNumber(connection.downlink),
+    connection_rtt_ms: finiteNumber(connection.rtt),
+    connection_save_data: typeof connection.saveData === 'boolean' ? connection.saveData : null,
+  };
+};
+
+export const readBatteryTelemetry = (battery) => ({
+  battery_level: finiteNumber(battery?.level) === null
+    ? null
+    : Math.max(0, Math.min(100, Math.round(battery.level * 100))),
+  battery_charging: typeof battery?.charging === 'boolean' ? battery.charging : null,
+  battery_charging_time: finiteNumber(battery?.chargingTime),
+  battery_discharging_time: finiteNumber(battery?.dischargingTime),
+});
+
+const emptyTelemetry = () => ({
+  device_model: '',
+  platform_version: '',
+  architecture: '',
+  bitness: '',
+  browser_full_version: '',
+  battery_level: null,
+  battery_charging: null,
+  battery_charging_time: null,
+  battery_discharging_time: null,
+  ...readConnectionTelemetry(),
+});
+
 const getDeviceId = () => {
   try {
     let id = localStorage.getItem(DEVICE_KEY);
@@ -76,6 +122,11 @@ const FrontendDiagnostics = () => {
   const frontendVersionRef = useRef('');
   const deviceIdRef = useRef(getDeviceId());
   const tabIdRef = useRef(getTabId());
+  const telemetryRef = useRef(emptyTelemetry());
+  const heartbeatRttRef = useRef(null);
+  const heartbeatFailuresRef = useRef(0);
+  const lastHeartbeatFailureAtRef = useRef('');
+  const heartbeatInFlightRef = useRef(false);
 
   useEffect(() => { tokenRef.current = token; }, [token]);
   useEffect(() => { restaurantRef.current = restaurant; }, [restaurant]);
@@ -101,6 +152,10 @@ const FrontendDiagnostics = () => {
       visibility: document.visibilityState,
       restaurant_id: effective?.id || currentRestaurant?.id || '',
       restaurant_location: effective?.location || currentRestaurant?.location || currentRestaurant?.username || '',
+      ...telemetryRef.current,
+      heartbeat_rtt_ms: heartbeatRttRef.current,
+      heartbeat_failures: heartbeatFailuresRef.current,
+      last_heartbeat_failure_at: lastHeartbeatFailureAtRef.current,
     };
   };
 
@@ -129,9 +184,94 @@ const FrontendDiagnostics = () => {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    const userAgentData = navigator.userAgentData;
+    if (!userAgentData?.getHighEntropyValues) return undefined;
+    userAgentData.getHighEntropyValues([
+      'model',
+      'platformVersion',
+      'architecture',
+      'bitness',
+      'fullVersionList',
+    ]).then(values => {
+      if (cancelled) return;
+      const fullVersions = (values.fullVersionList || [])
+        .filter(item => item?.brand && !/not.?a.?brand/i.test(item.brand))
+        .map(item => `${item.brand} ${item.version}`)
+        .join(' / ');
+      telemetryRef.current = {
+        ...telemetryRef.current,
+        device_model: values.model || '',
+        platform_version: values.platformVersion || '',
+        architecture: values.architecture || '',
+        bitness: values.bitness || '',
+        browser_full_version: fullVersions,
+      };
+    }).catch(() => {
+      // High entropy hints are optional and unavailable on several browsers.
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let battery = null;
+    const syncBattery = () => {
+      if (!cancelled && battery) {
+        telemetryRef.current = { ...telemetryRef.current, ...readBatteryTelemetry(battery) };
+      }
+    };
+    if (typeof navigator.getBattery !== 'function') return undefined;
+    navigator.getBattery().then(value => {
+      if (cancelled) return;
+      battery = value;
+      syncBattery();
+      ['levelchange', 'chargingchange', 'chargingtimechange', 'dischargingtimechange']
+        .forEach(event => battery.addEventListener?.(event, syncBattery));
+    }).catch(() => {
+      // Battery telemetry is best-effort and never affects the app.
+    });
+    return () => {
+      cancelled = true;
+      if (battery) {
+        ['levelchange', 'chargingchange', 'chargingtimechange', 'dischargingtimechange']
+          .forEach(event => battery.removeEventListener?.(event, syncBattery));
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (!connection) return undefined;
+    const syncConnection = () => {
+      telemetryRef.current = { ...telemetryRef.current, ...readConnectionTelemetry() };
+    };
+    syncConnection();
+    connection.addEventListener?.('change', syncConnection);
+    return () => connection.removeEventListener?.('change', syncConnection);
+  }, []);
+
+  useEffect(() => {
     if (!token) return undefined;
 
-    const heartbeat = () => postDiagnostics('/diagnostics/frontend', buildPayload());
+    const heartbeat = async () => {
+      if (heartbeatInFlightRef.current || !tokenRef.current) return;
+      heartbeatInFlightRef.current = true;
+      const startedAt = performance.now();
+      const payload = buildPayload();
+      try {
+        await axios.post(`${API}/diagnostics/frontend`, payload, {
+          headers: { Authorization: `Bearer ${tokenRef.current}` },
+        });
+        heartbeatRttRef.current = Math.max(0, Math.round(performance.now() - startedAt));
+        heartbeatFailuresRef.current = 0;
+      } catch {
+        heartbeatFailuresRef.current += 1;
+        lastHeartbeatFailureAtRef.current = new Date().toISOString();
+      } finally {
+        heartbeatInFlightRef.current = false;
+      }
+    };
     heartbeat();
     const interval = setInterval(heartbeat, HEARTBEAT_MS);
     const onVisibility = () => heartbeat();

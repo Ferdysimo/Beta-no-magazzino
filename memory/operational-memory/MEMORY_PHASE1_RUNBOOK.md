@@ -5,7 +5,7 @@ Data: 2026-07-20
 Documento storico del collector ordini. Lo stato corrente della Fase 2 e in:
 
 ```text
-memory/MEMORY_PHASE2_RUNBOOK.md
+memory/operational-memory/MEMORY_PHASE2_RUNBOOK.md
 ```
 
 Stato:
@@ -21,7 +21,7 @@ backend e frontend operativi non dipendono dalla Memoria
 Contratto autoritativo:
 
 ```text
-memory/OPERATIONAL_MEMORY_DESIGN.md
+memory/operational-memory/OPERATIONAL_MEMORY_DESIGN.md
 ```
 
 ## Obiettivo

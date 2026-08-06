@@ -30,6 +30,7 @@ from app.core.state import RESTAURANT_LOCATION_CACHE
 from app.core.time import ROME_TZ
 from app.core.ws_manager import manager
 from app.schemas import (
+    DiagnosticDeviceRegistryUpdate,
     FrontendDiagnosticsPayload,
     FrontendErrorPayload,
     LocalRestaurantCreate,
@@ -54,6 +55,7 @@ __all__ = [
     "create_local_restaurant",
     "get_system_alerts",
     "acknowledge_system_alert",
+    "update_diagnostic_device_registry",
     "get_diagnostics",
 ]
 
@@ -81,11 +83,22 @@ def _is_restaurant_frontend_entry(entry: dict) -> bool:
     return (entry.get("role") or "").lower() == "restaurant"
 
 
+def _frontend_restaurant_identity(payload: FrontendDiagnosticsPayload, token_data: dict) -> tuple[str, str]:
+    restaurant_id = token_data.get("restaurant_id", "") or payload.restaurant_id
+    location = (
+        RESTAURANT_LOCATION_CACHE.get(restaurant_id)
+        or payload.restaurant_location
+        or token_data.get("restaurant_name", "")
+    )
+    return restaurant_id, location
+
+
 def _record_frontend_heartbeat(payload: FrontendDiagnosticsPayload, token_data: dict, request: Request) -> dict:
     now_iso = datetime.now(timezone.utc).isoformat()
     device_id = (payload.device_id or "").strip()
     if not device_id:
         raise HTTPException(status_code=400, detail="device_id required")
+    restaurant_id, restaurant_location = _frontend_restaurant_identity(payload, token_data)
     # One row per physical/browser device. `tab_id` is accepted for backward
     # compatibility, but diagnostics intentionally collapse multiple tabs into
     # the same device so the admin sees tablets, not browser sessions.
@@ -109,10 +122,27 @@ def _record_frontend_heartbeat(payload: FrontendDiagnosticsPayload, token_data: 
         "timezone": payload.timezone or "",
         "online": bool(payload.online),
         "visibility": payload.visibility or "",
-        "restaurant_id": payload.restaurant_id or token_data.get("restaurant_id", ""),
-        "restaurant_location": payload.restaurant_location or token_data.get("restaurant_name", ""),
+        "restaurant_id": restaurant_id,
+        "restaurant_location": restaurant_location,
         "username": token_data.get("username", ""),
         "role": token_data.get("role", ""),
+        "device_model": (payload.device_model or "")[:120],
+        "platform_version": (payload.platform_version or "")[:80],
+        "architecture": (payload.architecture or "")[:40],
+        "bitness": (payload.bitness or "")[:20],
+        "browser_full_version": (payload.browser_full_version or "")[:120],
+        "battery_level": payload.battery_level,
+        "battery_charging": payload.battery_charging,
+        "battery_charging_time": payload.battery_charging_time,
+        "battery_discharging_time": payload.battery_discharging_time,
+        "connection_type": (payload.connection_type or "")[:40],
+        "connection_effective_type": (payload.connection_effective_type or "")[:40],
+        "connection_downlink_mbps": payload.connection_downlink_mbps,
+        "connection_rtt_ms": payload.connection_rtt_ms,
+        "connection_save_data": payload.connection_save_data,
+        "heartbeat_rtt_ms": payload.heartbeat_rtt_ms,
+        "heartbeat_failures": max(0, int(payload.heartbeat_failures or 0)),
+        "last_heartbeat_failure_at": (payload.last_heartbeat_failure_at or "")[:80],
     }
     return frontend_device_state[device_id]
 
@@ -123,7 +153,7 @@ async def frontend_heartbeat(
     request: Request,
     token_data: dict = Depends(verify_token),
 ):
-    _record_frontend_heartbeat(payload, token_data, request)
+    device_entry = _record_frontend_heartbeat(payload, token_data, request)
     return {"ok": True}
 
 @router.post("/diagnostics/frontend/error")
@@ -147,8 +177,8 @@ async def frontend_error(
         "method": payload.method or "",
         "url": (payload.url or "")[:300],
         "path": payload.path or "",
-        "restaurant_id": payload.restaurant_id or token_data.get("restaurant_id", ""),
-        "restaurant_location": payload.restaurant_location or token_data.get("restaurant_name", ""),
+        "restaurant_id": device_entry["restaurant_id"],
+        "restaurant_location": device_entry["restaurant_location"],
         "username": token_data.get("username", ""),
         "role": token_data.get("role", ""),
         "frontend_version": payload.frontend_version or "",
@@ -522,14 +552,31 @@ async def get_diagnostics(token_data: dict = Depends(verify_token)):
         cid = err.get("client_id") or err.get("device_id")
         if cid:
             frontend_errors_by_client[cid] = frontend_errors_by_client.get(cid, 0) + 1
-    for device in frontend_device_state.values():
-        if not _is_restaurant_frontend_entry(device):
-            continue
+    restaurant_devices = [
+        device for device in frontend_device_state.values()
+        if _is_restaurant_frontend_entry(device)
+    ]
+    registry_by_device = {}
+    registry_ids = [device.get("device_id") for device in restaurant_devices if device.get("device_id")]
+    if registry_ids:
+        try:
+            registry_rows = await db.diagnostic_device_registry.find(
+                {"device_id": {"$in": registry_ids}},
+                {"_id": 0},
+            ).to_list(len(registry_ids))
+            registry_by_device = {
+                row.get("device_id"): row for row in registry_rows if row.get("device_id")
+            }
+        except Exception as exc:
+            logger.warning("Could not load diagnostic device registry: %s", exc)
+
+    for device in restaurant_devices:
         last_seen_dt = parse_diag_ts(device.get("last_seen"))
         seconds_since_seen = int((now - last_seen_dt).total_seconds()) if last_seen_dt else None
         client_id = device.get("client_id") or device.get("device_id")
         frontend_devices.append({
             **device,
+            **registry_by_device.get(device.get("device_id"), {}),
             "seconds_since_seen": seconds_since_seen,
             "status": "online" if seconds_since_seen is not None and seconds_since_seen <= 90 and device.get("online", True) else "offline",
             "recent_errors_count": frontend_errors_by_client.get(client_id, 0),
@@ -632,12 +679,6 @@ async def get_diagnostics(token_data: dict = Depends(verify_token)):
             "level": "warning",
             "title": f"{len(frontend_recent_errors)} errori frontend recenti",
             "detail": f"Ultimo: {latest.get('message')}",
-        })
-    if frontend_offline > 0:
-        health_reasons.append({
-            "level": "warning",
-            "title": f"{frontend_offline} tablet/browser offline",
-            "detail": "Almeno un dispositivo registrato non invia heartbeat da oltre 90 secondi.",
         })
     if not health_reasons:
         health_reasons.append({
@@ -753,3 +794,40 @@ async def get_diagnostics(token_data: dict = Depends(verify_token)):
         "slow_calls_count": len(slow_calls),
         "buffer_size": len(api_call_log),
     }
+
+
+@router.put("/admin/diagnostics/devices/{device_id}")
+async def update_diagnostic_device_registry(
+    device_id: str,
+    data: DiagnosticDeviceRegistryUpdate,
+    token_data: dict = Depends(verify_token),
+):
+    require_admin(token_data)
+    clean_device_id = (device_id or "").strip()
+    if not clean_device_id or len(clean_device_id) > 160:
+        raise HTTPException(status_code=400, detail="ID dispositivo non valido")
+
+    display_name = data.display_name.strip()
+    model_override = data.model_override.strip()
+    if not display_name and not model_override:
+        await db.diagnostic_device_registry.delete_one({"device_id": clean_device_id})
+        return {
+            "device_id": clean_device_id,
+            "display_name": "",
+            "model_override": "",
+        }
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    document = {
+        "device_id": clean_device_id,
+        "display_name": display_name,
+        "model_override": model_override,
+        "updated_at": now_iso,
+        "updated_by": token_data.get("username") or "Admin",
+    }
+    await db.diagnostic_device_registry.update_one(
+        {"device_id": clean_device_id},
+        {"$set": document},
+        upsert=True,
+    )
+    return document

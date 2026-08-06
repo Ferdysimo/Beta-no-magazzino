@@ -1,7 +1,9 @@
 # Piano P1 sicurezza - versione approvata
 
 Data approvazione: 2026-07-19
-Stato: approvato; nessuna implementazione avviata
+Stato: approvato; rollout ordinato delle fasi non avviato. La revoca mirata
+dell'account Admin applicata il 6 agosto 2026 e una misura isolata e non
+equivale al completamento della Fase 4 generale.
 
 Questo documento e la fonte operativa per il P1 di sicurezza. Se entra in
 conflitto con il perimetro P1 storico in `SECURITY_HARDENING_PLAN.md`, prevale

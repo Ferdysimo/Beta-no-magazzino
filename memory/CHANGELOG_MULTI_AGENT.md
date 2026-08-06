@@ -10,8 +10,8 @@
 
 **🇮🇹 ITALIANO**
 Prima di iniziare qualsiasi modifica al codice:
-1. **LEGGI** integralmente la sezione "LOG MODIFICHE" sotto, dal più recente al più vecchio.
-2. Leggi anche `/app/memory/PRD.md` per il contesto generale del prodotto.
+1. **LEGGI** prima `/app/memory/INDEX.md`, poi integralmente la sezione "LOG MODIFICHE" sotto, dal più recente al più vecchio.
+2. Leggi anche `/app/memory/PRD.md` per il contratto del prodotto e `/app/memory/TODO.md` per i lavori aperti.
 3. Dopo aver completato il tuo lavoro (anche un fix piccolo), **AGGIUNGI** una nuova voce in cima alla sezione "LOG MODIFICHE" seguendo il formato indicato.
 4. NON cancellare voci precedenti. Solo aggiungere.
 5. Se il file supera le 500 righe, sposta le voci più vecchie di 30 giorni in `/app/memory/CHANGELOG_MULTI_AGENT_ARCHIVE.md`.
@@ -25,8 +25,8 @@ Prima di iniziare qualsiasi modifica al codice:
 
 **🇬🇧 ENGLISH**
 Before making any code change:
-1. **READ** the entire "CHANGE LOG" section below, newest first.
-2. Also read `/app/memory/PRD.md` for general product context.
+1. **READ** `/app/memory/INDEX.md` first, then the entire "CHANGE LOG" section below, newest first.
+2. Also read `/app/memory/PRD.md` for the product contract and `/app/memory/TODO.md` for open work.
 3. After completing your work (even small fixes), **ADD** a new entry on top of the "CHANGE LOG" section using the format below.
 4. DO NOT delete previous entries. Only append.
 5. If this file grows beyond 500 lines, move entries older than 30 days to `/app/memory/CHANGELOG_MULTI_AGENT_ARCHIVE.md`.
@@ -178,6 +178,46 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-08-06 14:08 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: refactor | diagnostica | UX | sicurezza | test
+**File toccati**:
+- `/app/backend/app/{bootstrap.py,routers/system.py,schemas/{__init__,diagnostics}.py}`
+- `/app/backend/tests/{test_diagnostics_devices,test_phase1_foundations_contract,test_phase3_module_contract}.py`
+- `/app/frontend/src/components/{FrontendDiagnostics.js,FrontendDiagnostics.test.js,diagnostics/DiagnosticsDevicesView.js}`
+- `/app/frontend/src/{pages/DiagnosticaLivePage.js,utils/diagnosticsDevices.js,utils/diagnosticsDevices.test.js}`
+- `/app/frontend/public/version.json`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Rifatta la sezione dispositivi di Diagnostica Live come elenco a tutta larghezza dei soli locali online, con un solo locale espanso, ricerca, filtro problemi e pannello laterale per i dettagli. I dispositivi sani non mostrano badge; quelli problematici espongono soltanto avvisi concreti. Aggiunta raccolta best-effort e non bloccante di modello/browser, batteria, rete e latenza heartbeat, oltre a nomi/modelli manuali persistenti modificabili da Admin e Simone; Federico resta in sola lettura. L'identita del locale e ora ricavata lato backend dall'ID autenticato e dalla cache delle sedi, non dall'etichetta dichiarata dal client. I dispositivi offline restano fuori dalla vista e non alterano piu lo stato generale.
+**Testato**: si (metodo: backend completo `207 passed, 36 skipped`; matrice HTTP anonimo/locale/magazzino/Federico/Admin/Simone; frontend completo `47 passed`; build produzione riuscita con soli warning Hook preesistenti; collaudo browser locale con due tablet simulati, avvisi, dettagli, separazione sedi e rinomina persistente; `git diff --check`).
+**Note per il prossimo agente**: batteria, modello e Network Information dipendono dalle API supportate dal browser e possono risultare non disponibili senza indicare un guasto. Il registry Mongo contiene solo etichette manuali; heartbeat ed errori restano intenzionalmente volatili e falliscono senza influire sui flussi operativi.
+
+### [2026-08-06 10:08 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: docs | organizzazione | stato progetto
+**File toccati**:
+- `/app/memory/{INDEX,TODO,PRD,CHANGELOG_MULTI_AGENT}.md`
+- `/app/memory/{security,operational-memory,plans,archive}/`
+**Descrizione**: Riorganizzata la documentazione senza eliminare contenuti: aggiunto un indice centrale con ordine di lettura, stato reale e precedenza delle fonti; sostituita la vecchia TODO dispersiva con una coda sintetica; conservati integralmente i dettagli nel backlog esteso; separati sicurezza, Memoria operativa, piani futuri e documenti conclusi/storici. Corretti i riferimenti operativi e riallineati PRD e P1 allo stato reale di P0, Memoria e revoca mirata Admin. Riposizionata nella corretta data una voce del 30 luglio rimasta fuori sequenza e trasferite nell'archivio, senza riscriverle, le voci piu vecchie di 30 giorni.
+**Testato**: si (metodo: scansione completa dei Markdown, verifica dei riferimenti ai percorsi correnti, controllo file obbligatori, BOM del changelog e `git diff --check`; nessuna modifica applicativa eseguita per questa riorganizzazione).
+**Note per il prossimo agente**: partire sempre da `/app/memory/INDEX.md`. I percorsi precedenti conservati nelle vecchie voci del changelog sono storia e non vanno riscritti; per i file correnti usare la mappa dell'indice.
+
+### [2026-08-06 09:51 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: security | operazione VPS | credenziali | revoca sessioni | docs
+**File toccati**:
+- `/app/memory/security/ADMIN_PASSWORD_ROTATION_RUNBOOK.md`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Applicata sulla VPS, durante finestra autorizzata, la rotazione della password dell'account `Admin` e la revoca mirata delle sessioni precedenti. Dopo backup Mongo e configurazione root-only verificati, account e `ADMIN_MIN_TOKEN_VERSION` sono stati allineati alla versione `6` e il solo backend e stato riavviato. Nessuna password e stata salvata nel repository.
+**Testato**: si (metodo: backup Mongo compresso da circa 30 MB con SHA-256 verificato; servizio backend attivo e senza warning/errori successivi al riavvio; token Admin versione `5` rifiutato con `401`; nuova autenticazione Admin e `/api/auth/me` con `200`; vecchia password rifiutata con `401`; token locale con `200`; `.env` `root:root 0600`).
+**Note per il prossimo agente**: non abbassare `ADMIN_MIN_TOKEN_VERSION=6`. Una futura rotazione deve produrre una versione superiore e aggiornare account, soglia e servizio nello stesso intervento. La prima automazione via pseudo-terminale e stata scartata dal collaudo perche il valore ricevuto non coincideva; la rotazione definitiva e stata ripetuta correttamente alla versione `6` prima della verifica finale.
+
+### [2026-08-05 14:05 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: UX | Storico chiusure | test
+**File toccati**:
+- `/app/frontend/src/pages/{ChiusureExcelPage,ChiusureExcelPage.test}.js`
+- `/app/frontend/public/version.json`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Nello Storico chiusure e stato scambiato esclusivamente l'ordine visivo dei primi due gruppi bevande: `SCARTI` compare ora prima di `INGRESSI / USCITE`. Celle giornaliere, formule, commenti, totali e dati salvati restano invariati.
+**Testato**: si (metodo: test frontend dedicato `9 passed`, inclusa verifica esplicita dell'ordine dei gruppi; build React produzione riuscita con soli warning Hook preesistenti; `git diff --check`).
+
 ### [2026-08-05 14:01 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: UX | Storico chiusure | totali | test
 **File toccati**:
@@ -298,6 +338,16 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 **Descrizione**: Aggiunto un controllo nominativo senza cambiare il flusso richieste merce: `pending -> evasa -> confermata/errore` resta invariato. Conferma ricezione richiede ora il nome di chi ha verificato la merce; la segnalazione errore richiede sia nome sia motivo. I dati vengono salvati sul DDT esistente con orario, esito e account autenticato. La nuova pagina essenziale `Controlli trasporti` permette ad Admin e Simone di filtrare per locale e mese; anonimo, locali, Magazziniere e Federico sono rifiutati dal backend. I documenti storici privi del nuovo campo restano compatibili.
 **Testato**: sì (metodo: contratto API `6 passed`; integrazione Mongo isolata completa su conferma, errore e matrice ruoli `1 passed`; suite backend `181 passed, 36 skipped`; suite frontend `26 passed`; build React produzione riuscita senza nuovi warning; prova browser locale con due DDT temporanei, pulsanti disabilitati senza nome, conferma `Mario Prova`, errore `Anna Prova`, verifica pagina Admin e rimozione integrale dei dati simulati; `git diff --check`)
 **Note per il prossimo agente**: non separare questi controlli in una nuova collezione: i campi `transport_checked_*` appartengono alla richiesta/DDT. La nuova route `/api/admin/transport-checks` è intenzionalmente admin-only; il frontend `AdminOnlyRoute` è soltanto UX e non sostituisce il controllo backend.
+
+### [2026-07-30 10:15 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix | UX | Report desktop
+**File toccati**:
+- `/app/frontend/src/index.css`
+- `/app/frontend/src/pages/ReportBetaPage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Corretto il contenitore della pagina Report che, alle risoluzioni desktop con altezza utile ridotta da scala Windows o barre del browser, nascondeva la parte inferiore destra. L'altezza desktop compensa lo zoom della pagina, mantenendo visibili `Spicci` e il collegamento `Storico chiusure` senza scorrimento. Sotto i 700 px di altezza utile si applica una compattezza desktop leggermente maggiore; la visualizzazione mobile resta verticale e scorrevole. Modifica esclusivamente grafica, senza variazioni a salvataggi, calcoli o logica del Report.
+**Testato**: non documentato nella voce originale; commit applicativo `11ac380` presente nella cronologia Git.
+**Note per il prossimo agente**: questa voce era stata originariamente appesa fuori dalla sezione cronologica ed e stata ricollocata il 6 agosto 2026 senza modificare il codice descritto.
 
 ### [2026-07-29 12:07 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix | analisi dati | Excel | test
@@ -1137,306 +1187,4 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 **Testato**: si (metodo: `python -m py_compile backend/server.py`, compile nel container Docker, test API locale: token vecchio Simone -> 401 `Token revoked`, login nuovo Simone -> 200 e `/auth/me` -> 200)
 **Note per il prossimo agente**: Meccanismo intenzionalmente limitato a Simone; non invalida Admin, Federico, locali o Magazziniere.
 
-### [2026-07-07 09:45 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: ux
-**File toccati**:
-- `/app/frontend/src/pages/DiagnosticaLivePage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Ridisegnata la tab "Dispositivi locali" della Diagnostica Live per usare tutta la larghezza disponibile: rimossa la sidebar in questa tab, portato il contenitore a 1920px, trasformati i locali in griglia larga cliccabile e sostituita la lista dispositivi con una tabella operativa a colonne stabili.
-**Testato**: si (metodo: `npm run build`, riuscito con warning ESLint preesistenti; server locale non raggiungibile per screenshot live)
-**Note per il prossimo agente**: Su Diagnostica > Dispositivi locali privilegiare scansione di molti locali/dispositivi su schermi grandi; la sidebar stato generale resta solo nella tab Backend.
-
-### [2026-07-07 09:20 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: bugfix
-**File toccati**:
-- `/app/backend/server.py`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Corretto errore della Diagnostica Live dopo la rimozione degli health snapshot: ripristinata la variabile `cutoff_24h_dt`, ancora necessaria per calcolare lo storico salute "24 ore" live.
-**Testato**: si (metodo: `python -m py_compile backend/server.py`)
-**Note per il prossimo agente**: La rimozione degli snapshot Mongo resta valida; `cutoff_24h_dt` serve solo per aggregare il buffer diagnostico in memoria.
-
-### [2026-07-06 12:15 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: config
-**File toccati**:
-- `/app/backend/server.py`
-- `/app/memory/test_credentials.md`
-- `/app/memory/PRD.md`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Ripristinata la password dedicata di Federico a `[REDACTED-CREDENTIAL]`. Il seed/startup non forza piu Federico a `[REDACTED-CREDENTIAL]`; aggiornata anche la documentazione credenziali.
-**Testato**: si (metodo: aggiornato DB locale Docker, restart backend, login Federico OK con `[REDACTED-CREDENTIAL]`, KO con `[REDACTED-CREDENTIAL]`)
-**Note per il prossimo agente**: Federico e l'unica eccezione alla password comune dei locali/test account.
-
-### [2026-07-06 12:00 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: cleanup
-**File toccati**:
-- `/app/backend/server.py`
-- `/app/frontend/src/pages/DiagnosticaLivePage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Rimossa la persistenza degli `health_snapshot` dalla Diagnostica Live: il backend non scrive/legge piu `diagnostics_health_snapshots` e il frontend non mostra piu il box/tabella Snapshot salute. La diagnostica live corrente resta invariata.
-**Testato**: si (metodo: `python -m py_compile backend/server.py`, `yarn build`, riuscito con warning ESLint preesistenti)
-**Note per il prossimo agente**: La collection storica eventualmente gia presente in Mongo non viene cancellata da questa modifica; semplicemente non viene piu alimentata ne mostrata.
-
-### [2026-07-05 01:22 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: feature
-**File toccati**:
-- `/app/frontend/src/pages/DiagnosticaLivePage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Aumentato il respiro laterale della Diagnostica Live: contenitore leggermente piu stretto e padding orizzontale maggiore su desktop, per evitare che la pagina sembri appiccicata ai bordi.
-**Testato**: ✅ sì (metodo: `npm run build`, riuscito con soli warning ESLint preesistenti)
-**Note per il prossimo agente**: Mantenere margini laterali generosi nelle viste admin dense; non allargare tutto fino ai bordi viewport.
-
-### [2026-07-05 01:16 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: feature
-**File toccati**:
-- `/app/frontend/src/pages/DiagnosticaLivePage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Spostato il semaforo "Stato generale" in una colonna verticale a sinistra della Diagnostica Live, sticky su desktop. La colonna principale resta dedicata a tab e contenuti, migliorando la scansione della pagina.
-**Testato**: ✅ sì (metodo: `npm run build`, riuscito con soli warning ESLint preesistenti)
-**Note per il prossimo agente**: Il semaforo laterale deve restare sintetico; non trasformarlo in un secondo pannello tecnico.
-
-### [2026-07-05 00:54 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: feature
-**File toccati**:
-- `/app/frontend/src/pages/DiagnosticaLivePage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Sgravata la Diagnostica Live: rimossi dalla vista principale errori frontend grezzi, commit backend, snapshot/campioni Mongo e storico salute. La pagina ora apre sui dispositivi locali, mostra build attesa, dispositivi online/offline, build vecchie e locali da guardare; ogni dispositivo ha stato leggibile e azione consigliata. Rollback applicato alla potatura successiva di Mongo/disco/endpoint, quindi il tab Backend mantiene stato sistema e prestazioni live.
-**Testato**: ✅ sì (metodo: `npm run build`, riuscito con soli warning ESLint preesistenti)
-**Note per il prossimo agente**: La diagnostica deve restare operativa per l'utente: priorita a locali/dispositivi/build, dettagli tecnici solo se servono davvero.
-
-### [2026-07-05 00:18 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: bugfix
-**File toccati**:
-- `/app/frontend/craco.config.js`
-- `/app/frontend/src/components/UpdateBanner.js`
-- `/app/frontend/src/components/FrontendDiagnostics.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Fix anti-cache definitivo: il bundle React ora incorpora la versione di build via Webpack, confronta periodicamente quella versione con `/version.json` e forza un reload quando la tab sta eseguendo codice vecchio. La diagnostica frontend ora invia la versione reale del bundle in memoria, non la versione letta dal server.
-**Testato**: ✅ sì (metodo: `npm run build`, verifica che la build version venga incorporata nel bundle compilato; soli warning ESLint preesistenti)
-**Note per il prossimo agente**: Il fix Nginx da solo non aggiorna tab gia aperte con vecchio JS in memoria; questo controllo lato app serve proprio a intercettare quei casi.
-
-### [2026-07-04 18:42 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: feature
-**File toccati**:
-- `/app/frontend/src/pages/DiagnosticaLivePage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Ripensata l'impaginazione di "Dispositivi locali": piu larghezza utile su desktop, eliminato lo scroll orizzontale della tabella e sostituita con righe responsive compatte. La versione webapp ora e il valore primario in grande/monospace, con la data build solo come dettaglio secondario.
-**Testato**: ✅ sì (metodo: `npm run build`, riuscito con soli warning ESLint preesistenti)
-**Note per il prossimo agente**: La vista dispositivi deve privilegiare scansione rapida: locale, IP, versione webapp, errori e ultimo heartbeat senza obbligare scroll laterale.
-
-### [2026-07-04 18:32 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: feature
-**File toccati**:
-- `/app/backend/server.py`
-- `/app/frontend/src/pages/DiagnosticaLivePage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: La diagnostica dispositivi frontend ora espone solo client con ruolo `restaurant`, escludendo admin/amministrazione/Federico/Simone e altri ruoli interni. Ogni heartbeat salva anche l'IP client e la tabella "Dispositivi locali" mostra IP e versione webapp in modo esplicito.
-**Testato**: ✅ sì (metodo: `python -m py_compile backend/server.py`, `npm run build`, restart backend locale, heartbeat Admin + Flaminio -> `/api/admin/diagnostics` mostra solo device `restaurant` con `ip` e `frontend_version`)
-**Note per il prossimo agente**: Mantenere il filtro restaurant lato backend; non affidarsi solo al frontend per nascondere dispositivi admin.
-
-### [2026-07-04 18:18 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: feature
-**File toccati**:
-- `/app/frontend/src/pages/DiagnosticaLivePage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Rimossa dalla Diagnostica Live la sezione `Timeline ultimi eventi`, non utile per l'uso operativo richiesto. Restano storico salute, tab Backend/Frontend/Dispositivi locali, errori e dettagli tecnici.
-**Testato**: ✅ sì (metodo: `npm run build`, riuscito con soli warning ESLint preesistenti)
-**Note per il prossimo agente**: Non reintrodurre la timeline senza richiesta esplicita: l'utente l'ha rimossa per ridurre rumore.
-
-### [2026-07-04 18:16 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: feature
-**File toccati**:
-- `/app/frontend/src/pages/DiagnosticaLivePage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Separata la Diagnostica Live in tab dedicate: `Backend`, `Frontend` e `Dispositivi locali`. Il semaforo generale resta in alto, mentre stato server/API/WebSocket resta nel tab Backend, errori browser nel tab Frontend e la vista per locale/dispositivo nel tab Dispositivi locali, per evitare confusione con molti locali.
-**Testato**: ✅ sì (metodo: `npm run build`, riuscito con soli warning ESLint preesistenti)
-**Note per il prossimo agente**: Il build rigenera `frontend/public/version.json`; e stato ripristinato.
-
-### [2026-07-04 17:29 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: config
-**File toccati**:
-- `/app/setup.sh`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Aggiornato il template Nginx di setup con cache policy corretta per React SPA: `index.html` e `version.json` no-cache/no-store, asset `/static/` cachati forte con `immutable`. Serve a evitare che i tablet ricarichino una shell React vecchia dopo deploy.
-**Testato**: ✅ sì (metodo: verifica configurazione template)
-**Note per il prossimo agente**: La modifica al repo non aggiorna automaticamente il VPS gia installato; applicare la stessa policy in `/etc/nginx/sites-available/pastasciutta` e fare `nginx -t && systemctl reload nginx`.
-
-### [2026-07-04 17:24 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: feature
-**File toccati**:
-- `/app/backend/server.py`
-- `/app/frontend/src/pages/DiagnosticaLivePage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: La diagnostica frontend ora mostra un solo record per dispositivo, non uno per scheda browser. Il backend collassa gli heartbeat su `device_id`; la UI usa `device_id` come chiave e rimuove riferimenti visibili alle tab.
-**Testato**: ✅ sì (metodo: `python -m py_compile backend/server.py`, `npm run build`, restart backend locale, doppio heartbeat stesso `device_id` con due `tab_id` diverse -> un solo dispositivo in `/api/admin/diagnostics`)
-**Note per il prossimo agente**: `tab_id` resta accettato nel payload per compatibilita, ma non deve essere usato per mostrare righe separate nella diagnostica.
-
-### [2026-07-04 17:22 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: feature
-**File toccati**:
-- `/app/backend/server.py`
-- `/app/frontend/src/components/FrontendDiagnostics.js`
-- `/app/frontend/src/pages/DiagnosticaLivePage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Rafforzata la diagnostica dispositivi per tanti locali: heartbeat frontend ora distingue device/tab e invia browser, OS, tipo dispositivo, viewport e versione; `/admin/diagnostics` aggrega i dispositivi per locale con online/offline, errori e versioni; la UI mostra una vista scalabile con lista locali e dettaglio dispositivi filtrabile.
-**Testato**: ✅ sì (metodo: `python -m py_compile backend/server.py`, `npm run build`, restart backend locale, POST heartbeat arricchito, GET `/api/admin/diagnostics` con verifica `frontend.locations`, device browser e conteggio errori)
-**Note per il prossimo agente**: La tabella ora rappresenta sessioni browser/device (`device_id` + `tab_id`), utile quando uno stesso tablet apre piu schede. Il build rigenera `frontend/public/version.json`; e stato ripristinato.
-
-### [2026-07-04 17:17 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: feature
-**File toccati**:
-- `/app/backend/server.py`
-- `/app/frontend/src/App.js`
-- `/app/frontend/src/components/FrontendDiagnostics.js`
-- `/app/frontend/src/pages/DiagnosticaLivePage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Estesa Diagnostica Live senza renderla un mapazzone: aggiunte sezioni compatte per versioni/deploy, frontend/tablet, errori JS/API lato browser e snapshot salute persistiti su Mongo. Ogni browser loggato invia heartbeat tecnico e segnala errori frontend; `/admin/diagnostics` espone ora deployment, device frontend, errori recenti e storico persistito.
-**Testato**: ✅ sì (metodo: `python -m py_compile backend/server.py`, `npm run build`, restart backend locale, login Admin, POST `/api/diagnostics/frontend`, GET `/api/admin/diagnostics` con verifica `deployment`, `frontend.devices`, `persisted_health`)
-**Note per il prossimo agente**: Lo snapshot Mongo viene scritto al massimo una volta al minuto quando si apre/aggiorna la Diagnostica Live. Il build rigenera `frontend/public/version.json`; e stato ripristinato.
-
-### [2026-07-04 17:08 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: feature
-**File toccati**:
-- `/app/frontend/src/pages/DiagnosticaLivePage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Riordinata la Diagnostica Live: `Timeline ultimi eventi` e `Storico salute` ora sono sotto `Stato sistema` e `Prestazioni live`, cosi la pagina mostra prima lo stato attuale e poi il contesto storico.
-**Testato**: ✅ sì (metodo: `npm run build`, riuscito con soli warning ESLint preesistenti)
-**Note per il prossimo agente**: Il build rigenera `frontend/public/version.json`; e stato ripristinato.
-
-### [2026-07-04 17:05 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: feature
-**File toccati**:
-- `/app/backend/server.py`
-- `/app/frontend/src/pages/DiagnosticaLivePage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Evoluta la Diagnostica Live in una vista decisionale: il backend ora espone motivi del semaforo, timeline eventi e storico salute 15 min/1 ora/24 ore; il frontend mostra subito perche il sistema e OK/Attenzione/Critico, gli ultimi eventi tecnici e se errori/lentezza/disconnessioni sono episodici o ricorrenti.
-**Testato**: ✅ sì (metodo: `python -m py_compile backend/server.py`, `npm run build`, login Admin + GET `/api/admin/diagnostics` con verifica `health_reasons`, `timeline_events`, `health_history`)
-**Note per il prossimo agente**: Lo storico e in memoria come il buffer diagnostico: si svuota al riavvio backend. Il build rigenera `frontend/public/version.json`; e stato ripristinato.
-
-### [2026-07-04 16:59 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: feature
-**File toccati**:
-- `/app/frontend/src/pages/DiagnosticaLivePage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Rimossa dalla Diagnostica Live la lettura operativa "quanto stiamo lavorando" (ordini oggi, DDT pendenti, fatture operative) e sostituita con una sezione tecnica "Prestazioni live": latenza media, picco latenza, errori server, chiamate lente e tabella degli endpoint piu critici per errori/latenza.
-**Testato**: ✅ sì (metodo: `npm run build`, riuscito con soli warning ESLint preesistenti)
-**Note per il prossimo agente**: Il build rigenera `frontend/public/version.json`; e stato ripristinato e non fa parte della modifica.
-
-### [2026-07-04 16:51 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: docs
-**File toccati**:
-- `/app/memory/refactor_plan_server_py.md`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Aggiunta regola esplicita per tutti gli agenti: lavorare anche da reviewer e architetti, non solo da implementatori. Aggiornato il piano split `server.py` con gate anti-regressione obbligatori su JWT, WebSocket manager singleton, import graph e assenza di import da `server.py` nei router.
-**Testato**: ✅ sì (metodo: verifica documento e `git diff`)
-**Note per il prossimo agente**: Prima di iniziare lo split, leggere questo piano e trasformare ogni rischio architetturale in un gate verificabile.
-
-### [2026-07-04 00:25 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: feature
-**File toccati**:
-- `/app/backend/server.py`
-- `/app/frontend/src/pages/DiagnosticaLivePage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Trasformata la pagina Diagnostica Live in una vista Stato Sistema piu operativa: stato backend/Mongo/disco/API, salute operativa per locale, DDT/fatture da controllare, WebSocket e dettagli tecnici collassabili. L'endpoint `/api/admin/diagnostics` ora restituisce anche metriche sintetiche di sistema e operativita giornaliera.
-**Testato**: si (metodo: `python -m py_compile backend/server.py`, `npm run build` con soli warning ESLint preesistenti)
-**Note per il prossimo agente**: Il build rigenera `frontend/public/version.json`; e stato ripristinato e non fa parte di questa modifica.
-
-### [2026-07-03 23:55 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: bugfix
-**File toccati**:
-- `/app/backend/server.py`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Aggiornato l export Excel Numeri per compilare le colonne MEDIA solo sui mesi conclusi. Per l'anno corrente il mese in corso resta senza media sulla riga di fine mese futura, evitando medie parziali come luglio calcolato sui primi giorni del mese.
-**Testato**: si (metodo: `python -m py_compile backend/server.py`)
-**Note per il prossimo agente**: Il foglio continua a generare tutte le date dell'anno; cambia solo la compilazione delle colonne MEDIA per mesi non ancora conclusi.
-
-### [2026-07-03 23:35 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: bugfix
-**File toccati**:
-- `/app/backend/server.py`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Corretto il calcolo della pagina Numeri e dell export Excel annuale: ora usa il conteggio reale degli ordini del giorno sommando `orders`, `archived_orders` e `deletion_logs`, invece del massimo `order_number` giornaliero. Questo evita numeri storici gonfiati quando i vecchi progressivi non erano giornalieri o erano sporchi.
-**Testato**: si (metodo: `python -m py_compile Beta-no-magazzino/backend/server.py`)
-**Note per il prossimo agente**: La voce del 2026-07-03 15:44 descriveva il vecchio criterio basato sul massimo `order_number`; da questa modifica in poi il criterio corretto e il conteggio documentale reale.
-
-### [2026-07-03 20:55 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: config
-**File toccati**:
-- `/app/frontend/src/pages/HomePage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Rimossi dalla Home operativa del locale Flaminio i collegamenti in basso "Magazzino Bevande" e "Report Ieri". Restano invariati gli altri pulsanti della Home locale.
-**Testato**: si (metodo: controllo sorgente e `yarn build`)
-**Note per il prossimo agente**: Non fare commit/push senza conferma esplicita dell'utente.
-
-### [2026-07-03 20:24 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: config
-**File toccati**:
-- `/app/frontend/src/pages/HomePage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Cambiata l'intestazione della dashboard dell'account Federico da "Supervisione" a "Federico", lasciando invariato il fallback "Supervisione" per eventuali altri supervisor. Allineata anche la password seed di Federico alla credenziale documentata `[REDACTED-CREDENTIAL]`.
-**Testato**: si (metodo: login Federico API, `python -m py_compile`, `yarn build`)
-**Note per il prossimo agente**: Non fare commit/push senza conferma esplicita dell'utente.
-
-### [2026-07-03 20:02 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: config
-**File toccati**:
-- `/app/backend/server.py`
-- `/app/frontend/src/App.js`
-- `/app/frontend/src/pages/CreaLocaliPage.js`
-- `/app/frontend/src/pages/HomePage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Aggiunto l'account privilegiato `Simone` con ruolo `admin`, password dedicata e creazione automatica sia da `/api/seed` sia allo startup backend. La dashboard iniziale di Simone mostra selettore locali e solo i pulsanti richiesti: Diagnostica live, Cestino Generale - Audit, Fatture Globale e Crea nuovi locali; quando Simone seleziona un locale entra nella normale Home ristorante, come Admin quando clicca Flaminio. La nuova pagina crea locali `restaurant` con username, nome locale, password e numero bollitori; la Home mostra il secondo bollitore quando `boiler_count >= 2`. Gli stessi pulsanti riservati a Simone sono stati rimossi dalla Home Admin.
-**Testato**: si (metodo: login API Simone, `/api/admin/restaurants`, `/api/admin/diagnostics`, `/api/admin/generale-hide-log`, `/api/admin/fatture-globali`, creazione locale API, login nuovo locale, `python -m py_compile`, `yarn build`)
-**Note per il prossimo agente**: Account creato anche nel DB locale `pastasciutta_local` per test immediato. Non fare commit/push senza conferma esplicita dell'utente.
-
-### [2026-07-03 19:48 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: config
-**File toccati**:
-- `/app/.gitignore`
-- `/app/LOCAL_NATIVE.md`
-- `/app/scripts/start-local-native.ps1`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Aggiunto ambiente locale nativo Windows senza Docker, il piu fedele possibile alla VPS: MongoDB 8 portable, backend FastAPI su 8001, frontend React su 3000, Python 3.12 e Yarn 1.22.22. Lo script avvia i servizi e mantiene file locali, log e database fuori da Git.
-**Testato**: si (metodo: MongoDB 8.0.26 portable, backend `/api/`, frontend `localhost:3000`, seed, login Admin, `python -m py_compile`, `yarn build`)
-**Note per il prossimo agente**: Docker non e disponibile su questo PC. Usare `.\scripts\start-local-native.ps1`; le cartelle `.local-tools/`, `.local-data/`, `logs/`, `backend/.venv`, `frontend/node_modules` e i `.env` locali restano ignorati.
-
-### [2026-07-03 17:36 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: fix
-**File toccati**:
-- `/app/frontend/src/pages/ReportBetaPage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Esteso anche alla riga "Cassa" della pagina Report il filtro che rimuove lettere e caratteri non numerici dagli input. Ora i campi banconote usano lo stesso `sanitizeNum` gia adottato da movimentazione, spicci e cassetto.
-**Testato**: si (metodo: `yarn build`, riuscito con warning ESLint preesistenti)
-**Note per il prossimo agente**: Il build rigenera `frontend/public/version.json`; non includerlo nel commit se non richiesto.
-
-### [2026-07-03 15:44 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: feature
-**File toccati**:
-- `/app/backend/server.py`
-- `/app/backend/requirements.txt`
-- `/app/frontend/src/pages/MediaLocaliPage.js`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Aggiunto bottone "SCARICA EXCEL" nella pagina Numeri (`/media-locali`). Il download chiama il nuovo endpoint admin `/api/admin/media-locali/export?year=YYYY`, che genera un file `.xlsx` annuale dal 1 gennaio al 31 dicembre con colonne DATA, locali, TOTALI e medie mensili compilate solo sull ultimo giorno di ogni mese.
-**Testato**: si (metodo: build backend Docker con `openpyxl`, `python -m py_compile`, export autenticato Admin su `localhost:8002`, controllo intestazioni workbook, simulazione ordini/log con medie mensili attese per gennaio/febbraio, `yarn build`)
-**Note per il prossimo agente**: L export usa gli stessi criteri della pagina Numeri: per ogni locale prende il massimo `order_number` giornaliero da ordini attivi, archiviati e cancellati. Nel DB locale Docker sono stati inseriti record fittizi dei tre locali solo per verificare le intestazioni complete del file.
-
-### [2026-07-03 14:38 CEST] - Codex (GPT-5 / OpenAI)
-**Tipo**: config
-**File toccati**:
-- `/app/docker-compose.local.yml`
-- `/app/docker/local/backend.Dockerfile`
-- `/app/docker/local/frontend.Dockerfile`
-- `/app/.dockerignore`
-- `/app/LOCAL_DOCKER.md`
-- `/app/memory/CHANGELOG_MULTI_AGENT.md`
-**Descrizione**: Aggiunto ambiente locale Docker per testare l app con versioni vicine alla VPS: Python 3.12, Node.js 20 e MongoDB 8.0. Documentati avvio standard, fallback porta backend 8002 su Windows, seed account e comandi operativi.
-**Testato**: si (metodo: `docker compose build`, `docker compose up -d`, health backend `/api/`, frontend `localhost:3000`, seed e login Admin)
-**Note per il prossimo agente**: Su questo PC la porta host 8001 risultava bloccata da un socket Windows orfano; lo stack Docker e stato validato con `BACKEND_HOST_PORT=8002` e `REACT_APP_BACKEND_URL=http://localhost:8002`. Dentro Docker il backend resta su 8001.
-
-
 <!-- Le voci più vecchie vanno archiviate in CHANGELOG_MULTI_AGENT_ARCHIVE.md dopo 30 giorni -->
-# 2026-07-30 - Report desktop interamente visibile senza scorrimento
-
-- Corretto il contenitore della pagina Report che, alle risoluzioni desktop con altezza utile ridotta da scala Windows o barre del browser, nascondeva la parte inferiore destra.
-- L'altezza desktop ora compensa lo zoom della pagina: `Spicci` e il collegamento `Storico chiusure` restano visibili senza scorrimento.
-- Sotto i 700 px di altezza utile viene applicata automaticamente una compattezza desktop leggermente maggiore; la visualizzazione mobile resta verticale e scorrevole.
-- Modifica esclusivamente grafica: nessuna variazione a salvataggi, calcoli o logica del Report.

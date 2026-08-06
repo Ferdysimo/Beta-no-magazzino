@@ -18,8 +18,8 @@ const BEV_NAMES = {
 const BEV_COLOR_HEADER = '#d1fae5';
 const BEV_COLOR_CELL   = '#f0fdf4';
 const BEV_GROUPS = [
-  { key: 'inUsc',  label: 'INGRESSI / USCITE', headerBg: BEV_COLOR_HEADER, cellBg: BEV_COLOR_CELL },
   { key: 'scarti', label: 'SCARTI',            headerBg: BEV_COLOR_HEADER, cellBg: BEV_COLOR_CELL },
+  { key: 'inUsc',  label: 'INGRESSI / USCITE', headerBg: BEV_COLOR_HEADER, cellBg: BEV_COLOR_CELL },
   { key: 'sera',   label: 'MAGAZZINO SERA',    headerBg: BEV_COLOR_HEADER, cellBg: BEV_COLOR_CELL },
   { key: 'qty',    label: 'VENDITE',           headerBg: BEV_COLOR_HEADER, cellBg: BEV_COLOR_CELL },
 ];

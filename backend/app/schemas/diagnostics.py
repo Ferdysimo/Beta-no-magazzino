@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class FrontendDiagnosticsPayload(BaseModel):
@@ -21,6 +21,23 @@ class FrontendDiagnosticsPayload(BaseModel):
     visibility: Optional[str] = ""
     restaurant_id: Optional[str] = ""
     restaurant_location: Optional[str] = ""
+    device_model: Optional[str] = ""
+    platform_version: Optional[str] = ""
+    architecture: Optional[str] = ""
+    bitness: Optional[str] = ""
+    browser_full_version: Optional[str] = ""
+    battery_level: Optional[int] = None
+    battery_charging: Optional[bool] = None
+    battery_charging_time: Optional[float] = None
+    battery_discharging_time: Optional[float] = None
+    connection_type: Optional[str] = ""
+    connection_effective_type: Optional[str] = ""
+    connection_downlink_mbps: Optional[float] = None
+    connection_rtt_ms: Optional[int] = None
+    connection_save_data: Optional[bool] = None
+    heartbeat_rtt_ms: Optional[int] = None
+    heartbeat_failures: int = 0
+    last_heartbeat_failure_at: Optional[str] = ""
 
 
 class FrontendErrorPayload(FrontendDiagnosticsPayload):
@@ -31,3 +48,8 @@ class FrontendErrorPayload(FrontendDiagnosticsPayload):
     status: Optional[int] = None
     method: Optional[str] = ""
     url: Optional[str] = ""
+
+
+class DiagnosticDeviceRegistryUpdate(BaseModel):
+    display_name: str = Field(default="", max_length=80)
+    model_override: str = Field(default="", max_length=120)
