@@ -52,6 +52,16 @@ const fmtTime = (iso) => {
     return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   } catch { return iso; }
 };
+export const auditDisplayValue = (value, field) => {
+  if (value === '' || value === null || value === undefined) return value;
+  const raw = String(value);
+  if (field !== 'vers') return raw;
+  return raw
+    // VERS conserva span di colore; l'audit puo troncarli a meta a 240 caratteri.
+    .replace(/<[^>]*(?:>|$)/g, '')
+    .replace(/[^0-9+\-*/.(),=\s€]/g, '')
+    .trim();
+};
 const truncate = (s, n = 60) => {
   if (s === '' || s === null || s === undefined) return <span className="italic text-gray-400">(vuoto)</span>;
   const str = String(s);
@@ -333,8 +343,8 @@ const AuditCassaPage = () => {
                               }`}>{CATEGORY_LABEL[it.category] || it.category}</span>
                             </td>
                             <td className="p-2 font-medium">{prettyField(it.field)}</td>
-                            <td className="p-2 text-rose-700 font-mono" title={it.old_value}>{truncate(it.old_value)}</td>
-                            <td className="p-2 text-emerald-700 font-mono font-bold" title={it.new_value}>{truncate(it.new_value)}</td>
+                            <td className="p-2 text-rose-700 font-mono" title={auditDisplayValue(it.old_value, it.field)}>{truncate(auditDisplayValue(it.old_value, it.field))}</td>
+                            <td className="p-2 text-emerald-700 font-mono font-bold" title={auditDisplayValue(it.new_value, it.field)}>{truncate(auditDisplayValue(it.new_value, it.field))}</td>
                             <td className="p-2">
                               <span className="font-medium">{it.by_user}</span>
                               {it.is_impersonating && (

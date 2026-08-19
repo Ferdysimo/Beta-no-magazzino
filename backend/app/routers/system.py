@@ -162,7 +162,7 @@ async def frontend_error(
     request: Request,
     token_data: dict = Depends(verify_token),
 ):
-    _record_frontend_heartbeat(payload, token_data, request)
+    device_entry = _record_frontend_heartbeat(payload, token_data, request)
     entry = {
         "ts": datetime.now(timezone.utc).isoformat(),
         "device_id": payload.device_id,

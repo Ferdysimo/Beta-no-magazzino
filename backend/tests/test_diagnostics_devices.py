@@ -5,9 +5,13 @@ import pytest
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 
-from app.core.diagnostics import frontend_device_state
+from app.core.diagnostics import frontend_device_state, frontend_error_log
 from app.routers import system
-from app.schemas import DiagnosticDeviceRegistryUpdate, FrontendDiagnosticsPayload
+from app.schemas import (
+    DiagnosticDeviceRegistryUpdate,
+    FrontendDiagnosticsPayload,
+    FrontendErrorPayload,
+)
 
 
 class _RegistryCollection:
@@ -59,6 +63,39 @@ def test_frontend_heartbeat_keeps_optional_device_telemetry(monkeypatch):
     assert saved["restaurant_id"] == "rest-1"
     assert saved["restaurant_location"] == "Flaminio"
     frontend_device_state.clear()
+
+
+def test_frontend_error_records_authoritative_device_identity(monkeypatch):
+    frontend_device_state.clear()
+    frontend_error_log.clear()
+    monkeypatch.setitem(system.RESTAURANT_LOCATION_CACHE, "rest-1", "Flaminio")
+    payload = FrontendErrorPayload(
+        device_id="dev-tablet-1",
+        path="/cassa",
+        kind="window_error",
+        message="Errore di prova",
+        restaurant_id="spoofed-id",
+        restaurant_location="Locale falso",
+    )
+    request = SimpleNamespace(headers={}, client=SimpleNamespace(host="127.0.0.1"))
+
+    result = asyncio.run(system.frontend_error(
+        payload,
+        request,
+        {
+            "restaurant_id": "rest-1",
+            "restaurant_name": "Flaminio",
+            "username": "Flaminio",
+            "role": "restaurant",
+        },
+    ))
+
+    assert result == {"ok": True}
+    assert frontend_error_log[-1]["device_id"] == "dev-tablet-1"
+    assert frontend_error_log[-1]["restaurant_id"] == "rest-1"
+    assert frontend_error_log[-1]["restaurant_location"] == "Flaminio"
+    frontend_device_state.clear()
+    frontend_error_log.clear()
 
 
 def test_admin_can_name_device_and_clear_registry(monkeypatch):

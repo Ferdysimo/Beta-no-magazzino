@@ -30,6 +30,19 @@ function Test-PortOpen {
     }
 }
 
+function Wait-PortOpen {
+    param(
+        [int]$Port,
+        [int]$TimeoutSeconds
+    )
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        if (Test-PortOpen -Port $Port) { return $true }
+        Start-Sleep -Seconds 1
+    } while ((Get-Date) -lt $deadline)
+    return $false
+}
+
 function Write-LocalEnv {
     $backendEnv = @"
 MONGO_URL=mongodb://localhost:$MongoPort
@@ -53,14 +66,14 @@ WATCHPACK_POLLING=true
 }
 
 function Ensure-Mongo {
-    $mongod = Get-ChildItem -Path $ToolsDir -Recurse -Filter "mongod.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $mongod) {
-        throw "mongod.exe non trovato sotto $ToolsDir. Scarica MongoDB Community Server 8.0 portable o usa LOCAL_NATIVE.md."
-    }
-
     if (Test-PortOpen -Port $MongoPort) {
         Write-Host "MongoDB gia attivo su $MongoPort"
         return
+    }
+
+    $mongod = Get-ChildItem -Path $ToolsDir -Recurse -Filter "mongod.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $mongod) {
+        throw "mongod.exe non trovato sotto $ToolsDir. Scarica MongoDB Community Server 8.0 portable o usa LOCAL_NATIVE.md."
     }
 
     Start-Process `
@@ -69,8 +82,7 @@ function Ensure-Mongo {
         -WorkingDirectory $Root `
         -WindowStyle Hidden
 
-    Start-Sleep -Seconds 3
-    if (-not (Test-PortOpen -Port $MongoPort)) {
+    if (-not (Wait-PortOpen -Port $MongoPort -TimeoutSeconds 10)) {
         throw "MongoDB non e partito su $MongoPort. Controlla logs\mongo.log."
     }
 }
@@ -94,8 +106,7 @@ function Ensure-Backend {
         -RedirectStandardError (Join-Path $LogsDir "backend.err.log") `
         -WindowStyle Hidden
 
-    Start-Sleep -Seconds 6
-    if (-not (Test-PortOpen -Port $BackendPort)) {
+    if (-not (Wait-PortOpen -Port $BackendPort -TimeoutSeconds 15)) {
         throw "Backend non e partito su $BackendPort. Controlla logs\backend.err.log."
     }
 }
@@ -119,8 +130,7 @@ function Ensure-Frontend {
         -RedirectStandardError (Join-Path $LogsDir "frontend.err.log") `
         -WindowStyle Hidden
 
-    Start-Sleep -Seconds 12
-    if (-not (Test-PortOpen -Port $FrontendPort)) {
+    if (-not (Wait-PortOpen -Port $FrontendPort -TimeoutSeconds 45)) {
         throw "Frontend non e partito su $FrontendPort. Controlla logs\frontend.err.log."
     }
 }

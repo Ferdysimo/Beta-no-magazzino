@@ -45,13 +45,18 @@ test('un dispositivo sano non riceve badge, gli avvisi reali vengono raccolti', 
   }), '200');
 
   expect(warnings.map(warning => warning.key)).toEqual([
-    'build',
     'errors',
     'heartbeat-failures',
+    'build',
     'heartbeat-rtt',
     'network',
     'battery',
   ]);
+  expect(warnings[0]).toEqual(expect.objectContaining({
+    level: 'critical',
+    detail: expect.any(String),
+    action: expect.any(String),
+  }));
 });
 
 test('nome manuale prevale sul nome automatico e la ricerca lo usa', () => {
@@ -69,4 +74,6 @@ test('filtro problemi esclude i dispositivi senza avvisi', () => {
 
   expect(groups).toHaveLength(1);
   expect(groups[0].devices.map(item => item.device_id)).toEqual(['dev-warning']);
+  expect(groups[0].devicesWithIssues).toBe(1);
+  expect(groups[0].warningCount).toBe(1);
 });

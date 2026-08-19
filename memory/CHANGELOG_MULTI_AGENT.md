@@ -178,6 +178,33 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-08-19 12:20 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: refactor | diagnostica | UX | bugfix | test
+**File toccati**:
+- `/app/frontend/src/components/diagnostics/DiagnosticsDevicesView.js`
+- `/app/frontend/src/components/diagnostics/DiagnosticsDevicesView.test.js`
+- `/app/frontend/src/pages/DiagnosticaLivePage.js`
+- `/app/frontend/src/pages/DiagnosticaLivePage.test.js`
+- `/app/frontend/src/utils/diagnosticsDevices.js`
+- `/app/frontend/src/utils/diagnosticsDevices.test.js`
+- `/app/backend/app/routers/system.py`
+- `/app/backend/tests/test_diagnostics_devices.py`
+- `/app/scripts/start-local-native.ps1`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Rifatta da zero Diagnostica Live come control room desktop: tre locali affiancati gia a larghezza PC, tutti i dispositivi online visibili senza accordion, ricerca e filtro problemi, dati immediati su pagina/sistema/rete/batteria/RTT e pannello completo con spiegazione e azione concreta per ogni anomalia. Rimossi tab e semaforo generico; backend, MongoDB, disco, WebSocket, finestre temporali ed endpoint restano disponibili in una sezione tecnica subordinata. Il collaudo reale ha inoltre corretto un `NameError` nell'acquisizione degli errori frontend, che trasformava ogni segnalazione browser in un falso `500`, e lo script locale ora accetta correttamente un MongoDB gia attivo anche senza eseguibile portatile nel repository.
+**Testato**: si (metodo: backend completo `208 passed, 36 skipped`, incluso nuovo test sull'identita tenant autorevole dell'errore frontend; frontend completo `53 passed`; build React produzione riuscita con soli warning Hook preesistenti in file non coinvolti; collaudo browser locale con 3 locali, 4 dispositivi Windows/Android/iPadOS simulati, griglia desktop, filtro problemi, dettaglio tecnico, azioni suggerite, auto-refresh e sezione infrastruttura; dopo il fix nessun errore API `5xx`; `git diff --check`).
+**Note per il prossimo agente**: nessuna route o regola di accesso e stata ampliata: la lettura resta Admin/Federico, la rinomina resta Admin e Simone, identita e sede continuano a essere determinate dal backend. Batteria, modello e Network Information possono risultare non disponibili per limiti del browser e vengono mostrati come dato assente, non come guasto. Il simulatore usato per il collaudo vive fuori dal repository e alimenta solo buffer diagnostici volatili locali.
+
+### [2026-08-19 11:30 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix
+**File toccati**:
+- `/app/frontend/src/pages/AuditCassaPage.js`
+- `/app/frontend/src/pages/AuditCassaPage.test.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: La cronologia `Check singoli movimenti` mostra ora i valori prima/dopo di `VERS` come espressioni numeriche pulite, senza esporre gli `<span>` usati dal Report per i colori. La pulizia gestisce anche i tag troncati a metà dal limite storico dell'audit, lasciando invariati i raw salvati e tutti gli altri campi.
+**Testato**: si (metodo: test mirati Audit Cassa `4 passed`, inclusi span completo, span troncato e campo non-VERS; suite frontend completa `49 passed`; build React produzione riuscita con soli warning Hook preesistenti in file non coinvolti; `git diff --check`).
+**Note per il prossimo agente**: modifica esclusivamente di presentazione frontend; API, ruoli, tenant, filtri, totali e documenti Mongo non cambiano. React continua a rendere testo escapato e non viene usato `dangerouslySetInnerHTML`; nessuna migrazione o bonifica dei log storici è necessaria.
+
 ### [2026-08-06 14:08 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: refactor | diagnostica | UX | sicurezza | test
 **File toccati**:

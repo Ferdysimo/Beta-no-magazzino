@@ -20,27 +20,63 @@ export const diagnosticDeviceModel = (device) => (
 
 export const getDiagnosticDeviceWarnings = (device, expectedVersion = '') => {
   const warnings = [];
-  if (expectedVersion && device?.frontend_version && device.frontend_version !== expectedVersion) {
-    warnings.push({ key: 'build', label: 'Build da aggiornare' });
-  }
   if ((device?.recent_errors_count || 0) > 0) {
-    warnings.push({ key: 'errors', label: `${device.recent_errors_count} errori browser` });
+    warnings.push({
+      key: 'errors',
+      level: 'critical',
+      label: `${device.recent_errors_count} errori browser`,
+      detail: 'Il browser ha registrato errori recenti.',
+      action: 'Apri il dispositivo e controlla messaggio, pagina e stack degli errori.',
+    });
   }
   if ((device?.heartbeat_failures || 0) > 0) {
-    warnings.push({ key: 'heartbeat-failures', label: `${device.heartbeat_failures} heartbeat falliti` });
+    warnings.push({
+      key: 'heartbeat-failures',
+      level: 'critical',
+      label: `${device.heartbeat_failures} heartbeat falliti`,
+      detail: 'Le ultime richieste diagnostiche non sono arrivate al backend.',
+      action: 'Verifica prima la connessione del dispositivo, poi lo stato del backend.',
+    });
+  }
+  if (expectedVersion && device?.frontend_version && device.frontend_version !== expectedVersion) {
+    warnings.push({
+      key: 'build',
+      level: 'warning',
+      label: 'Versione app diversa',
+      detail: `Build dispositivo ${device.frontend_version}; attesa ${expectedVersion}.`,
+      action: 'Ricarica completamente la pagina sul dispositivo e verifica che la build cambi.',
+    });
   }
   if ((device?.heartbeat_rtt_ms || 0) >= 1200) {
-    warnings.push({ key: 'heartbeat-rtt', label: 'Risposta app lenta' });
+    warnings.push({
+      key: 'heartbeat-rtt',
+      level: 'warning',
+      label: `App lenta · ${device.heartbeat_rtt_ms} ms`,
+      detail: 'Il giro completo dispositivo-backend supera 1,2 secondi.',
+      action: 'Confronta RTT della rete e latenza API per distinguere Wi-Fi lento da backend lento.',
+    });
   }
   if (['slow-2g', '2g'].includes(String(device?.connection_effective_type || '').toLowerCase())) {
-    warnings.push({ key: 'network', label: 'Connessione debole' });
+    warnings.push({
+      key: 'network',
+      level: 'warning',
+      label: `Rete ${device.connection_effective_type}`,
+      detail: 'Il browser rileva un profilo di connessione molto lento.',
+      action: 'Controlla copertura Wi-Fi, distanza dall’access point o rete mobile.',
+    });
   }
   if (
     typeof device?.battery_level === 'number'
     && device.battery_level <= 15
     && device.battery_charging === false
   ) {
-    warnings.push({ key: 'battery', label: `Batteria ${device.battery_level}%` });
+    warnings.push({
+      key: 'battery',
+      level: 'warning',
+      label: `Batteria ${device.battery_level}%`,
+      detail: 'Il dispositivo non è in carica e potrebbe spegnersi durante il servizio.',
+      action: 'Collega il dispositivo all’alimentazione.',
+    });
   }
   return warnings;
 };
@@ -78,10 +114,14 @@ export const groupOnlineDiagnosticDevices = (
         location: device.restaurant_location || device.username || 'Locale non identificato',
         devices: [],
         warningCount: 0,
+        devicesWithIssues: 0,
+        criticalCount: 0,
         lastSeen: '',
       };
       current.devices.push(device);
       current.warningCount += warnings.length;
+      current.devicesWithIssues += warnings.length > 0 ? 1 : 0;
+      current.criticalCount += warnings.filter(warning => warning.level === 'critical').length;
       if (!current.lastSeen || String(device.last_seen || '') > current.lastSeen) {
         current.lastSeen = device.last_seen || '';
       }
@@ -98,7 +138,8 @@ export const groupOnlineDiagnosticDevices = (
       )),
     }))
     .sort((a, b) => (
-      (b.warningCount - a.warningCount)
+      (b.criticalCount - a.criticalCount)
+      || (b.devicesWithIssues - a.devicesWithIssues)
       || a.location.localeCompare(b.location, 'it')
     ));
 };

@@ -1,7 +1,7 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import axios from 'axios';
-import AuditCassaPage from './AuditCassaPage';
+import AuditCassaPage, { auditDisplayValue } from './AuditCassaPage';
 
 const mockNavigate = jest.fn();
 const mockUseAuth = jest.fn();
@@ -38,6 +38,23 @@ const brazza = {
   location: 'Largo di Brazzà',
   role: 'restaurant',
 };
+
+describe('auditDisplayValue', () => {
+  test('ripulisce gli span completi e troncati del campo VERS', () => {
+    expect(auditDisplayValue(
+      '2770+<span style="color: rgb(220, 38, 38);">500</span>',
+      'vers',
+    )).toBe('2770+500');
+    expect(auditDisplayValue(
+      '2770+<span style="color: rgb(220, 38, 38);">52</span><span s',
+      'vers',
+    )).toBe('2770+52');
+  });
+
+  test('non interpreta come HTML i valori degli altri campi audit', () => {
+    expect(auditDisplayValue('nota <urgente>', 'comments.ft')).toBe('nota <urgente>');
+  });
+});
 
 describe('AuditCassaPage restaurant selection', () => {
   let container;
