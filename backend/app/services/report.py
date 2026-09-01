@@ -12,6 +12,11 @@ from app.core.catalogs import BEVERAGES_CATALOG
 from app.core.database import db
 from app.core.security import can_impersonate
 from app.core.time import ROME_TZ, _today_rome_str
+from app.services.beverage_prices import (
+    _beverage_price_for_row,
+    _beverage_price_snapshot_fields,
+    _get_beverage_prices_for,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -285,15 +290,18 @@ def _compute_paste_total_eur_legacy_index_only(
     return total
 
 
-def _compute_bev_total_eur(bev_docs: list) -> float:
+def _compute_bev_total_eur(
+    bev_docs: list,
+    beverage_prices: Optional[Dict[str, float]] = None,
+) -> float:
     """Somma incassi bevande. Le qty negative rettificano il totale."""
-    prices = {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
+    prices = beverage_prices or {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
     total = 0.0
     for r in bev_docs:
         m = _eval_cash_value(r.get("mattina")); u = _eval_cash_value(r.get("inUsc"))
         s = _eval_cash_value(r.get("scarti"));  e = _eval_cash_value(r.get("sera"))
         qty = (0 if e == 0 else (m + u - e)) - s
-        total += qty * prices.get(r["sigla"], 0)
+        total += qty * _beverage_price_for_row(r, prices)
     return total
 
 
@@ -339,6 +347,7 @@ def _compute_cash_sera_full(
     cash_row: dict,
     bev_docs: list,
     dict_map: Optional[Dict[str, float]] = None,
+    beverage_prices: Optional[Dict[str, float]] = None,
 ) -> float:
     """Cash sera completo: include paste (riconosciute + manuali), bevande e spicci."""
     base = _compute_cash_sera(cash_row)
@@ -348,13 +357,14 @@ def _compute_cash_sera_full(
                     cash_row.get("manual_prices") or {},
                     dict_map,
                 ) \
-                + _compute_bev_total_eur(bev_docs)
+                + _compute_bev_total_eur(bev_docs, beverage_prices)
 
 
 def _compute_cash_sera_full_legacy_manual_prices(
     cash_row: dict,
     bev_docs: list,
     dict_map: Optional[Dict[str, float]] = None,
+    beverage_prices: Optional[Dict[str, float]] = None,
 ) -> float:
     base = _compute_cash_sera(cash_row)
     return base + _compute_spicci_total(cash_row) \
@@ -363,7 +373,7 @@ def _compute_cash_sera_full_legacy_manual_prices(
                     cash_row.get("manual_prices") or {},
                     dict_map,
                 ) \
-                + _compute_bev_total_eur(bev_docs)
+                + _compute_bev_total_eur(bev_docs, beverage_prices)
 
 
 def _format_report_number(value) -> str:
@@ -391,13 +401,18 @@ def _report_numbers_equal(a, b) -> bool:
 async def _cash_mattina_carry_fields(
     *, rid: str, target_date: str, today_cash: dict, last_cash: dict,
     prev_bev_docs: list, dict_map: Optional[Dict[str, float]] = None,
+    beverage_prices: Optional[Dict[str, float]] = None,
 ) -> Dict[str, object]:
     if not last_cash:
         return {}
     prev_date = last_cash.get("date_rome", "")
     current_value = today_cash.get("mattina", "")
-    carry_value = _format_report_number(round(_compute_cash_sera_full(last_cash, prev_bev_docs, dict_map), 2))
-    legacy_value = _format_report_number(round(_compute_cash_sera_full_legacy_manual_prices(last_cash, prev_bev_docs, dict_map), 2))
+    carry_value = _format_report_number(round(_compute_cash_sera_full(
+        last_cash, prev_bev_docs, dict_map, beverage_prices
+    ), 2))
+    legacy_value = _format_report_number(round(_compute_cash_sera_full_legacy_manual_prices(
+        last_cash, prev_bev_docs, dict_map, beverage_prices
+    ), 2))
 
     should_write = not str(current_value or "").strip()
     auto_marker = today_cash.get("mattina_auto_carry")
@@ -534,6 +549,7 @@ async def _materialize_report_day_opening_for_restaurant(rid: str, target_date: 
     """Persist report carry-over rows for a restaurant/day without overwriting filled fields."""
     summary = {"cash_fields": 0, "beverage_rows": 0}
     now_iso = datetime.now(timezone.utc).isoformat()
+    beverage_prices = await _get_beverage_prices_for(rid)
 
     last_bev_day = await db.beverage_daily_counts.find_one(
         {"restaurant_id": rid, "date_rome": {"$lt": target_date}},
@@ -563,6 +579,12 @@ async def _materialize_report_day_opening_for_restaurant(rid: str, target_date: 
             )
             if not carry_fields:
                 continue
+            if today.get("price_snapshot") is None:
+                carry_fields.update(_beverage_price_snapshot_fields(
+                    beverage_prices.get(sigla, 0),
+                    source="day_opening",
+                    captured_at=now_iso,
+                ))
             await db.beverage_daily_counts.update_one(
                 {"restaurant_id": rid, "date_rome": target_date, "sigla": sigla},
                 {"$set": {
@@ -606,6 +628,7 @@ async def _materialize_report_day_opening_for_restaurant(rid: str, target_date: 
             last_cash=last_cash,
             prev_bev_docs=prev_bev_docs,
             dict_map=dmap,
+            beverage_prices=beverage_prices,
         ))
         carry_fields.update(await _cash_cassetto_carry_fields(
             rid=rid,
@@ -762,9 +785,12 @@ async def _build_closure_detail(date_str: str, restaurant_id: Optional[str]) -> 
         bev_q["restaurant_id"] = restaurant_id
     cash_doc = await db.cash_daily_counts.find_one(cash_q, {"_id": 0}) or {}
     bev_docs = await db.beverage_daily_counts.find(bev_q, {"_id": 0}).to_list(50)
-    dmap = await _get_pasta_dict_for(restaurant_id or cash_doc.get("restaurant_id"))
-    cash_sera = round(_compute_cash_sera_full(cash_doc, bev_docs, dmap), 2) if cash_doc else 0.0
-    bev_prices = {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
+    rid_for_prices = restaurant_id or cash_doc.get("restaurant_id")
+    dmap = await _get_pasta_dict_for(rid_for_prices)
+    bev_prices = await _get_beverage_prices_for(rid_for_prices)
+    cash_sera = round(_compute_cash_sera_full(
+        cash_doc, bev_docs, dmap, bev_prices
+    ), 2) if cash_doc else 0.0
     bev_names = {b["sigla"]: b["name"] for b in BEVERAGES_CATALOG}
     bev_rows = []
     bev_total_qty = 0
@@ -773,7 +799,8 @@ async def _build_closure_detail(date_str: str, restaurant_id: Optional[str]) -> 
         m = _eval_cash_value(r.get("mattina")); u = _eval_cash_value(r.get("inUsc"))
         s = _eval_cash_value(r.get("scarti"));  e = _eval_cash_value(r.get("sera"))
         qty = (0 if e == 0 else (m + u - e)) - s
-        inc = qty * bev_prices.get(r["sigla"], 0)
+        price = _beverage_price_for_row(r, bev_prices)
+        inc = qty * price
         bev_rows.append({
             "sigla": r["sigla"],
             "name": bev_names.get(r["sigla"], r["sigla"]),
@@ -782,6 +809,7 @@ async def _build_closure_detail(date_str: str, restaurant_id: Optional[str]) -> 
             "scarti": r.get("scarti", ""),
             "sera": r.get("sera", ""),
             "quantita": qty,
+            "price": price,
             "incasso": round(inc, 2),
             "comments": r.get("comments") or {},
         })

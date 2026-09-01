@@ -83,6 +83,26 @@ export const arrCellBackground = (value) => {
     : '#fee2e2';
 };
 
+export const altroCommentValidation = (rawValue, rawComment) => {
+  const expression = String(rawValue ?? '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/^\s*=\s*/, '');
+  // Ogni numero dell'operazione rappresenta un valore inserito. La virgola
+  // decimale resta parte del numero: "10,50+3,20" contiene due valori.
+  const values = expression.match(/(?:\d+(?:[.,]\d+)?|[.,]\d+)/g) || [];
+  const comment = String(rawComment ?? '').trim();
+  const commentParts = comment ? comment.split(',').map(part => part.trim()) : [];
+  const commentCount = commentParts.filter(Boolean).length;
+  const valid = values.length === 0
+    ? commentParts.length === 0
+    : commentParts.length === values.length && commentParts.every(Boolean);
+  return {
+    valid,
+    valueCount: values.length,
+    commentCount,
+  };
+};
+
 export const reportExpressionText = (value) => {
   const raw = String(value ?? '');
   return raw
@@ -542,9 +562,14 @@ const ChiusureExcelPage = () => {
                         const rawValue = r.cash_raw?.[f.key]
                           ?? (f.key === 'vers' ? r.vers_raw : '');
                         const comment = String(r.cash_comments?.[f.key] || '').trim();
+                        const altroValidation = f.key === 'altro'
+                          ? altroCommentValidation(rawValue, comment)
+                          : null;
                         const cellBg = f.key === 'arr'
                           ? arrCellBackground(r.cash?.arr)
-                          : (versDisplay?.mixed ? '#fef08a' : baseBg);
+                          : (altroValidation && !altroValidation.valid)
+                            ? '#fee2e2'
+                            : (versDisplay?.mixed ? '#fef08a' : baseBg);
                         const detail = {
                           date: r.date,
                           label: f.label,
@@ -560,7 +585,9 @@ const ChiusureExcelPage = () => {
                             mono
                             bold={f.key === 'arr' || f.key === 'pos'}
                             testId={`closure-${r.date}-cash-${f.key}`}
-                            title="Doppio clic per vedere operazione e commento"
+                            title={altroValidation && !altroValidation.valid
+                              ? `${altroValidation.valueCount} ${altroValidation.valueCount === 1 ? 'valore' : 'valori'} ma ${altroValidation.commentCount} ${altroValidation.commentCount === 1 ? 'commento' : 'commenti'}. Doppio clic per controllare.`
+                              : 'Doppio clic per vedere operazione e commento'}
                             {...detailCellProps(detail)}
                           >
                             {f.key === 'vers' && versHasContent

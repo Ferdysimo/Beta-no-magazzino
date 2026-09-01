@@ -7,6 +7,13 @@ import { compressImage, friendlyUploadError } from '../utils/compressImage';
 import PhotoLightbox from '../components/PhotoLightbox';
 import Pagination from '../components/Pagination';
 import useSessionState from '../hooks/useSessionState';
+import {
+  createUploadAttemptId,
+  flushUploadAttemptEvents,
+  getUploadDeviceId,
+  recordUploadAttemptEvent,
+  uploadErrorDetails,
+} from '../utils/uploadAttemptTracking';
 
 const PAGE_SIZE = 10;
 
@@ -20,8 +27,9 @@ const resolveImageSrc = (imageData) => {
 };
 
 const ChiusurePage = () => {
-  const { restaurant, token } = useAuth();
+  const { restaurant, token, effectiveRestaurant } = useAuth();
   const fileInputRef = useRef(null);
+  const uploadScopeId = effectiveRestaurant?.id || restaurant?.id || '';
   
   // Form state
   const [selectedFile, setSelectedFile] = useState(null);
@@ -36,6 +44,7 @@ const ChiusurePage = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [compressing, setCompressing] = useState(false);
   const [compressedData, setCompressedData] = useState(null);
+  const [uploadAttemptId, setUploadAttemptId] = useState('');
   
   // List state
   const [chiusure, setChiusure] = useState([]);
@@ -89,28 +98,73 @@ const ChiusurePage = () => {
     fetchChiusure();
   }, [token, searchTerm, filterTipologia]);
 
+  useEffect(() => {
+    if (!token) return undefined;
+    const flush = () => { void flushUploadAttemptEvents(token, uploadScopeId); };
+    flush();
+    window.addEventListener('online', flush);
+    return () => window.removeEventListener('online', flush);
+  }, [token, uploadScopeId]);
+
   // Handle file selection
   const handleFileSelect = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
+    const attemptId = createUploadAttemptId();
+    setUploadAttemptId(attemptId);
+    setSelectedFile(null);
+    setPreview(null);
+    setCompressedData(null);
+    const fileMetadata = {
+      attempt_id: attemptId,
+      upload_kind: 'closure_primary',
+      file_size_bytes: file.size,
+      mime_type: file.type || '',
+    };
+    void recordUploadAttemptEvent(token, {
+      ...fileMetadata,
+      stage: 'file_selected',
+    }, uploadScopeId);
+
     if (file.size > 30 * 1024 * 1024) {
       setError('File troppo grande. Massimo 30 MB.');
+      void recordUploadAttemptEvent(token, {
+        ...fileMetadata,
+        stage: 'compression_failed',
+        error_kind: 'file_too_large',
+        error_message: 'File oltre 30 MB',
+      }, uploadScopeId);
       return;
     }
 
     setSelectedFile(file);
     setError('');
     setCompressing(true);
+    void recordUploadAttemptEvent(token, {
+      ...fileMetadata,
+      stage: 'compression_started',
+    }, uploadScopeId);
     try {
-      const { dataUrl } = await compressImage(file);
+      const { dataUrl, sizeKB } = await compressImage(file);
       setPreview(dataUrl);
       setCompressedData(dataUrl);
+      void recordUploadAttemptEvent(token, {
+        ...fileMetadata,
+        stage: 'compression_succeeded',
+        compressed_size_bytes: sizeKB * 1024,
+      }, uploadScopeId);
     } catch (err) {
-      setError('Errore elaborazione foto: ' + (err.message || 'riprova'));
+      setError('Foto non pronta. Selezionala di nuovo e riprova.');
       setSelectedFile(null);
       setPreview(null);
       setCompressedData(null);
+      void recordUploadAttemptEvent(token, {
+        ...fileMetadata,
+        stage: 'compression_failed',
+        error_kind: 'compression_error',
+        error_message: String(err?.message || 'Errore elaborazione foto').slice(0, 500),
+      }, uploadScopeId);
     } finally {
       setCompressing(false);
     }
@@ -128,14 +182,28 @@ const ChiusurePage = () => {
     setLoading(true);
     setError('');
     setUploadProgress(0);
+    const attemptId = uploadAttemptId || createUploadAttemptId();
+    if (!uploadAttemptId) setUploadAttemptId(attemptId);
+    const uploadMetadata = {
+      attempt_id: attemptId,
+      upload_kind: 'closure_primary',
+      file_size_bytes: selectedFile.size,
+      mime_type: selectedFile.type || '',
+    };
+    void recordUploadAttemptEvent(token, {
+      ...uploadMetadata,
+      stage: 'upload_started',
+    }, uploadScopeId);
 
     try {
-      await axios.post(`${API}/chiusure`, {
+      const response = await axios.post(`${API}/chiusure`, {
         description,
         tipologia,
         control_code: controlCode,
         image_data: compressedData,
-        chiusura_date: new Date(chiusuraDate).toISOString()
+        chiusura_date: new Date(chiusuraDate).toISOString(),
+        upload_attempt_id: attemptId,
+        upload_device_id: getUploadDeviceId(),
       }, {
         headers: { Authorization: `Bearer ${token}` },
         timeout: 120000,
@@ -148,17 +216,29 @@ const ChiusurePage = () => {
       setSelectedFile(null);
       setPreview(null);
       setCompressedData(null);
+      setUploadAttemptId('');
       setDescription('');
       setTipologia('Piatti');
       setControlCode('');
       const now = new Date();
       setChiusuraDate(new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
-      setSuccess('Chiusura caricata con successo!');
+      setSuccess('Chiusura salvata.');
       setTimeout(() => setSuccess(''), 3000);
+
+      void recordUploadAttemptEvent(token, {
+        ...uploadMetadata,
+        stage: 'upload_succeeded',
+        target_closure_id: response.data?.id || '',
+      }, uploadScopeId);
 
       fetchChiusure();
     } catch (err) {
-      setError(friendlyUploadError(err));
+      setError(`Chiusura non salvata — ${friendlyUploadError(err)}`);
+      void recordUploadAttemptEvent(token, {
+        ...uploadMetadata,
+        stage: 'upload_failed',
+        ...uploadErrorDetails(err),
+      }, uploadScopeId);
     } finally {
       setLoading(false);
       setUploadProgress(0);
@@ -210,16 +290,61 @@ const ChiusurePage = () => {
     const file = e.target.files?.[0];
     const cid = piattiTargetId;
     if (!file || !cid) return;
+    const attemptId = createUploadAttemptId();
+    const metadata = {
+      attempt_id: attemptId,
+      upload_kind: 'closure_secondary',
+      target_closure_id: cid,
+      file_size_bytes: file.size,
+      mime_type: file.type || '',
+    };
+    void recordUploadAttemptEvent(token, {
+      ...metadata,
+      stage: 'file_selected',
+    }, uploadScopeId);
     setPiattiUploadingId(cid);
+    let secondaryPhase = 'compression';
     try {
-      const { dataUrl } = await compressImage(file);
+      void recordUploadAttemptEvent(token, {
+        ...metadata,
+        stage: 'compression_started',
+      }, uploadScopeId);
+      const { dataUrl, sizeKB } = await compressImage(file);
+      void recordUploadAttemptEvent(token, {
+        ...metadata,
+        stage: 'compression_succeeded',
+        compressed_size_bytes: sizeKB * 1024,
+      }, uploadScopeId);
+      secondaryPhase = 'upload';
+      void recordUploadAttemptEvent(token, {
+        ...metadata,
+        stage: 'upload_started',
+      }, uploadScopeId);
       await axios.put(
         `${API}/chiusure/${cid}/piatti`,
-        { piatti_data: dataUrl },
+        {
+          piatti_data: dataUrl,
+          upload_attempt_id: attemptId,
+          upload_device_id: getUploadDeviceId(),
+        },
         { headers: { Authorization: `Bearer ${token}` }, timeout: 120000 }
       );
+      void recordUploadAttemptEvent(token, {
+        ...metadata,
+        stage: 'upload_succeeded',
+      }, uploadScopeId);
       await fetchChiusure();
     } catch (err) {
+      void recordUploadAttemptEvent(token, {
+        ...metadata,
+        stage: secondaryPhase === 'compression' ? 'compression_failed' : 'upload_failed',
+        ...(secondaryPhase === 'compression'
+          ? {
+            error_kind: 'compression_error',
+            error_message: String(err?.message || 'Errore elaborazione foto').slice(0, 500),
+          }
+          : uploadErrorDetails(err)),
+      }, uploadScopeId);
       alert(friendlyUploadError(err));
     } finally {
       setPiattiUploadingId(null);
@@ -292,7 +417,7 @@ const ChiusurePage = () => {
                 <span className="ml-3 text-gray-600">
                   {selectedFile ? selectedFile.name : 'Nessun file selezionato'}
                 </span>
-                <span className="ml-3 text-gray-400 text-sm">peso massimo 16 Mb</span>
+                <span className="ml-3 text-gray-400 text-sm">peso massimo 30 MB</span>
               </div>
             </div>
 
@@ -304,7 +429,12 @@ const ChiusurePage = () => {
                   <img src={preview} alt="Preview" className="w-40 h-40 object-cover rounded-md border" />
                   <button
                     type="button"
-                    onClick={() => { setSelectedFile(null); setPreview(null); }}
+                    onClick={() => {
+                      setSelectedFile(null);
+                      setPreview(null);
+                      setCompressedData(null);
+                      setUploadAttemptId('');
+                    }}
                     className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center"
                   >
                     <X size={14} />
@@ -373,9 +503,9 @@ const ChiusurePage = () => {
                 data-testid="chiusura-upload-btn"
               >
                 {compressing
-                  ? 'Elaboro foto...'
+                  ? 'Preparo la foto...'
                   : loading
-                    ? (uploadProgress > 0 && uploadProgress < 100 ? `Caricamento... ${uploadProgress}%` : 'Caricamento...')
+                    ? (uploadProgress > 0 && uploadProgress < 100 ? `Invio in corso... ${uploadProgress}%` : 'Invio in corso...')
                     : 'Carica chiusura'}
               </button>
             </div>

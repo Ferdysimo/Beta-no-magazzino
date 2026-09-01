@@ -44,10 +44,14 @@ class ChiusuraCreate(BaseModel):
     image_data: str = ""
     piatti_data: Optional[str] = None
     chiusura_date: str = None
+    upload_attempt_id: Optional[str] = ""
+    upload_device_id: Optional[str] = ""
 
 
 class ChiusuraPiattiUpload(BaseModel):
     piatti_data: str
+    upload_attempt_id: Optional[str] = ""
+    upload_device_id: Optional[str] = ""
 
 
 class FatturaGlobaleCreate(BaseModel):

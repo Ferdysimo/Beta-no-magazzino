@@ -21,7 +21,8 @@ from .laboratory import (
     PastaAnnotationDecision,
 )
 from .orders import DeletionLog, ModificationLog, OrderCreate, OrderResponse, OrderUpdate
-from .report import CashDailyUpsert, PastaDictionaryUpsert
+from .report import BeveragePriceDictionaryUpsert, CashDailyUpsert, PastaDictionaryUpsert
+from .upload_attempts import UploadAttemptEventCreate
 from .warehouse import (
     CaricoCreate,
     CaricoItem,
@@ -67,6 +68,7 @@ __all__ = [
     "OrderResponse",
     "OrderUpdate",
     "PastaDictionaryUpsert",
+    "BeveragePriceDictionaryUpsert",
     "ProductCreate",
     "ProductQuantityUpdate",
     "ProductUpdate",
@@ -78,4 +80,5 @@ __all__ = [
     "RichiestaItem",
     "RichiestaReceptionConfirm",
     "VersamentoCreate",
+    "UploadAttemptEventCreate",
 ]

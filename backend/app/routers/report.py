@@ -15,7 +15,20 @@ from app.core.security import (
     verify_token,
 )
 from app.core.time import ROME_TZ, _today_rome_str
-from app.schemas import BeverageDailyUpsert, CashDailyUpsert, PastaDictionaryUpsert
+from app.schemas import (
+    BeverageDailyUpsert,
+    BeveragePriceDictionaryUpsert,
+    CashDailyUpsert,
+    PastaDictionaryUpsert,
+)
+from app.services.beverage_prices import (
+    _beverage_price_for_row,
+    _beverage_price_snapshot_fields,
+    _default_beverage_catalog,
+    _freeze_existing_beverage_days,
+    _get_beverage_catalog_for,
+    _get_beverage_prices_for,
+)
 from app.services.report import (
     ALL_CASH_FIELDS,
     CASSETTO_FIELDS,
@@ -208,6 +221,13 @@ async def upsert_beverage_daily(
         "sigla": data.sigla,
         "updated_at": now_iso,
     }
+    if not historical and old_doc.get("price_snapshot") is None:
+        beverage_prices = await _get_beverage_prices_for(rid)
+        set_body.update(_beverage_price_snapshot_fields(
+            beverage_prices.get(data.sigla, 0),
+            source="live_report",
+            captured_at=now_iso,
+        ))
     for k in ("mattina", "inUsc", "scarti", "sera", "mattina_casse", "mattina_sfuse", "inUsc_casse", "sera_casse", "sera_sfuse"):
         if k in sent_fields:
             set_body[k] = getattr(data, k) or ""
@@ -335,7 +355,10 @@ async def get_cash_daily(
             {"_id": 0},
         ).to_list(100)
         dmap = await _get_pasta_dict_for(rid)
-        prev_cash_sera = round(_compute_cash_sera_full(last_doc, prev_bev_docs, dmap), 2)
+        beverage_prices = await _get_beverage_prices_for(rid)
+        prev_cash_sera = round(_compute_cash_sera_full(
+            last_doc, prev_bev_docs, dmap, beverage_prices
+        ), 2)
         # Riga di ieri completa (per la vista read-only nel Report)
         prev_date = last_doc.get("date_rome", "")
         prev_row = {f: last_doc.get(f, "") for f in ALL_CASH_FIELDS}
@@ -351,6 +374,7 @@ async def get_cash_daily(
                 last_cash=last_doc,
                 prev_bev_docs=prev_bev_docs,
                 dict_map=dmap,
+                beverage_prices=beverage_prices,
             ))
             carry_fields.update(await _cash_cassetto_carry_fields(
                 rid=rid,
@@ -510,15 +534,20 @@ async def list_closures(
     async for d in db.beverage_daily_counts.find(base_q, {"date_rome": 1, "_id": 0}):
         dates.add(d["date_rome"])
     items = []
-    bev_prices = {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
     # Dizionario paste per ristorante (se single restaurant); altrimenti per riga
     dict_for_rid_cache: Dict[str, Dict[str, float]] = {}
+    beverage_prices_cache: Dict[str, Dict[str, float]] = {}
     async def _dict_for(rid_local: Optional[str]) -> Dict[str, float]:
         if not rid_local:
             return dict(PASTA_PRICES_MAP)
         if rid_local not in dict_for_rid_cache:
             dict_for_rid_cache[rid_local] = await _get_pasta_dict_for(rid_local)
         return dict_for_rid_cache[rid_local]
+    async def _beverage_prices_for(rid_local: Optional[str]) -> Dict[str, float]:
+        cache_key = rid_local or ""
+        if cache_key not in beverage_prices_cache:
+            beverage_prices_cache[cache_key] = await _get_beverage_prices_for(rid_local)
+        return beverage_prices_cache[cache_key]
     for date_str in sorted(dates, reverse=True):
         cash_q = {"date_rome": date_str}
         bev_q = {"date_rome": date_str}
@@ -529,7 +558,10 @@ async def list_closures(
         bev_docs = await db.beverage_daily_counts.find(bev_q, {"_id": 0}).to_list(50)
         rid_for_dict = restaurant_id or cash_doc.get("restaurant_id")
         dmap = await _dict_for(rid_for_dict)
-        cash_sera = round(_compute_cash_sera_full(cash_doc, bev_docs, dmap), 2) if cash_doc else 0.0
+        bev_prices = await _beverage_prices_for(rid_for_dict)
+        cash_sera = round(_compute_cash_sera_full(
+            cash_doc, bev_docs, dmap, bev_prices
+        ), 2) if cash_doc else 0.0
         bev_total_qty = 0
         bev_total_inc = 0.0
         for r in bev_docs:
@@ -537,7 +569,7 @@ async def list_closures(
             s = _eval_cash_value(r.get("scarti"));  e = _eval_cash_value(r.get("sera"))
             qty = (0 if e == 0 else (m + u - e)) - s
             bev_total_qty += int(qty)
-            bev_total_inc += qty * bev_prices.get(r["sigla"], 0)
+            bev_total_inc += qty * _beverage_price_for_row(r, bev_prices)
         orders_info = await _orders_aggregate_for_date(date_str, restaurant_id=restaurant_id)
         paste_count = _compute_paste_count(cash_doc.get("paste_text", "") if cash_doc else "")
         items.append({
@@ -726,16 +758,21 @@ async def closures_grid_admin(
     async for d in db.beverage_daily_counts.find(base_q, {"date_rome": 1, "_id": 0}):
         dates.add(d["date_rome"])
 
-    bev_prices = {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
     bev_sigle_sorted = [b["sigla"] for b in sorted(BEVERAGES_CATALOG, key=lambda x: x.get("sort_order", 999))]
     # Cache dizionario paste per ristorante
     _dict_cache: Dict[str, Dict[str, float]] = {}
+    _beverage_price_cache: Dict[str, Dict[str, float]] = {}
     async def _dict_for_grid(rid_local: Optional[str]) -> Dict[str, float]:
         if not rid_local:
             return dict(PASTA_PRICES_MAP)
         if rid_local not in _dict_cache:
             _dict_cache[rid_local] = await _get_pasta_dict_for(rid_local)
         return _dict_cache[rid_local]
+    async def _beverage_prices_for_grid(rid_local: Optional[str]) -> Dict[str, float]:
+        cache_key = rid_local or ""
+        if cache_key not in _beverage_price_cache:
+            _beverage_price_cache[cache_key] = await _get_beverage_prices_for(rid_local)
+        return _beverage_price_cache[cache_key]
 
     rows: List[Dict] = []
     for date_str in sorted(dates, reverse=True):
@@ -747,7 +784,9 @@ async def closures_grid_admin(
         cash_doc = await db.cash_daily_counts.find_one(cash_q, {"_id": 0}) or {}
         bev_docs = await db.beverage_daily_counts.find(bev_q, {"_id": 0}).to_list(50)
         bev_by_sigla = {b["sigla"]: b for b in bev_docs}
-        dmap_row = await _dict_for_grid(restaurant_id or cash_doc.get("restaurant_id"))
+        rid_for_prices = restaurant_id or cash_doc.get("restaurant_id")
+        dmap_row = await _dict_for_grid(rid_for_prices)
+        bev_prices_row = await _beverage_prices_for_grid(rid_for_prices)
         cash_metadata = _closure_grid_report_metadata(
             cash_doc,
             _CLOSURE_GRID_CASH_DETAIL_FIELDS,
@@ -771,17 +810,20 @@ async def closures_grid_admin(
             s = _eval_cash_value(r.get("scarti"))
             e = _eval_cash_value(r.get("sera"))
             qty = (0 if e == 0 else (m + u - e)) - s
-            inc = qty * bev_prices.get(sigla, 0)
+            price = _beverage_price_for_row(r, bev_prices_row)
+            inc = qty * price
             bev_flat[sigla] = {
                 "mattina": m, "inUsc": u, "scarti": s, "sera": e,
-                "qty": int(qty), "incasso": round(inc, 2),
+                "qty": int(qty), "price": price, "incasso": round(inc, 2),
                 "raw": beverage_metadata["raw"],
                 "comments": beverage_metadata["comments"],
             }
             bev_total_qty += int(qty)
             bev_total_inc += inc
 
-        cash_sera = round(_compute_cash_sera_full(cash_doc, bev_docs, dmap_row), 2) if cash_doc else 0.0
+        cash_sera = round(_compute_cash_sera_full(
+            cash_doc, bev_docs, dmap_row, bev_prices_row
+        ), 2) if cash_doc else 0.0
         cash_sera_base = round(_compute_cash_sera(cash_doc), 2) if cash_doc else 0.0
         spicci_total = round(_compute_spicci_total(cash_doc), 2) if cash_doc else 0.0
         paste_text = cash_doc.get("paste_text", "") if cash_doc else ""
@@ -814,7 +856,7 @@ async def closures_grid_admin(
         "count": len(rows),
         "cash_fields": list(ALL_CASH_FIELDS),
         "bev_sigle": bev_sigle_sorted,
-        "bev_prices": bev_prices,
+        "bev_prices": await _beverage_prices_for_grid(restaurant_id),
     }
 
 
@@ -1041,6 +1083,117 @@ async def reset_pasta_dictionary(
     require_admin_or_federico(token_data)
     res = await db.pasta_dictionary.delete_one({"restaurant_id": restaurant_id})
     return {"ok": True, "deleted": res.deleted_count}
+
+
+# ─── LISTINO BEVANDE PER RISTORANTE ─────────────────────────────────────────
+
+@router.get("/beverage-price-dictionary")
+async def get_beverage_price_dictionary(
+    request: Request,
+    restaurant_id: Optional[str] = None,
+    token_data: dict = Depends(verify_token),
+):
+    """Return the effective beverage list for one restaurant.
+
+    Beverage identities stay fixed because their siglas are also inventory keys;
+    only prices can be customized per restaurant.
+    """
+    if restaurant_id and not can_impersonate(token_data):
+        raise HTTPException(status_code=403, detail="Admin only per leggere listini di altri locali")
+    rid = restaurant_id or await _effective_restaurant_id(request, token_data)
+    catalog = await _get_beverage_catalog_for(rid)
+    doc = await db.beverage_price_dictionary.find_one(
+        {"restaurant_id": rid},
+        {"_id": 0},
+    ) if rid else None
+    return {
+        "restaurant_id": rid,
+        "beverages": catalog,
+        "is_default": not bool(doc),
+        "updated_at": (doc or {}).get("updated_at"),
+        "updated_by": (doc or {}).get("updated_by"),
+    }
+
+
+@router.put("/beverage-price-dictionary")
+async def upsert_beverage_price_dictionary(
+    data: BeveragePriceDictionaryUpsert,
+    token_data: dict = Depends(verify_token),
+):
+    """Set the complete beverage price list for a restaurant."""
+    require_admin_or_federico(token_data)
+    rid = str(data.restaurant_id or "").strip()
+    if not rid:
+        raise HTTPException(status_code=400, detail="restaurant_id mancante")
+
+    defaults = _default_beverage_catalog()
+    expected = {item["sigla"] for item in defaults}
+    clean_map: Dict[str, float] = {}
+    for item in data.prices or []:
+        if not isinstance(item, dict):
+            raise HTTPException(status_code=400, detail="Riga listino non valida")
+        sigla = str(item.get("sigla", "")).upper().strip()
+        if sigla not in expected:
+            raise HTTPException(status_code=400, detail=f"Sigla bevanda non valida: '{sigla}'")
+        if sigla in clean_map:
+            raise HTTPException(status_code=400, detail=f"Sigla duplicata: '{sigla}'")
+        try:
+            price = float(item.get("price"))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail=f"Prezzo non valido per '{sigla}'")
+        if price < 0 or price > 1000:
+            raise HTTPException(status_code=400, detail=f"Prezzo non valido per '{sigla}'")
+        clean_map[sigla] = price
+    missing = expected - set(clean_map)
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Listino incompleto; mancano: {', '.join(sorted(missing))}",
+        )
+
+    previous_prices = await _get_beverage_prices_for(rid)
+    frozen_rows = await _freeze_existing_beverage_days(
+        rid,
+        previous_prices,
+        source="before_price_dictionary_change",
+    )
+    now_iso = datetime.now(timezone.utc).isoformat()
+    username = token_data.get("name") or token_data.get("username") or token_data.get("sub") or "admin"
+    clean = [
+        {"sigla": item["sigla"], "price": clean_map[item["sigla"]]}
+        for item in defaults
+    ]
+    await db.beverage_price_dictionary.update_one(
+        {"restaurant_id": rid},
+        {"$set": {
+            "restaurant_id": rid,
+            "prices": clean,
+            "updated_at": now_iso,
+            "updated_by": username,
+        }},
+        upsert=True,
+    )
+    return {"ok": True, "count": len(clean), "frozen_rows": frozen_rows}
+
+
+@router.delete("/beverage-price-dictionary")
+async def reset_beverage_price_dictionary(
+    restaurant_id: str,
+    token_data: dict = Depends(verify_token),
+):
+    """Reset future beverage report prices to the code defaults."""
+    require_admin_or_federico(token_data)
+    rid = str(restaurant_id or "").strip()
+    if not rid:
+        raise HTTPException(status_code=400, detail="restaurant_id mancante")
+    previous_prices = await _get_beverage_prices_for(rid)
+    frozen_rows = await _freeze_existing_beverage_days(
+        rid,
+        previous_prices,
+        source="before_price_dictionary_reset",
+    )
+    res = await db.beverage_price_dictionary.delete_one({"restaurant_id": rid})
+    return {"ok": True, "deleted": res.deleted_count, "frozen_rows": frozen_rows}
 
 
 async def admin_snapshot_today(

@@ -14,6 +14,7 @@ from app.schemas import (
     FatturaGlobaleCreate,
     VersamentoCreate,
 )
+from app.services.upload_attempts import safe_record_server_upload_event
 
 
 router = APIRouter()
@@ -128,6 +129,13 @@ async def delete_versamento(versamento_id: str, token_data: dict = Depends(verif
 async def create_chiusura(data: ChiusuraCreate, token_data: dict = Depends(verify_token)):
     restaurant_id = token_data["restaurant_id"]
     restaurant_name = token_data["restaurant_name"]
+    await safe_record_server_upload_event(
+        attempt_id=data.upload_attempt_id or "",
+        stage="server_received",
+        upload_kind="closure_primary",
+        token_data=token_data,
+        device_id=data.upload_device_id or "",
+    )
 
     # Check for duplicate control code within today if provided
     if data.control_code:
@@ -160,6 +168,14 @@ async def create_chiusura(data: ChiusuraCreate, token_data: dict = Depends(verif
     }
 
     await db.chiusure.insert_one(chiusura)
+    await safe_record_server_upload_event(
+        attempt_id=data.upload_attempt_id or "",
+        stage="server_saved",
+        upload_kind="closure_primary",
+        token_data=token_data,
+        device_id=data.upload_device_id or "",
+        target_closure_id=chiusura_id,
+    )
 
     return {
         "id": chiusura_id,
@@ -227,6 +243,14 @@ async def delete_chiusura(chiusura_id: str, token_data: dict = Depends(verify_to
 @router.put("/chiusure/{chiusura_id}/piatti")
 async def upload_chiusura_piatti(chiusura_id: str, data: ChiusuraPiattiUpload, token_data: dict = Depends(verify_token)):
     """Attach/replace the 'piatti' photo for a given chiusura."""
+    await safe_record_server_upload_event(
+        attempt_id=data.upload_attempt_id or "",
+        stage="server_received",
+        upload_kind="closure_secondary",
+        token_data=token_data,
+        device_id=data.upload_device_id or "",
+        target_closure_id=chiusura_id,
+    )
     is_admin = token_data.get("role") == "admin"
     query = {"id": chiusura_id}
     if not is_admin:
@@ -245,6 +269,14 @@ async def upload_chiusura_piatti(chiusura_id: str, data: ChiusuraPiattiUpload, t
     await db.chiusure.update_one(
         {"id": chiusura_id},
         {"$set": {"piatti_file": filename}}
+    )
+    await safe_record_server_upload_event(
+        attempt_id=data.upload_attempt_id or "",
+        stage="server_saved",
+        upload_kind="closure_secondary",
+        token_data=token_data,
+        device_id=data.upload_device_id or "",
+        target_closure_id=chiusura_id,
     )
     return {"piatti_url": build_upload_url(filename)}
 

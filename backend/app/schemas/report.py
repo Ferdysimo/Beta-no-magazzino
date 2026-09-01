@@ -37,3 +37,8 @@ class CashDailyUpsert(BaseModel):
 class PastaDictionaryUpsert(BaseModel):
     restaurant_id: str
     siglas: List[Dict]
+
+
+class BeveragePriceDictionaryUpsert(BaseModel):
+    restaurant_id: str
+    prices: List[Dict]

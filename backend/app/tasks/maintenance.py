@@ -154,4 +154,13 @@ async def cleanup_old_uploads(retention_days: int = UPLOADS_RETENTION_DAYS) -> D
             logger.error(f"[CLEANUP] Failed for {coll_name}: {e}", exc_info=True)
             summary[coll_name] = -1
 
+    # Upload-attempt diagnostics contain metadata only and follow the same
+    # 90-day window as the closure images they explain.
+    try:
+        result = await db.upload_attempts.delete_many({"first_seen": {"$lt": cutoff}})
+        summary["upload_attempts"] = result.deleted_count
+    except Exception as e:
+        logger.error("[CLEANUP] Failed for upload_attempts: %s", e, exc_info=True)
+        summary["upload_attempts"] = -1
+
     return summary

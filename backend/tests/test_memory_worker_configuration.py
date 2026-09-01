@@ -77,6 +77,20 @@ def test_pasta_dictionary_and_beverage_prices_use_integer_cents():
         captured_at=CAPTURED,
         activation_epoch=ACTIVATION,
     )
+    _, _, beverage_prices = normalize_configuration_record(
+        {
+            "restaurant_id": "restaurant-1",
+            "prices": [
+                {"sigla": "C", "price": 3.2},
+                {"sigla": "AL", "price": 1.1},
+            ],
+            "updated_at": "2026-07-20T14:20:00+00:00",
+            "updated_by": "Federico",
+        },
+        _stream("configuration_beverage_price_dictionaries"),
+        captured_at=CAPTURED,
+        activation_epoch=ACTIVATION,
+    )
 
     assert dictionary["entries"] == [
         {"code": "CARB", "price_cents": 850},
@@ -84,6 +98,10 @@ def test_pasta_dictionary_and_beverage_prices_use_integer_cents():
     ]
     assert dictionary["dictionary_source"] == "restaurant_override"
     assert beverage["price_cents"] == 250
+    assert beverage_prices["entries"] == [
+        {"code": "AL", "price_cents": 110},
+        {"code": "C", "price_cents": 320},
+    ]
 
 
 def test_confirmed_pasta_alias_is_collected_as_versioned_configuration():
@@ -180,6 +198,7 @@ def test_configuration_streams_cover_local_prices_catalog_and_suppliers():
     assert {stream.collection for stream in CONFIGURATION_STREAMS} == {
         "restaurants",
         "pasta_dictionary",
+        "beverage_price_dictionary",
         "lab_pasta_annotation_aliases",
         "beverages",
         "suppliers",

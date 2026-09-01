@@ -70,6 +70,14 @@ CONFIGURATION_STREAMS = (
         ("restaurant_id", "_id"),
     ),
     ConfigurationStream(
+        "configuration_beverage_price_dictionaries",
+        "beverage_price_dictionary",
+        "configuration_beverage_price_dictionaries",
+        "beverage_price_dictionary_state",
+        ("updated_at",),
+        ("restaurant_id", "_id"),
+    ),
+    ConfigurationStream(
         "configuration_pasta_annotation_aliases",
         "lab_pasta_annotation_aliases",
         "configuration_pasta_annotation_aliases",
@@ -152,9 +160,12 @@ def configuration_source_id(
         "supplier_state",
     }:
         return str(document.get("id") or "").strip()
-    if stream.event_kind == "pasta_dictionary_state":
+    if stream.event_kind in {"pasta_dictionary_state", "beverage_price_dictionary_state"}:
         restaurant_id = str(document.get("restaurant_id") or "").strip()
-        return f"pasta-dictionary:{restaurant_id}" if restaurant_id else ""
+        if not restaurant_id:
+            return ""
+        prefix = "pasta-dictionary" if stream.event_kind == "pasta_dictionary_state" else "beverage-price-dictionary"
+        return f"{prefix}:{restaurant_id}"
     if stream.event_kind == "pasta_annotation_alias_state":
         alias = normalize_annotation_target(
             document.get("alias_normalized") or ""
@@ -265,6 +276,59 @@ def _normalize_pasta_dictionary(
         "normalizer_version": CONFIGURATION_NORMALIZER_VERSION,
         "fact_kind": "pasta_dictionary_state",
         "entity_key": f"pasta-dictionary:{restaurant_id}",
+        "restaurant_id": restaurant_id,
+        "occurred_at": timestamp,
+        "present": True,
+        "dictionary_source": "restaurant_override",
+        "entries": entries,
+        "entry_count": len(entries),
+        "updated_by": str(document.get("updated_by") or "").strip(),
+        "quality": {
+            "timestamp_source": timestamp_source,
+            "prices_use_integer_cents": True,
+        },
+    }
+    return source_id, timestamp, fact
+
+
+def _normalize_beverage_price_dictionary(
+    document: dict,
+    *,
+    captured_at: datetime,
+    stream: ConfigurationStream,
+) -> tuple[str, datetime, dict]:
+    source_id = configuration_source_id(document, stream)
+    restaurant_id = str(document.get("restaurant_id") or "").strip()
+    if not source_id or not restaurant_id:
+        raise ValueError("restaurant_id listino bevande mancante")
+    timestamp, timestamp_source = _source_timestamp(
+        document,
+        stream.timestamp_fields,
+        captured_at=captured_at,
+    )
+    entries = []
+    seen = set()
+    for index, item in enumerate(document.get("prices") or []):
+        if not isinstance(item, dict):
+            raise ValueError(f"prices[{index}] non e un oggetto")
+        sigla = str(item.get("sigla") or "").strip().upper()
+        if not sigla:
+            raise ValueError(f"prices[{index}].sigla mancante")
+        if sigla in seen:
+            raise ValueError(f"sigla duplicata: {sigla}")
+        seen.add(sigla)
+        entries.append({
+            "code": sigla,
+            "price_cents": _to_cents(_decimal(
+                item.get("price"),
+                field=f"prices[{index}].price",
+            )),
+        })
+    entries.sort(key=lambda item: item["code"])
+    fact = {
+        "normalizer_version": CONFIGURATION_NORMALIZER_VERSION,
+        "fact_kind": "beverage_price_dictionary_state",
+        "entity_key": f"beverage-price-dictionary:{restaurant_id}",
         "restaurant_id": restaurant_id,
         "occurred_at": timestamp,
         "present": True,
@@ -410,6 +474,12 @@ def normalize_configuration_record(
         )
     if stream.event_kind == "pasta_dictionary_state":
         return _normalize_pasta_dictionary(
+            document,
+            captured_at=captured_at,
+            stream=stream,
+        )
+    if stream.event_kind == "beverage_price_dictionary_state":
+        return _normalize_beverage_price_dictionary(
             document,
             captured_at=captured_at,
             stream=stream,

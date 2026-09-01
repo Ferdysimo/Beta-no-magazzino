@@ -116,9 +116,9 @@ essere verificati durante il rollout P0-B, non dati per acquisiti.
 | Anonimo | Nessun tenant | Login, endpoint tecnici pubblici minimi, apertura di un upload solo con URL firmato valido | Tutti i dati operativi |
 | Locale (`restaurant`) | Solo il proprio locale | Ordini, tablet, Report del giorno, documenti del locale, richieste merce e conferma ricezione | Impersonazione, configurazioni globali, dati di altri locali |
 | Magazziniere (`magazzino`) | Magazzino centrale | Evasione richieste, carichi, DDT, consultazione prodotti, stock e movimenti necessari al flusso operativo | Creazione/modifica/cancellazione catalogo prodotti e fornitori, forzatura quantita |
-| Federico (`supervisor`) | Locale selezionato | Selezione locale, Report e storico, Numeri, storico chiusure, audit Cassa, diagnostica e dizionario paste secondo le route abilitate | Magazzino globale, Analisi mensile completa, documenti globali, creazione locali e mutazioni globali |
+| Federico (`supervisor`) | Locale selezionato | Selezione locale, Report e storico, Numeri, storico chiusure, audit Cassa, diagnostica, controllo caricamenti chiusure, dizionario paste e listino bevande secondo le route abilitate | Magazzino globale, Analisi mensile completa, documenti globali, creazione locali e mutazioni globali |
 | Admin (`admin`) | Globale o locale selezionato | Amministrazione operativa, impersonazione, mutazioni globali, export e correzioni autorizzate | Creazione nuovi locali riservata a Simone |
-| Simone (`admin`) | Globale o locale selezionato | Tutte le capacita Admin e creazione/configurazione iniziale di nuovi locali | Nessun bypass fuori dalle route autorizzate |
+| Simone (`admin`) | Globale o locale selezionato | Tutte le capacita Admin, controllo caricamenti chiusure e creazione/configurazione iniziale di nuovi locali | Nessun bypass fuori dalle route autorizzate |
 
 La matrice e un contratto di prodotto, ma ogni route deve applicarlo nel backend.
 Ogni nuova route deve dichiarare e testare esplicitamente l'accesso per:
@@ -170,6 +170,13 @@ Contratti:
 
 WebSocket notifica le variazioni al tenant corretto. Se non e disponibile, il
 polling mantiene le pagine aggiornate senza cambiare la fonte di verita.
+
+Nella Cassa desktop di Flaminio una colonna fissa a destra mostra tutte le
+bevande del catalogo effettivo, con nome, sigla e contatore giornaliero. Il
+pulsante verde `+` registra una vendita, mentre il pulsante rosso `-` storna
+l'ultima vendita della stessa sigla senza permettere valori negativi. Queste
+azioni usano il flusso `beverage_sales` gia esistente e aggiornano la relativa
+giacenza; non modificano direttamente le righe del Report giornaliero.
 
 ### 6.2 Chiusura della giornata
 
@@ -242,6 +249,14 @@ valore e compreso nell'intervallo inclusivo da `-5` a `+5`; per qualunque valore
 esterno e rosso. Il colore riguarda soltanto lo sfondo e non altera il numero,
 i calcoli o la posizione della colonna.
 
+La cella `Altro` confronta invece i valori numerici presenti nell'espressione
+grezza con i commenti inseriti per quel campo, dove ogni commento e separato dal
+successivo tramite virgola. Se i conteggi non coincidono, oppure un segmento di
+commento e vuoto, la cella diventa rossa nello Storico chiusure. Le virgole
+decimali dell'espressione (per esempio `10,50+3,20`) restano parte dei numeri e
+non aumentano il conteggio dei valori. Campo e commento entrambi vuoti sono uno
+stato valido; il controllo e solo visivo e non modifica dati o calcoli.
+
 Riporti automatici:
 
 - `cash mattina` del nuovo giorno deriva dal `cash sera` del giorno precedente;
@@ -260,6 +275,12 @@ Per ciascuna bevanda, la vendita calcolata usa:
 
 Il significato di `sera = 0` resta una limitazione nota: oggi viene interpretato
 come dato non chiuso, non come vendita completa di tutto lo stock.
+
+I nomi e le sigle delle bevande restano un catalogo tecnico fisso, perché le
+sigle identificano anche le righe di magazzino. Federico, Admin e Simone possono
+personalizzare soltanto il prezzo per ciascun locale. Ogni riga giornaliera
+conserva uno snapshot del prezzo: un cambio di listino non deve ricalcolare una
+chiusura già iniziata né il suo riporto cassa al giorno successivo.
 
 ### 6.4 Numeri
 
@@ -405,6 +426,17 @@ La retention corrente e di 90 giorni:
 - per carichi di magazzino e bevande vengono rimossi gli allegati vecchi, ma i
   documenti strutturati restano per lo storico.
 
+Il caricamento delle foto di chiusura mantiene inoltre un registro persistente
+di soli metadati, separato dalla Diagnostica live. Per ogni tentativo registra
+selezione, preparazione client, inizio invio, arrivo al backend, salvataggio o
+errore, insieme a locale e identificativo dispositivo; non salva mai la foto o
+il suo contenuto nel registro. Il locale vede soltanto messaggi operativi brevi
+(`Invio in corso`, `Chiusura salvata`, `Chiusura non salvata`), mentre la pagina
+`Controllo caricamenti` e la relativa lettura backend sono riservate
+esclusivamente a Federico e Simone. Gli eventi client non consegnati vengono
+ritentati best effort quando il dispositivo torna online e i metadati seguono la
+stessa retention di 90 giorni delle chiusure.
+
 ### 6.8 Diagnostica e aggiornamenti client
 
 La Diagnostica live e una vista operativa, non una fonte contabile. Mostra:
@@ -429,8 +461,9 @@ dettagli in sola lettura. L'identita del locale viene risolta lato backend a
 partire dall'account autenticato.
 
 Heartbeat, latenze ed errori frontend sono mantenuti prevalentemente in memoria
-e si azzerano al riavvio backend. Solo i nomi/modelli assegnati manualmente sono
-conservati nella collezione Mongo dedicata.
+e si azzerano al riavvio backend. Solo i nomi/modelli assegnati manualmente e il
+registro specifico dei tentativi di caricamento chiusure sono conservati nelle
+rispettive collezioni Mongo dedicate.
 
 Il frontend controlla la versione pubblicata e puo ricaricarsi una volta quando
 rileva un bundle nuovo. Le pagine ricordano in `sessionStorage` la posizione di
@@ -539,9 +572,11 @@ evidenza, ma non deve mai compilare un prezzo assente dal documento.
 | Report cassa | `cash_daily_counts` | Un documento per locale e data di Roma |
 | Report bevande | `beverage_daily_counts` | Una riga per locale, data e sigla |
 | Dizionario paste | dizionario per locale + snapshot giornaliero | Lo snapshot congela interpretazione e prezzi dello storico |
+| Listino bevande | `beverage_price_dictionary` + snapshot sulla riga Report | Prezzi per locale; sigle e nomi restano fissi |
 | Stock | `products` | Quantita corrente, verificabile tramite ledger |
 | Movimenti stock | `stock_movements` | Registro delle variazioni, non sostituisce la quantita corrente |
 | Allegati | filesystem `UPLOADS_DIR` + riferimento Mongo | Database e filesystem devono restare coerenti |
+| Tentativi upload chiusure | `upload_attempts` | Soli metadati e fasi; `server_saved` conferma il salvataggio effettivo |
 
 Distinzioni obbligatorie:
 

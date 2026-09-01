@@ -32,3 +32,26 @@ def test_beverage_waste_reduces_total_even_before_evening_count():
     ]
 
     assert _compute_bev_total_eur(docs) == -4
+
+
+def test_beverage_total_uses_restaurant_price_list_when_no_snapshot_exists():
+    docs = [
+        {"sigla": "C", "mattina": "20", "inUsc": "", "scarti": "", "sera": "10"},
+    ]
+
+    assert _compute_bev_total_eur(docs, {"C": 3.25}) == 32.5
+
+
+def test_beverage_daily_price_snapshot_wins_over_later_price_changes():
+    docs = [
+        {
+            "sigla": "C",
+            "mattina": "20",
+            "inUsc": "",
+            "scarti": "",
+            "sera": "10",
+            "price_snapshot": 2,
+        },
+    ]
+
+    assert _compute_bev_total_eur(docs, {"C": 3.25}) == 20

@@ -88,6 +88,14 @@ const HomePage = () => {
                 <span className="block text-xs text-gray-500 mt-0.5">WebSocket, latenze e errori in tempo reale</span>
               </button>
               <button
+                data-testid="simone-controllo-caricamenti"
+                onClick={() => navigate('/controllo-caricamenti')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Controllo caricamenti</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Verifica ogni tentativo di invio delle foto di chiusura</span>
+              </button>
+              <button
                 data-testid="simone-controlli-trasporti"
                 onClick={() => navigate('/admin/controlli-trasporti')}
                 className="w-full flex items-center gap-3 text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
@@ -231,6 +239,16 @@ const HomePage = () => {
               )}
               {isFederico && (
               <button
+                data-testid="admin-dizionario-bevande"
+                onClick={() => navigate('/dizionario-bevande')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Prezzi delle bevande</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Listino per locale usato nel calcolo del Report</span>
+              </button>
+              )}
+              {isFederico && (
+              <button
                 data-testid="admin-audit-cassa"
                 onClick={() => navigate('/audit-cassa')}
                 className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
@@ -246,6 +264,16 @@ const HomePage = () => {
                 className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
               >
                 <span className="font-bold text-lg text-gray-800">Diagnostica live</span>
+              </button>
+              )}
+              {isFederico && (
+              <button
+                data-testid="federico-controllo-caricamenti"
+                onClick={() => navigate('/controllo-caricamenti')}
+                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <span className="font-bold text-lg text-gray-800">Controllo caricamenti</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Verifica ogni tentativo di invio delle foto di chiusura</span>
               </button>
               )}
             </div>

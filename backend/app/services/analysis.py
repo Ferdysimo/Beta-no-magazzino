@@ -16,6 +16,10 @@ from app.core.time import (
     _rome_date_bounds_utc,
     _rome_date_from_iso,
 )
+from app.services.beverage_prices import (
+    _beverage_price_for_row,
+    _get_beverage_prices_for,
+)
 from app.services.report import (
     ALL_CASH_FIELDS,
     PASTA_PRICES_MAP,
@@ -627,13 +631,13 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
     deleted_order_counts = deletion_source_data["counts"]
 
     bev_sigle = [b["sigla"] for b in sorted(BEVERAGES_CATALOG, key=lambda x: x.get("sort_order", 999))]
-    bev_prices = {b["sigla"]: b["price"] for b in BEVERAGES_CATALOG}
     restaurants_data = []
     integrity_errors: List[Dict] = []
     integrity_warnings: List[Dict] = []
 
     for rest in restaurants:
         rid = rest.get("id")
+        beverage_prices = await _get_beverage_prices_for(rid)
         price_dict = _ordered_pasta_dict(await _get_pasta_dict_for(rid))
         analysis_pasta_types = _analysis_pasta_types_for_restaurant(rest)
         analysis_dict = _analysis_pasta_dict(price_dict, analysis_pasta_types)
@@ -692,7 +696,8 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
                 s = _eval_cash_value(row.get("scarti"))
                 e = _eval_cash_value(row.get("sera"))
                 qty = (0 if e == 0 else (m + u - e)) - s
-                inc = round(qty * bev_prices.get(sigla, 0), 2)
+                price = _beverage_price_for_row(row, beverage_prices)
+                inc = round(qty * price, 2)
                 beverages[sigla] = {
                     "mattina": m,
                     "inUsc": u,
@@ -700,7 +705,7 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
                     "sera": e,
                     "qty": int(qty),
                     "incasso": inc,
-                    "price": bev_prices.get(sigla, 0),
+                    "price": price,
                     "raw": {
                         "mattina": row.get("mattina", ""),
                         "inUsc": row.get("inUsc", ""),
@@ -716,7 +721,9 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
             cash_values = {f: _eval_cash_value(cash_doc.get(f, "")) for f in ALL_CASH_FIELDS}
             spicci_total = round(_compute_spicci_total(cash_doc), 2)
             cassetto_total = round(_compute_cassetto_total(cash_doc), 2)
-            cash_sera = round(_compute_cash_sera_full(cash_calc, bev_docs, row_price_dict), 2) if (cash_doc or paste_text or bev_docs) else 0.0
+            cash_sera = round(_compute_cash_sera_full(
+                cash_calc, bev_docs, row_price_dict, beverage_prices
+            ), 2) if (cash_doc or paste_text or bev_docs) else 0.0
 
             total_count = paste_breakdown["total_count"]
             if total_count > 0:

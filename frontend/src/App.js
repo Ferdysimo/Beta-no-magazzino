@@ -19,6 +19,7 @@ import MagazzinierePage from './pages/MagazzinierePage';
 import ProdottiMagazzinoPage from './pages/ProdottiMagazzinoPage';
 import MediaLocaliPage from './pages/MediaLocaliPage';
 import DiagnosticaLivePage from './pages/DiagnosticaLivePage';
+import ControlloCaricamentiPage from './pages/ControlloCaricamentiPage';
 import GeneraleHideLogPage from './pages/GeneraleHideLogPage';
 import AdminFattureGlobaliPage from './pages/AdminFattureGlobaliPage';
 import MagazzinoBevandePage from './pages/MagazzinoBevandePage';
@@ -38,6 +39,7 @@ import ReportIeriPage from './pages/ReportIeriPage';
 import AuditCassaPage from './pages/AuditCassaPage';
 import ChiusureExcelPage from './pages/ChiusureExcelPage';
 import DizionarioPastePage from './pages/DizionarioPastePage';
+import DizionarioBevandePage from './pages/DizionarioBevandePage';
 import CreaLocaliPage from './pages/CreaLocaliPage';
 import LaboratorioPage from './pages/LaboratorioPage';
 import ScannerDocumentiLabPage from './pages/ScannerDocumentiLabPage';
@@ -100,6 +102,20 @@ const AdminOnlyRoute = ({ children }) => {
   const { restaurant } = useAuth();
 
   if (restaurant?.role !== 'admin') {
+    return <Navigate to="/home" replace />;
+  }
+
+  return children;
+};
+
+const UploadMonitorRoute = ({ children }) => {
+  const { restaurant } = useAuth();
+  const allowed = (
+    (restaurant?.username === 'Simone' && restaurant?.role === 'admin')
+    || (restaurant?.username === 'Federico' && restaurant?.role === 'supervisor')
+  );
+
+  if (!allowed) {
     return <Navigate to="/home" replace />;
   }
 
@@ -264,6 +280,13 @@ function AppRoutes() {
           <DiagnosticaLivePage />
         </ProtectedRoute>
       } />
+      <Route path="/controllo-caricamenti" element={
+        <ProtectedRoute>
+          <UploadMonitorRoute>
+            <ControlloCaricamentiPage />
+          </UploadMonitorRoute>
+        </ProtectedRoute>
+      } />
       <Route path="/cestino-generale" element={
         <ProtectedRoute>
           <GeneraleHideLogPage />
@@ -299,6 +322,11 @@ function AppRoutes() {
       <Route path="/dizionario-paste" element={
         <ProtectedRoute>
           <DizionarioPastePage />
+        </ProtectedRoute>
+      } />
+      <Route path="/dizionario-bevande" element={
+        <ProtectedRoute>
+          <DizionarioBevandePage />
         </ProtectedRoute>
       } />
       <Route path="/simone/crea-locali" element={

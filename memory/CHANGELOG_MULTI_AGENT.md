@@ -178,6 +178,70 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-09-01 11:59 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | Storico chiusure | controllo operativo | test
+**File toccati**:
+- `/app/frontend/src/pages/{ChiusureExcelPage,ChiusureExcelPage.test}.js`
+- `/app/frontend/public/version.json`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: La cella `Altro` dello Storico chiusure diventa rossa quando il numero dei valori numerici presenti nell'espressione non coincide con il numero dei commenti separati da virgola. Segmenti commento vuoti sono invalidi; campo e commento entrambi vuoti restano validi. Il conteggio riconosce correttamente le virgole decimali, quindi `10,50+3,20` vale come due valori e non come quattro.
+**Testato**: sì (metodo: test mirati Storico chiusure `11 passed`, inclusi mismatch visivo, decimali italiani, formule, commenti vuoti e stato vuoto; suite frontend completa `61 passed`; build React produzione riuscita con soli warning Hook preesistenti; `git diff --check`).
+**Note per il prossimo agente**: controllo esclusivamente visivo nella griglia Federico; non blocca l'inserimento del cassiere, non riscrive commenti o valori, non cambia formule, totali, API, ruoli o documenti Mongo. Il doppio clic continua a mostrare espressione e commento originali per correggere il dato dal Report storico.
+
+### [2026-09-01 11:45 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | upload | diagnostica operativa | sicurezza | test
+**File toccati**:
+- `/app/backend/app/{bootstrap.py,routers/{documents,upload_attempts}.py,schemas/{__init__,documents,upload_attempts}.py,services/upload_attempts.py,tasks/maintenance.py}`
+- `/app/backend/server.py`
+- `/app/backend/tests/{test_upload_attempts,test_phase1_foundations_contract,test_phase3_module_contract}.py`
+- `/app/frontend/src/{App.js,pages/{HomePage,ChiusurePage,ControlloCaricamentiPage,ControlloCaricamentiPage.test}.js,utils/{uploadAttemptTracking,uploadAttemptTracking.test}.js}`
+- `/app/frontend/public/version.json`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Aggiunta fuori dalla Diagnostica live la pagina desktop `Controllo caricamenti`, raggiungibile dai pulsanti degli account Federico e Simone. Ogni foto di chiusura primaria o secondaria produce una cronologia persistente di soli metadati (selezione, compressione, invio, arrivo al backend, salvataggio o errore), con locale e dispositivo; gli eventi non consegnati restano in coda locale e vengono ritentati al ritorno online. Il cassiere continua a vedere soltanto messaggi brevi e può riprovare con la foto ancora pronta, mentre la pagina privilegiata offre filtri, riepilogo, ultima fase e timeline espandibile. I metadati vengono rimossi dopo 90 giorni insieme alla finestra di retention delle chiusure.
+**Testato**: sì (metodo: backend completo `243 passed, 36 skipped`; frontend completo `59 passed`; test HTTP della matrice ruoli per entrambe le nuove route; build React produzione riuscita con soli warning Hook preesistenti; OpenAPI aggiornato a 94 path/38 schema; `git diff --check`).
+**Note per il prossimo agente**: matrice backend esplicita: `POST /api/upload-attempts/events` richiede autenticazione ed è ammesso per locale, Admin, Simone e Federico, ma non per Magazziniere o altri supervisor; il tenant è sempre derivato dal token. `GET /api/admin/upload-attempts` è leggibile esclusivamente da Federico e Simone: anonimo, locale, Magazziniere, altri supervisor e Admin generico ricevono 401/403. Il registro nasce con questo rilascio e non può ricostruire retroattivamente tentativi client precedenti; il tracking server è best effort e ha timeout isolato, quindi non può bloccare il salvataggio della chiusura.
+
+### [2026-08-25 15:20 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | Cassa | UX | bugfix | test
+**File toccati**:
+- `/app/frontend/src/pages/CassaPage.js`
+- `/app/frontend/src/components/CassaBevandeBox.js`
+- `/app/frontend/src/components/CassaBevandeBox.test.js`
+- `/app/frontend/public/version.json`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Ripristinata nella Cassa desktop di Flaminio la colonna verticale Bevande, alimentata dalle nove voci del catalogo effettivo: ogni riga mostra nome, sigla, contatore, pulsante `-` rosso e pulsante `+` verde. Rimossi i vecchi comandi da tastiera globali che interferivano con la scrittura degli ordini. Corretto inoltre il flusso ottimistico che poteva cambiare il contatore senza inviare la registrazione backend; incremento e storno usano ora coerentemente le API giornaliere esistenti.
+**Testato**: sì (metodo: suite frontend completa `55 passed`; nuovo test con tutte le 9 bevande, colori, incremento, decremento e chiamate POST; build React produzione riuscita con soli warning Hook preesistenti; endpoint locale reale verificato con sigle `AL, AG, C, CZ, F, S, B, VB, VR`; frontend locale compilato e senza errori browser alla schermata di accesso; `git diff --check`).
+**Note per il prossimo agente**: la colonna resta intenzionalmente legata a Flaminio, come le API `beverage_sales` e la giacenza bevande preesistenti; non è ancora collegata automaticamente alle righe `beverage_daily_counts` del Report. Il backend non è stato modificato e nulla è stato distribuito sulla VPS.
+
+### [2026-08-25 14:57 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: UX
+**File toccati**:
+- `/app/frontend/src/pages/DizionarioBevandePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Rimossa dalla pagina Prezzi delle bevande la riga riepilogativa con numero di bevande collegate e somma dei prezzi unitari.
+**Testato**: sì (metodo: controllo testuale del sorgente e compilazione automatica del frontend locale).
+
+### [2026-08-25 14:55 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: UX
+**File toccati**:
+- `/app/frontend/src/pages/DizionarioBevandePage.js`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Rimossa su richiesta la descrizione introduttiva sotto il titolo della pagina Prezzi delle bevande, senza modificare listino, calcoli o protezione dello storico.
+**Testato**: sì (metodo: controllo testuale del sorgente e compilazione automatica del frontend locale).
+
+### [2026-08-25 14:50 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | Report | sicurezza dati | UX | test
+**File toccati**:
+- `/app/backend/app/{bootstrap.py,routers/{beverages,report}.py,schemas/{__init__,report}.py,services/{beverage_prices,analysis,report}.py}`
+- `/app/backend/{server.py,memory_worker/{contracts.py,sources/configuration.py,stores/mongo.py}}`
+- `/app/backend/tests/{test_beverage_price_dictionary,test_beverage_signed_totals,test_memory_worker_configuration,test_phase1_foundations_contract,test_phase2_module_contract,test_phase3_module_contract}.py`
+- `/app/frontend/src/{App.js,pages/{HomePage,DizionarioBevandePage,DizionarioBevandePage.test}.js}`
+- `/app/frontend/public/version.json`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Aggiunto nell'area Federico un listino bevande per locale, simile al Dizionario Paste ma limitato ai prezzi: nomi, sigle e ordinamento restano fissi per non rompere magazzino e Report. Il listino effettivo alimenta Report live/storico, Cash Sera, riporto Mattina, Storico chiusure, Analisi Excel e vendite bevande. Ogni riga giornaliera acquisisce uno snapshot del prezzo; prima di una modifica o di un reset vengono inoltre congelate le righe legacy ancora prive di snapshot, così un nuovo prezzo non ricalcola chiusure già registrate. Aggiunta la collection tenant-specific `beverage_price_dictionary`, indice univoco, API GET/PUT/DELETE e raccolta futura nella Memoria operativa.
+**Testato**: sì (metodo: backend completo `218 passed, 36 skipped`; frontend completo `54 passed`; build React produzione riuscita con soli warning Hook preesistenti in file non coinvolti; API locale reale caricata con 9 bevande e prezzi default; OpenAPI e route ownership aggiornati; `git diff --check`; backend e frontend locali attivi su `127.0.0.1:8001` e `localhost:3000`).
+**Note per il prossimo agente**: nessuna modifica è stata inviata alla VPS. Matrice route: anonimo rifiutato dalla dipendenza Bearer; locale e magazzino possono leggere soltanto il listino del proprio tenant ma non modificarlo né indicare altri locali; Federico, Admin e Simone possono leggere/scrivere/reset per locale; ogni mutazione è nuovamente validata nel backend e accetta soltanto le nove sigle tecniche complete. I dati storici già presenti vengono materializzati soltanto alla prima modifica del listino, usando il prezzo che era effettivo prima del cambio.
+
 ### [2026-08-19 12:20 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: refactor | diagnostica | UX | bugfix | test
 **File toccati**:

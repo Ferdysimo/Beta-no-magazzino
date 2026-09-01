@@ -44,7 +44,7 @@ def test_critical_routes_are_owned_once():
 
     assert duplicates == {}
     assert len(orders.router.routes) == 18
-    assert len(report.router.routes) == 15
+    assert len(report.router.routes) == 18
     assert len(analysis.router.routes) == 3
 
 

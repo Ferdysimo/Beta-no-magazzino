@@ -21,6 +21,7 @@ from app.routers.laboratory import router as laboratory_router
 from app.routers.orders import router as orders_router
 from app.routers.report import router as report_router
 from app.routers.system import router as system_router
+from app.routers.upload_attempts import router as upload_attempts_router
 from app.routers.warehouse import router as warehouse_router
 from app.routers.websocket import router as websocket_router
 from app.services.seeding import _ensure_beverages_seeded
@@ -99,6 +100,11 @@ async def initialize_application():
         [("restaurant_id", 1), ("date_rome", -1)], unique=True
     )
     await db.cash_daily_counts.create_index([("date_rome", -1)])
+    await db.beverage_price_dictionary.create_index(
+        [("restaurant_id", 1)],
+        unique=True,
+        name="uniq_beverage_price_dictionary_restaurant",
+    )
     # Audit log (Report Cassa + Bevande)
     await db.cash_audit_log.create_index([("last_at", -1)])
     await db.cash_audit_log.create_index([("restaurant_id", 1), ("date_rome", -1), ("last_at", -1)])
@@ -111,6 +117,19 @@ async def initialize_application():
         )
     except Exception as e:
         logger.warning(f"Could not create diagnostic device registry index: {e}")
+    try:
+        await db.upload_attempts.create_index(
+            [("attempt_id", 1)],
+            unique=True,
+            name="uniq_upload_attempt_id",
+        )
+        await db.upload_attempts.create_index([("first_seen", -1)])
+        await db.upload_attempts.create_index(
+            [("restaurant_id", 1), ("first_seen", -1)]
+        )
+        await db.upload_attempts.create_index([("status", 1), ("last_seen", -1)])
+    except Exception as e:
+        logger.warning(f"Could not create upload attempt indexes: {e}")
     # Laboratorio scanner: isolated from operational warehouse collections.
     # Failures here must not prevent the production application from starting.
     try:
@@ -193,6 +212,7 @@ api_router.include_router(invoices_router)
 api_router.include_router(warehouse_router)
 api_router.include_router(beverages_router)
 api_router.include_router(documents_router)
+api_router.include_router(upload_attempts_router)
 api_router.include_router(laboratory_router)
 
 

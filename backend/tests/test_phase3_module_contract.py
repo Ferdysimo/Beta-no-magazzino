@@ -22,17 +22,25 @@ from app.core.diagnostics import (
 from app.core.rate_limit import limiter
 from app.core.state import RESTAURANT_LOCATION_CACHE
 from app.core.ws_manager import manager
-from app.routers import beverages, documents, invoices, system, warehouse, websocket
+from app.routers import (
+    beverages,
+    documents,
+    invoices,
+    system,
+    upload_attempts,
+    warehouse,
+    websocket,
+)
 
 
-EXPECTED_OPENAPI_SHA256 = "13ca1084d5993ede8eef22e14590fcfdc34be62583ad52121ee08730cbb00e61"
+EXPECTED_OPENAPI_SHA256 = "41c9e0ffc59b6db9930b2a581b34bdee0883375454013b410f02b6fcd1168b18"
 
 
 def test_phase3_keeps_exact_openapi_contract_and_unique_routes():
     schema = server.app.openapi()
     payload = json.dumps(schema, sort_keys=True, separators=(",", ":")).encode()
     assert hashlib.sha256(payload).hexdigest() == EXPECTED_OPENAPI_SHA256
-    assert len(schema["paths"]) == 91
+    assert len(schema["paths"]) == 94
 
     route_pairs = [
         (method, route.path)
@@ -49,6 +57,7 @@ def test_phase3_router_ownership_counts_are_stable():
     assert len(warehouse.router.routes) == 28
     assert len(beverages.router.routes) == 8
     assert len(documents.router.routes) == 16
+    assert len(upload_attempts.router.routes) == 2
     assert len(websocket.router.routes) == 2
 
 

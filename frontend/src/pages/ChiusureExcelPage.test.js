@@ -2,6 +2,7 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import axios from 'axios';
 import ChiusureExcelPage, {
+  altroCommentValidation,
   arrCellBackground,
   parseVersDisplay,
   reportExpressionText,
@@ -85,6 +86,7 @@ describe('ChiusureExcelPage restaurant selection', () => {
               },
               cash_raw: {
                 arr: '10+2',
+                altro: '5+2',
                 pos: '6200+99',
                 vers: '<span style="color: rgb(220, 38, 38)">50</span>+30',
                 ft: '500+300-20',
@@ -92,6 +94,7 @@ describe('ChiusureExcelPage restaurant selection', () => {
                 sp1: '1',
               },
               cash_comments: {
+                altro: 'Un solo commento',
                 ft: 'Tre fatture controllate',
               },
               vers_raw: '<span style="color: rgb(220, 38, 38)">50</span>+30',
@@ -195,6 +198,16 @@ describe('ChiusureExcelPage restaurant selection', () => {
     expect(segments).toHaveLength(2);
     expect(segments[0].style.color).toBe('rgb(220, 38, 38)');
     expect(segments[1].style.color).toBe('rgb(17, 24, 39)');
+  });
+
+  test('rende rossa la cella Altro quando valori e commenti non coincidono', async () => {
+    await renderPage();
+
+    const altroCell = container.querySelector(
+      '[data-testid="closure-2026-07-27-cash-altro"]',
+    );
+    expect(altroCell.style.background).toBe('rgb(254, 226, 226)');
+    expect(altroCell.title).toContain('2 valori ma 1 commento');
   });
 
   test('mostra operazione e commento con doppio clic senza aprire il Report', async () => {
@@ -322,5 +335,30 @@ describe('ChiusureExcelPage restaurant selection', () => {
     expect(arrCellBackground(-5.01)).toBe('#fee2e2');
     expect(arrCellBackground(5.01)).toBe('#fee2e2');
     expect(reportExpressionText('<span style="color:red">50</span>+30')).toBe('50+30');
+  });
+
+  test('conta i valori di Altro senza scambiare le virgole decimali per separatori', () => {
+    expect(altroCommentValidation('10+20', 'Mancia, rimborso')).toEqual({
+      valid: true,
+      valueCount: 2,
+      commentCount: 2,
+    });
+    expect(altroCommentValidation('10,50+3,20', 'Mancia, rimborso')).toEqual({
+      valid: true,
+      valueCount: 2,
+      commentCount: 2,
+    });
+    expect(altroCommentValidation('-5+(10*2)', 'Uno, due, tre')).toEqual({
+      valid: true,
+      valueCount: 3,
+      commentCount: 3,
+    });
+    expect(altroCommentValidation('10+20', 'Un solo commento').valid).toBe(false);
+    expect(altroCommentValidation('10+20', 'Uno,,due').valid).toBe(false);
+    expect(altroCommentValidation('', '')).toEqual({
+      valid: true,
+      valueCount: 0,
+      commentCount: 0,
+    });
   });
 });

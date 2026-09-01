@@ -12,6 +12,11 @@ from app.core.files import build_upload_url, save_image_to_disk
 from app.core.security import can_impersonate, verify_token
 from app.core.time import ROME_TZ, _today_rome_bounds_utc
 from app.schemas import BeverageCaricoCreate
+from app.services.beverage_prices import (
+    _beverage_price_for_row,
+    _get_beverage_catalog_for,
+)
+from app.services.report import _resolve_historical_mode
 from app.tasks.maintenance import UPLOADS_RETENTION_DAYS, cleanup_old_uploads
 
 
@@ -47,17 +52,44 @@ def _require_flaminio_access(token_data: dict, flaminio_id: str) -> None:
 # ==================== BEVANDE (FLAMINIO ONLY) ====================
 
 @router.get("/beverages")
-async def list_beverages(token_data: dict = Depends(verify_token)):
+async def list_beverages(request: Request, token_data: dict = Depends(verify_token)):
     """Catalog of 9 beverages (sigla, name, price). Sorted by sort_order."""
-    docs = await db.beverages.find({}, {"_id": 0}).sort("sort_order", 1).to_list(20)
-    return docs
+    rid = await _effective_restaurant_id(request, token_data)
+    return await _get_beverage_catalog_for(rid)
 
 
 @router.get("/beverages/inventory")
-async def get_beverage_inventory(request: Request, token_data: dict = Depends(verify_token)):
+async def get_beverage_inventory(
+    request: Request,
+    date: Optional[str] = None,
+    restaurant_id: Optional[str] = None,
+    token_data: dict = Depends(verify_token),
+):
     """On-hand inventory of beverages for the current restaurant."""
-    rid = await _effective_restaurant_id(request, token_data)
-    beverages = await db.beverages.find({}, {"_id": 0}).sort("sort_order", 1).to_list(20)
+    historical = _resolve_historical_mode(date, restaurant_id, token_data, allow_self=True)
+    if historical:
+        target_date, rid = historical
+    else:
+        target_date = None
+        rid = await _effective_restaurant_id(request, token_data)
+    beverages = await _get_beverage_catalog_for(rid)
+    if target_date:
+        daily_docs = await db.beverage_daily_counts.find(
+            {"restaurant_id": rid, "date_rome": target_date},
+            {"_id": 0, "sigla": 1, "price_snapshot": 1},
+        ).to_list(20)
+        daily_by_sigla = {row.get("sigla"): row for row in daily_docs}
+        fallback_prices = {item["sigla"]: item["price"] for item in beverages}
+        beverages = [
+            {
+                **item,
+                "price": _beverage_price_for_row(
+                    daily_by_sigla.get(item["sigla"], {"sigla": item["sigla"]}),
+                    fallback_prices,
+                ),
+            }
+            for item in beverages
+        ]
     inv_docs = await db.beverage_inventory.find(
         {"restaurant_id": rid}, {"_id": 0}
     ).to_list(20)
@@ -340,12 +372,13 @@ async def register_beverage_sale(
     sigla = data.get("sigla")
     if not sigla:
         raise HTTPException(status_code=400, detail="sigla mancante")
-    bev = await db.beverages.find_one({"sigla": sigla}, {"_id": 0})
-    if not bev:
-        raise HTTPException(status_code=404, detail="Bevanda non trovata")
     flaminio_id = await _get_flaminio_restaurant_id()
     if not flaminio_id:
         raise HTTPException(status_code=404, detail="Ristorante Flaminio non trovato")
+    beverages = await _get_beverage_catalog_for(flaminio_id)
+    bev = next((item for item in beverages if item["sigla"] == sigla), None)
+    if not bev:
+        raise HTTPException(status_code=404, detail="Bevanda non trovata")
     _require_flaminio_access(token_data, flaminio_id)
     now_iso = datetime.now(timezone.utc).isoformat()
     sale = {
@@ -429,7 +462,7 @@ async def get_beverage_sales_today(token_data: dict = Depends(verify_token)):
         {"restaurant_id": flaminio_id}, {"_id": 0, "sigla": 1, "quantity": 1}
     ).to_list(20)
     inv_map = {d["sigla"]: d.get("quantity", 0) for d in inv_docs}
-    beverages = await db.beverages.find({}, {"_id": 0}).sort("sort_order", 1).to_list(20)
+    beverages = await _get_beverage_catalog_for(flaminio_id)
     return [
         {
             "sigla": b["sigla"],
@@ -464,7 +497,7 @@ async def beverage_report(
     start_utc = start_rome.astimezone(timezone.utc).isoformat()
     end_utc = end_rome.astimezone(timezone.utc).isoformat()
     # Query BOTH current and archived sales collections (midnight reset archives)
-    beverages = await db.beverages.find({}, {"_id": 0}).sort("sort_order", 1).to_list(20)
+    beverages = await _get_beverage_catalog_for(flaminio_id)
     bev_map = {b["sigla"]: b for b in beverages}
 
     results = {b["sigla"]: {"sigla": b["sigla"], "name": b["name"], "price": b["price"], "count": 0, "total": 0.0} for b in beverages}

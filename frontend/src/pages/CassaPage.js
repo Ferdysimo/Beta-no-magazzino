@@ -47,11 +47,17 @@ const CassaPage = () => {
   const inputRef = useRef(null);
   const [tick, setTick] = useState(0);
 
-  // La tabella bevande in Cassa è stata rimossa su richiesta.
-  const showBeverages = false;
-  const beveragesVisible = false;
+  const showBeverages = restaurant?.username === 'Flaminio'
+    || (isAdmin && restaurant?.location === 'Flaminio');
+  const beveragesVisible = showBeverages && !hideBeverages;
 
-  const toggleBeverages = () => {};
+  const toggleBeverages = () => {
+    setHideBeverages(prev => {
+      const next = !prev;
+      try { localStorage.setItem('cassa_hide_beverages', next ? '1' : '0'); } catch (e) { /* ignore */ }
+      return next;
+    });
+  };
 
   // Tick every second for live timer colors
   useEffect(() => {
@@ -336,7 +342,7 @@ const CassaPage = () => {
 
       <Header />
       
-      <main className={`max-w-6xl mx-auto p-6 ${beveragesVisible ? 'lg:pr-56' : ''}`}>
+      <main className={`max-w-6xl mx-auto p-6 ${beveragesVisible ? 'lg:pr-80' : ''}`}>
         {/* Page Header */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="font-heading text-4xl font-bold text-gray-900 uppercase">Cassa</h1>
@@ -367,7 +373,7 @@ const CassaPage = () => {
         {/* Beverages sidebar (right, Flaminio only, hideable) */}
         {beveragesVisible && (
           <aside
-            className="hidden lg:flex fixed top-[70px] bottom-0 right-0 w-52 flex-col bg-gray-50 border-l border-gray-200 z-20 overflow-y-auto"
+            className="hidden lg:flex fixed top-[70px] bottom-0 right-0 w-72 flex-col bg-gray-50 border-l border-gray-200 z-20 overflow-y-auto"
             data-testid="cassa-bev-sidebar"
           >
             <div className="px-2 py-2 bg-[#F5C518] text-gray-900 font-extrabold text-center text-sm uppercase tracking-wide sticky top-0 flex items-center justify-between gap-1">
