@@ -631,6 +631,13 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
     deleted_order_counts = deletion_source_data["counts"]
 
     bev_sigle = [b["sigla"] for b in sorted(BEVERAGES_CATALOG, key=lambda x: x.get("sort_order", 999))]
+    # Compatibility metadata for callers that still inspect the top-level
+    # catalogue. Actual row calculations use each restaurant's price list (or
+    # the historical row snapshot) below.
+    default_bev_prices = {
+        beverage["sigla"]: float(beverage.get("price") or 0)
+        for beverage in BEVERAGES_CATALOG
+    }
     restaurants_data = []
     integrity_errors: List[Dict] = []
     integrity_warnings: List[Dict] = []
@@ -789,7 +796,7 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
         "days": days,
         "restaurants": restaurants_data,
         "bev_sigle": bev_sigle,
-        "bev_prices": bev_prices,
+        "bev_prices": default_bev_prices,
         "integrity": {
             "errors": integrity_errors,
             "warnings": integrity_warnings,

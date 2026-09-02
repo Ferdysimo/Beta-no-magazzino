@@ -370,6 +370,54 @@ def test_cursor_collection_has_no_100000_document_truncation():
     assert result[-1]["index"] == 100_000
 
 
+def test_annual_analysis_builder_keeps_catalog_metadata_with_per_restaurant_prices(monkeypatch):
+    class _BuilderCollection:
+        def __init__(self, documents):
+            self.documents = documents
+
+        def find(self, query, projection):
+            return _FakeCursor(self.documents)
+
+    class _BuilderDatabase:
+        restaurants = _BuilderCollection([{
+            "id": "r1",
+            "username": "FlaminioTest",
+            "location": "Flaminio",
+            "role": "restaurant",
+        }])
+        cash_daily_counts = _BuilderCollection([])
+        beverage_daily_counts = _BuilderCollection([{
+            "restaurant_id": "r1",
+            "date_rome": "2026-01-01",
+            "sigla": "AL",
+            "mattina": "2",
+            "sera": "1",
+        }])
+
+    async def empty_source_data(*args, **kwargs):
+        return {"texts": {}, "counts": {}}
+
+    async def pasta_prices(_restaurant_id):
+        return {"CARB": 8}
+
+    async def beverage_prices(_restaurant_id):
+        return {
+            beverage["sigla"]: (1.25 if beverage["sigla"] == "AL" else beverage["price"])
+            for beverage in analysis_service.BEVERAGES_CATALOG
+        }
+
+    monkeypatch.setattr(analysis_service, "db", _BuilderDatabase())
+    monkeypatch.setattr(analysis_service, "_prefetch_analysis_order_data", empty_source_data)
+    monkeypatch.setattr(analysis_service, "_prefetch_analysis_deleted_order_data", empty_source_data)
+    monkeypatch.setattr(analysis_service, "_get_pasta_dict_for", pasta_prices)
+    monkeypatch.setattr(analysis_service, "_get_beverage_prices_for", beverage_prices)
+
+    data = asyncio.run(analysis_service._build_annual_analysis_data(2026))
+
+    assert data["bev_prices"]["AL"] == 1.0
+    assert data["restaurants"][0]["rows"][0]["beverages"]["AL"]["price"] == 1.25
+
+
 def test_daily_order_count_excludes_cancellations_and_keeps_reused_valid_numbers(monkeypatch):
     collections = {
         "orders": _FakeCollection([{

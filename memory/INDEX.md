@@ -36,6 +36,9 @@ aperti. Non contiene credenziali o istruzioni segrete.
 - [`TODO.md`](TODO.md): coda breve e ordinata dei lavori aperti.
 - [`CHANGELOG_MULTI_AGENT.md`](CHANGELOG_MULTI_AGENT.md): modifiche recenti e
   prove effettuate.
+- [`WAREHOUSE_LOAD_RETENTION_WARNING.md`](WAREHOUSE_LOAD_RETENTION_WARNING.md):
+  avviso da leggere prima di distribuire la cancellazione completa dei carichi
+  verso il magazzino dopo 90 giorni.
 - [`CHANGELOG_MULTI_AGENT_ARCHIVE.md`](CHANGELOG_MULTI_AGENT_ARCHIVE.md):
   storico meno recente.
 

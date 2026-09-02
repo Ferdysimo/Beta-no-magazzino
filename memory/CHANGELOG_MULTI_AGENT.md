@@ -178,6 +178,40 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-09-02 13:15 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix | manutenzione upload | magazzino
+**File toccati**:
+- `/app/backend/app/tasks/maintenance.py`
+- `/app/backend/tests/test_upload_maintenance.py`
+- `/app/memory/INDEX.md`
+- `/app/memory/PRD.md`
+- `/app/memory/WAREHOUSE_LOAD_RETENTION_WARNING.md`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Dopo 90 giorni la manutenzione elimina ora anche il documento visibile del carico verso il magazzino, oltre alle foto DDT/fattura. I movimenti di stock già prodotti dal carico restano intenzionalmente invariati; il comportamento dei carichi bevande non cambia.
+**Testato**: ✅ sì (metodo: test unitario dedicato su cancellazione riga/file e conservazione del movimento; suite backend completa).
+**Note per il prossimo agente**: leggere `/app/memory/WAREHOUSE_LOAD_RETENTION_WARNING.md` prima del rollout. In produzione esistono 20 carichi legacy del 28 aprile-7 maggio privi di qualunque movimento ledger associato; non usare automaticamente il ledger come unica fonte dell'Analisi magazzino senza una migrazione verificata.
+
+### [2026-09-02 12:11 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: rimozione feature | Cassa Flaminio | frontend | test
+**File toccati**:
+- `/app/frontend/src/pages/CassaPage.js`
+- `/app/frontend/src/components/{CassaBevandeBox,CassaBevandeBox.test}.js` (rimossi)
+- `/app/frontend/public/version.json`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Rimossa completamente dalla pagina Cassa di Flaminio la finestra laterale per incrementare o diminuire le bevande, inclusi il richiamo per riaprirla e lo spazio desktop riservato sulla destra. Il dizionario prezzi, il Report, i conteggi storici e le API bevande non sono stati modificati.
+**Testato**: sì (metodo: suite frontend completa `60 passed`; build React produzione riuscita con soli warning Hook preesistenti; `git diff --check`).
+**Note per il prossimo agente**: il componente dedicato e il relativo test sono stati eliminati perché non avevano altri utilizzatori. I dati di vendita bevande eventualmente già registrati restano invariati nel database.
+
+### [2026-09-02 11:53 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix | Analisi mensile | export Excel | test
+**File toccati**:
+- `/app/backend/app/services/analysis.py`
+- `/app/backend/tests/test_report_backend_totals.py`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: Ripristinato l'export Excel dell'Analisi mensile dopo l'introduzione dei listini bevande per locale. Il payload mantiene il metadato compatibile dei prezzi predefiniti, mentre i calcoli giornalieri continuano a usare il listino del singolo locale o lo snapshot storico; eliminato il `NameError` sulla vecchia variabile globale `bev_prices` che causava una risposta HTTP 500 a ogni download.
+**Testato**: sì (metodo: test mirati analisi/report `36 passed`; suite backend completa `244 passed, 36 skipped`; integrazione isolata con generazione e salvataggio reale del workbook `1 passed`; `git diff --check`).
+**Note per il prossimo agente**: nessuna modifica a dati, formule contabili, ruoli o API. La chiave top-level `bev_prices` resta disponibile come catalogo predefinito per compatibilità; i prezzi effettivi sono già salvati nelle righe per locale.
+
 ### [2026-09-01 11:59 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: feature | Storico chiusure | controllo operativo | test
 **File toccati**:

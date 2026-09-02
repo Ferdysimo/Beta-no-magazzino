@@ -2,7 +2,7 @@
 
 Stato: contratto funzionale corrente
 
-Ultimo allineamento: 6 agosto 2026
+Ultimo allineamento: 2 settembre 2026
 
 ## 1. Scopo del documento
 
@@ -423,8 +423,10 @@ fatture globali collegate ai DDT. Gli upload:
 La retention corrente e di 90 giorni:
 
 - fatture, versamenti e chiusure vecchi vengono rimossi con i loro file;
-- per carichi di magazzino e bevande vengono rimossi gli allegati vecchi, ma i
-  documenti strutturati restano per lo storico.
+- per i carichi verso il magazzino vengono rimossi sia gli allegati sia la riga
+  del carico; i movimenti di stock gia generati restano intatti;
+- per i carichi bevande viene rimosso il vecchio allegato, ma il documento
+  strutturato resta per lo storico.
 
 Il caricamento delle foto di chiusura mantiene inoltre un registro persistente
 di soli metadati, separato dalla Diagnostica live. Per ogni tentativo registra

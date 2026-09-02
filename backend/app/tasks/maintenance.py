@@ -43,10 +43,10 @@ async def cleanup_old_uploads(retention_days: int = UPLOADS_RETENTION_DAYS) -> D
     """Delete fatture / versamenti / chiusure older than `retention_days` together
     with their associated image files on disk.
 
-    For warehouse carichi (`carichi_magazzino`, `beverage_carichi`) we only strip
-    the DDT/fattura image files from disk and null out the filename fields —
-    the documents themselves are kept so `/analisi/magazzino` keeps working on
-    historical ranges.
+    Warehouse supplier loads (`carichi_magazzino`) are removed together with
+    their DDT/fattura images. Their already-recorded stock ledger entries are
+    deliberately left untouched. Beverage loads (`beverage_carichi`) keep the
+    structured document and only lose the old invoice image.
 
     Cutoff is based on `created_at` (ISO 8601 UTC string, lexicographically
     comparable). Returns a dict {collection: deleted_or_stripped_count}.
@@ -57,11 +57,11 @@ async def cleanup_old_uploads(retention_days: int = UPLOADS_RETENTION_DAYS) -> D
         ("invoices",   ["image_file"]),
         ("versamenti", ["image_file"]),
         ("chiusure",   ["image_file", "piatti_file"]),
+        ("carichi_magazzino", ["photo_file", "fattura_file"]),
     ]
     # Strip-only collections: keep the doc (needed for analytics), drop the
     # associated images from disk and clear the filename fields.
     strip_targets = [
-        ("carichi_magazzino", ["photo_file", "fattura_file"]),
         ("beverage_carichi",  ["invoice_file"]),
     ]
     summary: Dict[str, int] = {}
