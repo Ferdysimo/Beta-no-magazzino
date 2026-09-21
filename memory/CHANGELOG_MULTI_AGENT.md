@@ -178,6 +178,14 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-09-21 11:00 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix
+**File toccati**:
+- `/app/frontend/src/pages/MediaLocaliPage.js`
+- `/app/frontend/src/pages/MediaLocaliPage.test.js`
+**Descrizione**: Corretta la tabella Numeri su smartphone dopo l'aggiunta di Corso Vittorio: la data ora ha una colonna riservata, valori e intestazioni sono compatti e centrati, i nomi dei locali possono andare su due righe e il totale usa un'etichetta breve su mobile. Tutte le colonne rientrano nella viewport senza scroll orizzontale e la resa desktop resta invariata.
+**Testato**: ✅ sì (metodo: test Jest dedicato con quattro locali superato; build React di produzione completata, con soli warning Hook preesistenti).
+
 ### [2026-09-02 13:15 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix | manutenzione upload | magazzino
 **File toccati**:

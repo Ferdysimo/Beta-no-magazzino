@@ -100,27 +100,41 @@ const MediaLocaliPage = () => {
           const totalAverage = data.locations.reduce((sum, loc) => sum + averagesCeil[loc], 0);
 
           return (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-              <table className="w-full table-fixed">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <table className="w-full table-fixed" data-testid="media-locali-table">
+                <colgroup>
+                  <col className="w-[23%] sm:w-auto" />
+                  {data.locations.map(loc => <col key={loc} />)}
+                  <col className="w-[15%] sm:w-auto" />
+                </colgroup>
                 <thead>
                   <tr className="border-b border-gray-300">
-                    <th className="text-left px-1.5 sm:px-4 py-2 sm:py-3 font-semibold text-gray-700 text-[11px] sm:text-sm">Giorno</th>
+                    <th className="text-left pl-1.5 pr-0.5 sm:px-4 py-2 sm:py-3 font-semibold text-gray-700 text-[10px] sm:text-sm whitespace-nowrap">Giorno</th>
                     {data.locations.map(loc => (
-                      <th key={loc} className="text-left px-1.5 sm:px-4 py-2 sm:py-3 font-semibold text-gray-700 text-[11px] sm:text-sm truncate">{displayName(loc)}</th>
+                      <th
+                        key={loc}
+                        title={loc}
+                        className="px-0.5 sm:px-4 py-2 sm:py-3 font-semibold text-gray-700 text-[9px] sm:text-sm text-center sm:text-left leading-tight break-words"
+                      >
+                        {displayName(loc)}
+                      </th>
                     ))}
-                    <th className="text-left px-1.5 sm:px-4 py-2 sm:py-3 font-semibold text-gray-700 text-[11px] sm:text-sm">Totale</th>
+                    <th className="px-0.5 sm:px-4 py-2 sm:py-3 font-semibold text-gray-700 text-[9px] sm:text-sm text-center sm:text-left whitespace-nowrap">
+                      <span className="sm:hidden">Tot.</span>
+                      <span className="hidden sm:inline">Totale</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {/* Media row */}
                   <tr className="border-b-2 border-gray-400 bg-gray-50">
-                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 font-bold text-gray-800 text-[11px] sm:text-base">Media</td>
+                    <td className="pl-1.5 pr-0.5 sm:px-4 py-2 sm:py-3 font-bold text-gray-800 text-[10px] sm:text-base whitespace-nowrap">Media</td>
                     {data.locations.map(loc => (
-                      <td key={loc} className="px-1.5 sm:px-4 py-2 sm:py-3 font-bold text-gray-800 text-[11px] sm:text-base">
+                      <td key={loc} className="px-0.5 sm:px-4 py-2 sm:py-3 font-bold text-gray-800 text-[10px] sm:text-base text-center sm:text-left tabular-nums whitespace-nowrap">
                         {averagesCeil[loc].toLocaleString('it-IT')}
                       </td>
                     ))}
-                    <td className="px-1.5 sm:px-4 py-2 sm:py-3 font-bold text-gray-800 text-[11px] sm:text-base">
+                    <td className="px-0.5 sm:px-4 py-2 sm:py-3 font-bold text-gray-800 text-[10px] sm:text-base text-center sm:text-left tabular-nums whitespace-nowrap">
                       {totalAverage.toLocaleString('it-IT')}
                     </td>
                   </tr>
@@ -133,13 +147,13 @@ const MediaLocaliPage = () => {
                     );
                     return (
                       <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="px-1.5 sm:px-4 py-1.5 sm:py-2 text-gray-700 text-[11px] sm:text-sm">{day.date}</td>
+                        <td className="pl-1.5 pr-0.5 sm:px-4 py-1.5 sm:py-2 text-gray-700 text-[10px] sm:text-sm tabular-nums whitespace-nowrap">{day.date}</td>
                         {data.locations.map(loc => (
-                          <td key={loc} className="px-1.5 sm:px-4 py-1.5 sm:py-2 text-gray-800 text-[11px] sm:text-sm">
+                          <td key={loc} className="px-0.5 sm:px-4 py-1.5 sm:py-2 text-gray-800 text-[10px] sm:text-sm text-center sm:text-left tabular-nums whitespace-nowrap">
                             {day.locations[loc] || ''}
                           </td>
                         ))}
-                        <td className="px-1.5 sm:px-4 py-1.5 sm:py-2 font-semibold text-gray-800 text-[11px] sm:text-sm">
+                        <td className="px-0.5 sm:px-4 py-1.5 sm:py-2 font-semibold text-gray-800 text-[10px] sm:text-sm text-center sm:text-left tabular-nums whitespace-nowrap">
                           {dailyTotal > 0 ? dailyTotal.toLocaleString('it-IT') : ''}
                         </td>
                       </tr>
