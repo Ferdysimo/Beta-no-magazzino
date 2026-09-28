@@ -1622,7 +1622,7 @@ const ReportBetaPageInner = () => {
                               previewKey === f.key
                                 ? 'bg-amber-400 text-white ring-1 ring-amber-300'
                                 : 'bg-white border border-gray-400 text-gray-500 hover:bg-gray-100'
-                            } ${readOnlyHistorical && DELIVERY_DETAIL_FIELDS.has(f.key) ? 'pointer-events-auto' : ''}`}
+                            } ${readOnlyHistorical ? 'pointer-events-auto' : ''}`}
                           >
                             <svg width="7" height="7" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                               <circle cx="7" cy="7" r="4.5"/>
@@ -1728,12 +1728,12 @@ const ReportBetaPageInner = () => {
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => setPreviewKey(curr => curr === f.key ? null : f.key)}
                           title="Mostra dettaglio in basso"
-                          aria-label="Apri preview"
+                          aria-label={`Apri dettaglio ${f.label}`}
                           className={`w-3 h-3 flex-none flex items-center justify-center rounded-full transition-colors ${
                             previewKey === f.key
                               ? 'bg-amber-400 text-white ring-1 ring-amber-300'
                               : 'bg-white border border-gray-400 text-gray-500 hover:bg-gray-100'
-                          }`}
+                          } ${readOnlyHistorical ? 'pointer-events-auto' : ''}`}
                         >
                           <svg width="7" height="7" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                             <circle cx="7" cy="7" r="4.5"/>

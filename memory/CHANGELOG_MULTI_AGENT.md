@@ -178,6 +178,16 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-09-28 22:51 CEST] - Codex (OpenAI)
+**Tipo**: bugfix | Report storico | UX | test
+**File toccati**:
+- `/app/frontend/src/pages/{ReportBetaPage,ReportBetaPage.test}.js`
+- `/app/frontend/public/version.json`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Nel Report storico in sola lettura, i cassieri possono ora aprire la lente di tutte le caselle del riepilogo Cassa (`Altro`, `GLO`, `JUST`, `DEL`, `BP`, `SAT`, `POS`, `FT`, `ARR` e `VERS`). Restano bloccati input, commenti, palette e autosalvataggi: la modifica abilita esclusivamente la consultazione dell'espressione originale e del risultato.
+**Testato**: ✅ sì (metodo: test Jest dedicato sul Report storico `2 passed`; nessuna richiesta `PUT` durante la consultazione). Suite completa e build non eseguite su richiesta del titolare.
+**Note per il prossimo agente**: il contenitore storico resta intenzionalmente protetto da `pointer-events-none`; ogni nuovo controllo consultivo che debba funzionare in sola lettura deve essere riabilitato esplicitamente senza aprire percorsi di scrittura.
+
 ### [2026-09-21 11:00 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix
 **File toccati**:

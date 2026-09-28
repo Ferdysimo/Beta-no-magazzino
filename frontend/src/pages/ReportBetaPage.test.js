@@ -75,9 +75,16 @@ describe('ReportBetaPage storico in sola lettura', () => {
         return Promise.resolve({
           data: {
             data: {
+              altro: '5+7',
               glo: '10+20+30',
               just: '12+8',
               delv: '7+3',
+              bp: '15+25',
+              sat: '4+6',
+              pos: '40+20',
+              ft: '11+9',
+              arr: '3+2',
+              vers: '8+4',
             },
             paste_text: [
               '1 CARB',
@@ -172,10 +179,11 @@ describe('ReportBetaPage storico in sola lettura', () => {
     expect(axios.put).not.toHaveBeenCalled();
   });
 
-  test('consente al cassiere di consultare GLO, JUST e DEL tramite le lenti', async () => {
+  test('consente al cassiere di consultare tutte le caselle dotate di lente', async () => {
     await renderPage();
 
-    const details = ['GLO', 'JUST', 'DEL'].map(label => (
+    const labels = ['ALTRO', 'GLO', 'JUST', 'DEL', 'BP', 'SAT', 'POS', 'FT', 'ARR', 'VERS'];
+    const details = labels.map(label => (
       container.querySelector(`[aria-label="Apri dettaglio ${label}"]`)
     ));
 
@@ -184,10 +192,16 @@ describe('ReportBetaPage storico in sola lettura', () => {
       expect(button.classList.contains('pointer-events-auto')).toBe(true);
     });
 
-    act(() => {
-      details[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    details.forEach((button, index) => {
+      act(() => {
+        button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(container.querySelector('[data-testid="preview-bar"]').textContent).toContain(labels[index]);
     });
 
+    act(() => {
+      details[1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
     const preview = container.querySelector('[data-testid="preview-bar"]');
     expect(preview.textContent).toContain('GLO');
     expect(preview.textContent).toContain('10+20+30');

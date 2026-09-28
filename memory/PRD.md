@@ -222,8 +222,9 @@ Contratti:
   consultabile: si possono scorrere sia il testo incollato sia l'elenco dei
   prezzi delle righe non riconosciute, anche nella vista ingrandita, ma testo,
   prezzi e blocco degli aggiornamenti restano non modificabili e non generano
-  autosalvataggi. Le lenti dei campi `GLO`, `JUST` e `DEL` restano cliccabili
-  per mostrare l'espressione originale e il risultato senza abilitare scritture;
+  autosalvataggi. Tutte le lenti delle caselle del riepilogo Cassa restano
+  cliccabili per
+  mostrare l'espressione originale e il risultato senza abilitare scritture;
 - le correzioni storiche autorizzate devono restare riconoscibili nell'audit.
 
 Lo Storico chiusure mantiene la griglia sintetica, ma le celle che derivano da
