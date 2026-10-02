@@ -100,17 +100,17 @@ describe('AuditCassaPage restaurant selection', () => {
     });
   };
 
-  test('parte dal locale della scheda e lo applica alla lista movimenti', async () => {
+  test('parte da tutti i locali per non nascondere movimenti fuori locale', async () => {
     await renderPage();
 
     const select = container.querySelector(
       '[data-testid="filter-restaurant"]',
     );
-    expect(select.value).toBe(brazza.id);
+    expect(select.value).toBe('');
     const groupsCall = axios.get.mock.calls.find(([url]) => (
       url.includes('/admin/audit-log/groups')
     ));
-    expect(groupsCall[0]).toContain(`restaurant_id=${brazza.id}`);
+    expect(groupsCall[0]).not.toContain('restaurant_id=');
   });
 
   test('cambiare locale aggiorna anche la selezione condivisa', async () => {

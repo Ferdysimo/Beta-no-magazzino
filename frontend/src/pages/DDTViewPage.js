@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import { formatItalianDate } from '../utils/formatDate';
-import { Printer, ArrowLeft, Pencil } from 'lucide-react';
+import { Printer, ArrowLeft, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
 import { sortByCanonicalOrder } from '../utils/productOrder';
 
 // For legacy DDTs (no dispatch_date stored), fall back to created_at + 1 day.
@@ -19,31 +19,115 @@ const addOneDay = (iso) => {
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+export const sortedDdtHistory = (rows) => [...(rows || [])]
+  .filter(row => row?.id)
+  .sort((a, b) => {
+    const aNumber = Number(a.ddt_number);
+    const bNumber = Number(b.ddt_number);
+    if (Number.isFinite(aNumber) && Number.isFinite(bNumber) && aNumber !== bNumber) {
+      return aNumber - bNumber;
+    }
+    return String(a.created_at || '').localeCompare(String(b.created_at || ''));
+  });
+
 const DDTViewPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { token, restaurant, effectiveRestaurant, canImpersonate, isAdmin } = useAuth();
   const activeRestaurant = canImpersonate ? effectiveRestaurant : restaurant;
   const [ddt, setDdt] = useState(null);
+  const [historyRows, setHistoryRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const historySource = searchParams.get('history');
   // Tick di 1s per il countdown "Modificabile per ancora MM:SS"
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
     const fetch = async () => {
       try {
         const res = await axios.get(`${API}/richieste/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setDdt(res.data);
+        if (!cancelled) setDdt(res.data);
       } catch (e) {
-        console.error(e);
+        if (!cancelled) {
+          console.error(e);
+          setDdt(null);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     fetch();
+    return () => { cancelled = true; };
   }, [id, token]);
+
+  useEffect(() => {
+    if (!historySource) {
+      setHistoryRows([]);
+      return;
+    }
+    let cancelled = false;
+    const fetchHistory = async () => {
+      try {
+        const endpoint = historySource === 'warehouse'
+          ? '/richieste/history-all'
+          : '/richieste';
+        const res = await axios.get(`${API}${endpoint}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (cancelled) return;
+        const rows = historySource === 'warehouse'
+          ? (res.data || [])
+          : (res.data || []).filter(row => ['confermata', 'errore'].includes(row.status));
+        setHistoryRows(sortedDdtHistory(rows));
+      } catch (e) {
+        if (!cancelled) {
+          console.error(e);
+          setHistoryRows([]);
+        }
+      }
+    };
+    fetchHistory();
+    return () => { cancelled = true; };
+  }, [historySource, token]);
+
+  const historyNavigation = useMemo(() => {
+    if (!historySource || historyRows.length === 0) return null;
+    const index = historyRows.findIndex(row => row.id === id);
+    if (index < 0) return null;
+    return {
+      index,
+      total: historyRows.length,
+      previous: index > 0 ? historyRows[index - 1] : null,
+      next: index < historyRows.length - 1 ? historyRows[index + 1] : null,
+    };
+  }, [historyRows, historySource, id]);
+
+  const openHistoryDdt = React.useCallback((row) => {
+    if (!row?.id || !historySource) return;
+    navigate(`/ddt/${row.id}?history=${historySource}`, { replace: true });
+  }, [historySource, navigate]);
+
+  useEffect(() => {
+    if (!historyNavigation) return undefined;
+    const onKeyDown = (event) => {
+      const tag = event.target?.tagName?.toLowerCase();
+      if (['input', 'textarea', 'select'].includes(tag) || event.target?.isContentEditable) return;
+      if (event.key === 'ArrowLeft' && historyNavigation.previous) {
+        event.preventDefault();
+        openHistoryDdt(historyNavigation.previous);
+      } else if (event.key === 'ArrowRight' && historyNavigation.next) {
+        event.preventDefault();
+        openHistoryDdt(historyNavigation.next);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [historyNavigation, openHistoryDdt]);
 
   const handlePrint = () => window.print();
 
@@ -154,6 +238,41 @@ const DDTViewPage = () => {
           </button>
         </div>
       </div>
+
+      {historyNavigation && (
+        <nav
+          data-testid="ddt-history-navigation"
+          aria-label="Navigazione storico DDT"
+          className="mx-auto mt-5 max-w-[850px] px-3 sm:px-0 grid grid-cols-[1fr_auto_1fr] items-center gap-2 print:hidden"
+        >
+          <button
+            type="button"
+            data-testid="ddt-history-previous"
+            disabled={!historyNavigation.previous}
+            onClick={() => openHistoryDdt(historyNavigation.previous)}
+            className="justify-self-start inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-800 shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35"
+            aria-label={historyNavigation.previous ? `Apri DDT precedente ${historyNavigation.previous.ddt_number}` : 'Nessun DDT precedente'}
+          >
+            <ChevronLeft size={20} />
+            <span className="hidden sm:inline">DDT {historyNavigation.previous?.ddt_number || '—'}</span>
+          </button>
+          <div className="text-center text-xs font-semibold text-gray-600">
+            {historyNavigation.index + 1} di {historyNavigation.total}
+            <div className="hidden sm:block font-normal text-gray-400">usa anche ← →</div>
+          </div>
+          <button
+            type="button"
+            data-testid="ddt-history-next"
+            disabled={!historyNavigation.next}
+            onClick={() => openHistoryDdt(historyNavigation.next)}
+            className="justify-self-end inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-800 shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-35"
+            aria-label={historyNavigation.next ? `Apri DDT successivo ${historyNavigation.next.ddt_number}` : 'Nessun DDT successivo'}
+          >
+            <span className="hidden sm:inline">DDT {historyNavigation.next?.ddt_number || '—'}</span>
+            <ChevronRight size={20} />
+          </button>
+        </nav>
+      )}
 
       {/* A4 sheet */}
       <div className="mx-auto my-6 bg-white shadow print:shadow-none print:my-0 print:mx-0 px-12 py-10 max-w-[850px] print:max-w-full" id="ddt-print">

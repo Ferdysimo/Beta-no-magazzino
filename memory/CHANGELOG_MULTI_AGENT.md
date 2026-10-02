@@ -178,6 +178,27 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-10-02 13:20 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | DDT | navigazione | frontend | test
+**File toccati**:
+- `/app/frontend/src/pages/{DDTViewPage,DDTViewPage.test,MagazzinoRichiestePage,RichiestaMercePage}.js`
+- `/app/frontend/public/version.json`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Aprendo una bolla dallo storico DDT sono ora disponibili frecce precedente/successivo, numero del DDT adiacente, posizione nella sequenza e scorciatoie tastiera sinistra/destra. Lo storico Magazzino resta globale, mentre lo storico del locale scorre soltanto i DDT di quel locale; navigare sostituisce la bolla corrente cosi il pulsante Indietro torna direttamente all'elenco.
+**Testato**: ✅ sì (metodo: test Jest dedicati su ordinamento, pulsanti, tastiera, conservazione del contesto e assenza delle frecce fuori dallo storico; suite frontend completa `71 passed`; build React produzione riuscita con soli warning Hook preesistenti; `git diff --check`).
+**Note per il prossimo agente**: nessuna route o autorizzazione backend nuova; vengono riutilizzati gli elenchi gia protetti `/richieste/history-all` e `/richieste`.
+
+### [2026-10-02 11:58 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix | sicurezza tenant | Report | audit | test
+**File toccati**:
+- `/app/backend/app/{routers/report.py,schemas/{beverages,report}.py,services/report.py}`
+- `/app/backend/tests/{test_report_targeting,test_phase1_foundations_contract,test_phase3_module_contract}.py`
+- `/app/frontend/src/{contexts/{AuthContext,AuthContext.test}.js,pages/{AuditCassaPage,AuditCassaPage.test,ReportBetaPage,ReportBetaPage.test}.js}`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Corretto il salvataggio Report di Admin/Federico che, in assenza dell'header di impersonazione, poteva attribuire spicci o altri valori all'account tecnico. Ogni autosave ora conserva il locale operativo nel payload e negli header; il backend rifiuta target mancanti, tecnici o incoerenti. L'audit mostra l'autore reale Federico distinto da Admin e apre la ricerca su tutti i locali per non nascondere anomalie fuori tenant.
+**Testato**: ✅ sì (metodo: suite backend completa `270 passed, 36 skipped`; suite frontend completa `68 passed`; build React produzione riuscita con soli warning Hook preesistenti; matrice target Federico/Admin/locale, mismatch header-payload, cambio locale durante autosave e regressione storico; OpenAPI invariato a 96 path/38 schema con hash aggiornato; `git diff --check`).
+**Note per il prossimo agente**: la VPS e stata interrogata solo in lettura. Le 103 richieste legacy con `updated_at` non possiedono `edit_history`, quindi certificano che il DDT fu modificato e il valore finale, non quali righe furono aggiunte o rimosse. La cronologia prima/dopo vale per modifiche successive al rilascio della feature del 2 ottobre.
+
 ### [2026-10-02 10:02 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: feature | audit | magazzino | sicurezza | test
 **File toccati**:

@@ -672,7 +672,7 @@ def _audit_user_info(request: Request, token_data: dict) -> dict:
 def _normalize_audit_user_label(entry: dict, user_map: Dict[str, str]) -> str:
     """Display name for audit UI: real locale username, or Admin for admin edits."""
     raw_user = (entry.get("by_user") or "").strip()
-    if entry.get("by_role") == "admin" or entry.get("is_impersonating") or raw_user in ("Admin", "Amministratore", "Simone"):
+    if entry.get("by_role") == "admin" or raw_user in ("Admin", "Amministratore", "Simone"):
         return "Admin"
     if raw_user == "Pastasciutta Roma" or not raw_user:
         return user_map.get(entry.get("by_user_id")) or user_map.get(entry.get("restaurant_id")) or raw_user or "?"

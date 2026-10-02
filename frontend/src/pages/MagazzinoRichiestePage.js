@@ -168,7 +168,7 @@ const MagazzinoRichiestePage = () => {
               return (
                 <div key={r.id} className={`p-3 flex flex-col sm:flex-row sm:items-center gap-2 text-sm ${isError ? 'bg-red-50' : ''}`}>
                   <NavLinkSpa
-                    to={`/ddt/${r.id}`}
+                    to={`/ddt/${r.id}?history=warehouse`}
                     className={`px-3 py-1.5 rounded border text-xs font-semibold whitespace-nowrap no-underline ${isError ? 'bg-red-100 hover:bg-red-200 border-red-300 text-red-800' : 'bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-800'}`}
                     title="Click → apri · Ctrl/⌘+click → nuova scheda"
                   >

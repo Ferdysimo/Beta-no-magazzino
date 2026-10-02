@@ -203,7 +203,7 @@ const RichiestaMercePage = () => {
                   className={`p-3 sm:p-4 flex flex-col sm:flex-row sm:items-start gap-3 ${isError ? 'bg-red-50' : ''}`}
                 >
                   <NavLinkSpa
-                    to={`/ddt/${r.id}`}
+                    to={`/ddt/${r.id}?history=restaurant`}
                     className={`px-4 py-2 rounded border text-sm font-semibold whitespace-nowrap self-start no-underline ${isError ? 'bg-red-100 hover:bg-red-200 border-red-300 text-red-800' : 'bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-800'}`}
                     title="Click → apri · Ctrl/⌘+click → nuova scheda"
                   >

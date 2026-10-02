@@ -78,7 +78,6 @@ const AuditCassaPage = () => {
   const {
     token,
     canImpersonate,
-    effectiveRestaurant,
     selectRestaurant,
   } = useAuth();
 
@@ -92,9 +91,9 @@ const AuditCassaPage = () => {
   const [dateFrom, setDateFrom] = useState(thirtyDaysAgo);
   const [dateTo, setDateTo] = useState(today);
   const [restaurants, setRestaurants] = useState([]);
-  const [restaurantFilter, setRestaurantFilter] = useState(
-    () => effectiveRestaurant?.id || '',
-  );
+  // L'audit parte da tutti i locali: un movimento finito per errore su un
+  // account tecnico deve restare visibile e non sparire dietro il filtro attivo.
+  const [restaurantFilter, setRestaurantFilter] = useState('');
 
   // Stato lista + selezione
   const [groups, setGroups] = useState([]);
@@ -261,7 +260,7 @@ const AuditCassaPage = () => {
                           {g.cash_count > 0 && <span>· cassa <b>{g.cash_count}</b></span>}
                           {g.bev_count > 0 && <span>· bev <b>{g.bev_count}</b></span>}
                           {g.admin_count > 0 && (
-                            <span className="text-violet-700">· admin <b>{g.admin_count}</b></span>
+                            <span className="text-violet-700">· in gestione <b>{g.admin_count}</b></span>
                           )}
                         </div>
                         <div className="text-[10px] text-gray-400 mt-0.5 truncate">
@@ -348,7 +347,7 @@ const AuditCassaPage = () => {
                             <td className="p-2">
                               <span className="font-medium">{it.by_user}</span>
                               {it.is_impersonating && (
-                                <span className="ml-1 text-[9px] bg-violet-100 text-violet-800 px-1 rounded">Admin→</span>
+                                <span className="ml-1 text-[9px] bg-violet-100 text-violet-800 px-1 rounded">su locale</span>
                               )}
                             </td>
                           </tr>

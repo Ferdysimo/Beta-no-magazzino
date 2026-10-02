@@ -30,4 +30,5 @@ class BeverageDailyUpsert(BaseModel):
     comments: Optional[Dict[str, str]] = None
     date: Optional[str] = None
     restaurant_id: Optional[str] = None
+    target_restaurant_id: Optional[str] = None
     revision: Optional[str] = None

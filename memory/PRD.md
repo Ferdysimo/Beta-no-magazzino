@@ -133,6 +133,11 @@ anonimo, locale, magazzino, Federico, Admin e Simone.
   il tenant effettivo su cui lavorare.
 - Il tenant effettivo viene comunicato al backend tramite header dedicati solo
   per ruoli autorizzati; un locale normale non puo sovrascriverlo.
+- Nel Report live, Admin e Federico devono indicare un locale operativo valido:
+  il backend non puo mai usare come proprietario dei dati il loro account
+  tecnico. Corpo e header devono concordare; un autosalvataggio gia accodato
+  conserva il locale selezionato al momento della modifica e viene rifiutato se
+  il contesto cambia in modo incoerente.
 - Aprire due schede su locali diversi non deve causare scritture incrociate.
 - Gli account non vengono creati o resettati automaticamente all'avvio.
 - Gli account privilegiati si gestiscono con il comando offline
@@ -226,6 +231,9 @@ Contratti:
   cliccabili per
   mostrare l'espressione originale e il risultato senza abilitare scritture;
 - le correzioni storiche autorizzate devono restare riconoscibili nell'audit.
+- l'audit Cassa mostra l'autore reale (`Federico` resta distinto da `Admin`) e
+  si apre su tutti i locali, cosi anche un eventuale dato salvato fuori tenant
+  resta immediatamente visibile e filtrabile.
 
 Lo Storico chiusure mantiene la griglia sintetica, ma le celle che derivano da
 un input del Report sono ispezionabili con doppio clic. Il dettaglio mostra il
@@ -388,6 +396,10 @@ pending -> annullata
 - i DDT precedenti all'introduzione del controllo restano leggibili e mostrano
   esplicitamente che il nome non era registrato;
 - il numero DDT e globale e allocato atomicamente;
+- aprendo un DDT dallo storico, frecce visibili e tasti tastiera sinistra/destra
+  consentono di passare al numero precedente o successivo senza tornare
+  all'elenco; la sequenza resta limitata allo storico globale del Magazzino o
+  allo storico del singolo locale da cui la bolla e stata aperta;
 - l'annullamento e consentito soltanto mentre la richiesta e `pending`: la
   richiesta diventa `annullata`, sparisce dai flussi operativi e dai conteggi
   dell'Analisi magazzino, ma conserva DDT, articoli, quantita, autore e ora

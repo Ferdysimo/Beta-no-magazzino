@@ -13,6 +13,31 @@ const AuthContext = createContext(null);
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+const readHeader = (headers, name) => {
+  if (!headers) return '';
+  if (typeof headers.get === 'function') return headers.get(name) || '';
+  return headers[name] || headers[name.toLowerCase()] || '';
+};
+
+const writeHeader = (headers, name, value) => {
+  if (typeof headers.set === 'function') headers.set(name, value);
+  else headers[name] = value;
+};
+
+export const applyImpersonationHeaders = (config, selectedRestaurant) => {
+  if (!selectedRestaurant?.id) return config;
+  config.headers = config.headers || {};
+  // An autosave can fire after the user changes locale. Explicit headers
+  // captured when the edit was made must win over the current global selection.
+  if (!readHeader(config.headers, 'X-Restaurant-Id')) {
+    writeHeader(config.headers, 'X-Restaurant-Id', selectedRestaurant.id);
+  }
+  if (!readHeader(config.headers, 'X-Admin-Restaurant-Id')) {
+    writeHeader(config.headers, 'X-Admin-Restaurant-Id', selectedRestaurant.id);
+  }
+  return config;
+};
+
 export const AuthProvider = ({ children }) => {
   const [restaurant, setRestaurant] = useState(null);
   const [token, setToken] = useState(loadSessionToken);
@@ -75,8 +100,7 @@ export const AuthProvider = ({ children }) => {
           const url = config.url || '';
           const isAuthMe = url.endsWith('/auth/me') || url.includes('/auth/me?');
           if (!isAuthMe) {
-            config.headers['X-Restaurant-Id'] = adminRestRef.current.id;
-            config.headers['X-Admin-Restaurant-Id'] = adminRestRef.current.id;
+            applyImpersonationHeaders(config, adminRestRef.current);
           }
         }
       } catch (e) { /* no-op */ }

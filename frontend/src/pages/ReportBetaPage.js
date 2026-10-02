@@ -9,6 +9,28 @@ import Header from '../components/Header';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+export const buildReportWriteContext = ({
+  token,
+  canImpersonate,
+  historicalMode,
+  urlRid,
+  effectiveRestaurant,
+}) => {
+  const targetId = canImpersonate
+    ? (historicalMode ? urlRid : (effectiveRestaurant?.id || ''))
+    : '';
+  const headers = { Authorization: `Bearer ${token}` };
+  if (targetId) {
+    headers['X-Restaurant-Id'] = targetId;
+    headers['X-Admin-Restaurant-Id'] = targetId;
+  }
+  return {
+    targetId,
+    meta: targetId ? { target_restaurant_id: targetId } : {},
+    headers,
+  };
+};
+
 // Listino paste (prezzi modificabili in un solo punto)
 const DEFAULT_PASTA_PRICES = [
   { sigla: 'CARB',    price: 8 },
@@ -315,6 +337,15 @@ const ReportBetaPageInner = () => {
     () => (historicalMode ? { date: urlDate, restaurant_id: urlRid } : {}),
     [historicalMode, urlDate, urlRid],
   );
+  const reportWriteContext = useMemo(() => buildReportWriteContext({
+    token,
+    canImpersonate,
+    historicalMode,
+    urlRid,
+    effectiveRestaurant,
+  }), [token, canImpersonate, historicalMode, urlRid, effectiveRestaurant]);
+  const reportWriteMeta = reportWriteContext.meta;
+  const reportWriteHeaders = reportWriteContext.headers;
   const historicalRestaurantLabel = historicalMode
     && effectiveRestaurant?.id === urlRid
     ? (effectiveRestaurant.location || effectiveRestaurant.username || '')
@@ -537,10 +568,11 @@ const ReportBetaPageInner = () => {
       try {
         const res = await axios.put(`${API}/cash/daily`, {
           ...payload,
+          ...reportWriteMeta,
           revision: cashRevisionRef.current || '',
           ...histBody,
         }, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: reportWriteHeaders,
         });
         const nextRevision = res.data?.revision || '';
         cashRevisionRef.current = nextRevision;
@@ -549,7 +581,7 @@ const ReportBetaPageInner = () => {
         console.error('save cash report patch', e);
       }
     }, 500);
-  }, [cashLoaded, token, readOnlyHistorical, histBody]);
+  }, [cashLoaded, token, readOnlyHistorical, histBody, reportWriteMeta, reportWriteHeaders]);
 
   // Auto-save debounced di una bevanda: salva solo i campi modificati della sigla.
   const scheduleBevSave = React.useCallback((sigla, patch) => {
@@ -564,9 +596,10 @@ const ReportBetaPageInner = () => {
         const res = await axios.put(`${API}/beverages/daily`, {
           sigla,
           ...payload,
+          ...reportWriteMeta,
           revision: bevRevisionRef.current[sigla] || '',
           ...histBody,
-        }, { headers: { Authorization: `Bearer ${token}` } });
+        }, { headers: reportWriteHeaders });
         bevRevisionRef.current[sigla] = res.data?.revision || '';
         // Mantieni protezione del valore locale per altri 2s dopo il save
         bevPendingSeraUntil.current[sigla] = Date.now() + 2000;
@@ -574,7 +607,7 @@ const ReportBetaPageInner = () => {
         console.error('save beverage report patch', e);
       }
     }, 600);
-  }, [token, histBody, readOnlyHistorical]);
+  }, [histBody, readOnlyHistorical, reportWriteMeta, reportWriteHeaders]);
 
   // Magazzino (Mattina o Sera): l'utente inserisce CASSE (×24) e SFUSE separatamente.
   // Il totale (mattina o sera) memorizzato a DB è la somma calcolata casse*24 + sfuse.

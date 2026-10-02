@@ -67,6 +67,56 @@ _CLOSURE_GRID_CASH_DETAIL_FIELDS = (
 _CLOSURE_GRID_BEVERAGE_DETAIL_FIELDS = ("inUsc", "scarti", "sera")
 
 
+async def _ensure_operational_restaurant(restaurant_id: str) -> str:
+    """Reject technical Admin/Supervisor identities as Report data owners."""
+    rid = str(restaurant_id or "").strip()
+    if not rid:
+        raise HTTPException(status_code=400, detail="Seleziona un locale operativo")
+    target = await db.restaurants.find_one(
+        {"id": rid, "role": "restaurant"},
+        {"_id": 0, "id": 1},
+    )
+    if not target:
+        raise HTTPException(status_code=400, detail="Locale operativo non valido")
+    return rid
+
+
+async def _resolve_live_report_target(
+    request: Request,
+    token_data: dict,
+    explicit_target: Optional[str] = None,
+) -> str:
+    """Resolve a live Report target without falling back to technical accounts."""
+    role = token_data.get("role")
+    authenticated_rid = (
+        token_data.get("authenticated_restaurant_id")
+        or token_data.get("restaurant_id")
+        or ""
+    )
+    requested_rid = str(explicit_target or "").strip()
+
+    if role == "restaurant":
+        if requested_rid and requested_rid != authenticated_rid:
+            raise HTTPException(status_code=403, detail="Non puoi scrivere sul Report di un altro locale")
+        return authenticated_rid
+    if not can_impersonate(token_data):
+        raise HTTPException(status_code=403, detail="Ruolo non autorizzato al Report")
+
+    header_rid = str(request.headers.get("X-Restaurant-Id") or "").strip()
+    admin_header_rid = str(request.headers.get("X-Admin-Restaurant-Id") or "").strip()
+    target_rid = requested_rid or header_rid
+    if not target_rid:
+        raise HTTPException(
+            status_code=400,
+            detail="Seleziona un locale prima di modificare il Report",
+        )
+    if header_rid and header_rid != target_rid:
+        raise HTTPException(status_code=409, detail="Il locale del Report è cambiato: ricarica la pagina")
+    if admin_header_rid and admin_header_rid != target_rid:
+        raise HTTPException(status_code=409, detail="Il locale impersonato è cambiato: ricarica la pagina")
+    return await _ensure_operational_restaurant(target_rid)
+
+
 def _closure_grid_report_metadata(doc: Dict, fields) -> Dict[str, Dict[str, str]]:
     source = doc or {}
     raw_comments = source.get("comments") or {}
@@ -99,8 +149,10 @@ async def get_beverage_daily_counts(
     historical = _resolve_historical_mode(date, restaurant_id, token_data, allow_self=True)
     if historical:
         target_date, rid = historical
+        if can_impersonate(token_data):
+            rid = await _ensure_operational_restaurant(rid)
     else:
-        rid = await _effective_restaurant_id(request, token_data)
+        rid = await _resolve_live_report_target(request, token_data)
         target_date = _today_rome_str()
 
     today_docs = await db.beverage_daily_counts.find(
@@ -203,8 +255,15 @@ async def upsert_beverage_daily(
     historical = _resolve_historical_mode(data.date, data.restaurant_id, token_data)
     if historical:
         target_date, rid = historical
+        rid = await _ensure_operational_restaurant(rid)
+        if data.target_restaurant_id and data.target_restaurant_id != rid:
+            raise HTTPException(status_code=409, detail="Il locale del Report è cambiato: ricarica la pagina")
     else:
-        rid = await _effective_restaurant_id(request, token_data)
+        rid = await _resolve_live_report_target(
+            request,
+            token_data,
+            data.target_restaurant_id,
+        )
         target_date = _today_rome_str()
     valid_siglas = {b["sigla"] for b in BEVERAGES_CATALOG}
     if data.sigla not in valid_siglas:
@@ -322,8 +381,10 @@ async def get_cash_daily(
     historical = _resolve_historical_mode(date, restaurant_id, token_data, allow_self=True)
     if historical:
         target_date, rid = historical
+        if can_impersonate(token_data):
+            rid = await _ensure_operational_restaurant(rid)
     else:
-        rid = await _effective_restaurant_id(request, token_data)
+        rid = await _resolve_live_report_target(request, token_data)
         target_date = _today_rome_str()
     today_doc = await db.cash_daily_counts.find_one(
         {"restaurant_id": rid, "date_rome": target_date}, {"_id": 0}
@@ -424,8 +485,15 @@ async def upsert_cash_daily(
     historical = _resolve_historical_mode(data.date, data.restaurant_id, token_data)
     if historical:
         target_date, rid = historical
+        rid = await _ensure_operational_restaurant(rid)
+        if data.target_restaurant_id and data.target_restaurant_id != rid:
+            raise HTTPException(status_code=409, detail="Il locale del Report è cambiato: ricarica la pagina")
     else:
-        rid = await _effective_restaurant_id(request, token_data)
+        rid = await _resolve_live_report_target(
+            request,
+            token_data,
+            data.target_restaurant_id,
+        )
         target_date = _today_rome_str()
     old_doc = await db.cash_daily_counts.find_one(
         {"restaurant_id": rid, "date_rome": target_date}, {"_id": 0}
@@ -645,10 +713,6 @@ async def admin_audit_log_groups(
         rid = r["_id"]["rid"]
         restaurant_label = rest_map.get(rid, "?")
         users = set(r.get("users") or [])
-        if r.get("admin_count", 0) > 0:
-            users.discard("Simone")
-            users.discard("Amministratore")
-            users.add("Admin")
         if "Pastasciutta Roma" in users:
             users.discard("Pastasciutta Roma")
             users.add(user_map.get(rid, restaurant_label))

@@ -1,7 +1,7 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import axios from 'axios';
-import ReportBetaPage from './ReportBetaPage';
+import ReportBetaPage, { buildReportWriteContext } from './ReportBetaPage';
 
 const mockNavigate = jest.fn();
 const mockUseAuth = jest.fn();
@@ -33,6 +33,62 @@ jest.mock('../contexts/OrderContext', () => ({
 jest.mock('../components/Header', () => () => <div data-testid="header" />);
 
 global.IS_REACT_ACT_ENVIRONMENT = true;
+
+const brazza = {
+  id: 'brazza-id',
+  username: 'Brazza',
+  location: 'Largo di Brazzà',
+  role: 'restaurant',
+};
+
+describe('buildReportWriteContext', () => {
+  test('lega un salvataggio live di Federico al locale attivo', () => {
+    expect(buildReportWriteContext({
+      token: 'token-federico',
+      canImpersonate: true,
+      historicalMode: false,
+      urlRid: '',
+      effectiveRestaurant: brazza,
+    })).toEqual({
+      targetId: brazza.id,
+      meta: { target_restaurant_id: brazza.id },
+      headers: {
+        Authorization: 'Bearer token-federico',
+        'X-Restaurant-Id': brazza.id,
+        'X-Admin-Restaurant-Id': brazza.id,
+      },
+    });
+  });
+
+  test('in storico usa il locale dell URL e non quello selezionato dopo', () => {
+    const context = buildReportWriteContext({
+      token: 'token-admin',
+      canImpersonate: true,
+      historicalMode: true,
+      urlRid: 'flaminio-id',
+      effectiveRestaurant: brazza,
+    });
+
+    expect(context.targetId).toBe('flaminio-id');
+    expect(context.meta.target_restaurant_id).toBe('flaminio-id');
+    expect(context.headers['X-Restaurant-Id']).toBe('flaminio-id');
+    expect(context.headers['X-Admin-Restaurant-Id']).toBe('flaminio-id');
+  });
+
+  test('il cassiere continua a usare la propria identita del token', () => {
+    expect(buildReportWriteContext({
+      token: 'token-locale',
+      canImpersonate: false,
+      historicalMode: false,
+      urlRid: '',
+      effectiveRestaurant: brazza,
+    })).toEqual({
+      targetId: '',
+      meta: {},
+      headers: { Authorization: 'Bearer token-locale' },
+    });
+  });
+});
 
 describe('ReportBetaPage storico in sola lettura', () => {
   let container;
