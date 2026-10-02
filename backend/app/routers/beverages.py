@@ -604,8 +604,8 @@ async def analisi_magazzino(
     # report solo dopo che è passata 1 ora dalla sua creazione (grace
     # period: entro l'ora i locali possono ancora modificarla — di fatto
     # la finestra di modifica è 20 min, ma teniamo 1h come margine pieno).
-    # Stato: qualunque, perché le richieste cancellate vengono `delete_one`
-    # in DB → spariscono automaticamente da qui.
+    # Le richieste annullate restano in Mongo per l'audit Simone, ma non
+    # rappresentano merce trasportata e vanno escluse esplicitamente.
     grace_cutoff_iso = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
     outgoing_agg = await db.richieste.aggregate([
         {"$match": {
@@ -614,6 +614,7 @@ async def analisi_magazzino(
                 "$lt": to_iso_excl,
                 "$lte": grace_cutoff_iso,
             },
+            "status": {"$ne": "annullata"},
         }},
         {"$unwind": "$items"},
         {"$group": {

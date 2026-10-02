@@ -33,14 +33,14 @@ from app.routers import (
 )
 
 
-EXPECTED_OPENAPI_SHA256 = "41c9e0ffc59b6db9930b2a581b34bdee0883375454013b410f02b6fcd1168b18"
+EXPECTED_OPENAPI_SHA256 = "5223582a64504a904b9e49c151bfa57ac2733e26addbc48ca5a21241694710d0"
 
 
 def test_phase3_keeps_exact_openapi_contract_and_unique_routes():
     schema = server.app.openapi()
     payload = json.dumps(schema, sort_keys=True, separators=(",", ":")).encode()
     assert hashlib.sha256(payload).hexdigest() == EXPECTED_OPENAPI_SHA256
-    assert len(schema["paths"]) == 94
+    assert len(schema["paths"]) == 96
 
     route_pairs = [
         (method, route.path)
@@ -54,7 +54,7 @@ def test_phase3_keeps_exact_openapi_contract_and_unique_routes():
 def test_phase3_router_ownership_counts_are_stable():
     assert len(system.router.routes) == 13
     assert len(invoices.router.routes) == 9
-    assert len(warehouse.router.routes) == 28
+    assert len(warehouse.router.routes) == 30
     assert len(beverages.router.routes) == 8
     assert len(documents.router.routes) == 16
     assert len(upload_attempts.router.routes) == 2

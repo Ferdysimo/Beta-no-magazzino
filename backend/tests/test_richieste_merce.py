@@ -299,9 +299,10 @@ class TestRichiesteCRUD:
         gr_id = TestRichiesteCRUD.created_ids[1][1]
         r = requests.delete(f"{BASE_URL}/api/richieste/{gr_id}", headers=_h(tokens["Grazie"]))
         assert r.status_code == 200
-        # Verify gone
+        # The request disappears from operational lists but remains in the audit archive.
         r2 = requests.get(f"{BASE_URL}/api/richieste/{gr_id}", headers=_h(tokens["Magazziniere"]))
-        assert r2.status_code == 404
+        assert r2.status_code == 200
+        assert r2.json()["status"] == "annullata"
 
 
 class TestAdminImpersonation:

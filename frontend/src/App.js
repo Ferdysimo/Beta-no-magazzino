@@ -45,6 +45,7 @@ import LaboratorioPage from './pages/LaboratorioPage';
 import ScannerDocumentiLabPage from './pages/ScannerDocumentiLabPage';
 import PastaAnnotationsLabPage from './pages/PastaAnnotationsLabPage';
 import ControlliTrasportiPage from './pages/ControlliTrasportiPage';
+import RichiesteCancellatePage from './pages/RichiesteCancellatePage';
 import UpdateBanner from './components/UpdateBanner';
 import FrontendDiagnostics from './components/FrontendDiagnostics';
 import RouteScrollRestoration from './components/RouteScrollRestoration';
@@ -332,6 +333,13 @@ function AppRoutes() {
       <Route path="/simone/crea-locali" element={
         <ProtectedRoute>
           <CreaLocaliPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/simone/richieste-cancellate" element={
+        <ProtectedRoute>
+          <SimoneOnlyRoute>
+            <RichiesteCancellatePage />
+          </SimoneOnlyRoute>
         </ProtectedRoute>
       } />
       <Route path="/laboratorio" element={

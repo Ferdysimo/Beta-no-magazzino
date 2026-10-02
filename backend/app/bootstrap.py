@@ -90,6 +90,9 @@ async def initialize_application():
     await db.stock_movements.create_index([("product_id", 1), ("timestamp", -1)])
     await db.stock_movements.create_index([("timestamp", -1)])
     await db.stock_movements.create_index([("cause", 1), ("timestamp", -1)])
+    await db.richieste.create_index([("status", 1), ("cancelled_at", -1)])
+    await db.richieste.create_index([("updated_at", -1)])
+    await db.richieste.create_index([("edit_history.changed_at", -1)])
     # Beverage daily counts (Magazzino Bevande page)
     await db.beverage_daily_counts.create_index(
         [("restaurant_id", 1), ("date_rome", -1), ("sigla", 1)], unique=True

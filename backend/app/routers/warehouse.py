@@ -41,6 +41,8 @@ __all__ = [
     "list_history_all",
     "list_extra_notes",
     "list_transport_checks",
+    "list_cancelled_requests",
+    "list_modified_requests",
     "get_richiesta",
     "update_richiesta",
     "evade_richiesta",
@@ -443,6 +445,14 @@ async def _enrich_richiesta(r: dict) -> dict:
     r["mittente"] = MITTENTE_INFO
     return r
 
+
+def _require_simone_request_audit(token_data: dict) -> None:
+    if token_data.get("username") != "Simone" or token_data.get("role") != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Audit richieste merce riservato a Simone",
+        )
+
 @router.get("/warehouse/products")
 async def get_warehouse_products_for_request(token_data: dict = Depends(verify_token)):
     """
@@ -527,7 +537,11 @@ async def list_richieste(token_data: dict = Depends(verify_token)):
     """List requests for the current restaurant (pending + evase + confermate)."""
     restaurant_id = token_data["restaurant_id"]
     docs = await db.richieste.find(
-        {"restaurant_id": restaurant_id}, {"_id": 0}
+        {
+            "restaurant_id": restaurant_id,
+            "status": {"$ne": "annullata"},
+        },
+        {"_id": 0},
     ).sort("created_at", -1).to_list(500)
     return docs
 
@@ -595,6 +609,7 @@ async def list_extra_notes(
     docs = await db.richieste.find(
         {
             "created_at": {"$gte": start_iso, "$lt": end_iso},
+            "status": {"$ne": "annullata"},
             "extra_note": {"$type": "string", "$regex": r"\S"},
         },
         {
@@ -669,6 +684,122 @@ async def list_transport_checks(
     return docs
 
 
+@router.get("/admin/cancelled-requests")
+async def list_cancelled_requests(
+    date_from: str,
+    date_to: str,
+    restaurant_id: Optional[str] = None,
+    token_data: dict = Depends(verify_token),
+):
+    """Simone-only audit of warehouse requests cancelled while pending."""
+    _require_simone_request_audit(token_data)
+    try:
+        start_day = datetime.strptime(date_from, "%Y-%m-%d").date()
+        end_day = datetime.strptime(date_to, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Periodo non valido")
+    if end_day < start_day:
+        raise HTTPException(status_code=400, detail="Periodo non valido")
+    if (end_day - start_day).days > 370:
+        raise HTTPException(status_code=400, detail="Il periodo massimo è di 371 giorni")
+
+    start_iso = datetime.combine(
+        start_day,
+        datetime.min.time(),
+        tzinfo=ROME_TZ,
+    ).astimezone(timezone.utc).isoformat()
+    end_iso = datetime.combine(
+        end_day + timedelta(days=1),
+        datetime.min.time(),
+        tzinfo=ROME_TZ,
+    ).astimezone(timezone.utc).isoformat()
+    query = {
+        "status": "annullata",
+        "cancelled_at": {"$gte": start_iso, "$lt": end_iso},
+    }
+    if restaurant_id:
+        query["restaurant_id"] = restaurant_id
+
+    return await db.richieste.find(
+        query,
+        {
+            "_id": 0,
+            "id": 1,
+            "ddt_number": 1,
+            "restaurant_id": 1,
+            "restaurant_location": 1,
+            "items": 1,
+            "extra_note": 1,
+            "created_at": 1,
+            "dispatch_date": 1,
+            "status": 1,
+            "cancelled_at": 1,
+            "cancelled_from_status": 1,
+            "cancelled_by_username": 1,
+            "cancelled_by_role": 1,
+            "cancelled_by_restaurant_id": 1,
+        },
+    ).sort("cancelled_at", -1).to_list(1000)
+
+
+@router.get("/admin/modified-requests")
+async def list_modified_requests(
+    date_from: str,
+    date_to: str,
+    restaurant_id: Optional[str] = None,
+    token_data: dict = Depends(verify_token),
+):
+    """Simone-only audit of DDT requests changed in the selected period."""
+    _require_simone_request_audit(token_data)
+    try:
+        start_day = datetime.strptime(date_from, "%Y-%m-%d").date()
+        end_day = datetime.strptime(date_to, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Periodo non valido")
+    if end_day < start_day:
+        raise HTTPException(status_code=400, detail="Periodo non valido")
+    if (end_day - start_day).days > 370:
+        raise HTTPException(status_code=400, detail="Il periodo massimo è di 371 giorni")
+
+    start_iso = datetime.combine(
+        start_day,
+        datetime.min.time(),
+        tzinfo=ROME_TZ,
+    ).astimezone(timezone.utc).isoformat()
+    end_iso = datetime.combine(
+        end_day + timedelta(days=1),
+        datetime.min.time(),
+        tzinfo=ROME_TZ,
+    ).astimezone(timezone.utc).isoformat()
+    period = {"$gte": start_iso, "$lt": end_iso}
+    query = {
+        "$or": [
+            {"updated_at": period},
+            {"edit_history.changed_at": period},
+        ],
+    }
+    if restaurant_id:
+        query["restaurant_id"] = restaurant_id
+
+    return await db.richieste.find(
+        query,
+        {
+            "_id": 0,
+            "id": 1,
+            "ddt_number": 1,
+            "restaurant_id": 1,
+            "restaurant_location": 1,
+            "items": 1,
+            "extra_note": 1,
+            "created_at": 1,
+            "dispatch_date": 1,
+            "status": 1,
+            "updated_at": 1,
+            "edit_history": 1,
+        },
+    ).sort("updated_at", -1).to_list(1000)
+
+
 @router.get("/richieste/{richiesta_id}")
 async def get_richiesta(richiesta_id: str, token_data: dict = Depends(verify_token)):
     """Get single request with MITTENTE/DESTINATARIO populated for DDT view."""
@@ -712,15 +843,40 @@ async def update_richiesta(
     extra_note = (data.extra_note or "").strip()
     if not clean_items and not extra_note:
         raise HTTPException(status_code=400, detail="Aggiungi almeno un prodotto o un extra")
+    previous_items = doc.get("items") or []
+    previous_extra_note = (doc.get("extra_note") or "").strip()
+    if clean_items == previous_items and extra_note == previous_extra_note:
+        return await _enrich_richiesta(doc)
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    edit_entry = {
+        "id": str(uuid.uuid4()),
+        "changed_at": now_iso,
+        "changed_by_username": token_data.get("username", ""),
+        "changed_by_role": role or "",
+        "changed_by_restaurant_id": token_data.get("restaurant_id", ""),
+        "before_items": previous_items,
+        "after_items": clean_items,
+        "before_extra_note": previous_extra_note,
+        "after_extra_note": extra_note,
+    }
     updated = await db.richieste.find_one_and_update(
-        {"id": richiesta_id},
-        {"$set": {
-            "items": clean_items,
-            "extra_note": extra_note,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }},
+        {"id": richiesta_id, "status": "pending"},
+        {
+            "$set": {
+                "items": clean_items,
+                "extra_note": extra_note,
+                "updated_at": now_iso,
+            },
+            "$push": {"edit_history": edit_entry},
+        },
         return_document=True,
     )
+    if not updated:
+        raise HTTPException(
+            status_code=409,
+            detail="La richiesta è cambiata mentre veniva modificata. Aggiorna e riprova.",
+        )
     return await _enrich_richiesta(updated)
 
 
@@ -823,20 +979,42 @@ async def segnala_errore_richiesta(richiesta_id: str, data: RichiestaErrorReport
 
 @router.delete("/richieste/{richiesta_id}")
 async def delete_richiesta(richiesta_id: str, token_data: dict = Depends(verify_token)):
-    """Locale cancella una richiesta che ha creato (solo se pending). Admin può cancellare qualsiasi."""
+    """Cancel a pending request while preserving its complete audit record."""
     doc = await db.richieste.find_one({"id": richiesta_id})
     if not doc:
         raise HTTPException(status_code=404, detail="Richiesta non trovata")
     role = token_data.get("role")
     if role == "magazzino":
         raise HTTPException(status_code=403, detail="Il magazziniere non può cancellare")
-    if role != "admin":
-        if doc.get("restaurant_id") != token_data["restaurant_id"]:
-            raise HTTPException(status_code=403, detail="Non autorizzato")
-        if doc.get("status") != "pending":
-            raise HTTPException(status_code=400, detail="Puoi cancellare solo richieste non ancora evase")
-    await db.richieste.delete_one({"id": richiesta_id})
-    return {"message": "Richiesta cancellata"}
+    if role != "admin" and doc.get("restaurant_id") != token_data["restaurant_id"]:
+        raise HTTPException(status_code=403, detail="Non autorizzato")
+    if doc.get("status") != "pending":
+        raise HTTPException(status_code=400, detail="Puoi cancellare solo richieste non ancora evase")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    cancelled = await db.richieste.find_one_and_update(
+        {"id": richiesta_id, "status": "pending"},
+        {"$set": {
+            "status": "annullata",
+            "cancelled_at": now_iso,
+            "cancelled_from_status": "pending",
+            "cancelled_by_username": token_data.get("username", ""),
+            "cancelled_by_role": role or "",
+            "cancelled_by_restaurant_id": token_data.get("restaurant_id", ""),
+        }},
+        return_document=True,
+    )
+    if not cancelled:
+        raise HTTPException(
+            status_code=409,
+            detail="La richiesta è cambiata mentre veniva annullata. Aggiorna e riprova.",
+        )
+    return {
+        "message": "Richiesta cancellata",
+        "id": richiesta_id,
+        "status": "annullata",
+        "cancelled_at": now_iso,
+    }
 
 
 # ==================== CARICHI MAGAZZINO - ENDPOINTS ====================

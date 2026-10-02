@@ -178,6 +178,30 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-10-02 10:02 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | audit | magazzino | sicurezza | test
+**File toccati**:
+- `/app/backend/app/{bootstrap.py,routers/{warehouse,beverages}.py}`
+- `/app/backend/tests/{test_warehouse_request_audit,test_warehouse_waste,test_richieste_merce,test_phase1_foundations_contract,test_phase3_module_contract}.py`
+- `/app/frontend/src/{App.js,pages/{HomePage,RichiesteCancellatePage,RichiesteCancellatePage.test}.js}`
+- `/app/frontend/public/version.json`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Aggiunta nell'account Simone la pagina `Audit richieste merce`, con due sezioni filtrabili per mese e locale: richieste cancellate e DDT modificati. Le cancellazioni pending diventano soft-delete e conservano articoli, quantita e autore senza entrare nei flussi operativi o nell'Analisi magazzino; ogni modifica futura salva atomicamente versione prima/dopo, autore e ora, mentre i DDT legacy mostrano correttamente solo il valore finale disponibile.
+**Testato**: ✅ sì (metodo: suite backend completa `259 passed, 36 skipped`; suite frontend completa `63 passed`; build React produzione riuscita con soli warning Hook preesistenti; test dedicati su soft-delete, versioni prima/dopo, no-op, filtri temporali e matrice ruoli; OpenAPI aggiornato a 96 path/38 schema; `git diff --check`).
+**Note per il prossimo agente**: accesso backend riservato all'identita esatta `Simone` con ruolo `admin`; anonimo, locale, Magazziniere, Federico e Admin generico ricevono 401/403. Lo storico completo nasce con questo rilascio: i documenti legacy con `updated_at` sono visibili, ma non viene inventata una versione precedente. Nessuna modifica e stata distribuita sulla VPS.
+
+### [2026-09-30 13:23 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix | prestazioni | Analisi mensile | Excel | test
+**File toccati**:
+- `/app/backend/app/routers/analysis.py`
+- `/app/backend/app/services/analysis.py`
+- `/app/backend/tests/test_analysis_export_responsiveness.py`
+- `/app/memory/PRD.md`
+- `/app/memory/CHANGELOG_MULTI_AGENT.md`
+**Descrizione**: La costruzione e il salvataggio OpenPyXL dell'Excel Analisi annuale vengono ora eseguiti in un worker thread, lasciando libero l'event loop che serve ordini, API e WebSocket. La preparazione delle righe cede periodicamente il controllo e un blocco atomico ammette un solo export per processo; una richiesta contemporanea riceve HTTP 429 con invito a riprovare, senza duplicare il carico. Formule, dati, file prodotto e permesso Admin restano invariati.
+**Testato**: ✅ sì (metodo: test mirati Analisi/Report `39 passed`, inclusa prova di concorrenza con event loop reattivo, rifiuto del secondo export, rilascio del blocco dopo successo/errore e workbook XLSX reale; suite backend completa `248 passed, 36 skipped`; `git diff --check`).
+**Note per il prossimo agente**: il workbook resta interamente in RAM, ma non blocca piu il processo durante la fase OpenPyXL. Non aumentare i worker Uvicorn senza prima rendere singleton i job di lifespan/reset notturno; il limite export e intenzionalmente in-process per l'attuale singolo worker di produzione.
+
 ### [2026-09-28 22:51 CEST] - Codex (OpenAI)
 **Tipo**: bugfix | Report storico | UX | test
 **File toccati**:

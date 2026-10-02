@@ -67,8 +67,10 @@ class _Movements:
 class _AggregateCollection:
     def __init__(self, docs):
         self.docs = docs
+        self.pipeline = None
 
     def aggregate(self, pipeline):
+        self.pipeline = pipeline
         return _Cursor(self.docs)
 
 
@@ -163,6 +165,7 @@ async def _assert_anonymous_rejected():
 
 def test_warehouse_analysis_exposes_waste_as_last_metric(monkeypatch):
     movements = _Movements([{"_id": "p1", "total": 3}])
+    richieste = _AggregateCollection([])
     monkeypatch.setattr(
         beverages,
         "db",
@@ -170,7 +173,7 @@ def test_warehouse_analysis_exposes_waste_as_last_metric(monkeypatch):
             restaurants=_FindCollection([{"location": "Flaminio"}]),
             carichi_magazzino=_AggregateCollection([{"_id": "p1", "total": 10}]),
             stock_movements=movements,
-            richieste=_AggregateCollection([]),
+            richieste=richieste,
             products=_Products([{
                 "id": "p1",
                 "name": "Farina test",
@@ -192,3 +195,4 @@ def test_warehouse_analysis_exposes_waste_as_last_metric(monkeypatch):
     match = movements.pipeline[0]["$match"]
     assert match["cause"] == "scarto_admin"
     assert match["delta"] == {"$lt": 0}
+    assert richieste.pipeline[0]["$match"]["status"] == {"$ne": "annullata"}

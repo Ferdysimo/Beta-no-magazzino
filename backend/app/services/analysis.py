@@ -1,6 +1,8 @@
+import asyncio
 import math
 import re
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 from typing import Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
@@ -589,6 +591,35 @@ def _analysis_warning_counts(warnings: List[Dict]) -> Dict[str, int]:
     return counts
 
 
+def _build_analysis_workbook_bytes(data: Dict, selected_year: int) -> BytesIO:
+    """Build the CPU-heavy workbook outside the FastAPI event loop.
+
+    The caller is responsible for invoking this synchronous function through a
+    worker thread. Keeping the complete OpenPyXL phase here makes it harder to
+    accidentally move only ``wb.save`` off-thread while cell creation still
+    blocks orders, reports and WebSocket heartbeats.
+    """
+    wb = Workbook()
+    wb.calculation.calcMode = "auto"
+    wb.calculation.fullCalcOnLoad = True
+    wb.calculation.forceFullCalc = True
+    wb.remove(wb.active)
+
+    used_titles = set()
+    for rest_data in data["restaurants"]:
+        _write_analysis_locale_sheet(wb, rest_data, data, used_titles)
+    _write_totali_sheet_for_analysis(
+        wb,
+        data["restaurants"],
+        selected_year,
+    )
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output
+
+
 async def _build_annual_analysis_data(selected_year: int) -> Dict:
     restaurants = await _collect_cursor_documents(db.restaurants.find(
         {"role": "restaurant"},
@@ -654,7 +685,13 @@ async def _build_annual_analysis_data(selected_year: int) -> Dict:
         days_with_paste = 0
         rows = []
 
-        for day in days:
+        for day_index, day in enumerate(days):
+            # This preprocessing is lighter than OpenPyXL, but a full year for
+            # several restaurants is still CPU work. Yield periodically so
+            # orders and WebSocket heartbeats remain responsive while the
+            # export rows are prepared.
+            if day_index and day_index % 14 == 0:
+                await asyncio.sleep(0)
             date_str = day.strftime("%Y-%m-%d")
             cash_doc = cash_by_key.get((rid, date_str), {}) or {}
             manual_prices = cash_doc.get("manual_prices") or {}

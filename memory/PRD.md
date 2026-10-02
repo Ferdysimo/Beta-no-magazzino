@@ -2,7 +2,7 @@
 
 Stato: contratto funzionale corrente
 
-Ultimo allineamento: 2 settembre 2026
+Ultimo allineamento: 2 ottobre 2026
 
 ## 1. Scopo del documento
 
@@ -368,6 +368,7 @@ Richieste merce:
 
 ```text
 pending -> evasa -> confermata
+pending -> annullata
 ```
 
 - il locale crea la richiesta;
@@ -386,7 +387,21 @@ pending -> evasa -> confermata
   lettura globale;
 - i DDT precedenti all'introduzione del controllo restano leggibili e mostrano
   esplicitamente che il nome non era registrato;
-- il numero DDT e globale e allocato atomicamente.
+- il numero DDT e globale e allocato atomicamente;
+- l'annullamento e consentito soltanto mentre la richiesta e `pending`: la
+  richiesta diventa `annullata`, sparisce dai flussi operativi e dai conteggi
+  dell'Analisi magazzino, ma conserva DDT, articoli, quantita, autore e ora
+  dell'annullamento;
+- ogni modifica effettiva a una richiesta `pending` salva atomicamente autore,
+  ora e versione prima/dopo di articoli e campo extra; un salvataggio identico
+  non crea un falso evento;
+- Simone consulta richieste annullate e DDT modificati nella pagina
+  `Audit richieste merce`, filtrabile per mese e locale. La route e protetta
+  dal backend sulla sua identita esatta: Admin generico, Federico,
+  Magazziniere, locali e anonimi non accedono;
+- i DDT storici che possiedono `updated_at` restano elencati, ma se precedono
+  l'attivazione dello storico versioni mostrano solo il valore finale: il
+  sistema non inventa retroattivamente il contenuto precedente.
 
 Tutti gli elenchi prodotti del frontend usano lo stesso ordine canonico. Le
 voci `Ragu di cinghiale`, `Cinghiale` e `Ragù di cinghiale` devono comparire tra
@@ -636,6 +651,9 @@ procedura di riferimento sono conservati in
 - Le query analitiche annuali devono essere aggregate/prefetchate, non eseguite
   una volta per giorno e locale.
 - Liste e storico devono avere limiti o filtri coerenti col volume previsto.
+- Preparazione e salvataggio OpenPyXL dell'Analisi annuale devono avvenire fuori
+  dall'event loop del backend; una sola generazione per processo puo essere
+  attiva, cosi richieste duplicate non moltiplicano CPU e memoria.
 - Il workbook Excel viene oggi costruito in memoria: va monitorato con la crescita
   di anni e locali.
 - Diagnostica e future analisi non devono saturare MongoDB operativo.

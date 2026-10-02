@@ -1,29 +1,50 @@
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
+from threading import Lock
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from starlette.concurrency import run_in_threadpool
 
 from app.core.database import db
 from app.core.security import require_admin, require_admin_or_federico, verify_token
 from app.core.time import ROME_TZ
 from app.services.analysis import (
     _build_annual_analysis_data,
+    _build_analysis_workbook_bytes,
     _display_media_location,
     _ensure_analysis_integrity,
     _format_italian_long_date,
     _media_code_for_restaurant,
     _prefetch_analysis_order_data,
     _validate_export_year,
-    _write_analysis_locale_sheet,
-    _write_totali_sheet_for_analysis,
 )
 
 
 router = APIRouter()
+
+
+_analysis_export_state_lock = Lock()
+_analysis_export_running = False
+
+
+def _reserve_analysis_export() -> bool:
+    """Claim the single in-process annual export slot without waiting."""
+    global _analysis_export_running
+    with _analysis_export_state_lock:
+        if _analysis_export_running:
+            return False
+        _analysis_export_running = True
+        return True
+
+
+def _release_analysis_export() -> None:
+    global _analysis_export_running
+    with _analysis_export_state_lock:
+        _analysis_export_running = False
 
 
 @router.get("/admin/media-locali")
@@ -104,27 +125,27 @@ async def get_media_locali(token_data: dict = Depends(verify_token)):
 async def export_analisi_mensile_excel(year: int = None, token_data: dict = Depends(verify_token)):
     require_admin(token_data)
     selected_year = _validate_export_year(year)
-    data = await _build_annual_analysis_data(selected_year)
-    _ensure_analysis_integrity(data)
+    if not _reserve_analysis_export():
+        raise HTTPException(
+            status_code=429,
+            detail="Un Excel Analisi è già in generazione. Attendi che termini e riprova.",
+            headers={"Retry-After": "5"},
+        )
 
-    wb = Workbook()
-    wb.calculation.calcMode = "auto"
-    wb.calculation.fullCalcOnLoad = True
-    wb.calculation.forceFullCalc = True
-    default_sheet = wb.active
-    wb.remove(default_sheet)
-    used_titles = set()
-    for rest_data in data["restaurants"]:
-        _write_analysis_locale_sheet(wb, rest_data, data, used_titles)
-    _write_totali_sheet_for_analysis(
-        wb,
-        data["restaurants"],
-        selected_year,
-    )
+    try:
+        data = await _build_annual_analysis_data(selected_year)
+        _ensure_analysis_integrity(data)
+        # OpenPyXL is synchronous and CPU-heavy. Running cell creation and ZIP
+        # serialization in FastAPI's worker pool keeps the main event loop free
+        # for operational APIs and WebSocket heartbeats.
+        output = await run_in_threadpool(
+            _build_analysis_workbook_bytes,
+            data,
+            selected_year,
+        )
+    finally:
+        _release_analysis_export()
 
-    output = BytesIO()
-    wb.save(output)
-    output.seek(0)
     filename = f"analisi_mensile_{selected_year}.xlsx"
     integrity = data.get("integrity") or {}
     warning_counts = integrity.get("warning_counts") or {}
