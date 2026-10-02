@@ -33,7 +33,7 @@ from app.routers import (
 )
 
 
-EXPECTED_OPENAPI_SHA256 = "5a1d6c51f44cc2cdf8a1b1d29ccfdbdf51f13a8ea645d5e7d263454405f03016"
+EXPECTED_OPENAPI_SHA256 = "f3227ef6ca4ca5062a13814c9cb841034c1658771ebcde91a74fcb01d2c76714"
 
 
 def test_phase3_keeps_exact_openapi_contract_and_unique_routes():

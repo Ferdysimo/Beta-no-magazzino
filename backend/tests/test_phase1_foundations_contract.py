@@ -28,7 +28,7 @@ from app.schemas import OrderCreate
 from app.routers import websocket as websocket_router
 
 
-EXPECTED_OPENAPI_SHA256 = "5a1d6c51f44cc2cdf8a1b1d29ccfdbdf51f13a8ea645d5e7d263454405f03016"
+EXPECTED_OPENAPI_SHA256 = "f3227ef6ca4ca5062a13814c9cb841034c1658771ebcde91a74fcb01d2c76714"
 
 
 def _request(headers=None) -> Request:

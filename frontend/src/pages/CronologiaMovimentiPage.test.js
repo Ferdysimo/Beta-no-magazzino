@@ -38,6 +38,10 @@ describe('CronologiaMovimentiPage', () => {
       if (url.endsWith('/stock-movements')) {
         return Promise.resolve({
           data: {
+            locations: [
+              { id: 'flaminio-id', location: 'Flaminio' },
+              { id: 'brazza-id', location: 'Largo di Brazzà' },
+            ],
             movements: [{
               id: 'waste-1',
               product_id: 'product-1',
@@ -88,5 +92,37 @@ describe('CronologiaMovimentiPage', () => {
     expect(row.textContent).toContain('Confezione rotta');
     expect(badge.classList.contains('bg-red-100')).toBe(true);
     expect(badge.classList.contains('text-red-800')).toBe(true);
+  });
+
+  test('filtra la cronologia per locale usando il suo identificativo', async () => {
+    await act(async () => {
+      root.render(<CronologiaMovimentiPage />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const locationFilter = container.querySelector('[data-testid="filter-restaurant"]');
+    expect(Array.from(locationFilter.options).map(option => option.textContent)).toEqual([
+      'Tutti i locali',
+      'Flaminio',
+      'Largo di Brazzà',
+    ]);
+
+    await act(async () => {
+      locationFilter.value = 'flaminio-id';
+      locationFilter.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(async () => {
+      container.querySelector('[data-testid="apply-filters"]').click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const movementCall = axios.get.mock.calls
+      .filter(([url]) => url.endsWith('/stock-movements'))
+      .at(-1);
+    expect(movementCall[1].params.restaurant_id).toBe('flaminio-id');
   });
 });

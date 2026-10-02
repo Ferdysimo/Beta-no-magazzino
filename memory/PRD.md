@@ -431,7 +431,11 @@ Carichi:
 Ogni variazione di stock deve produrre un movimento nel ledger
 `stock_movements`, con prodotto, delta, saldo, causa, riferimento e autore. La
 cronologia include gli scarti nel filtro causale e li evidenzia in rosso,
-continuando a mostrare il motivo registrato dall'Admin. La
+continuando a mostrare il motivo registrato dall'Admin. La cronologia puo
+essere filtrata anche per locale: il collegamento usa l'identificativo della
+richiesta/DDT e mostra quindi le sole evasioni attribuibili a quella sede;
+carichi, scarti e forzature restano movimenti globali e compaiono selezionando
+`Tutti i locali`. La
 resistenza completa a crash e retry multi-documento resta un obiettivo P2 e non
 deve essere data per garantita senza test specifici.
 

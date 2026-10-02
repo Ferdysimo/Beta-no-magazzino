@@ -178,6 +178,18 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-10-02 13:30 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | magazzino | cronologia | filtri | test
+**File toccati**:
+- `/app/backend/app/routers/warehouse.py`
+- `/app/backend/tests/{test_stock_movement_location_filter,test_phase1_foundations_contract,test_phase3_module_contract}.py`
+- `/app/frontend/src/pages/{CronologiaMovimentiPage,CronologiaMovimentiPage.test}.js`
+- `/app/frontend/public/version.json`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Aggiunto alla Cronologia movimenti il filtro `Locale`, disponibile sia nella vista globale sia quando è selezionato un prodotto. Il backend collega il locale agli identificativi reali delle richieste/DDT, senza interpretare le note testuali: la selezione mostra quindi le evasioni della sede, mentre carichi, scarti e forzature globali restano nella vista `Tutti i locali`. L'elenco sedi viene restituito dalle route già protette, senza ampliare i permessi o introdurre nuove route.
+**Testato**: ✅ sì (metodo: test backend dedicati su filtri combinati, locale inesistente e ruoli `4 passed`; suite backend completa `274 passed, 36 skipped`; test frontend su selettore e parametro API; suite frontend completa `72 passed`; build React produzione riuscita con soli warning Hook preesistenti; contratto OpenAPI aggiornato senza variazioni al numero di path; `git diff --check`).
+**Note per il prossimo agente**: il filtro locale esclude intenzionalmente i movimenti globali privi di DDT; il valore predefinito resta `Tutti i locali`. Accesso invariato: solo ruoli `admin` e `magazzino`; locale, Federico e anonimo restano esclusi dalle route della cronologia.
+
 ### [2026-10-02 13:20 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: feature | DDT | navigazione | frontend | test
 **File toccati**:

@@ -319,12 +319,43 @@ async def create_product_waste(
 
 # ==================== STOCK MOVEMENTS LEDGER - QUERY ENDPOINTS ====================
 
+async def _stock_movement_locations():
+    restaurants = await db.restaurants.find(
+        {"role": "restaurant"},
+        {"_id": 0, "id": 1, "location": 1, "username": 1},
+    ).sort("location", 1).to_list(500)
+    return [
+        {
+            "id": restaurant.get("id", ""),
+            "location": restaurant.get("location") or restaurant.get("username") or "Locale",
+        }
+        for restaurant in restaurants
+        if restaurant.get("id")
+    ]
+
+
+async def _apply_stock_movement_location_filter(query: Dict, restaurant_id: Optional[str]) -> None:
+    if not restaurant_id:
+        return
+
+    restaurant = await db.restaurants.find_one(
+        {"id": restaurant_id, "role": "restaurant"},
+        {"_id": 0, "id": 1},
+    )
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Locale non trovato")
+
+    request_ids = await db.richieste.distinct("id", {"restaurant_id": restaurant_id})
+    query["ref_type"] = "richiesta"
+    query["ref_id"] = {"$in": request_ids}
+
 @router.get("/products/{product_id}/movements")
 async def get_product_movements(
     product_id: str,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     cause: Optional[str] = None,
+    restaurant_id: Optional[str] = None,
     limit: int = 500,
     token_data: dict = Depends(verify_token),
 ):
@@ -334,6 +365,7 @@ async def get_product_movements(
       - date_from / date_to (YYYY-MM-DD, inclusivi)
       - cause: carico | carico_modifica | carico_cancellato | evasione |
                forzatura_admin | scarto_admin | stock_iniziale
+      - restaurant_id: mostra solo le evasioni collegate ai DDT del locale
     """
     if token_data.get("role") not in ("magazzino", "admin"):
         raise HTTPException(status_code=403, detail="Solo magazziniere/admin")
@@ -351,6 +383,7 @@ async def get_product_movements(
         query["timestamp"] = ts
     if cause:
         query["cause"] = cause
+    await _apply_stock_movement_location_filter(query, restaurant_id)
     docs = await db.stock_movements.find(query, {"_id": 0}).sort("timestamp", -1).to_list(max(1, min(limit, 5000)))
     # Bilancio corrente
     product = await db.products.find_one({"id": product_id}, {"_id": 0, "name": 1, "quantity": 1})
@@ -360,6 +393,7 @@ async def get_product_movements(
         "current_quantity": int(product.get("quantity", 0)) if product else 0,
         "count": len(docs),
         "movements": docs,
+        "locations": await _stock_movement_locations(),
     }
 
 
@@ -369,6 +403,7 @@ async def list_stock_movements(
     date_to: Optional[str] = None,
     cause: Optional[str] = None,
     user_id: Optional[str] = None,
+    restaurant_id: Optional[str] = None,
     limit: int = 500,
     token_data: dict = Depends(verify_token),
 ):
@@ -391,8 +426,13 @@ async def list_stock_movements(
         query["cause"] = cause
     if user_id:
         query["user_id"] = user_id
+    await _apply_stock_movement_location_filter(query, restaurant_id)
     docs = await db.stock_movements.find(query, {"_id": 0}).sort("timestamp", -1).to_list(max(1, min(limit, 5000)))
-    return {"count": len(docs), "movements": docs}
+    return {
+        "count": len(docs),
+        "movements": docs,
+        "locations": await _stock_movement_locations(),
+    }
 
 @router.delete("/products/{product_id}")
 async def delete_product(product_id: str, token_data: dict = Depends(verify_token)):

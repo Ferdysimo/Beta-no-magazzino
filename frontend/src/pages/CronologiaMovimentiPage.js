@@ -51,7 +51,9 @@ const CronologiaMovimentiPage = () => {
   monthAgo.setDate(today.getDate() - 30);
 
   const [products, setProducts] = useState([]);
+  const [locations, setLocations] = useState([]);
   const [productId, setProductId] = useState(searchParams.get('product') || '');
+  const [restaurantId, setRestaurantId] = useState('');
   const [dateFrom, setDateFrom] = useState(toISODate(monthAgo));
   const [dateTo, setDateTo] = useState(toISODate(today));
   const [cause, setCause] = useState('');
@@ -83,6 +85,7 @@ const CronologiaMovimentiPage = () => {
     try {
       const params = { date_from: dateFrom, date_to: dateTo, limit: 1000 };
       if (cause) params.cause = cause;
+      if (restaurantId) params.restaurant_id = restaurantId;
       let url;
       if (productId) {
         url = `${API}/products/${productId}/movements`;
@@ -92,6 +95,7 @@ const CronologiaMovimentiPage = () => {
       const res = await axios.get(url, { headers, params });
       const data = res.data;
       setMovements(data.movements || []);
+      setLocations(data.locations || []);
       if (productId) {
         setCurrentQuantity(data.current_quantity ?? null);
         setProductName(data.product_name || '');
@@ -130,7 +134,7 @@ const CronologiaMovimentiPage = () => {
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 mb-4 grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Prodotto</label>
             <select
@@ -142,6 +146,20 @@ const CronologiaMovimentiPage = () => {
               <option value="">Tutti i prodotti</option>
               {products.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Locale</label>
+            <select
+              data-testid="filter-restaurant"
+              value={restaurantId}
+              onChange={e => setRestaurantId(e.target.value)}
+              className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+            >
+              <option value="">Tutti i locali</option>
+              {locations.map(location => (
+                <option key={location.id} value={location.id}>{location.location}</option>
               ))}
             </select>
           </div>
@@ -179,7 +197,7 @@ const CronologiaMovimentiPage = () => {
               ))}
             </select>
           </div>
-          <div className="sm:col-span-4 flex items-center justify-between flex-wrap gap-2">
+          <div className="sm:col-span-2 lg:col-span-5 flex items-center justify-between flex-wrap gap-2">
             <button
               data-testid="apply-filters"
               onClick={load}
@@ -297,6 +315,7 @@ const CronologiaMovimentiPage = () => {
         <p className="mt-4 text-xs text-gray-400">
           • Δ = variazione applicata · Saldo = stock dopo il movimento
           <br />• Tocca il nome prodotto per filtrare la sua sola cronologia
+          <br />• Il filtro locale riguarda le evasioni collegate ai DDT; carichi e rettifiche sono movimenti globali
         </p>
       </main>
     </div>
