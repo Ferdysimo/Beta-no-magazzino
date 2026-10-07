@@ -178,6 +178,18 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-10-07 09:31 CEST] - Codex (GPT-5 / OpenAI)
+**Tipo**: feature | magazzino | snapshot | audit | sicurezza | test
+**File toccati**:
+- `/app/backend/app/{bootstrap.py,routers/warehouse.py,tasks/warehouse_inventory_snapshots.py}`
+- `/app/backend/tests/{test_warehouse_inventory_snapshots,test_phase1_foundations_contract,test_phase3_module_contract}.py`
+- `/app/frontend/src/{App.js,pages/{HomePage,HomePage.test,FotografieMagazzinoPage,FotografieMagazzinoPage.test}.js}`
+- `/app/frontend/public/version.json`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Aggiunta la fotografia immutabile dell'inventario centrale alle `06:00 Europe/Rome`, una sola per giornata, con prodotto, quantita, unita e fornitore. Se il backend riparte tardi e la fotografia del giorno manca, ricostruisce le quantita delle 06:00 invertendo i movimenti ledger successivi e marca esplicitamente il dato come ricostruito. Simone dispone della nuova pagina mensile `Magazzino alle 06:00`, con giornate, qualita dell'acquisizione, orari, ricerca e dettaglio prodotti; pulsante, route frontend e API sono riservati alla sua identita esatta.
+**Testato**: ✅ sì (metodo: test backend su acquisizione puntuale, idempotenza, cambio ora di Roma, ricostruzione ledger, rifiuto prima delle 06:00 e matrice ruoli; suite backend completa `280 passed, 36 skipped`; test frontend su accesso Simone, navigazione, giornate puntuali/ricostruite e ricerca; suite frontend completa `75 passed`; build React produzione riuscita con soli warning Hook preesistenti; contratto OpenAPI aggiornato a 97 path; `git diff --check`).
+**Note per il prossimo agente**: la raccolta usa la collection operativa `warehouse_inventory_snapshots` e parte automaticamente col backend, senza dipendere dalla Memoria sperimentale. I giorni anteriori al rilascio non vengono inventati. Una ricostruzione tardiva dipende dalla completezza di `stock_movements` e lo dichiara nella UI; lo snapshot puntuale resta la fonte preferita.
+
 ### [2026-10-02 13:30 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: feature | magazzino | cronologia | filtri | test
 **File toccati**:

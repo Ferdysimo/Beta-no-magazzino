@@ -28,6 +28,7 @@ from app.services.seeding import _ensure_beverages_seeded
 from app.tasks.maintenance import cleanup_old_uploads
 from app.tasks.midnight import midnight_scheduler
 from app.tasks.stale_orders import recover_stale_orders
+from app.tasks.warehouse_inventory_snapshots import warehouse_inventory_snapshot_scheduler
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -90,6 +91,11 @@ async def initialize_application():
     await db.stock_movements.create_index([("product_id", 1), ("timestamp", -1)])
     await db.stock_movements.create_index([("timestamp", -1)])
     await db.stock_movements.create_index([("cause", 1), ("timestamp", -1)])
+    await db.warehouse_inventory_snapshots.create_index(
+        [("business_date", -1)],
+        unique=True,
+        name="uniq_warehouse_inventory_snapshot_day",
+    )
     await db.richieste.create_index([("status", 1), ("cancelled_at", -1)])
     await db.richieste.create_index([("updated_at", -1)])
     await db.richieste.create_index([("edit_history.changed_at", -1)])
@@ -189,21 +195,27 @@ async def initialize_application():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    scheduler_task = asyncio.create_task(midnight_scheduler())
+    await initialize_application()
+    scheduler_tasks = [
+        asyncio.create_task(midnight_scheduler()),
+        asyncio.create_task(warehouse_inventory_snapshot_scheduler()),
+    ]
     try:
-        await initialize_application()
         yield
     finally:
-        scheduler_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await scheduler_task
+        for scheduler_task in scheduler_tasks:
+            scheduler_task.cancel()
+        for scheduler_task in scheduler_tasks:
+            with suppress(asyncio.CancelledError):
+                await scheduler_task
         await shutdown_db_client()
 
 
 async def startup_scheduler():
     """Compatibility wrapper for the former FastAPI startup handler."""
-    asyncio.create_task(midnight_scheduler())
     await initialize_application()
+    asyncio.create_task(midnight_scheduler())
+    asyncio.create_task(warehouse_inventory_snapshot_scheduler())
 
 
 api_router = APIRouter(prefix="/api")

@@ -33,6 +33,7 @@ __all__ = [
     "create_product_waste",
     "get_product_movements",
     "list_stock_movements",
+    "list_warehouse_inventory_snapshots",
     "delete_product",
     "get_warehouse_products_for_request",
     "create_richiesta",
@@ -492,6 +493,39 @@ def _require_simone_request_audit(token_data: dict) -> None:
             status_code=403,
             detail="Audit richieste merce riservato a Simone",
         )
+
+
+def _require_simone_inventory_snapshots(token_data: dict) -> None:
+    if token_data.get("username") != "Simone" or token_data.get("role") != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Fotografie magazzino riservate a Simone",
+        )
+
+
+@router.get("/admin/warehouse-inventory-snapshots")
+async def list_warehouse_inventory_snapshots(
+    date_from: str,
+    date_to: str,
+    token_data: dict = Depends(verify_token),
+):
+    """Daily 06:00 warehouse inventory pictures, reserved to Simone."""
+    _require_simone_inventory_snapshots(token_data)
+    try:
+        start_day = datetime.strptime(date_from, "%Y-%m-%d").date()
+        end_day = datetime.strptime(date_to, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Periodo non valido")
+    if end_day < start_day:
+        raise HTTPException(status_code=400, detail="Periodo non valido")
+    if (end_day - start_day).days > 370:
+        raise HTTPException(status_code=400, detail="Il periodo massimo è di 371 giorni")
+
+    snapshots = await db.warehouse_inventory_snapshots.find(
+        {"business_date": {"$gte": date_from, "$lte": date_to}},
+        {"_id": 0},
+    ).sort("business_date", -1).to_list(371)
+    return {"count": len(snapshots), "snapshots": snapshots}
 
 @router.get("/warehouse/products")
 async def get_warehouse_products_for_request(token_data: dict = Depends(verify_token)):

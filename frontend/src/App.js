@@ -46,6 +46,7 @@ import ScannerDocumentiLabPage from './pages/ScannerDocumentiLabPage';
 import PastaAnnotationsLabPage from './pages/PastaAnnotationsLabPage';
 import ControlliTrasportiPage from './pages/ControlliTrasportiPage';
 import RichiesteCancellatePage from './pages/RichiesteCancellatePage';
+import FotografieMagazzinoPage from './pages/FotografieMagazzinoPage';
 import UpdateBanner from './components/UpdateBanner';
 import FrontendDiagnostics from './components/FrontendDiagnostics';
 import RouteScrollRestoration from './components/RouteScrollRestoration';
@@ -339,6 +340,13 @@ function AppRoutes() {
         <ProtectedRoute>
           <SimoneOnlyRoute>
             <RichiesteCancellatePage />
+          </SimoneOnlyRoute>
+        </ProtectedRoute>
+      } />
+      <Route path="/simone/fotografie-magazzino" element={
+        <ProtectedRoute>
+          <SimoneOnlyRoute>
+            <FotografieMagazzinoPage />
           </SimoneOnlyRoute>
         </ProtectedRoute>
       } />

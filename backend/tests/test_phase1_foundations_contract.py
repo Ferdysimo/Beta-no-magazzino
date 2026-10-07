@@ -28,7 +28,7 @@ from app.schemas import OrderCreate
 from app.routers import websocket as websocket_router
 
 
-EXPECTED_OPENAPI_SHA256 = "f3227ef6ca4ca5062a13814c9cb841034c1658771ebcde91a74fcb01d2c76714"
+EXPECTED_OPENAPI_SHA256 = "5ec39e3fdcfa967190ae1d5a5e3402b1d5cb2f171027ba8574d3f8f33bdc4535"
 
 
 def _request(headers=None) -> Request:
@@ -66,7 +66,7 @@ def test_openapi_contract_is_unchanged():
     ).encode()
 
     assert hashlib.sha256(encoded).hexdigest() == EXPECTED_OPENAPI_SHA256
-    assert len(spec["paths"]) == 96
+    assert len(spec["paths"]) == 97
     assert len(spec.get("components", {}).get("schemas", {})) == 38
 
 

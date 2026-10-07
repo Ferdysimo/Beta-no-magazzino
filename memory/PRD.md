@@ -439,6 +439,17 @@ carichi, scarti e forzature restano movimenti globali e compaiono selezionando
 resistenza completa a crash e retry multi-documento resta un obiettivo P2 e non
 deve essere data per garantita senza test specifici.
 
+Ogni giorno alle `06:00 Europe/Rome` il backend salva inoltre una fotografia
+immutabile dell'inventario centrale, con prodotto, quantita, unita e fornitore.
+Le fotografie sono consultabili esclusivamente dall'identita Simone tramite la
+pagina `Magazzino alle 06:00`; Admin generico, Federico, Magazziniere, locali e
+anonimo non accedono. La data e univoca, quindi riavvii o piu processi non
+creano duplicati. Se il backend riparte dopo l'orario e manca la fotografia del
+giorno, la quantita delle 06:00 viene ricostruita come saldo corrente meno i
+movimenti ledger successivi ed e mostrata esplicitamente come ricostruita, con
+ora di acquisizione e numero di movimenti usati; non viene presentata come
+fotografia puntuale.
+
 Il DDT usa i dati anagrafici salvati nel locale; i fallback hardcoded servono
 soltanto per sedi storiche che non possiedono ancora quei campi.
 
@@ -609,6 +620,7 @@ evidenza, ma non deve mai compilare un prezzo assente dal documento.
 | Listino bevande | `beverage_price_dictionary` + snapshot sulla riga Report | Prezzi per locale; sigle e nomi restano fissi |
 | Stock | `products` | Quantita corrente, verificabile tramite ledger |
 | Movimenti stock | `stock_movements` | Registro delle variazioni, non sostituisce la quantita corrente |
+| Fotografie stock ore 06:00 | `warehouse_inventory_snapshots` | Copia immutabile giornaliera; gli eventuali recuperi tardivi dichiarano la ricostruzione dal ledger |
 | Allegati | filesystem `UPLOADS_DIR` + riferimento Mongo | Database e filesystem devono restare coerenti |
 | Tentativi upload chiusure | `upload_attempts` | Soli metadati e fasi; `server_saved` conferma il salvataggio effettivo |
 

@@ -33,14 +33,14 @@ from app.routers import (
 )
 
 
-EXPECTED_OPENAPI_SHA256 = "f3227ef6ca4ca5062a13814c9cb841034c1658771ebcde91a74fcb01d2c76714"
+EXPECTED_OPENAPI_SHA256 = "5ec39e3fdcfa967190ae1d5a5e3402b1d5cb2f171027ba8574d3f8f33bdc4535"
 
 
 def test_phase3_keeps_exact_openapi_contract_and_unique_routes():
     schema = server.app.openapi()
     payload = json.dumps(schema, sort_keys=True, separators=(",", ":")).encode()
     assert hashlib.sha256(payload).hexdigest() == EXPECTED_OPENAPI_SHA256
-    assert len(schema["paths"]) == 96
+    assert len(schema["paths"]) == 97
 
     route_pairs = [
         (method, route.path)
@@ -54,7 +54,7 @@ def test_phase3_keeps_exact_openapi_contract_and_unique_routes():
 def test_phase3_router_ownership_counts_are_stable():
     assert len(system.router.routes) == 13
     assert len(invoices.router.routes) == 9
-    assert len(warehouse.router.routes) == 30
+    assert len(warehouse.router.routes) == 31
     assert len(beverages.router.routes) == 8
     assert len(documents.router.routes) == 16
     assert len(upload_attempts.router.routes) == 2
@@ -93,15 +93,24 @@ def test_server_is_a_small_facade_and_app_modules_do_not_import_it():
 
 def test_lifespan_initializes_then_cancels_scheduler_and_shuts_down(monkeypatch):
     events = []
-    scheduler_started = asyncio.Event()
+    midnight_started = asyncio.Event()
+    snapshot_started = asyncio.Event()
 
-    async def fake_scheduler():
-        events.append("scheduler-started")
-        scheduler_started.set()
+    async def fake_midnight_scheduler():
+        events.append("midnight-started")
+        midnight_started.set()
         try:
             await asyncio.Event().wait()
         finally:
-            events.append("scheduler-cancelled")
+            events.append("midnight-cancelled")
+
+    async def fake_snapshot_scheduler():
+        events.append("snapshot-started")
+        snapshot_started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            events.append("snapshot-cancelled")
 
     async def fake_initialize():
         events.append("initialized")
@@ -109,17 +118,30 @@ def test_lifespan_initializes_then_cancels_scheduler_and_shuts_down(monkeypatch)
     async def fake_shutdown():
         events.append("shutdown")
 
-    monkeypatch.setattr(bootstrap, "midnight_scheduler", fake_scheduler)
+    monkeypatch.setattr(bootstrap, "midnight_scheduler", fake_midnight_scheduler)
+    monkeypatch.setattr(
+        bootstrap,
+        "warehouse_inventory_snapshot_scheduler",
+        fake_snapshot_scheduler,
+    )
     monkeypatch.setattr(bootstrap, "initialize_application", fake_initialize)
     monkeypatch.setattr(bootstrap, "shutdown_db_client", fake_shutdown)
 
     async def exercise():
         async with bootstrap.lifespan(server.app):
-            await asyncio.wait_for(scheduler_started.wait(), timeout=1)
-            assert events == ["initialized", "scheduler-started"]
+            await asyncio.wait_for(midnight_started.wait(), timeout=1)
+            await asyncio.wait_for(snapshot_started.wait(), timeout=1)
+            assert events == ["initialized", "midnight-started", "snapshot-started"]
 
     asyncio.run(exercise())
-    assert events == ["initialized", "scheduler-started", "scheduler-cancelled", "shutdown"]
+    assert events == [
+        "initialized",
+        "midnight-started",
+        "snapshot-started",
+        "midnight-cancelled",
+        "snapshot-cancelled",
+        "shutdown",
+    ]
 
 
 def test_websocket_manager_tracks_broadcast_touch_and_disconnect():

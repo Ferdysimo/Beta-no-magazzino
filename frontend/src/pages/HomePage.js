@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import SystemAlertsBanner from '../components/SystemAlertsBanner';
 import axios from 'axios';
-import { ClipboardCheck, FileClock, FlaskConical } from 'lucide-react';
+import { Camera, ClipboardCheck, FileClock, FlaskConical } from 'lucide-react';
 import { canAccessLaboratory } from '../utils/laboratory';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -115,6 +115,17 @@ const HomePage = () => {
                 <span>
                   <span className="block font-bold text-lg text-gray-800">Audit richieste merce</span>
                   <span className="block text-xs text-gray-500 mt-0.5">Richieste cancellate e modifiche ai DDT</span>
+                </span>
+              </button>
+              <button
+                data-testid="simone-fotografie-magazzino"
+                onClick={() => navigate('/simone/fotografie-magazzino')}
+                className="w-full flex items-center gap-3 text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <Camera size={22} className="text-gray-700 shrink-0" aria-hidden="true" />
+                <span>
+                  <span className="block font-bold text-lg text-gray-800">Magazzino alle 06:00</span>
+                  <span className="block text-xs text-gray-500 mt-0.5">Fotografie giornaliere delle giacenze</span>
                 </span>
               </button>
               <button
