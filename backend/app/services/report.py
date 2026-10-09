@@ -197,8 +197,10 @@ def _pasta_recognized_sigla(line: str, dict_map: Dict[str, float]) -> Optional[s
         return None
     siglas_sorted = sorted(dict_map.keys(), key=len, reverse=True)
     for sigla in siglas_sorted:
-        # ^\s*(?:\d+\s+)?SIGLA(?:\b|$)
-        pattern = rf"^\s*(?:\d+\s+)?{re.escape(sigla)}(?:\b|$)"
+        # Dopo la sigla non può iniziare un'altra parola. Il controllo esplicito
+        # mantiene la stessa semantica Unicode del frontend: `CARBà` non è
+        # `CARB`, mentre `CARB -` continua a essere riconosciuta.
+        pattern = rf"^\s*(?:\d+\s+)?{re.escape(sigla)}(?![\w\u0300-\u036f])"
         if re.search(pattern, upper):
             return sigla
     return None

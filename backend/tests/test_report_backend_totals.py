@@ -30,6 +30,7 @@ from server import (
     _get_daily_order_count,
     _pasta_dict_from_snapshot,
     _pasta_dict_snapshot_fields,
+    _pasta_recognized_sigla,
     _paste_text_from_order_docs,
     _prefetch_analysis_order_data,
     _should_create_pasta_dict_snapshot,
@@ -41,6 +42,12 @@ from server import (
 
 PASTA_DICT = {"CARB": 8, "AMAT": 8}
 PASTE_TEXT = "1 CARB\n2 X UNKNOWN\n3 AMAT"
+
+
+def test_pasta_recognition_rejects_unicode_suffix_after_sigla():
+    assert _pasta_recognized_sigla("404  CARBà", PASTA_DICT) is None
+    assert _pasta_recognized_sigla("405  CARBÉ", PASTA_DICT) is None
+    assert _pasta_recognized_sigla("406  CARB - asporto", PASTA_DICT) == "CARB"
 
 
 class _FakeCursor:

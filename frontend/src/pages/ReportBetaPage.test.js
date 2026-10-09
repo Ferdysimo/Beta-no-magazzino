@@ -1,7 +1,7 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import axios from 'axios';
-import ReportBetaPage, { buildReportWriteContext } from './ReportBetaPage';
+import ReportBetaPage, { buildReportWriteContext, findPasta } from './ReportBetaPage';
 
 const mockNavigate = jest.fn();
 const mockUseAuth = jest.fn();
@@ -40,6 +40,19 @@ const brazza = {
   location: 'Largo di Brazzà',
   role: 'restaurant',
 };
+
+describe('findPasta', () => {
+  const dictionary = [{ sigla: 'CARB', price: 8 }];
+
+  test('manda tra le non riconosciute una sigla seguita da lettere accentate', () => {
+    expect(findPasta('404  CARBà', dictionary)).toBeNull();
+    expect(findPasta('405  CARBÉ', dictionary)).toBeNull();
+  });
+
+  test('continua a riconoscere la sigla completa seguita da separatori', () => {
+    expect(findPasta('404  CARB - asporto', dictionary)).toEqual(dictionary[0]);
+  });
+});
 
 describe('buildReportWriteContext', () => {
   test('lega un salvataggio live di Federico al locale attivo', () => {

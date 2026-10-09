@@ -67,16 +67,18 @@ const CASH_DENOMINATIONS = [
 //   "42 - CARB"        → ✗ NON riconosciuta ('-' tra 42 e CARB)
 //   "CARB tavolo 5"    → ✓ riconosciuta (nessun numero, sigla a inizio)
 // XL: se presente come parola intera nella riga → NON riconosciuta (manuale)
-const findPasta = (line, dict) => {
+export const findPasta = (line, dict) => {
   if (!line) return null;
   const upper = String(line).toUpperCase();
   if (/\bXL\b/.test(upper)) return null;
   const list = (dict && dict.length) ? dict : DEFAULT_PASTA_PRICES;
   const ordered = [...list].sort((a, b) => b.sigla.length - a.sigla.length);
   for (const p of ordered) {
-    // ^\s*(?:\d+\s+)?SIGLA(?:\b|$)
+    // Dopo la sigla non può iniziare un'altra parola: usiamo le categorie
+    // Unicode invece di `\b`, che in JavaScript considera lettere accentate
+    // come caratteri non alfabetici (e riconoscerebbe erroneamente `CARBà`).
     const escaped = p.sigla.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`^\\s*(?:\\d+\\s+)?${escaped}(?:\\b|$)`, 'i');
+    const re = new RegExp(`^\\s*(?:\\d+\\s+)?${escaped}(?![\\p{L}\\p{M}\\p{N}_])`, 'iu');
     if (re.test(upper)) return p;
   }
   return null;

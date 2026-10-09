@@ -276,6 +276,11 @@ Riporti automatici:
 - una forzatura manuale esplicita di `mattina` non deve essere sovrascritta dal
   successivo ricalcolo automatico.
 
+Il riconoscimento automatico delle paste richiede una sigla completa: caratteri
+alfabetici, numerici, underscore o segni diacritici immediatamente successivi
+alla sigla la rendono non riconosciuta. Per esempio `CARBà` non è `CARB` e deve
+ricevere un prezzo manuale; `CARB - asporto` resta invece una sigla valida.
+
 Per ciascuna bevanda, la vendita calcolata usa:
 
 ```text

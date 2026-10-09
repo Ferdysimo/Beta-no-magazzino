@@ -178,6 +178,16 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-10-09 08:35 CEST] - Codex (OpenAI)
+**Tipo**: bugfix | Report | riconoscimento paste | test
+**File toccati**:
+- `/app/backend/app/services/report.py`
+- `/app/backend/tests/test_report_backend_totals.py`
+- `/app/frontend/src/pages/{ReportBetaPage,ReportBetaPage.test}.js`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Uniformato tra Python e JavaScript il confine Unicode usato per riconoscere le sigle delle paste. Una descrizione come `404 CARBà` non viene più interpretata dal browser come `CARB`: resta tra le paste non riconosciute e richiede un prezzo manuale, evitando differenze di 8 euro tra Report storico aperto, griglia chiusure e riporto del Cash Mattina. Le sigle complete seguite da spazio o punteggiatura, per esempio `CARB - asporto`, continuano a essere riconosciute.
+**Testato**: sì (metodo: test frontend mirato `7 passed`, inclusi suffissi accentati e separatori validi; `py_compile` backend; controllo isolato della regex Python; `git diff --check`). La suite pytest backend non è eseguibile nel virtualenv locale perché il launcher punta a un interprete Python rimosso; non sono state modificate dipendenze.
+
 ### [2026-10-07 09:31 CEST] - Codex (GPT-5 / OpenAI)
 **Tipo**: feature | magazzino | snapshot | audit | sicurezza | test
 **File toccati**:
