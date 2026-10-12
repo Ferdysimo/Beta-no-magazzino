@@ -10,7 +10,7 @@ from app.core.database import db
 from app.core.deps import _effective_restaurant_id
 from app.core.files import build_upload_url, save_image_to_disk
 from app.core.security import can_impersonate, verify_token
-from app.core.time import ROME_TZ, _today_rome_bounds_utc
+from app.core.time import ROME_TZ, _today_rome_bounds_utc, _today_rome_str
 from app.schemas import BeverageCaricoCreate
 from app.services.beverage_prices import (
     _beverage_price_for_row,
@@ -70,7 +70,12 @@ async def get_beverage_inventory(
     if historical:
         target_date, rid = historical
     else:
-        target_date = None
+        # Anche il Report live deve usare il prezzo congelato nella riga della
+        # giornata. Se qui lasciassimo ``None``, una modifica al listino fatta
+        # durante il servizio cambierebbe subito il totale mostrato dal
+        # frontend, mentre backend, storico e riporto continuerebbero a usare
+        # ``price_snapshot``.
+        target_date = _today_rome_str()
         rid = await _effective_restaurant_id(request, token_data)
     beverages = await _get_beverage_catalog_for(rid)
     if target_date:
