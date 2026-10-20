@@ -77,4 +77,32 @@ describe('HomePage account Simone', () => {
     });
     expect(container.querySelector('[data-testid="simone-fotografie-magazzino"]')).toBeNull();
   });
+
+  test('mostra Report spicci globale soltanto a Federico', async () => {
+    mockAuth = {
+      ...authFor('Federico'),
+      restaurant: { username: 'Federico', role: 'supervisor', location: 'Supervisione' },
+      isAdmin: false,
+      isSupervisor: true,
+      isFederico: true,
+    };
+    await act(async () => {
+      root.render(<HomePage />);
+      await Promise.resolve();
+    });
+
+    const button = container.querySelector('[data-testid="federico-report-spicci-globale"]');
+    expect(button).not.toBeNull();
+    await act(async () => button.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(mockNavigate).toHaveBeenCalledWith('/federico/report-spicci-globale');
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    mockAuth = authFor('Simone');
+    await act(async () => {
+      root.render(<HomePage />);
+      await Promise.resolve();
+    });
+    expect(container.querySelector('[data-testid="federico-report-spicci-globale"]')).toBeNull();
+  });
 });

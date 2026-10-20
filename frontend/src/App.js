@@ -47,6 +47,7 @@ import PastaAnnotationsLabPage from './pages/PastaAnnotationsLabPage';
 import ControlliTrasportiPage from './pages/ControlliTrasportiPage';
 import RichiesteCancellatePage from './pages/RichiesteCancellatePage';
 import FotografieMagazzinoPage from './pages/FotografieMagazzinoPage';
+import ReportSpicciGlobalePage from './pages/ReportSpicciGlobalePage';
 import UpdateBanner from './components/UpdateBanner';
 import FrontendDiagnostics from './components/FrontendDiagnostics';
 import RouteScrollRestoration from './components/RouteScrollRestoration';
@@ -118,6 +119,16 @@ const UploadMonitorRoute = ({ children }) => {
   );
 
   if (!allowed) {
+    return <Navigate to="/home" replace />;
+  }
+
+  return children;
+};
+
+const FedericoOnlyRoute = ({ children }) => {
+  const { isFederico } = useAuth();
+
+  if (!isFederico) {
     return <Navigate to="/home" replace />;
   }
 
@@ -287,6 +298,13 @@ function AppRoutes() {
           <UploadMonitorRoute>
             <ControlloCaricamentiPage />
           </UploadMonitorRoute>
+        </ProtectedRoute>
+      } />
+      <Route path="/federico/report-spicci-globale" element={
+        <ProtectedRoute>
+          <FedericoOnlyRoute>
+            <ReportSpicciGlobalePage />
+          </FedericoOnlyRoute>
         </ProtectedRoute>
       } />
       <Route path="/cestino-generale" element={
