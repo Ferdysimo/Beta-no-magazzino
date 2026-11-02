@@ -178,6 +178,16 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-11-02 16:30 CET] - Codex (GPT-5 / OpenAI)
+**Tipo**: bugfix
+**File toccati**:
+- `/app/backend/app/services/analysis.py`
+- `/app/backend/tests/test_report_backend_totals.py`
+- `/app/memory/PRD.md`
+**Descrizione**: L'export Excel Analisi ora assegna a Corso Vittorio un profilo dedicato che mantiene `AMAT`/Amatriciana in una colonna separata, senza abilitare anche `CARZUC`. La configurazione esplicita `analysis_pasta_types` del locale resta prioritaria e il contratto e stato aggiornato; il fix si applica anche ai periodi storici quando l'export viene rigenerato.
+**Testato**: ✅ si (`backend/.venv/Scripts/python.exe -m pytest backend/tests/test_report_backend_totals.py -q`: 38 passed)
+**Note per il prossimo agente**: Nessun dato Mongo e stato modificato e nessun deploy e stato eseguito. La modifica riguarda soltanto la classificazione delle paste nell'export Analisi di Corso Vittorio.
+
 ### [2026-10-09 08:35 CEST] - Codex (OpenAI)
 **Tipo**: bugfix | Report | riconoscimento paste | test
 **File toccati**:

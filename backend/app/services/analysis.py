@@ -183,6 +183,12 @@ ANALYSIS_EXTENDED_PASTA_TYPES = [
 ]
 
 
+ANALYSIS_CORSO_VITTORIO_PASTA_TYPES = [
+    *ANALYSIS_STANDARD_PASTA_TYPES,
+    "AMAT",
+]
+
+
 ANALYSIS_PASTA_TYPES = ANALYSIS_EXTENDED_PASTA_TYPES
 
 
@@ -304,6 +310,8 @@ def _analysis_pasta_types_for_restaurant(restaurant: Dict) -> List[str]:
     location = str(restaurant.get("location") or "").strip().casefold()
     if location == "flaminio":
         return list(ANALYSIS_EXTENDED_PASTA_TYPES)
+    if location == "corso vittorio":
+        return list(ANALYSIS_CORSO_VITTORIO_PASTA_TYPES)
     return list(ANALYSIS_STANDARD_PASTA_TYPES)
 
 

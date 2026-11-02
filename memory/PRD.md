@@ -351,10 +351,12 @@ sistema usa, in ordine:
 2. dizionario corrente come fallback soltanto per giorni storici senza snapshot.
 
 Le colonne analitiche seguono il modello approvato per il locale: Flaminio usa
-il profilo esteso con `Carzuc` e `Amatriciana` separate; Grazie, Brazzà e i nuovi
-locali usano il profilo standard e raggruppano queste sigle in `Altro`. Il prezzo
-configurato continua comunque a contribuire agli incassi anche quando la pasta
-confluisce in `Altro`.
+il profilo esteso con `Carzuc` e `Amatriciana` separate; Corso Vittorio usa il
+profilo standard con `Amatriciana` separata; Grazie, Brazzà e i nuovi locali
+usano il profilo standard e raggruppano le sigle non previste in `Altro`. Una
+configurazione `analysis_pasta_types` esplicita sul locale ha sempre precedenza.
+Il prezzo configurato continua comunque a contribuire agli incassi anche quando
+la pasta confluisce in `Altro`.
 
 Il fallback deve produrre avvisi nell'export: cambiare oggi un prezzo o una sigla
 non deve modificare i giorni che possiedono gia uno snapshot, ma puo influire sui

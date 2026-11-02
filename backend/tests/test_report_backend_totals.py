@@ -209,11 +209,31 @@ def test_analysis_pasta_profile_matches_reference_workbook_by_location():
         {"location": "Flaminio"}
     ) == analysis_service.ANALYSIS_EXTENDED_PASTA_TYPES
     assert analysis_service._analysis_pasta_types_for_restaurant(
+        {"location": "Corso Vittorio"}
+    ) == analysis_service.ANALYSIS_CORSO_VITTORIO_PASTA_TYPES
+    assert analysis_service._analysis_pasta_types_for_restaurant(
         {"location": "Largo di Brazzà"}
     ) == analysis_service.ANALYSIS_STANDARD_PASTA_TYPES
     assert analysis_service._analysis_pasta_types_for_restaurant(
         {"location": "Nuovo locale", "analysis_pasta_types": ["CARB", "AMATRICIANA"]}
     ) == ["CARB", "AMAT"]
+
+
+def test_corso_vittorio_export_keeps_amatriciana_out_of_altro():
+    pasta_types = analysis_service._analysis_pasta_types_for_restaurant(
+        {"location": "Corso Vittorio"}
+    )
+
+    result = _compute_paste_breakdown_for_export(
+        "2 AMAT\n3 AMAT\n4 CARZUC",
+        {},
+        {"AMAT": 8, "CARZUC": 8},
+        pasta_types,
+    )
+
+    assert result["breakdown"]["AMAT"]["count"] == 2
+    assert "CARZUC" not in result["breakdown"]
+    assert result["unrecognized_count"] == 1
 
 
 def test_export_canonicalizes_long_pasta_alias_and_keeps_its_configured_price():
