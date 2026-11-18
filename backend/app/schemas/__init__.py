@@ -20,7 +20,14 @@ from .laboratory import (
     DocumentScanFeedbackRow,
     PastaAnnotationDecision,
 )
-from .orders import DeletionLog, ModificationLog, OrderCreate, OrderResponse, OrderUpdate
+from .orders import (
+    DeletionLog,
+    KitchenRoutingConfigUpdate,
+    ModificationLog,
+    OrderCreate,
+    OrderResponse,
+    OrderUpdate,
+)
 from .report import BeveragePriceDictionaryUpsert, CashDailyUpsert, PastaDictionaryUpsert
 from .upload_attempts import UploadAttemptEventCreate
 from .warehouse import (
@@ -67,6 +74,7 @@ __all__ = [
     "OrderCreate",
     "OrderResponse",
     "OrderUpdate",
+    "KitchenRoutingConfigUpdate",
     "PastaDictionaryUpsert",
     "BeveragePriceDictionaryUpsert",
     "ProductCreate",

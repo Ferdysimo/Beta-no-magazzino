@@ -1,4 +1,5 @@
 import React from 'react';
+import { safeArithmeticValue } from '../utils/safeArithmetic';
 
 const fmtEur = (n) => (Number(n) || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtDate = (s) => {
@@ -38,21 +39,7 @@ const CASH_BOX_STYLE = {
   arr:     { bg: '#fee2e2', text: '#111827' },
 };
 
-const evalNum = (v) => {
-  if (v === undefined || v === null || v === '') return 0;
-  const s = String(v).trim().replace(/,/g, '.');
-  if (s.startsWith('=')) {
-    const expr = s.slice(1).trim();
-    if (!expr || !/^[\d+\-*/.() \s]*$/.test(expr)) return 0;
-    try {
-      // eslint-disable-next-line no-new-func
-      const n = Function(`"use strict"; return (${expr})`)();
-      return Number.isFinite(n) ? n : 0;
-    } catch { return 0; }
-  }
-  const n = parseFloat(s);
-  return Number.isNaN(n) ? 0 : n;
-};
+const evalNum = (v) => safeArithmeticValue(v, { formulaOnly: true });
 
 export const ClosureDetail = ({ detail }) => {
   const cash = detail.cash || {};

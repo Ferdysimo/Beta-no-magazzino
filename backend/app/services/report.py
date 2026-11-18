@@ -17,6 +17,7 @@ from app.services.beverage_prices import (
     _beverage_price_snapshot_fields,
     _get_beverage_prices_for,
 )
+from app.services.safe_arithmetic import safe_arithmetic_value
 
 
 logger = logging.getLogger(__name__)
@@ -88,26 +89,7 @@ def _eval_cash_value(v) -> float:
     (Storico chiusure / Excel grid / cash_sera) divergono da quelli mostrati
     nella pagina Report.
     """
-    if v is None:
-        return 0.0
-    s = str(v)
-    # Strip HTML tags — il VERS può contenere <span style="color:...">…</span>
-    if "<" in s:
-        s = re.sub(r"<[^>]*>", "", s)
-    s = s.strip().replace(",", ".")
-    if not s:
-        return 0.0
-    if s.startswith("="):
-        s = s[1:].strip()
-    if not s:
-        return 0.0
-    if not re.match(r"^[\d+\-*/.() \s]*$", s):
-        return 0.0
-    try:
-        # Safe: il regex sopra ammette solo cifre/operatori/parentesi/spazi.
-        return float(eval(s, {"__builtins__": {}}, {}))  # noqa: S307
-    except Exception:
-        return 0.0
+    return safe_arithmetic_value(v, strip_html=True)
 
 
 def _compute_cash_sera(row: dict) -> float:

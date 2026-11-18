@@ -12,7 +12,12 @@ from app.core.security import verify_token
 from app.core.state import RESTAURANT_LOCATION_CACHE
 from app.core.time import ROME_TZ, _today_rome_bounds_utc
 from app.core.ws_manager import manager
-from app.schemas import OrderCreate, OrderResponse, OrderUpdate
+from app.schemas import KitchenRoutingConfigUpdate, OrderCreate, OrderResponse, OrderUpdate
+from app.services.kitchen_routing import (
+    get_kitchen_routing_config,
+    route_order_description,
+    update_kitchen_routing_config,
+)
 from app.services.orders import _highest_order_number_today
 
 
@@ -20,9 +25,63 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _require_kitchen_routing_role(token_data: dict) -> None:
+    if token_data.get("role") not in {"restaurant", "admin", "supervisor"}:
+        raise HTTPException(status_code=403, detail="Configurazione bollitori non autorizzata")
+
+
+@router.get("/kitchen-routing")
+async def read_kitchen_routing(token_data: dict = Depends(verify_token)):
+    """Read today's division mode for the authenticated/effective restaurant.
+
+    Access matrix: restaurant, Admin/Simone and Federico are allowed; anonymous
+    requests are rejected by ``verify_token`` and warehouse users are rejected
+    here because this is a Cassa-only operational setting.
+    """
+    _require_kitchen_routing_role(token_data)
+    config = await get_kitchen_routing_config(token_data["restaurant_id"])
+    if not config:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+    return config
+
+
+@router.put("/kitchen-routing")
+async def write_kitchen_routing(
+    data: KitchenRoutingConfigUpdate,
+    token_data: dict = Depends(verify_token),
+):
+    """Patch division mode/list for the authenticated/effective restaurant."""
+    _require_kitchen_routing_role(token_data)
+    if data.enabled is None and data.boiler2_siglas is None and data.standard_siglas is None:
+        raise HTTPException(status_code=400, detail="Nessuna modifica richiesta")
+    try:
+        config = await update_kitchen_routing_config(
+            token_data["restaurant_id"],
+            enabled=data.enabled,
+            boiler2_siglas=data.boiler2_siglas,
+            standard_siglas=data.standard_siglas,
+            updated_by=token_data.get("username") or token_data.get("restaurant_name") or "Cassa",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not config:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+
+    await manager.broadcast_to_restaurant(token_data["restaurant_id"], {
+        "type": "kitchen_routing_updated",
+        "config": config,
+    })
+    return config
+
+
 @router.post("/orders", response_model=OrderResponse)
 async def create_order(data: OrderCreate, token_data: dict = Depends(verify_token)):
     restaurant_id = token_data["restaurant_id"]
+
+    routing_config = await get_kitchen_routing_config(restaurant_id)
+    if not routing_config:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+    routed_description = route_order_description(data.description, routing_config)
 
     # Two distinct flows:
     # (a) No order_number provided -> atomic $inc on counter (race-safe).
@@ -76,7 +135,7 @@ async def create_order(data: OrderCreate, token_data: dict = Depends(verify_toke
     order = {
         "id": order_id,
         "order_number": order_number,
-        "description": data.description,  # Keep original case
+        "description": routed_description,  # Keep original case; route via legacy trailing marker
         "restaurant_id": restaurant_id,
         "status": "pending",
         "created_at": datetime.now(timezone.utc).isoformat(),

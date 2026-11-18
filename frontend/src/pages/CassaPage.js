@@ -3,11 +3,80 @@ import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrders } from '../contexts/OrderContext';
 import Header from '../components/Header';
-import { Edit2, Trash2, Check, Loader2, AlertCircle, Printer } from 'lucide-react';
+import { Edit2, Trash2, Check, Loader2, AlertCircle, Printer, Settings2, X } from 'lucide-react';
 import axios from 'axios';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+
+const parseRoutingSiglas = (value) => Array.from(new Set(
+  String(value || '')
+    .split(/[\s,;]+/)
+    .map(sigla => sigla.trim().toUpperCase())
+    .filter(Boolean)
+));
+
+const RoutingTagEditor = ({ testId, tags, setTags, placeholder, tone = 'gray' }) => {
+  const [draft, setDraft] = useState('');
+  const isBlue = tone === 'blue';
+
+  const addDraft = () => {
+    const newTags = parseRoutingSiglas(draft);
+    if (newTags.length === 0) return;
+    setTags(current => Array.from(new Set([...current, ...newTags])));
+    setDraft('');
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter' || event.key === ',') {
+      event.preventDefault();
+      addDraft();
+    } else if (event.key === 'Backspace' && !draft && tags.length > 0) {
+      setTags(current => current.slice(0, -1));
+    }
+  };
+
+  return (
+    <div
+      className={`min-h-44 rounded-md border bg-white p-2 focus-within:ring-2 ${isBlue ? 'border-blue-300 focus-within:border-blue-600 focus-within:ring-blue-200' : 'border-gray-300 focus-within:border-gray-600 focus-within:ring-gray-200'}`}
+      onClick={event => event.currentTarget.querySelector('input')?.focus()}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        {tags.map(sigla => (
+          <span
+            key={sigla}
+            className={`inline-flex items-center gap-1 rounded-full py-1 pl-3 pr-1 text-sm font-bold ${isBlue ? 'bg-blue-700 text-white' : 'border border-gray-300 bg-gray-100 text-gray-900'}`}
+          >
+            {sigla}
+            <button
+              type="button"
+              data-testid={`${testId}-remove-${sigla}`}
+              aria-label={`Elimina ${sigla}`}
+              onClick={event => {
+                event.stopPropagation();
+                setTags(current => current.filter(item => item !== sigla));
+              }}
+              className={`inline-flex h-6 w-6 items-center justify-center rounded-full ${isBlue ? 'hover:bg-blue-900' : 'hover:bg-gray-300'}`}
+            >
+              <X size={14} />
+            </button>
+          </span>
+        ))}
+        <input
+          data-testid={`${testId}-input`}
+          value={draft}
+          onChange={event => setDraft(event.target.value.toUpperCase())}
+          onKeyDown={handleKeyDown}
+          onBlur={addDraft}
+          placeholder={tags.length === 0 ? placeholder : 'Aggiungi…'}
+          autoComplete="off"
+          spellCheck="false"
+          className="min-w-32 flex-1 border-0 bg-transparent px-2 py-2 font-mono text-base font-bold uppercase text-gray-900 outline-none"
+        />
+      </div>
+    </div>
+  );
+};
 
 const getTimerSeconds = (order) => {
   if (!order.timer_started) return -1;
@@ -27,7 +96,7 @@ const getTimerColor = (order) => {
 };
 
 const CassaPage = () => {
-  const { restaurant, token } = useAuth();
+  const { restaurant, effectiveRestaurant, canImpersonate, token } = useAuth();
   const { orders, createOrder, deleteOrder, completeOrder, updateOrder } = useOrders();
   const [orderNumber, setOrderNumber] = useState('');
   const [userEditedNumber, setUserEditedNumber] = useState(false);
@@ -42,6 +111,14 @@ const CassaPage = () => {
   const [printData, setPrintData] = useState(null); // {orario, rows: [{number, description}]}
   const inputRef = useRef(null);
   const [tick, setTick] = useState(0);
+  const [routingConfig, setRoutingConfig] = useState({ enabled: false, boiler2_siglas: [], standard_siglas: [] });
+  const [boiler2RoutingSiglas, setBoiler2RoutingSiglas] = useState([]);
+  const [standardRoutingSiglas, setStandardRoutingSiglas] = useState([]);
+  const [showRoutingSettings, setShowRoutingSettings] = useState(false);
+  const [routingBusy, setRoutingBusy] = useState(false);
+  const [routingError, setRoutingError] = useState('');
+  const activeRestaurant = canImpersonate ? effectiveRestaurant : restaurant;
+  const hasTwoBoilers = Number(activeRestaurant?.boiler_count ?? 1) >= 2;
 
   // Tick every second for live timer colors
   useEffect(() => {
@@ -73,6 +150,114 @@ const CassaPage = () => {
   useEffect(() => {
     fetchLogs();
   }, [token]);
+
+  const fetchRoutingConfig = async () => {
+    if (!token || !hasTwoBoilers) return null;
+    try {
+      const response = await axios.get(`${API}/kitchen-routing`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setRoutingConfig(response.data);
+      setRoutingError('');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching kitchen routing:', error);
+      setRoutingError('Impossibile leggere le divisioni');
+      return null;
+    }
+  };
+
+  // Keep the status aligned across multiple Cassa devices. Routing itself is
+  // applied by the backend, so even an UI that has not polled yet still sends
+  // every new order to the correct bollitore.
+  useEffect(() => {
+    if (!token || !hasTwoBoilers) return undefined;
+    fetchRoutingConfig();
+    const interval = setInterval(fetchRoutingConfig, 10000);
+    return () => clearInterval(interval);
+  }, [token, hasTwoBoilers]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleDivisions = async () => {
+    if (routingBusy) return;
+    setRoutingBusy(true);
+    setRoutingError('');
+    try {
+      const response = await axios.put(`${API}/kitchen-routing`, {
+        enabled: !routingConfig.enabled,
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setRoutingConfig(response.data);
+    } catch (error) {
+      console.error('Error toggling kitchen routing:', error);
+      setRoutingError('Divisioni non aggiornate. Riprova.');
+    } finally {
+      setRoutingBusy(false);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  };
+
+  const openRoutingSettings = async () => {
+    setShowRoutingSettings(true);
+    setRoutingBusy(true);
+    setRoutingError('');
+    try {
+      const [configResponse, dictionaryResponse] = await Promise.all([
+        axios.get(`${API}/kitchen-routing`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get(`${API}/pasta-dictionary`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+      ]);
+      const config = configResponse.data;
+      const dictionarySiglas = (dictionaryResponse.data?.siglas || [])
+        .map(item => String(item.sigla || '').trim().toUpperCase())
+        .filter(Boolean);
+      const selected = config.boiler2_siglas || [];
+      const standard = config.standard_siglas_configured
+        ? (config.standard_siglas || [])
+        : dictionarySiglas.filter(sigla => !selected.includes(sigla));
+      setRoutingConfig(config);
+      setBoiler2RoutingSiglas(selected);
+      setStandardRoutingSiglas(standard);
+    } catch (error) {
+      console.error('Error opening kitchen routing settings:', error);
+      setRoutingError('Impossibile caricare le paste. Riprova.');
+    } finally {
+      setRoutingBusy(false);
+    }
+  };
+
+  const saveRoutingSiglas = async () => {
+    if (routingBusy) return;
+    setRoutingError('');
+    const boiler2Siglas = boiler2RoutingSiglas;
+    const standardSiglas = standardRoutingSiglas;
+    const standardSet = new Set(standardSiglas);
+    const duplicates = boiler2Siglas.filter(sigla => standardSet.has(sigla));
+    if (duplicates.length > 0) {
+      setRoutingError(`Queste paste sono presenti in entrambi i bollitori: ${duplicates.join(', ')}`);
+      return;
+    }
+    setRoutingBusy(true);
+    try {
+      const response = await axios.put(`${API}/kitchen-routing`, {
+        boiler2_siglas: boiler2Siglas,
+        standard_siglas: standardSiglas,
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setRoutingConfig(response.data);
+      setShowRoutingSettings(false);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    } catch (error) {
+      console.error('Error saving kitchen routing settings:', error);
+      setRoutingError(error.response?.data?.detail || 'Divisioni non salvate. Riprova.');
+    } finally {
+      setRoutingBusy(false);
+    }
+  };
 
   // Calculate next order number based on existing orders.
   // Pending list can shrink (orders move to completed/archived), so it's only
@@ -334,6 +519,127 @@ const CassaPage = () => {
             {restaurant?.location}
           </p>
         </div>
+
+        {hasTwoBoilers && (
+          <aside
+            className={`fixed top-1/2 -translate-y-1/2 right-0 z-30 overflow-hidden rounded-l-lg border border-r-0 shadow-lg ${routingConfig.enabled ? 'border-green-700 bg-green-600' : 'border-gray-700 bg-gray-700'}`}
+            data-testid="divisioni-panel"
+          >
+            <button
+              type="button"
+              data-testid="divisioni-toggle"
+              aria-pressed={routingConfig.enabled}
+              disabled={routingBusy}
+              onClick={toggleDivisions}
+              title={routingConfig.enabled
+                ? `Divisioni attive · Bollitore 2: ${(routingConfig.boiler2_siglas || []).join(', ') || 'nessuna pasta'}`
+                : 'Divisioni spente · tutte le paste al bollitore standard'}
+              className={`w-11 py-3 flex flex-col items-center gap-2 text-white transition-colors disabled:opacity-50 ${routingConfig.enabled ? 'hover:bg-green-700' : 'hover:bg-gray-800'}`}
+            >
+              <span className={`w-2.5 h-2.5 rounded-full ${routingConfig.enabled ? 'bg-white' : 'bg-gray-400'}`} />
+              <span className="text-[11px] font-bold uppercase tracking-wider [writing-mode:vertical-rl] rotate-180">
+                Divisioni
+              </span>
+              <span className="text-[9px] font-bold uppercase [writing-mode:vertical-rl] rotate-180 opacity-90">
+                {routingConfig.enabled ? 'ATTIVE' : 'SPENTE'}
+              </span>
+            </button>
+            <button
+              type="button"
+              data-testid="divisioni-configura"
+              onClick={openRoutingSettings}
+              disabled={routingBusy}
+              title="Imposta quali paste vanno nei due bollitori"
+              aria-label="Imposta paste delle divisioni"
+              className="w-11 h-11 inline-flex items-center justify-center border-t border-white/25 bg-white/10 hover:bg-white/20 text-white disabled:opacity-50"
+            >
+              <Settings2 size={18} />
+            </button>
+          </aside>
+        )}
+
+        {routingError && !showRoutingSettings && (
+          <div className="fixed top-20 right-4 z-50 max-w-xs rounded-md bg-red-600 px-4 py-3 text-sm font-semibold text-white shadow-lg">
+            {routingError}
+          </div>
+        )}
+
+        {showRoutingSettings && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" data-testid="divisioni-modal">
+            <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl border border-gray-200">
+              <div className="sticky top-0 bg-white px-5 py-4 border-b border-gray-200 flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="font-heading text-2xl font-bold text-gray-900 uppercase">Divisioni bollitori</h2>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Scrivi, aggiungi o elimina liberamente le sigle. La modifica vale per le prossime paste inviate.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  title="Chiudi"
+                  onClick={() => setShowRoutingSettings(false)}
+                  className="w-9 h-9 shrink-0 inline-flex items-center justify-center rounded-md border border-gray-300 hover:bg-gray-100"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-5">
+                <div className="rounded-lg border-2 border-gray-300 bg-gray-50 p-4">
+                  <h3 className="font-bold text-gray-900">Bollitore standard</h3>
+                  <p className="text-xs text-gray-600 mt-1 mb-3">Puoi tenere qui l'elenco di riferimento delle paste standard.</p>
+                  <RoutingTagEditor
+                    testId="divisioni-standard"
+                    tags={standardRoutingSiglas}
+                    setTags={setStandardRoutingSiglas}
+                    placeholder="CACIO, RAGU, ..."
+                  />
+                  <p className="mt-2 text-xs text-gray-600">
+                    {standardRoutingSiglas.length} sigle · quelle non presenti in nessun box vanno comunque qui.
+                  </p>
+                </div>
+
+                <div className="rounded-lg border-2 border-blue-300 bg-blue-50 p-4">
+                  <h3 className="font-bold text-blue-900">Bollitore 2 · sinistra</h3>
+                  <p className="text-xs text-blue-700 mt-1 mb-3">Ricevono automaticamente il trattino finale.</p>
+                  <RoutingTagEditor
+                    testId="divisioni-bollitore2"
+                    tags={boiler2RoutingSiglas}
+                    setTags={setBoiler2RoutingSiglas}
+                    placeholder="CARB, PESTO, POM, AMAT"
+                    tone="blue"
+                  />
+                  <p className="mt-2 text-xs text-blue-700">
+                    {boiler2RoutingSiglas.length} sigle · scrivi una sigla e premi Invio. Premi × per eliminarla.
+                  </p>
+                </div>
+              </div>
+
+              {routingError && <p className="px-5 pb-2 text-sm font-semibold text-red-600">{routingError}</p>}
+              <div className="px-5 py-4 border-t border-gray-200 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-gray-500">La modalità si spegne automaticamente al cambio del giorno.</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowRoutingSettings(false)}
+                    className="h-10 px-4 rounded-md border border-gray-300 bg-white hover:bg-gray-50 font-semibold"
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="divisioni-salva"
+                    onClick={saveRoutingSiglas}
+                    disabled={routingBusy}
+                    className="h-10 px-5 rounded-md bg-blue-700 hover:bg-blue-800 text-white font-bold disabled:opacity-50"
+                  >
+                    {routingBusy ? 'Salvataggio…' : 'Salva divisioni'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Floating side-tab trigger for LOGS (fixed on LEFT edge, always visible) */}
         <button

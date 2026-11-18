@@ -54,6 +54,7 @@ from app.services.report import (
     _should_create_pasta_dict_snapshot,
     _pasta_dict_snapshot_fields,
 )
+from app.services.vers_html import sanitize_vers_html
 
 
 logger = logging.getLogger(__name__)
@@ -508,6 +509,8 @@ async def upsert_cash_daily(
     for f in ALL_CASH_FIELDS:
         if f in sent_fields:
             set_payload[f] = getattr(data, f) or ""
+    if "vers" in set_payload:
+        set_payload["vers"] = sanitize_vers_html(set_payload["vers"])
     # vers_color: solo valori validi
     allowed_colors = {"", "black", "red", "green", "blue", "orange"}
     if "vers_color" in sent_fields and data.vers_color is not None and data.vers_color in allowed_colors:

@@ -5,6 +5,8 @@ import { Maximize2, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrders } from '../contexts/OrderContext';
 import Header from '../components/Header';
+import { safeArithmeticValue } from '../utils/safeArithmetic';
+import { sanitizeVersHtml, versHasMixedColors } from '../utils/versHtml';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -88,24 +90,7 @@ export const findPasta = (line, dict) => {
 // Il "=" iniziale è opzionale: anche scrivendo "10+5" il calcolo viene eseguito.
 // Per il campo VERS rich-text, lo storage può contenere HTML (span colorati):
 // in quel caso strippiamo tutti i tag prima di valutare.
-const evaluateValue = (v) => {
-  if (v === '' || v === null || v === undefined) return 0;
-  let s = String(v);
-  // Strip HTML tags (per il VERS rich-text)
-  if (s.includes('<')) s = s.replace(/<[^>]*>/g, '');
-  // Sostituisco TUTTE le virgole con punti (non solo la prima): scrivere
-  // "10,50+3,20" deve funzionare allo stesso modo di "10.50+3.20".
-  s = s.trim().replace(/,/g, '.');
-  if (s.startsWith('=')) s = s.slice(1).trim();
-  if (s === '') return 0;
-  // Whitelist: solo cifre, operatori, parentesi, punto e spazio
-  if (!/^[\d+\-*/.() \s]*$/.test(s)) return 0;
-  try {
-    // eslint-disable-next-line no-new-func
-    const v2 = Function(`"use strict"; return (${s})`)();
-    return Number.isFinite(v2) ? v2 : 0;
-  } catch { return 0; }
-};
+const evaluateValue = (v) => safeArithmeticValue(v, { stripHtml: true });
 
 // Considera "formula" qualsiasi stringa che contenga un operatore aritmetico
 // (esclude il semplice numero negativo "-5"). Il "=" iniziale è opzionale.
@@ -197,79 +182,10 @@ const COLOR_PALETTE = [
 // Heuristica che rileva se l'HTML del VERS contiene sia almeno una cifra
 // in ROSSO che almeno una cifra NON ROSSA (= nero/default). Cammina sull'albero
 // DOM mantenendo il colore ereditato e classifica ogni testo numerico.
-const isRedCssColor = (c) => {
-  if (!c) return false;
-  const n = String(c).toLowerCase().replace(/\s+/g, '');
-  return n === '#dc2626' || n === 'rgb(220,38,38)' || n === 'red';
-};
-
 // Sanitize HTML del VERS contro XSS.
 // Whitelist: solo testo + <span style="color:..."> (l'unico tag generato dal
 // nostro applyVersColor). Qualsiasi altro tag/attributo/handler viene strippato
 // PRIMA di essere iniettato come innerHTML.
-const HEX_RE = /^#[0-9a-fA-F]{3,6}$/;
-const RGB_RE = /^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/;
-const NAMED_COLORS = new Set(['red', 'black', 'inherit']);
-const sanitizeVersHtml = (html) => {
-  if (!html || typeof html !== 'string') return '';
-  if (typeof document === 'undefined') return '';
-  const tmp = document.createElement('div');
-  // setHTML+innerHTML è "safe" qui perché poi rimuoviamo tutto ciò che non è
-  // in whitelist; gli `onerror=...` non vengono mai inseriti nel documento attivo.
-  tmp.innerHTML = html;
-  const walk = (node) => {
-    for (const child of Array.from(node.childNodes)) {
-      if (child.nodeType === 3 /* TEXT_NODE */) continue;
-      if (child.nodeType !== 1 /* ELEMENT_NODE */) {
-        child.remove();
-        continue;
-      }
-      if (child.tagName !== 'SPAN') {
-        // Sostituisco il tag non consentito col suo testo
-        const text = document.createTextNode(child.textContent || '');
-        child.replaceWith(text);
-        continue;
-      }
-      // Tag <span>: tengo SOLO style.color se sembra un colore valido,
-      // rimuovo tutti gli altri attributi (id/class/onclick/onerror/...)
-      const rawColor = (child.style && child.style.color) || '';
-      const color = String(rawColor).trim().toLowerCase();
-      const colorOk = color && (HEX_RE.test(color) || RGB_RE.test(color) || NAMED_COLORS.has(color));
-      while (child.attributes.length) child.removeAttribute(child.attributes[0].name);
-      if (colorOk) child.style.color = color;
-      walk(child);
-    }
-  };
-  walk(tmp);
-  return tmp.innerHTML;
-};
-
-const versHasMixedColors = (html) => {
-  if (!html || typeof html !== 'string') return false;
-  if (typeof document === 'undefined') return false;
-  const tmp = document.createElement('div');
-  tmp.innerHTML = html;
-  let hasRed = false;
-  let hasNonRed = false;
-  const walk = (node, inheritedIsRed) => {
-    if (node.nodeType === 3 /* TEXT_NODE */) {
-      if (/\d/.test(node.textContent || '')) {
-        if (inheritedIsRed) hasRed = true;
-        else hasNonRed = true;
-      }
-      return;
-    }
-    if (node.nodeType !== 1 /* ELEMENT_NODE */) return;
-    let isRedHere = inheritedIsRed;
-    if (node.style && node.style.color) {
-      isRedHere = isRedCssColor(node.style.color);
-    }
-    for (const child of node.childNodes) walk(child, isRedHere);
-  };
-  walk(tmp, false);
-  return hasRed && hasNonRed;
-};
-
 // Popover commento (right-click su un quadratino)
 const CommentPopover = ({ inputRef, value, onChange, onSave, onCancel }) => {
   return (

@@ -4,25 +4,12 @@ import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import { ArrowLeft } from 'lucide-react';
+import { safeArithmeticValue } from '../utils/safeArithmetic';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-const evaluateValue = (v) => {
-  if (v === '' || v === null || v === undefined) return 0;
-  const s = String(v).trim().replace(/,/g, '.');
-  if (s.startsWith('=')) {
-    const expr = s.slice(1).trim();
-    if (!expr || !/^[\d+\-*/.() \s]*$/.test(expr)) return 0;
-    try {
-      // eslint-disable-next-line no-new-func
-      const v2 = Function(`"use strict"; return (${expr})`)();
-      return Number.isFinite(v2) ? v2 : 0;
-    } catch { return 0; }
-  }
-  const n = parseFloat(s);
-  return Number.isNaN(n) ? 0 : n;
-};
+const evaluateValue = (v) => safeArithmeticValue(v, { formulaOnly: true });
 
 const StoricoBevandePage = () => {
   const { token, canImpersonate, restaurant } = useAuth();

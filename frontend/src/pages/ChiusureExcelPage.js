@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import { ArrowLeft, RefreshCw, X } from 'lucide-react';
+import { parseVersSegments } from '../utils/versHtml';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -112,53 +113,8 @@ export const reportExpressionText = (value) => {
 };
 
 // ─── Cell helpers ──────────────────────────────────────────────────────────
-const isRedVersColor = (color) => {
-  const normalized = String(color || '').toLowerCase().replace(/\s+/g, '');
-  return normalized === '#dc2626'
-    || normalized === 'rgb(220,38,38)'
-    || normalized === 'red';
-};
-
 export const parseVersDisplay = (rawValue, legacyColor = '') => {
-  const raw = String(rawValue || '');
-  const legacyIsRed = String(legacyColor || '').toLowerCase() === 'red';
-  if (!raw) return { segments: [], mixed: false };
-
-  const segments = [];
-  const append = (text, red) => {
-    const safeText = String(text || '').replace(/[^0-9+\-*/.(),=\s€]/g, '');
-    if (!safeText) return;
-    const previous = segments[segments.length - 1];
-    if (previous && previous.red === red) previous.text += safeText;
-    else segments.push({ text: safeText, red });
-  };
-
-  if (typeof document === 'undefined') {
-    append(raw.replace(/<[^>]*>/g, ''), legacyIsRed);
-  } else {
-    const container = document.createElement('div');
-    container.innerHTML = raw;
-    const walk = (node, inheritedRed) => {
-      if (node.nodeType === 3) {
-        append(node.textContent, inheritedRed);
-        return;
-      }
-      if (node.nodeType !== 1) return;
-      let currentRed = inheritedRed;
-      if (node.tagName === 'SPAN' && node.style?.color) {
-        currentRed = isRedVersColor(node.style.color);
-      }
-      Array.from(node.childNodes).forEach(child => walk(child, currentRed));
-    };
-    Array.from(container.childNodes).forEach(child => walk(child, legacyIsRed));
-  }
-
-  const hasRedNumbers = segments.some(segment => segment.red && /\d/.test(segment.text));
-  const hasBlackNumbers = segments.some(segment => !segment.red && /\d/.test(segment.text));
-  return {
-    segments,
-    mixed: hasRedNumbers && hasBlackNumbers,
-  };
+  return parseVersSegments(rawValue, legacyColor);
 };
 
 const Th = ({ children, bg, color, sticky, top, left, width, title, colSpan, borderTop, isGroupEnd, emphasis }) => (

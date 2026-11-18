@@ -178,6 +178,30 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-11-18 16:17 CET] - Codex (OpenAI)
+**Tipo**: security | Report | VERS | Analisi | test
+**File toccati**:
+- `/app/backend/app/{routers/report.py,services/{analysis,report,safe_arithmetic,vers_html}.py}`
+- `/app/backend/tests/{test_report_input_security,test_phase1_foundations_contract,test_phase2_module_contract,test_phase3_module_contract}.py`
+- `/app/frontend/src/utils/{safeArithmetic,versHtml}{,.test}.js`
+- `/app/frontend/src/pages/{ReportBetaPage,ChiusureExcelPage,MagazzinoBevandePage,StoricoBevandePage,ReportSpicciGlobalePage}.js`
+- `/app/frontend/src/components/ClosureDetail.js`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Rimossi tutti gli usi applicativi di `eval`/`Function` dalle formule economiche. Backend e frontend usano parser limitati a numeri, segni, `+ - * /` e parentesi, con massimo 200 caratteri, 100 operazioni e profondita limitata; `**`, `//`, risultati non finiti e divisioni per zero restituiscono zero e non bloccano il servizio. La stessa validazione protegge anche le formule esportate nell'Excel Analisi. Il VERS viene ora sanitizzato dal backend prima del salvataggio e nel frontend viene analizzato in un `template` inerte, ricostruendo soltanto testo e `span` nero/rosso; storico chiusure e Report condividono il medesimo filtro.
+**Testato**: ✅ si (metodo: `py_compile`; suite backend completa -> 297 passed, 36 skipped; suite frontend completa -> 89 passed; build React produzione riuscita con soli warning Hook preesistenti; payload `img/onerror`, `script`, attributi evento e stili non ammessi eliminati; contratto OpenAPI riallineato alle due route Divisioni; `git diff --check`).
+**Note per il prossimo agente**: Le formule lecite restano retrocompatibili, incluso `=` opzionale nel Report, virgola decimale, segni unari e parentesi. Non reintrodurre evaluator dinamici: estendere entrambi i parser e i test se la grammatica dovesse cambiare.
+
+### [2026-11-18 14:35 CET] - Codex (OpenAI)
+**Tipo**: feature | ordini | Cassa | test
+**File toccati**:
+- `/app/backend/app/{routers/orders.py,schemas/{__init__,orders}.py,services/kitchen_routing.py}`
+- `/app/backend/tests/test_kitchen_routing.py`
+- `/app/frontend/src/pages/{CassaPage,CassaPage.test}.js`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Aggiunta ai locali con due bollitori la modalita giornaliera `Divisioni` nella Cassa, esposta come linguetta verticale fissa sul lato destro per non sottrarre spazio alla lista comande. Il backend applica alle nuove comande il trattino compatibile con i tablet esistenti: le sigle configurate (default `CARB`, `PESTO`, `POM`, `AMAT`) vanno al Bollitore 2/sinistra, le altre al bollitore standard. Dalla Cassa si possono attivare/disattivare le divisioni e modificare liberamente le paste tramite due editor a tag: Invio aggiunge una sigla e la `x` del tag la elimina; frontend e backend impediscono duplicati tra i due bollitori. La configurazione e condivisa per locale, non sposta ordini gia inviati e l'attivazione scade al cambio giorno di Roma.
+**Testato**: ✅ si (metodo: `py_compile`; `pytest backend/tests/test_kitchen_routing.py -q` -> 10 passed; test React `CassaPage.test.js` -> 3 passed; build React produzione riuscita con soli warning Hook preesistenti; verifica backend locale `GET /api/` -> 200 e route `/api/kitchen-routing` presente in OpenAPI; `git diff --check`).
+**Note per il prossimo agente**: Il trattino finale resta il contratto di compatibilita con `BollitorePage`/`BollitorePage2`. La nuova logica viene applicata solo alla creazione: una correzione manuale di una comanda esistente non deve farla saltare automaticamente tra tablet.
+
 ### [2026-11-02 16:30 CET] - Codex (GPT-5 / OpenAI)
 **Tipo**: bugfix
 **File toccati**:

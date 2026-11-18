@@ -36,6 +36,7 @@ from app.services.report import (
     _pasta_dict_from_snapshot,
     _pasta_recognized_sigla,
 )
+from app.services.safe_arithmetic import parse_arithmetic_expression
 
 
 def _paste_text_from_order_docs(order_docs: list) -> str:
@@ -999,23 +1000,8 @@ def _analysis_money_number_format(value) -> str:
 
 def _excel_arithmetic_expression(value) -> Optional[str]:
     """Return a safe Excel arithmetic expression preserving the Report input."""
-    if value is None:
-        return None
-    expression = str(value)
-    if "<" in expression:
-        expression = re.sub(r"<[^>]*>", "", expression)
-    expression = expression.strip().replace(",", ".")
-    if expression.startswith("="):
-        expression = expression[1:].strip()
-    if not expression or not re.fullmatch(r"[\d+\-*/.() \t\r\n]+", expression):
-        return None
-    try:
-        result = eval(expression, {"__builtins__": {}}, {})  # noqa: S307
-        if not isinstance(result, (int, float)) or not math.isfinite(float(result)):
-            return None
-    except Exception:
-        return None
-    return expression
+    parsed = parse_arithmetic_expression(value, strip_html=True)
+    return parsed[0] if parsed is not None else None
 
 
 def _excel_formula_from_report_value(value) -> Optional[str]:

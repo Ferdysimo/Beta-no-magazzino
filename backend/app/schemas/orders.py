@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel
 
@@ -16,6 +16,12 @@ class OrderUpdate(BaseModel):
     timer_start_time: Optional[str] = None
     timer_paused: Optional[bool] = None
     timer_elapsed: Optional[int] = None
+
+
+class KitchenRoutingConfigUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    boiler2_siglas: Optional[List[str]] = None
+    standard_siglas: Optional[List[str]] = None
 
 
 class OrderResponse(BaseModel):

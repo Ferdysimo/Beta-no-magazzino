@@ -171,6 +171,20 @@ Contratti:
 - un ordine cancellato non conta in Numeri o Analisi;
 - un ordine completato o archiviato continua a far parte dello storico valido;
 - Bollitore 1 e 2 gestiscono timer e completamento cucina;
+- nei locali con due bollitori la Cassa espone la modalita giornaliera
+  `Divisioni`: quando e attiva, il backend aggiunge automaticamente il trattino
+  finale alle nuove comande la cui prima sigla appartiene all'elenco del
+  Bollitore 2 (sinistra), mentre rimuove il marcatore dalle altre e le lascia al
+  bollitore standard;
+- i due elenchi sono configurabili dalla Cassa tramite editor a tag: si scrive
+  una sigla e si preme Invio per aggiungerla, mentre la `x` del tag la elimina;
+  le sigle non possono comparire in entrambi
+  i bollitori e quelle non elencate vengono comunque inviate allo standard;
+  il Bollitore 2 parte da `CARB`, `PESTO`, `POM`, `AMAT`; le modifiche riguardano
+  soltanto le comande successive e non spostano quelle gia inviate;
+- il pulsante `Divisioni` e condiviso tra le Casse dello stesso locale, viene
+  applicato in modo autoritativo dal backend e torna automaticamente spento al
+  cambio della giornata di Roma;
 - Monitor Clienti mostra gli ordini pronti soltanto nei locali configurati.
 
 WebSocket notifica le variazioni al tenant corretto. Se non e disponibile, il
@@ -740,6 +754,12 @@ Al 6 agosto 2026:
 - il P1 e approvato ma il rollout ordinato delle sue fasi non e ancora iniziato;
 - la revoca mirata Admin e attiva dal 6 agosto 2026, senza rendere completa la
   Fase 4 P1 generale.
+- le formule numeriche di Report, chiusure e Analisi sono valutate da parser
+  limitati a `+`, `-`, `*`, `/` e parentesi, con limiti di lunghezza e
+  complessita; `eval`, `Function`, potenze e divisione intera non sono ammessi;
+- il campo VERS viene sanitizzato anche dal backend prima del salvataggio e il
+  frontend lo interpreta in un `template` inerte, conservando soltanto testo e
+  span nei colori nero/rosso supportati.
 
 Nessuna modifica alla produzione deve essere eseguita mentre i locali lavorano
 se richiede logout globale, rotazione segreti, migrazione file o possibile

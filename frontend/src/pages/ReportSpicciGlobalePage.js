@@ -4,6 +4,7 @@ import axios from 'axios';
 import { ArrowLeft, Building2, RefreshCw, Save } from 'lucide-react';
 import Header from '../components/Header';
 import { useAuth } from '../contexts/AuthContext';
+import { safeArithmeticValue } from '../utils/safeArithmetic';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -31,19 +32,7 @@ const sanitizeNumberExpression = value => String(value ?? '')
   .replace(/[^0-9+\-*/.()\s,=]/g, '');
 
 export const evaluateSpicciValue = value => {
-  if (value === '' || value === null || value === undefined) return 0;
-  let expression = String(value).trim().replace(/,/g, '.');
-  if (expression.startsWith('=')) expression = expression.slice(1).trim();
-  if (!expression || !/^[\d+\-*/.()\s]*$/.test(expression)) return 0;
-  try {
-    // La whitelist sopra mantiene la stessa semantica del Report senza
-    // consentire codice o identificatori.
-    // eslint-disable-next-line no-new-func
-    const result = Function(`"use strict"; return (${expression})`)();
-    return Number.isFinite(result) ? result : 0;
-  } catch {
-    return 0;
-  }
+  return safeArithmeticValue(value);
 };
 
 const compactNumber = value => (
