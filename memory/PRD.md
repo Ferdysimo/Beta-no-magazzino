@@ -171,7 +171,7 @@ Contratti:
 - un ordine cancellato non conta in Numeri o Analisi;
 - un ordine completato o archiviato continua a far parte dello storico valido;
 - Bollitore 1 e 2 gestiscono timer e completamento cucina;
-- nei locali con due bollitori la Cassa espone la modalita giornaliera
+- esclusivamente nel locale Flaminio, la Cassa espone la modalita giornaliera
   `Divisioni`: quando e attiva, il backend aggiunge automaticamente il trattino
   finale alle nuove comande la cui prima sigla appartiene all'elenco del
   Bollitore 2 (sinistra), mentre rimuove il marcatore dalle altre e le lascia al
@@ -184,7 +184,8 @@ Contratti:
   soltanto le comande successive e non spostano quelle gia inviate;
 - il pulsante `Divisioni` e condiviso tra le Casse dello stesso locale, viene
   applicato in modo autoritativo dal backend e torna automaticamente spento al
-  cambio della giornata di Roma;
+  cambio della giornata di Roma; negli altri locali il comando non viene
+  mostrato e le API di configurazione rifiutano letture e modifiche;
 - Monitor Clienti mostra gli ordini pronti soltanto nei locali configurati.
 
 WebSocket notifica le variazioni al tenant corretto. Se non e disponibile, il

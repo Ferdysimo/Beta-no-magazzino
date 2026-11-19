@@ -10,13 +10,10 @@ jest.mock('axios', () => ({
   default: { get: jest.fn(), put: jest.fn() },
 }));
 
+let mockAuthState;
+
 jest.mock('../contexts/AuthContext', () => ({
-  useAuth: () => ({
-    token: 'token-flaminio',
-    restaurant: { id: 'flaminio', location: 'Flaminio', boiler_count: 2 },
-    effectiveRestaurant: null,
-    canImpersonate: false,
-  }),
+  useAuth: () => mockAuthState,
 }));
 
 jest.mock('../contexts/OrderContext', () => ({
@@ -66,6 +63,12 @@ describe('CassaPage divisioni bollitori', () => {
   let root;
 
   beforeEach(() => {
+    mockAuthState = {
+      token: 'token-flaminio',
+      restaurant: { id: 'flaminio', location: 'Flaminio', boiler_count: 2 },
+      effectiveRestaurant: null,
+      canImpersonate: false,
+    };
     axios.get.mockReset();
     axios.put.mockReset();
     axios.get.mockImplementation((url) => {
@@ -155,5 +158,18 @@ describe('CassaPage divisioni bollitori', () => {
     expect(axios.put).not.toHaveBeenCalled();
     expect(container.querySelector('[data-testid="divisioni-modal"]').textContent).toContain('CARB');
     expect(container.querySelector('[data-testid="divisioni-modal"]').textContent).toContain('entrambi');
+  });
+
+  test('non mostra ne interroga le divisioni negli altri locali', async () => {
+    mockAuthState = {
+      ...mockAuthState,
+      token: 'token-corso',
+      restaurant: { id: 'corso', location: 'Corso Vittorio', boiler_count: 2 },
+    };
+
+    await renderPage();
+
+    expect(container.querySelector('[data-testid="divisioni-panel"]')).toBeNull();
+    expect(axios.get.mock.calls.some(([url]) => url.includes('/kitchen-routing'))).toBe(false);
   });
 });

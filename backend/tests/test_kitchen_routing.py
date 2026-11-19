@@ -36,6 +36,12 @@ def test_routing_disabled_sends_every_new_order_to_standard_boiler():
     assert kitchen_routing.route_order_description("RAGU 9", config) == "RAGU 9"
 
 
+def test_unavailable_restaurant_keeps_legacy_manual_dash_unchanged():
+    config = {"available": False, "enabled": False, "boiler2_siglas": []}
+
+    assert kitchen_routing.route_order_description("POM tavolo 4 -", config) == "POM tavolo 4 -"
+
+
 def test_stored_toggle_expires_on_the_next_rome_day(monkeypatch):
     monkeypatch.setattr(kitchen_routing, "_today_rome_str", lambda: "2026-11-18")
     restaurant = {
@@ -53,16 +59,16 @@ def test_stored_toggle_expires_on_the_next_rome_day(monkeypatch):
     assert result["boiler2_siglas"] == ["CARB"]
 
 
-def test_single_boiler_restaurant_cannot_enable_divisions(monkeypatch):
+def test_flaminio_single_boiler_restaurant_cannot_enable_divisions(monkeypatch):
     class Restaurants:
         async def find_one(self, _query, _projection):
-            return {"id": "grazie", "boiler_count": 1}
+            return {"id": "flaminio", "username": "Flaminio", "boiler_count": 1}
 
     monkeypatch.setattr(kitchen_routing, "db", type("Db", (), {"restaurants": Restaurants()})())
 
     with pytest.raises(ValueError, match="due bollitori"):
         _run(kitchen_routing.update_kitchen_routing_config(
-            "grazie",
+            "flaminio",
             enabled=True,
             boiler2_siglas=None,
             standard_siglas=None,
@@ -75,6 +81,7 @@ def test_toggle_updates_only_enabled_fields_and_preserves_sigla_list(monkeypatch
         def __init__(self):
             self.document = {
                 "id": "flaminio",
+                "username": "Flaminio",
                 "boiler_count": 2,
                 "kitchen_routing": {"boiler2_siglas": ["CARB", "CACIO"]},
             }
@@ -110,7 +117,7 @@ def test_toggle_updates_only_enabled_fields_and_preserves_sigla_list(monkeypatch
 def test_same_sigla_cannot_be_saved_in_both_boilers(monkeypatch):
     class Restaurants:
         async def find_one(self, _query, _projection):
-            return {"id": "flaminio", "boiler_count": 2}
+            return {"id": "flaminio", "username": "Flaminio", "boiler_count": 2}
 
     monkeypatch.setattr(kitchen_routing, "db", type("Db", (), {"restaurants": Restaurants()})())
 
@@ -121,6 +128,23 @@ def test_same_sigla_cannot_be_saved_in_both_boilers(monkeypatch):
             boiler2_siglas=["carb", "pesto"],
             standard_siglas=["CARB", "CACIO"],
             updated_by="Flaminio",
+        ))
+
+
+def test_non_flaminio_restaurant_cannot_change_divisions(monkeypatch):
+    class Restaurants:
+        async def find_one(self, _query, _projection):
+            return {"id": "corso", "username": "Corso Vittorio", "boiler_count": 2}
+
+    monkeypatch.setattr(kitchen_routing, "db", type("Db", (), {"restaurants": Restaurants()})())
+
+    with pytest.raises(ValueError, match="solo per il locale Flaminio"):
+        _run(kitchen_routing.update_kitchen_routing_config(
+            "corso",
+            enabled=True,
+            boiler2_siglas=None,
+            standard_siglas=None,
+            updated_by="Corso Vittorio",
         ))
 
 
@@ -144,6 +168,21 @@ def test_warehouse_role_cannot_change_cassa_routing():
             kitchen_routing_config_update(enabled=True),
             {"role": "magazzino", "restaurant_id": "warehouse"},
         ))
+
+    assert exc.value.status_code == 403
+
+
+def test_non_flaminio_restaurant_cannot_read_routing(monkeypatch):
+    async def fake_get(_restaurant_id):
+        return {"restaurant_id": "corso", "available": False, "enabled": False}
+
+    monkeypatch.setattr(orders_router, "get_kitchen_routing_config", fake_get)
+
+    with pytest.raises(HTTPException) as exc:
+        _run(orders_router.read_kitchen_routing({
+            "role": "restaurant",
+            "restaurant_id": "corso",
+        }))
 
     assert exc.value.status_code == 403
 

@@ -178,6 +178,17 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-11-19] - Codex (OpenAI)
+**Tipo**: restrizione feature | Cassa Flaminio | backend | frontend | test
+**File toccati**:
+- `/app/backend/app/{routers/orders.py,services/kitchen_routing.py}`
+- `/app/backend/tests/test_kitchen_routing.py`
+- `/app/frontend/src/pages/{CassaPage,CassaPage.test}.js`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Limitata la modalita `Divisioni bollitori` esclusivamente al locale Flaminio. La Cassa mostra linguetta e impostazioni soltanto quando il locale operativo selezionato e Flaminio; gli altri locali non interrogano l'endpoint. Il backend verifica `username/location` del documento ristorante, restituisce configurazione non disponibile ai normali ordini degli altri locali e rifiuta con 403 letture o modifiche dirette delle API. Fuori da Flaminio la descrizione delle comande resta invariata, compreso un eventuale trattino manuale legacy.
+**Testato**: ✅ si (metodo: 13 test backend routing passati; 4 test React Cassa passati, incluso locale non Flaminio con due bollitori; suite backend completa -> 300 passed, 36 skipped; suite frontend completa -> 90 passed; build React produzione riuscita con soli warning Hook preesistenti; `git diff --check`).
+**Note per il prossimo agente**: Non usare il solo `boiler_count` per abilitare questa funzione. Il flag `available` del backend e la verifica Flaminio nel frontend sono entrambi intenzionali: UI per UX, backend per autorizzazione reale.
+
 ### [2026-11-18 16:17 CET] - Codex (OpenAI)
 **Tipo**: security | Report | VERS | Analisi | test
 **File toccati**:

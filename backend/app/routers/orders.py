@@ -42,6 +42,8 @@ async def read_kitchen_routing(token_data: dict = Depends(verify_token)):
     config = await get_kitchen_routing_config(token_data["restaurant_id"])
     if not config:
         raise HTTPException(status_code=404, detail="Restaurant not found")
+    if config.get("available") is False:
+        raise HTTPException(status_code=403, detail="Divisioni disponibili solo per il locale Flaminio")
     return config
 
 
@@ -54,6 +56,11 @@ async def write_kitchen_routing(
     _require_kitchen_routing_role(token_data)
     if data.enabled is None and data.boiler2_siglas is None and data.standard_siglas is None:
         raise HTTPException(status_code=400, detail="Nessuna modifica richiesta")
+    current_config = await get_kitchen_routing_config(token_data["restaurant_id"])
+    if not current_config:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+    if current_config.get("available") is False:
+        raise HTTPException(status_code=403, detail="Divisioni disponibili solo per il locale Flaminio")
     try:
         config = await update_kitchen_routing_config(
             token_data["restaurant_id"],

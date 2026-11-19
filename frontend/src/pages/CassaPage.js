@@ -119,6 +119,9 @@ const CassaPage = () => {
   const [routingError, setRoutingError] = useState('');
   const activeRestaurant = canImpersonate ? effectiveRestaurant : restaurant;
   const hasTwoBoilers = Number(activeRestaurant?.boiler_count ?? 1) >= 2;
+  const isFlaminio = [activeRestaurant?.location, activeRestaurant?.username]
+    .some(value => String(value || '').trim().toLowerCase() === 'flaminio');
+  const hasKitchenRouting = hasTwoBoilers && isFlaminio;
 
   // Tick every second for live timer colors
   useEffect(() => {
@@ -152,7 +155,7 @@ const CassaPage = () => {
   }, [token]);
 
   const fetchRoutingConfig = async () => {
-    if (!token || !hasTwoBoilers) return null;
+    if (!token || !hasKitchenRouting) return null;
     try {
       const response = await axios.get(`${API}/kitchen-routing`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -171,11 +174,11 @@ const CassaPage = () => {
   // applied by the backend, so even an UI that has not polled yet still sends
   // every new order to the correct bollitore.
   useEffect(() => {
-    if (!token || !hasTwoBoilers) return undefined;
+    if (!token || !hasKitchenRouting) return undefined;
     fetchRoutingConfig();
     const interval = setInterval(fetchRoutingConfig, 10000);
     return () => clearInterval(interval);
-  }, [token, hasTwoBoilers]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [token, hasKitchenRouting]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleDivisions = async () => {
     if (routingBusy) return;
@@ -520,7 +523,7 @@ const CassaPage = () => {
           </p>
         </div>
 
-        {hasTwoBoilers && (
+        {hasKitchenRouting && (
           <aside
             className={`fixed top-1/2 -translate-y-1/2 right-0 z-30 overflow-hidden rounded-l-lg border border-r-0 shadow-lg ${routingConfig.enabled ? 'border-green-700 bg-green-600' : 'border-gray-700 bg-gray-700'}`}
             data-testid="divisioni-panel"

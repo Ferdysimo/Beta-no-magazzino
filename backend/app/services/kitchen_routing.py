@@ -11,6 +11,15 @@ _VALID_SIGLA_RE = re.compile(r"^[A-Z0-9_-]{1,20}$")
 _TRAILING_ROUTE_MARKER_RE = re.compile(r"\s*-\s*$")
 
 
+def _is_flaminio_restaurant(restaurant: dict | None) -> bool:
+    """Kitchen divisions are an operational feature exclusive to Flaminio."""
+    source = restaurant or {}
+    return any(
+        str(source.get(field) or "").strip().casefold() == "flaminio"
+        for field in ("username", "location")
+    )
+
+
 def normalize_boiler2_siglas(values: Iterable[str] | None) -> list[str]:
     """Return unique, uppercase routing siglas in stable input order."""
     clean: list[str] = []
@@ -56,18 +65,27 @@ def kitchen_routing_config_from_restaurant(restaurant: dict | None) -> dict:
 async def get_kitchen_routing_config(restaurant_id: str) -> dict:
     restaurant = await db.restaurants.find_one(
         {"id": restaurant_id},
-        {"_id": 0, "id": 1, "boiler_count": 1, "kitchen_routing": 1},
+        {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "location": 1,
+            "boiler_count": 1,
+            "kitchen_routing": 1,
+        },
     )
     if not restaurant:
         return {}
     boiler_count = int(restaurant.get("boiler_count") or 1)
+    available = _is_flaminio_restaurant(restaurant)
     effective = kitchen_routing_config_from_restaurant(restaurant)
-    if boiler_count < 2:
+    if not available or boiler_count < 2:
         effective = {**effective, "enabled": False, "enabled_date": None}
     return {
         **effective,
         "restaurant_id": restaurant_id,
         "boiler_count": boiler_count,
+        "available": available,
     }
 
 
@@ -79,7 +97,10 @@ def route_order_description(description: str, config: dict) -> str:
     marker here is intentional: while this feature is available the Divisioni
     switch is the single source of truth for newly created orders.
     """
-    base_description = _TRAILING_ROUTE_MARKER_RE.sub("", str(description or "")).strip()
+    raw_description = str(description or "").strip()
+    if config.get("available") is False:
+        return raw_description
+    base_description = _TRAILING_ROUTE_MARKER_RE.sub("", raw_description).strip()
     first_token = base_description.split(maxsplit=1)[0].upper() if base_description else ""
     boiler2_siglas = set(config.get("boiler2_siglas") or [])
     if config.get("enabled") and first_token in boiler2_siglas:
@@ -97,10 +118,20 @@ async def update_kitchen_routing_config(
 ) -> dict:
     restaurant = await db.restaurants.find_one(
         {"id": restaurant_id},
-        {"_id": 0, "id": 1, "boiler_count": 1, "kitchen_routing": 1},
+        {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "location": 1,
+            "boiler_count": 1,
+            "kitchen_routing": 1,
+        },
     )
     if not restaurant:
         return {}
+
+    if not _is_flaminio_restaurant(restaurant):
+        raise ValueError("Divisioni disponibili solo per il locale Flaminio")
 
     boiler_count = int(restaurant.get("boiler_count") or 1)
     if enabled is True and boiler_count < 2:
