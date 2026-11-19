@@ -142,6 +142,16 @@ anonimo, locale, magazzino, Federico, Admin e Simone.
 - Gli account non vengono creati o resettati automaticamente all'avvio.
 - Gli account privilegiati si gestiscono con il comando offline
   `backend/scripts/manage_account.py`.
+- La Home globale di Simone mantiene direttamente la selezione locali,
+  Diagnostica live e Fatture globali; gli strumenti secondari sono raccolti in
+  tre hub Simone-only: `Controlli magazzino` (snapshot 06:00, audit richieste,
+  trasporti), `Audit sistema` (caricamenti chiusure, ordini nascosti) e
+  `Impostazioni amministrative` (creazione locali, Laboratorio).
+- La Home globale di Federico mantiene la selezione locali, `Numeri` e
+  `Report spicci globale`; gli altri strumenti sono raccolti in due hub
+  Federico-only: `Controlli` (caricamenti chiusure, singoli movimenti e storico
+  chiusure) e `Impostazioni prezzi` (listini di bevande e paste). La Diagnostica
+  live non viene mostrata nell'account Federico.
 - La revoca mirata dell'account `Admin` e attiva in produzione dal 6 agosto
   2026: account e `ADMIN_MIN_TOKEN_VERSION` sono alla versione `6`. La soglia
   non deve essere abbassata; una futura rotazione deve incrementare nuovamente
@@ -178,10 +188,14 @@ Contratti:
   bollitore standard;
 - i due elenchi sono configurabili dalla Cassa tramite editor a tag: si scrive
   una sigla e si preme Invio per aggiungerla, mentre la `x` del tag la elimina;
-  le sigle non possono comparire in entrambi
+  ciascun tag puo contenere piu parole (per esempio `XL CARB`) e viene
+  confrontato con l'inizio completo della descrizione; le sigle non possono
+  comparire in entrambi
   i bollitori e quelle non elencate vengono comunque inviate allo standard;
   il Bollitore 2 parte da `CARB`, `PESTO`, `POM`, `AMAT`; le modifiche riguardano
-  soltanto le comande successive e non spostano quelle gia inviate;
+  le modifiche alla configurazione riguardano soltanto le comande successive;
+  se invece la descrizione di una comanda gia inviata viene corretta dalla
+  Cassa, il backend ricalcola immediatamente il bollitore dalla nuova pasta;
 - il pulsante `Divisioni` e condiviso tra le Casse dello stesso locale, viene
   applicato in modo autoritativo dal backend e torna automaticamente spento al
   cambio della giornata di Roma; negli altri locali il comando non viene

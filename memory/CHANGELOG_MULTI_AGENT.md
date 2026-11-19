@@ -179,6 +179,37 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
 ### [2026-11-19] - Codex (OpenAI)
+**Tipo**: UX | account Federico | navigazione | test
+**File toccati**:
+- `/app/frontend/src/App.js`
+- `/app/frontend/src/pages/{HomePage,HomePage.test,FedericoHubPage,FedericoHubPage.test,SimoneHubPage,SimoneHubPage.test,ToolsHubPage}.js`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Riordinata la Home globale di Federico. `Controllo caricamenti`, `Check singoli movimenti` e `Storico chiusure` sono ora raccolti nel nuovo hub Federico-only `Controlli`; `Prezzi delle bevande` e `Nomi e prezzi delle paste` sono raccolti in `Impostazioni prezzi`. Rimossa dalla Home di Federico la voce `Diagnostica live`, non necessaria al suo lavoro. Restano direttamente visibili la selezione locali, `Numeri` e `Report spicci globale`. Gli hub Simone e Federico condividono ora un unico componente grafico senza modificare le route operative sottostanti.
+**Testato**: ✅ si (metodo: 9 test mirati Home/hub passati; suite frontend completa -> 97 passed; build React produzione riuscita con soli warning Hook preesistenti; `git diff --check`).
+**Note per il prossimo agente**: Non reintrodurre Diagnostica live nella Home Federico e non riportare i cinque strumenti come pulsanti singoli. Aggiungere eventuali nuove funzioni Federico alla sezione semanticamente corretta in `FEDERICO_HUBS`.
+
+### [2026-11-19] - Codex (OpenAI)
+**Tipo**: UX | account Simone | navigazione | test
+**File toccati**:
+- `/app/frontend/src/App.js`
+- `/app/frontend/src/pages/{HomePage,HomePage.test,SimoneHubPage,SimoneHubPage.test}.js`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Riordinata la Home globale di Simone eliminando il lungo elenco di strumenti eterogenei. Creati tre hub protetti Simone-only: `Controlli magazzino` contiene Magazzino alle 06:00, Audit richieste merce e Controlli trasporti; `Audit sistema` contiene Controllo caricamenti e Cestino Generale; `Impostazioni amministrative` contiene Crea nuovi locali e Laboratorio. Diagnostica live e Fatture globali restano direttamente in Home insieme ai tre accessi di sezione. Anche la route diretta di creazione locali e ora realmente protetta da `SimoneOnlyRoute`.
+**Testato**: ✅ si (metodo: 6 test mirati Home/hub passati; suite frontend completa -> 94 passed; build React produzione riuscita con soli warning Hook preesistenti; `git diff --check`).
+**Note per il prossimo agente**: Non riportare i sette strumenti come pulsanti singoli nella Home. Aggiungere nuove funzioni Simone alla sezione semanticamente corretta in `SIMONE_HUBS`; mantenere in Home soltanto accessi frequenti o hub di primo livello.
+
+### [2026-11-19] - Codex (OpenAI)
+**Tipo**: bugfix | Cassa Flaminio | divisioni bollitori | test
+**File toccati**:
+- `/app/backend/app/{routers/orders.py,services/kitchen_routing.py}`
+- `/app/backend/tests/test_kitchen_routing.py`
+- `/app/frontend/src/pages/{CassaPage,CassaPage.test}.js`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Corrette due regressioni della modalita `Divisioni`. I tag accettano ora espressioni di piu parole come `XL CARB`: gli spazi interni vengono conservati e normalizzati, mentre Invio crea un solo tag. Il routing confronta l'intero tag con l'inizio della descrizione invece della sola prima parola. Inoltre ogni modifica della descrizione di una comanda viene nuovamente instradata dal backend con la configurazione corrente: passando, per esempio, da `CARB ... -` a `CACIO ...`, il trattino viene rimosso e la comanda passa al bollitore standard. Fuori da Flaminio resta preservato il comportamento legacy senza riscrittura dei trattini.
+**Testato**: ✅ si (metodo: 15 test backend routing passati, inclusi tag multi-parola e modifica CARB->CACIO; 4 test React Cassa passati con salvataggio di `XL CARB`; suite backend completa -> 302 passed, 36 skipped; suite frontend completa -> 90 passed; build React produzione riuscita con soli warning Hook preesistenti; `git diff --check`).
+**Note per il prossimo agente**: Il marker finale deve essere ricalcolato dopo il parsing del numero comanda e usando sempre la descrizione nuova. Non tornare al confronto della sola prima parola: romperebbe tag come `XL CARB`.
+
+### [2026-11-19] - Codex (OpenAI)
 **Tipo**: restrizione feature | Cassa Flaminio | backend | frontend | test
 **File toccati**:
 - `/app/backend/app/{routers/orders.py,services/kitchen_routing.py}`

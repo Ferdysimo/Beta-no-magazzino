@@ -48,6 +48,8 @@ import ControlliTrasportiPage from './pages/ControlliTrasportiPage';
 import RichiesteCancellatePage from './pages/RichiesteCancellatePage';
 import FotografieMagazzinoPage from './pages/FotografieMagazzinoPage';
 import ReportSpicciGlobalePage from './pages/ReportSpicciGlobalePage';
+import SimoneHubPage from './pages/SimoneHubPage';
+import FedericoHubPage from './pages/FedericoHubPage';
 import UpdateBanner from './components/UpdateBanner';
 import FrontendDiagnostics from './components/FrontendDiagnostics';
 import RouteScrollRestoration from './components/RouteScrollRestoration';
@@ -307,6 +309,20 @@ function AppRoutes() {
           </FedericoOnlyRoute>
         </ProtectedRoute>
       } />
+      <Route path="/federico/controlli" element={
+        <ProtectedRoute>
+          <FedericoOnlyRoute>
+            <FedericoHubPage section="controlli" />
+          </FedericoOnlyRoute>
+        </ProtectedRoute>
+      } />
+      <Route path="/federico/impostazioni-prezzi" element={
+        <ProtectedRoute>
+          <FedericoOnlyRoute>
+            <FedericoHubPage section="prezzi" />
+          </FedericoOnlyRoute>
+        </ProtectedRoute>
+      } />
       <Route path="/cestino-generale" element={
         <ProtectedRoute>
           <GeneraleHideLogPage />
@@ -351,7 +367,30 @@ function AppRoutes() {
       } />
       <Route path="/simone/crea-locali" element={
         <ProtectedRoute>
-          <CreaLocaliPage />
+          <SimoneOnlyRoute>
+            <CreaLocaliPage />
+          </SimoneOnlyRoute>
+        </ProtectedRoute>
+      } />
+      <Route path="/simone/controlli-magazzino" element={
+        <ProtectedRoute>
+          <SimoneOnlyRoute>
+            <SimoneHubPage section="magazzino" />
+          </SimoneOnlyRoute>
+        </ProtectedRoute>
+      } />
+      <Route path="/simone/audit-sistema" element={
+        <ProtectedRoute>
+          <SimoneOnlyRoute>
+            <SimoneHubPage section="audit" />
+          </SimoneOnlyRoute>
+        </ProtectedRoute>
+      } />
+      <Route path="/simone/impostazioni" element={
+        <ProtectedRoute>
+          <SimoneOnlyRoute>
+            <SimoneHubPage section="impostazioni" />
+          </SimoneOnlyRoute>
         </ProtectedRoute>
       } />
       <Route path="/simone/richieste-cancellate" element={

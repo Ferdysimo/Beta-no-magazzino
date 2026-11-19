@@ -139,11 +139,12 @@ describe('CassaPage divisioni bollitori', () => {
     expect(container.querySelector('[data-testid="divisioni-modal"]')).not.toBeNull();
     await click(container.querySelector('[data-testid="divisioni-bollitore2-remove-POM"]'));
     await addTag(container.querySelector('[data-testid="divisioni-bollitore2-input"]'), 'alici');
+    await addTag(container.querySelector('[data-testid="divisioni-bollitore2-input"]'), 'xl carb');
     await click(container.querySelector('[data-testid="divisioni-salva"]'));
 
     const saveCall = axios.put.mock.calls.find(([, payload]) => payload.boiler2_siglas);
     expect(saveCall).toBeDefined();
-    expect(saveCall[1].boiler2_siglas).toEqual(['CARB', 'PESTO', 'AMAT', 'ALICI']);
+    expect(saveCall[1].boiler2_siglas).toEqual(['CARB', 'PESTO', 'AMAT', 'ALICI', 'XL CARB']);
     expect(saveCall[1].standard_siglas).toEqual(['CACIO']);
   });
 

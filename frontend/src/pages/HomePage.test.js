@@ -56,17 +56,26 @@ describe('HomePage account Simone', () => {
     container.remove();
   });
 
-  test('mostra il pulsante fotografie magazzino soltanto a Simone', async () => {
+  test('mostra i tre hub ordinati soltanto a Simone e rimuove i vecchi pulsanti sparsi', async () => {
     mockAuth = authFor('Simone');
     await act(async () => {
       root.render(<HomePage />);
       await Promise.resolve();
     });
 
-    const button = container.querySelector('[data-testid="simone-fotografie-magazzino"]');
+    const button = container.querySelector('[data-testid="simone-hub-magazzino"]');
     expect(button).not.toBeNull();
+    expect(container.querySelector('[data-testid="simone-hub-audit"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="simone-hub-impostazioni"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="simone-fotografie-magazzino"]')).toBeNull();
+    expect(container.querySelector('[data-testid="simone-richieste-cancellate"]')).toBeNull();
+    expect(container.querySelector('[data-testid="simone-controlli-trasporti"]')).toBeNull();
+    expect(container.querySelector('[data-testid="simone-controllo-caricamenti"]')).toBeNull();
+    expect(container.querySelector('[data-testid="simone-cestino-generale"]')).toBeNull();
+    expect(container.querySelector('[data-testid="simone-crea-locali"]')).toBeNull();
+    expect(container.querySelector('[data-testid="simone-laboratorio"]')).toBeNull();
     await act(async () => button.dispatchEvent(new MouseEvent('click', { bubbles: true })));
-    expect(mockNavigate).toHaveBeenCalledWith('/simone/fotografie-magazzino');
+    expect(mockNavigate).toHaveBeenCalledWith('/simone/controlli-magazzino');
 
     await act(async () => root.unmount());
     root = createRoot(container);
@@ -75,10 +84,10 @@ describe('HomePage account Simone', () => {
       root.render(<HomePage />);
       await Promise.resolve();
     });
-    expect(container.querySelector('[data-testid="simone-fotografie-magazzino"]')).toBeNull();
+    expect(container.querySelector('[data-testid="simone-hub-magazzino"]')).toBeNull();
   });
 
-  test('mostra Report spicci globale soltanto a Federico', async () => {
+  test('mostra a Federico gli accessi ordinati senza Diagnostica live', async () => {
     mockAuth = {
       ...authFor('Federico'),
       restaurant: { username: 'Federico', role: 'supervisor', location: 'Supervisione' },
@@ -93,8 +102,19 @@ describe('HomePage account Simone', () => {
 
     const button = container.querySelector('[data-testid="federico-report-spicci-globale"]');
     expect(button).not.toBeNull();
+    const controlsHub = container.querySelector('[data-testid="federico-hub-controlli"]');
+    expect(controlsHub).not.toBeNull();
+    expect(container.querySelector('[data-testid="federico-hub-prezzi"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="admin-chiusure-excel"]')).toBeNull();
+    expect(container.querySelector('[data-testid="admin-dizionario-paste"]')).toBeNull();
+    expect(container.querySelector('[data-testid="admin-dizionario-bevande"]')).toBeNull();
+    expect(container.querySelector('[data-testid="admin-audit-cassa"]')).toBeNull();
+    expect(container.querySelector('[data-testid="federico-controllo-caricamenti"]')).toBeNull();
+    expect(container.querySelector('[data-testid="federico-diagnostica"]')).toBeNull();
     await act(async () => button.dispatchEvent(new MouseEvent('click', { bubbles: true })));
     expect(mockNavigate).toHaveBeenCalledWith('/federico/report-spicci-globale');
+    await act(async () => controlsHub.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(mockNavigate).toHaveBeenCalledWith('/federico/controlli');
 
     await act(async () => root.unmount());
     root = createRoot(container);

@@ -7,7 +7,7 @@ from app.core.time import _today_rome_str
 
 
 DEFAULT_BOILER2_SIGLAS = ("CARB", "PESTO", "POM", "AMAT")
-_VALID_SIGLA_RE = re.compile(r"^[A-Z0-9_-]{1,20}$")
+_VALID_SIGLA_RE = re.compile(r"^[A-Z0-9_-]+(?: [A-Z0-9_-]+)*$")
 _TRAILING_ROUTE_MARKER_RE = re.compile(r"\s*-\s*$")
 
 
@@ -25,10 +25,10 @@ def normalize_boiler2_siglas(values: Iterable[str] | None) -> list[str]:
     clean: list[str] = []
     seen: set[str] = set()
     for raw_value in values or []:
-        sigla = str(raw_value or "").strip().upper()
+        sigla = " ".join(str(raw_value or "").strip().upper().split())
         if not sigla or sigla in seen:
             continue
-        if not _VALID_SIGLA_RE.fullmatch(sigla):
+        if len(sigla) > 50 or not _VALID_SIGLA_RE.fullmatch(sigla):
             raise ValueError(f"Sigla non valida: {sigla}")
         seen.add(sigla)
         clean.append(sigla)
@@ -101,9 +101,13 @@ def route_order_description(description: str, config: dict) -> str:
     if config.get("available") is False:
         return raw_description
     base_description = _TRAILING_ROUTE_MARKER_RE.sub("", raw_description).strip()
-    first_token = base_description.split(maxsplit=1)[0].upper() if base_description else ""
+    normalized_description = " ".join(base_description.upper().split())
     boiler2_siglas = set(config.get("boiler2_siglas") or [])
-    if config.get("enabled") and first_token in boiler2_siglas:
+    matches_boiler2 = any(
+        normalized_description == sigla or normalized_description.startswith(f"{sigla} ")
+        for sigla in boiler2_siglas
+    )
+    if config.get("enabled") and matches_boiler2:
         return f"{base_description} -"
     return base_description
 

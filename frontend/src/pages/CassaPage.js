@@ -11,8 +11,8 @@ const API = `${BACKEND_URL}/api`;
 
 const parseRoutingSiglas = (value) => Array.from(new Set(
   String(value || '')
-    .split(/[\s,;]+/)
-    .map(sigla => sigla.trim().toUpperCase())
+    .split(/[,;\n]+/)
+    .map(sigla => sigla.trim().replace(/\s+/g, ' ').toUpperCase())
     .filter(Boolean)
 ));
 
@@ -598,7 +598,7 @@ const CassaPage = () => {
                     placeholder="CACIO, RAGU, ..."
                   />
                   <p className="mt-2 text-xs text-gray-600">
-                    {standardRoutingSiglas.length} sigle · quelle non presenti in nessun box vanno comunque qui.
+                    {standardRoutingSiglas.length} tag · quelle non presenti in nessun box vanno comunque qui.
                   </p>
                 </div>
 
@@ -613,7 +613,7 @@ const CassaPage = () => {
                     tone="blue"
                   />
                   <p className="mt-2 text-xs text-blue-700">
-                    {boiler2RoutingSiglas.length} sigle · scrivi una sigla e premi Invio. Premi × per eliminarla.
+                    {boiler2RoutingSiglas.length} tag · puoi scrivere più parole, per esempio XL CARB. Premi Invio per aggiungere.
                   </p>
                 </div>
               </div>

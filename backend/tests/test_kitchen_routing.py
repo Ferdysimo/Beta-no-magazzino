@@ -21,12 +21,20 @@ def _run(coro):
 def test_routing_adds_marker_only_to_configured_sigla_when_enabled():
     config = {
         "enabled": True,
-        "boiler2_siglas": ["CARB", "PESTO", "POM", "AMAT"],
+        "boiler2_siglas": ["CARB", "PESTO", "POM", "AMAT", "XL CARB"],
     }
 
     assert kitchen_routing.route_order_description("carb rig 12", config) == "carb rig 12 -"
     assert kitchen_routing.route_order_description("POM TA 8 -", config) == "POM TA 8 -"
     assert kitchen_routing.route_order_description("cacio 4 -", config) == "cacio 4"
+    assert kitchen_routing.route_order_description("xl carb tavolo 5", config) == "xl carb tavolo 5 -"
+    assert kitchen_routing.route_order_description("XL CACIO tavolo 5", config) == "XL CACIO tavolo 5"
+
+
+def test_multiword_routing_tags_are_normalized_as_one_tag():
+    assert kitchen_routing.normalize_boiler2_siglas(
+        [" xl   carb ", "XL CARB", "pesto"]
+    ) == ["XL CARB", "PESTO"]
 
 
 def test_routing_disabled_sends_every_new_order_to_standard_boiler():
@@ -185,6 +193,69 @@ def test_non_flaminio_restaurant_cannot_read_routing(monkeypatch):
         }))
 
     assert exc.value.status_code == 403
+
+
+def test_cassa_description_edit_recalculates_the_bollitore(monkeypatch):
+    class Orders:
+        def __init__(self):
+            self.document = {
+                "id": "order-1",
+                "order_number": 7,
+                "description": "CARB tavolo 4 -",
+                "restaurant_id": "flaminio",
+                "status": "pending",
+                "created_at": "2026-11-19T10:00:00+00:00",
+                "timer_started": False,
+                "timer_start_time": None,
+                "timer_paused": False,
+                "timer_elapsed": 0,
+                "kitchen_completed": False,
+            }
+
+        async def find_one(self, query, _projection=None):
+            if query.get("id") == "order-1":
+                return dict(self.document)
+            return None
+
+        async def find_one_and_update(self, _query, update, return_document=True):
+            self.document.update(update["$set"])
+            return dict(self.document)
+
+    class ModificationLogs:
+        def __init__(self):
+            self.entries = []
+
+        async def insert_one(self, entry):
+            self.entries.append(entry)
+
+    class Manager:
+        async def broadcast_to_restaurant(self, _restaurant_id, _message):
+            return None
+
+    orders = Orders()
+    logs = ModificationLogs()
+    fake_db = type("Db", (), {"orders": orders, "modification_logs": logs})()
+
+    async def fake_config(_restaurant_id):
+        return {
+            "available": True,
+            "enabled": True,
+            "boiler2_siglas": ["CARB", "XL CARB"],
+        }
+
+    monkeypatch.setattr(orders_router, "db", fake_db)
+    monkeypatch.setattr(orders_router, "manager", Manager())
+    monkeypatch.setattr(orders_router, "get_kitchen_routing_config", fake_config)
+
+    result = _run(orders_router.update_order(
+        "order-1",
+        orders_router.OrderUpdate(description="CACIO tavolo 4"),
+        {"restaurant_id": "flaminio"},
+    ))
+
+    assert result.description == "CACIO tavolo 4"
+    assert logs.entries[0]["old_description"] == "CARB tavolo 4 -"
+    assert logs.entries[0]["new_description"] == "CACIO tavolo 4"
 
 
 def kitchen_routing_config_update(**kwargs):

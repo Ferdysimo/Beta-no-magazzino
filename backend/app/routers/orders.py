@@ -274,6 +274,18 @@ async def update_order(
 
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
 
+    # A correction made from the Cassa can change the pasta identity. Re-apply
+    # the current Flaminio division rules so the trailing marker follows the
+    # NEW description instead of leaving the order on its previous bollitore.
+    if "description" in update_data:
+        routing_config = await get_kitchen_routing_config(restaurant_id)
+        if not routing_config:
+            raise HTTPException(status_code=404, detail="Restaurant not found")
+        update_data["description"] = route_order_description(
+            update_data["description"],
+            routing_config,
+        )
+
     # Pre-check: if order_number is being changed, ensure it isn't already used
     # by another active order of the same restaurant. The unique compound index
     # on (restaurant_id, order_number) is the last line of defense, but we

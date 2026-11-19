@@ -4,8 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import SystemAlertsBanner from '../components/SystemAlertsBanner';
 import axios from 'axios';
-import { Camera, ClipboardCheck, FileClock, FlaskConical } from 'lucide-react';
-import { canAccessLaboratory } from '../utils/laboratory';
+import { BadgeEuro, ClipboardCheck, Settings2, ShieldCheck, Warehouse } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -15,7 +14,6 @@ const HomePage = () => {
   const navigate = useNavigate();
   const [restaurants, setRestaurants] = useState([]);
   const isSimone = restaurant?.username === 'Simone';
-  const showLaboratory = canAccessLaboratory(restaurant);
 
   // Magazziniere goes straight to magazzino
   useEffect(() => {
@@ -64,21 +62,6 @@ const HomePage = () => {
             </div>
 
             <div className="pt-6 border-t border-gray-300 space-y-3">
-              {showLaboratory && (
-              <button
-                data-testid="simone-laboratorio"
-                onClick={() => navigate('/laboratorio')}
-                className="w-full flex items-center gap-4 text-left px-6 py-4 bg-[#F5C518] hover:bg-[#E5B418] border border-yellow-600 rounded-lg transition-colors"
-              >
-                <span className="h-10 w-10 flex items-center justify-center bg-white/70 border border-yellow-700/30 rounded-md shrink-0">
-                  <FlaskConical size={21} className="text-gray-900" aria-hidden="true" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block font-bold text-lg text-gray-900">Laboratorio</span>
-                  <span className="block text-xs text-gray-700 mt-0.5">Esperimenti isolati</span>
-                </span>
-              </button>
-              )}
               <button
                 data-testid="simone-diagnostica"
                 onClick={() => navigate('/diagnostica')}
@@ -88,69 +71,45 @@ const HomePage = () => {
                 <span className="block text-xs text-gray-500 mt-0.5">WebSocket, latenze e errori in tempo reale</span>
               </button>
               <button
-                data-testid="simone-controllo-caricamenti"
-                onClick={() => navigate('/controllo-caricamenti')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <span className="font-bold text-lg text-gray-800">Controllo caricamenti</span>
-                <span className="block text-xs text-gray-500 mt-0.5">Verifica ogni tentativo di invio delle foto di chiusura</span>
-              </button>
-              <button
-                data-testid="simone-controlli-trasporti"
-                onClick={() => navigate('/admin/controlli-trasporti')}
-                className="w-full flex items-center gap-3 text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <ClipboardCheck size={22} className="text-gray-700 shrink-0" aria-hidden="true" />
-                <span>
-                  <span className="block font-bold text-lg text-gray-800">Controlli trasporti</span>
-                  <span className="block text-xs text-gray-500 mt-0.5">Ricezioni controllate dai locali</span>
-                </span>
-              </button>
-              <button
-                data-testid="simone-richieste-cancellate"
-                onClick={() => navigate('/simone/richieste-cancellate')}
-                className="w-full flex items-center gap-3 text-left px-6 py-4 bg-white hover:bg-gray-50 border border-gray-300 hover:border-gray-500 rounded-lg transition-colors"
-              >
-                <FileClock size={22} className="text-gray-700 shrink-0" aria-hidden="true" />
-                <span>
-                  <span className="block font-bold text-lg text-gray-800">Audit richieste merce</span>
-                  <span className="block text-xs text-gray-500 mt-0.5">Richieste cancellate e modifiche ai DDT</span>
-                </span>
-              </button>
-              <button
-                data-testid="simone-fotografie-magazzino"
-                onClick={() => navigate('/simone/fotografie-magazzino')}
-                className="w-full flex items-center gap-3 text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <Camera size={22} className="text-gray-700 shrink-0" aria-hidden="true" />
-                <span>
-                  <span className="block font-bold text-lg text-gray-800">Magazzino alle 06:00</span>
-                  <span className="block text-xs text-gray-500 mt-0.5">Fotografie giornaliere delle giacenze</span>
-                </span>
-              </button>
-              <button
-                data-testid="simone-cestino-generale"
-                onClick={() => navigate('/cestino-generale')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <span className="font-bold text-lg text-gray-800">Cestino Generale — Audit</span>
-                <span className="block text-xs text-gray-500 mt-0.5">Registro silenzioso degli ordini nascosti dal Tablet Generale</span>
-              </button>
-              <button
                 data-testid="simone-fatture-globale"
                 onClick={() => navigate('/admin/fatture-globale')}
                 className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
               >
-                <span className="font-bold text-lg text-gray-800">Fatture Globale</span>
-                <span className="block text-xs text-gray-500 mt-0.5">Carica fatture globali e abbinale ai DDT dei locali tramite numero DDT</span>
+                <span className="font-bold text-lg text-gray-800">Fatture Globali</span>
+                <span className="block text-xs text-gray-500 mt-0.5">Carica fatture globali e abbinale ai DDT dei locali</span>
               </button>
               <button
-                data-testid="simone-crea-locali"
-                onClick={() => navigate('/simone/crea-locali')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+                data-testid="simone-hub-magazzino"
+                onClick={() => navigate('/simone/controlli-magazzino')}
+                className="w-full flex items-center gap-3 text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
               >
-                <span className="font-bold text-lg text-gray-800">Crea nuovi locali</span>
-                <span className="block text-xs text-gray-500 mt-0.5">Crea locale ristorante per nuove aperture</span>
+                <Warehouse size={22} className="text-gray-700 shrink-0" aria-hidden="true" />
+                <span>
+                  <span className="block font-bold text-lg text-gray-800">Controlli magazzino</span>
+                  <span className="block text-xs text-gray-500 mt-0.5">Giacenze delle 06:00, richieste merce e trasporti</span>
+                </span>
+              </button>
+              <button
+                data-testid="simone-hub-audit"
+                onClick={() => navigate('/simone/audit-sistema')}
+                className="w-full flex items-center gap-3 text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <ShieldCheck size={22} className="text-gray-700 shrink-0" aria-hidden="true" />
+                <span>
+                  <span className="block font-bold text-lg text-gray-800">Audit sistema</span>
+                  <span className="block text-xs text-gray-500 mt-0.5">Caricamenti delle chiusure e ordini nascosti</span>
+                </span>
+              </button>
+              <button
+                data-testid="simone-hub-impostazioni"
+                onClick={() => navigate('/simone/impostazioni')}
+                className="w-full flex items-center gap-3 text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+              >
+                <Settings2 size={22} className="text-gray-700 shrink-0" aria-hidden="true" />
+                <span>
+                  <span className="block font-bold text-lg text-gray-800">Impostazioni amministrative</span>
+                  <span className="block text-xs text-gray-500 mt-0.5">Nuovi locali e Laboratorio</span>
+                </span>
               </button>
             </div>
           </div>
@@ -251,61 +210,28 @@ const HomePage = () => {
               )}
               {isFederico && (
               <button
-                data-testid="admin-chiusure-excel"
-                onClick={() => navigate('/chiusure-excel')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+                data-testid="federico-hub-controlli"
+                onClick={() => navigate('/federico/controlli')}
+                className="w-full flex items-center gap-3 text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
               >
-                <span className="font-bold text-lg text-gray-800">Storico chiusure</span>
-                <span className="block text-xs text-gray-500 mt-0.5">Vista a griglia: una riga per giorno, tutte le colonne cassa + bevande</span>
+                <ShieldCheck size={22} className="text-gray-700 shrink-0" aria-hidden="true" />
+                <span>
+                  <span className="block font-bold text-lg text-gray-800">Controlli</span>
+                  <span className="block text-xs text-gray-500 mt-0.5">Caricamenti, movimenti e storico chiusure</span>
+                </span>
               </button>
               )}
               {isFederico && (
               <button
-                data-testid="admin-dizionario-paste"
-                onClick={() => navigate('/dizionario-paste')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
+                data-testid="federico-hub-prezzi"
+                onClick={() => navigate('/federico/impostazioni-prezzi')}
+                className="w-full flex items-center gap-3 text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
               >
-                <span className="font-bold text-lg text-gray-800">Nomi e prezzi delle paste</span>
-                <span className="block text-xs text-gray-500 mt-0.5">Sigle + prezzi per ogni locale (per il riconoscimento automatico)</span>
-              </button>
-              )}
-              {isFederico && (
-              <button
-                data-testid="admin-dizionario-bevande"
-                onClick={() => navigate('/dizionario-bevande')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <span className="font-bold text-lg text-gray-800">Prezzi delle bevande</span>
-                <span className="block text-xs text-gray-500 mt-0.5">Listino per locale usato nel calcolo del Report</span>
-              </button>
-              )}
-              {isFederico && (
-              <button
-                data-testid="admin-audit-cassa"
-                onClick={() => navigate('/audit-cassa')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <span className="font-bold text-lg text-gray-800">Check singoli movimenti</span>
-                <span className="block text-xs text-gray-500 mt-0.5">Audit log: ogni movimento/operazione su Cassa e Bevande</span>
-              </button>
-              )}
-              {isFederico && (
-              <button
-                data-testid="federico-diagnostica"
-                onClick={() => navigate('/diagnostica')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <span className="font-bold text-lg text-gray-800">Diagnostica live</span>
-              </button>
-              )}
-              {isFederico && (
-              <button
-                data-testid="federico-controllo-caricamenti"
-                onClick={() => navigate('/controllo-caricamenti')}
-                className="w-full text-left px-6 py-4 bg-white hover:bg-yellow-50 border border-gray-300 hover:border-[#F5C518] rounded-lg transition-colors"
-              >
-                <span className="font-bold text-lg text-gray-800">Controllo caricamenti</span>
-                <span className="block text-xs text-gray-500 mt-0.5">Verifica ogni tentativo di invio delle foto di chiusura</span>
+                <BadgeEuro size={22} className="text-gray-700 shrink-0" aria-hidden="true" />
+                <span>
+                  <span className="block font-bold text-lg text-gray-800">Impostazioni prezzi</span>
+                  <span className="block text-xs text-gray-500 mt-0.5">Listini di paste e bevande</span>
+                </span>
               </button>
               )}
             </div>
