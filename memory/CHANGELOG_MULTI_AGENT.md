@@ -178,6 +178,17 @@ REACT_APP_BACKEND_URL=https://pasta-app.it
 ## 📋 LOG MODIFICHE / CHANGE LOG
 > **⬇️ Aggiungere nuove voci QUI SOTTO, in cima alla lista (più recente in alto). ⬇️**
 
+### [2026-11-20] - Codex (OpenAI)
+**Tipo**: feature | Numeri | Report | fatturato | test
+**File toccati**:
+- `/app/backend/app/{routers/analysis.py,services/analysis.py}`
+- `/app/backend/tests/{test_media_locali_revenue.py,test_report_backend_totals.py}`
+- `/app/frontend/src/pages/{MediaLocaliPage,MediaLocaliPage.test}.js`
+- `/app/memory/{PRD,CHANGELOG_MULTI_AGENT}.md`
+**Descrizione**: Aggiunto alla pagina `Numeri` uno switch tra la vista numerica esistente e la nuova vista `Fatturato`. La nuova modalita conserva giorni, locali e totali della tabella, ma mostra per ogni cella la somma di vendita piatti e vendita bevande ricavata dal Report; la riga superiore mostra le relative medie escludendo i giorni senza Report. I calcoli riusano prezzi manuali e snapshot storici di paste e bevande, quindi i cambi di listino successivi non riscrivono lo storico. Cassa, POS, spicci e arrotondamenti restano esclusi. L'export Excel esistente resta disponibile nella sola modalita Numeri per non presentare come fatturato un file che contiene conteggi.
+**Testato**: ✅ si (metodo: test mirati fatturato backend/frontend passati; suite backend completa -> 305 passed, 36 skipped; suite frontend completa -> 98 passed; build React produzione riuscita con soli warning Hook preesistenti; `git diff --check`).
+**Note per il prossimo agente**: Mantenere la distinzione tra Report assente (`null`, cella vuota) e Report presente con fatturato zero. Non sostituire gli snapshot storici con i listini correnti e non includere componenti diverse da vendita piatti + vendita bevande.
+
 ### [2026-11-19] - Codex (OpenAI)
 **Tipo**: UX | account Federico | navigazione | test
 **File toccati**:

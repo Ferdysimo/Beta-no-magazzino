@@ -12,16 +12,19 @@ from starlette.concurrency import run_in_threadpool
 from app.core.database import db
 from app.core.security import require_admin, require_admin_or_federico, verify_token
 from app.core.time import ROME_TZ
+from app.services.beverage_prices import _get_beverage_prices_for
 from app.services.analysis import (
     _build_annual_analysis_data,
     _build_analysis_workbook_bytes,
     _display_media_location,
     _ensure_analysis_integrity,
     _format_italian_long_date,
+    _media_report_revenue,
     _media_code_for_restaurant,
     _prefetch_analysis_order_data,
     _validate_export_year,
 )
+from app.services.report import _get_pasta_dict_for
 
 
 router = APIRouter()
@@ -86,13 +89,82 @@ async def get_media_locali(token_data: dict = Depends(verify_token)):
     )
     source_counts = source_data["counts"]
 
+    start_date = from_start.strftime("%Y-%m-%d")
+    end_date = current.strftime("%Y-%m-%d")
+    cash_docs = await db.cash_daily_counts.find(
+        {
+            "restaurant_id": {"$in": restaurant_ids},
+            "date_rome": {"$gte": start_date, "$lte": end_date},
+        },
+        {
+            "_id": 0,
+            "restaurant_id": 1,
+            "date_rome": 1,
+            "paste_text": 1,
+            "manual_prices": 1,
+            "pasta_dict_snapshot": 1,
+        },
+    ).to_list(1000)
+    cash_by_key = {
+        (doc.get("restaurant_id"), doc.get("date_rome")): doc
+        for doc in cash_docs
+    }
+    beverage_docs = await db.beverage_daily_counts.find(
+        {
+            "restaurant_id": {"$in": restaurant_ids},
+            "date_rome": {"$gte": start_date, "$lte": end_date},
+        },
+        {
+            "_id": 0,
+            "restaurant_id": 1,
+            "date_rome": 1,
+            "sigla": 1,
+            "mattina": 1,
+            "inUsc": 1,
+            "scarti": 1,
+            "sera": 1,
+            "price_snapshot": 1,
+        },
+    ).to_list(10000)
+    beverages_by_key = {}
+    for doc in beverage_docs:
+        beverages_by_key.setdefault(
+            (doc.get("restaurant_id"), doc.get("date_rome")), []
+        ).append(doc)
+
+    report_prices = {}
+    for rest in restaurants:
+        restaurant_id = rest.get("id")
+        if not restaurant_id:
+            continue
+        report_prices[restaurant_id] = {
+            "pasta": await _get_pasta_dict_for(restaurant_id),
+            "beverages": await _get_beverage_prices_for(restaurant_id),
+        }
+
     while current >= from_start:
-        day_data = {"date": current.strftime("%d/%m/%Y"), "locations": {}}
+        day_data = {
+            "date": current.strftime("%d/%m/%Y"),
+            "locations": {},
+            "revenues": {},
+        }
         date_rome = current.strftime("%Y-%m-%d")
 
         for rest in restaurants:
-            day_data["locations"][rest["location"]] = int(
-                source_counts.get((rest["id"], date_rome), 0) or 0
+            restaurant_id = rest["id"]
+            location = rest["location"]
+            day_data["locations"][location] = int(
+                source_counts.get((restaurant_id, date_rome), 0) or 0
+            )
+            prices = report_prices.get(restaurant_id) or {
+                "pasta": {},
+                "beverages": {},
+            }
+            day_data["revenues"][location] = _media_report_revenue(
+                cash_by_key.get((restaurant_id, date_rome)),
+                beverages_by_key.get((restaurant_id, date_rome), []),
+                prices["pasta"],
+                prices["beverages"],
             )
 
         result.append(day_data)
@@ -101,6 +173,7 @@ async def get_media_locali(token_data: dict = Depends(verify_token)):
     # Calculate averages per location, EXCLUDING days with 0/empty values
     # so empty cells in the table don't dilute the average.
     averages = {}
+    revenue_averages = {}
     for rest in restaurants:
         loc = rest["location"]
         values = []
@@ -113,10 +186,21 @@ async def get_media_locali(token_data: dict = Depends(verify_token)):
             if v_int > 0:
                 values.append(v_int)
         averages[loc] = round(sum(values) / len(values), 2) if values else 0
+        revenue_values = [
+            float(d["revenues"][loc])
+            for d in result
+            if d["revenues"].get(loc) is not None
+            and float(d["revenues"][loc]) > 0
+        ]
+        revenue_averages[loc] = (
+            round(sum(revenue_values) / len(revenue_values), 2)
+            if revenue_values else 0
+        )
 
     return {
         "locations": [r["location"] for r in restaurants],
         "averages": averages,
+        "revenue_averages": revenue_averages,
         "days": result
     }
 

@@ -50,6 +50,39 @@ def test_pasta_recognition_rejects_unicode_suffix_after_sigla():
     assert _pasta_recognized_sigla("406  CARB - asporto", PASTA_DICT) == "CARB"
 
 
+def test_media_report_revenue_uses_historical_pasta_and_beverage_prices():
+    cash_doc = {
+        "paste_text": "1 CARB\n2 FUORI LISTINO",
+        "manual_prices": {"1": "4,50"},
+        "pasta_dict_snapshot": [{"sigla": "CARB", "price": 9}],
+    }
+    beverage_docs = [{
+        "sigla": "C",
+        "mattina": "10",
+        "inUsc": "2",
+        "scarti": "1",
+        "sera": "7",
+        "price_snapshot": 2,
+    }]
+
+    revenue = analysis_service._media_report_revenue(
+        cash_doc,
+        beverage_docs,
+        {"CARB": 100},
+        {"C": 50},
+    )
+
+    # Paste: 9 + 4.50. Bevande: (10 + 2 - 7 - 1) * 2.
+    assert revenue == 21.5
+
+
+def test_media_report_revenue_distinguishes_missing_report_from_zero_sales():
+    assert analysis_service._media_report_revenue({}, [], {}, {}) is None
+    assert analysis_service._media_report_revenue(
+        {"paste_text": ""}, [], {}, {}
+    ) == 0
+
+
 class _FakeCursor:
     def __init__(self, documents):
         self._documents = list(documents)

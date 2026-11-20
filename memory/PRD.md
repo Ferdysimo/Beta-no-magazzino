@@ -325,10 +325,20 @@ personalizzare soltanto il prezzo per ciascun locale. Ogni riga giornaliera
 conserva uno snapshot del prezzo: un cambio di listino non deve ricalcolare una
 chiusura già iniziata né il suo riporto cassa al giorno successivo.
 
-### 6.4 Numeri
+### 6.4 Numeri e fatturato
 
-La pagina Numeri mostra per giorno le paste prodotte dai locali e le relative
-medie. L'Excel Numeri:
+La pagina Numeri dispone di due modalita selezionabili senza cambiare pagina:
+
+- `Numeri` mostra per giorno le paste prodotte dai locali e le relative medie;
+- `Fatturato` mostra, per gli stessi giorni e locali, la somma di vendita
+  piatti e vendita bevande del Report e sostituisce la riga superiore con la
+  media del fatturato. Giorni privi di Report restano vuoti e non abbassano la
+  media.
+
+Il fatturato usa prezzi manuali e snapshot storici dei listini paste e bevande:
+una modifica successiva dei prezzi non deve cambiare i giorni gia registrati.
+Non include cassa, POS, spicci, arrotondamenti o altri movimenti finanziari del
+Report. L'Excel Numeri resta associato alla modalita `Numeri`:
 
 - copre dal 1 gennaio al 31 dicembre dell'anno scelto;
 - crea una colonna per ogni locale attivo;

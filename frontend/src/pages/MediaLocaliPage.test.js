@@ -30,6 +30,12 @@ describe('MediaLocaliPage mobile table', () => {
           'Largo di Brazzà': 1073,
           'Corso Vittorio': 421,
         },
+        revenue_averages: {
+          Flaminio: 1234.5,
+          Grazie: 2000,
+          'Largo di Brazzà': 3100.25,
+          'Corso Vittorio': 400.75,
+        },
         days: [{
           date: '20/09/2026',
           locations: {
@@ -37,6 +43,12 @@ describe('MediaLocaliPage mobile table', () => {
             Grazie: 766,
             'Largo di Brazzà': 1109,
             'Corso Vittorio': 400,
+          },
+          revenues: {
+            Flaminio: 1100.5,
+            Grazie: 2200,
+            'Largo di Brazzà': 3300.25,
+            'Corso Vittorio': null,
           },
         }],
       },
@@ -73,5 +85,27 @@ describe('MediaLocaliPage mobile table', () => {
     ]);
     expect(table.textContent).toContain('20/09/2026');
     expect(table.textContent).toContain('2986');
+  });
+
+  test('passa a Fatturato mostrando vendita piatti più bevande e la relativa media', async () => {
+    await act(async () => {
+      root.render(<MediaLocaliPage />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const revenueButton = container.querySelector('[data-testid="media-mode-revenue"]');
+    expect(revenueButton.getAttribute('aria-pressed')).toBe('false');
+
+    await act(async () => {
+      revenueButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(revenueButton.getAttribute('aria-pressed')).toBe('true');
+    expect(container.textContent).toContain('Fatturato - vendita piatti e bevande');
+    expect(container.textContent).toContain('1234,50');
+    expect(container.textContent).toContain('1100,50');
+    expect(container.textContent).toContain('6600,75');
+    expect(container.textContent).not.toContain('SCARICA EXCEL');
   });
 });

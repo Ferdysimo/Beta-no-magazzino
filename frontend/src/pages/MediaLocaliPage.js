@@ -11,6 +11,7 @@ const MediaLocaliPage = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [downloadingExcel, setDownloadingExcel] = useState(false);
+  const [viewMode, setViewMode] = useState('numbers');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -78,26 +79,83 @@ const MediaLocaliPage = () => {
     <div className="min-h-screen bg-[#F5F5F5]">
       <Header />
       <main className="max-w-3xl mx-auto p-2 sm:p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3 sm:mb-6 px-1">
-          <h1 className="font-heading text-xl sm:text-3xl font-bold text-gray-800">
-            Numeri - report totali di giornata
-          </h1>
-          <button
-            type="button"
-            onClick={downloadExcel}
-            disabled={downloadingExcel}
-            className="bg-[#F5C518] hover:bg-[#e0b315] disabled:bg-gray-300 disabled:cursor-not-allowed text-gray-900 font-bold px-4 py-2 rounded shadow-sm border border-yellow-500 text-sm"
+        <div className="mb-3 sm:mb-6 px-1 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h1 className="font-heading text-xl sm:text-3xl font-bold text-gray-800">
+                {viewMode === 'numbers'
+                  ? 'Numeri - report totali di giornata'
+                  : 'Fatturato - vendita piatti e bevande'}
+              </h1>
+              {viewMode === 'revenue' && (
+                <p className="text-xs sm:text-sm text-gray-500 mt-1">Valori espressi in euro</p>
+              )}
+            </div>
+            {viewMode === 'numbers' && (
+              <button
+                type="button"
+                onClick={downloadExcel}
+                disabled={downloadingExcel}
+                className="bg-[#F5C518] hover:bg-[#e0b315] disabled:bg-gray-300 disabled:cursor-not-allowed text-gray-900 font-bold px-4 py-2 rounded shadow-sm border border-yellow-500 text-sm"
+              >
+                {downloadingExcel ? 'SCARICO...' : 'SCARICA EXCEL'}
+              </button>
+            )}
+          </div>
+
+          <div
+            className="inline-flex w-full sm:w-auto rounded-lg border border-gray-300 bg-gray-100 p-1"
+            role="group"
+            aria-label="Modalità visualizzazione"
           >
-            {downloadingExcel ? 'SCARICO...' : 'SCARICA EXCEL'}
-          </button>
+            <button
+              type="button"
+              data-testid="media-mode-numbers"
+              aria-pressed={viewMode === 'numbers'}
+              onClick={() => setViewMode('numbers')}
+              className={`flex-1 sm:flex-none px-5 py-2 rounded-md text-sm font-bold transition-colors ${
+                viewMode === 'numbers'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              Numeri
+            </button>
+            <button
+              type="button"
+              data-testid="media-mode-revenue"
+              aria-pressed={viewMode === 'revenue'}
+              onClick={() => setViewMode('revenue')}
+              className={`flex-1 sm:flex-none px-5 py-2 rounded-md text-sm font-bold transition-colors ${
+                viewMode === 'revenue'
+                  ? 'bg-[#F5C518] text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              Fatturato
+            </button>
+          </div>
         </div>
 
         {(() => {
+          const isRevenue = viewMode === 'revenue';
           const displayName = (loc) => (loc === 'Largo di Brazzà' ? 'Brazzà' : loc);
-          const averagesCeil = Object.fromEntries(
-            data.locations.map(loc => [loc, Math.ceil(data.averages[loc] || 0)])
+          const displayedAverages = Object.fromEntries(
+            data.locations.map(loc => [
+              loc,
+              isRevenue
+                ? Number(data.revenue_averages?.[loc] || 0)
+                : Math.ceil(data.averages[loc] || 0),
+            ])
           );
-          const totalAverage = data.locations.reduce((sum, loc) => sum + averagesCeil[loc], 0);
+          const totalAverage = data.locations.reduce(
+            (sum, loc) => sum + displayedAverages[loc],
+            0
+          );
+          const formatValue = (value) => Number(value).toLocaleString('it-IT', {
+            minimumFractionDigits: isRevenue ? 2 : 0,
+            maximumFractionDigits: isRevenue ? 2 : 0,
+          });
 
           return (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
@@ -131,18 +189,19 @@ const MediaLocaliPage = () => {
                     <td className="pl-1.5 pr-0.5 sm:px-4 py-2 sm:py-3 font-bold text-gray-800 text-[10px] sm:text-base whitespace-nowrap">Media</td>
                     {data.locations.map(loc => (
                       <td key={loc} className="px-0.5 sm:px-4 py-2 sm:py-3 font-bold text-gray-800 text-[10px] sm:text-base text-center sm:text-left tabular-nums whitespace-nowrap">
-                        {averagesCeil[loc].toLocaleString('it-IT')}
+                        {formatValue(displayedAverages[loc])}
                       </td>
                     ))}
                     <td className="px-0.5 sm:px-4 py-2 sm:py-3 font-bold text-gray-800 text-[10px] sm:text-base text-center sm:text-left tabular-nums whitespace-nowrap">
-                      {totalAverage.toLocaleString('it-IT')}
+                      {formatValue(totalAverage)}
                     </td>
                   </tr>
 
                   {/* Daily rows */}
                   {data.days.map((day, idx) => {
+                    const dayValues = isRevenue ? (day.revenues || {}) : day.locations;
                     const dailyTotal = data.locations.reduce(
-                      (sum, loc) => sum + (Number(day.locations[loc]) || 0),
+                      (sum, loc) => sum + (Number(dayValues[loc]) || 0),
                       0
                     );
                     return (
@@ -150,11 +209,13 @@ const MediaLocaliPage = () => {
                         <td className="pl-1.5 pr-0.5 sm:px-4 py-1.5 sm:py-2 text-gray-700 text-[10px] sm:text-sm tabular-nums whitespace-nowrap">{day.date}</td>
                         {data.locations.map(loc => (
                           <td key={loc} className="px-0.5 sm:px-4 py-1.5 sm:py-2 text-gray-800 text-[10px] sm:text-sm text-center sm:text-left tabular-nums whitespace-nowrap">
-                            {day.locations[loc] || ''}
+                            {dayValues[loc] === null || dayValues[loc] === undefined
+                              ? ''
+                              : formatValue(dayValues[loc])}
                           </td>
                         ))}
                         <td className="px-0.5 sm:px-4 py-1.5 sm:py-2 font-semibold text-gray-800 text-[10px] sm:text-sm text-center sm:text-left tabular-nums whitespace-nowrap">
-                          {dailyTotal > 0 ? dailyTotal.toLocaleString('it-IT') : ''}
+                          {dailyTotal > 0 ? formatValue(dailyTotal) : ''}
                         </td>
                       </tr>
                     );

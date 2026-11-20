@@ -26,6 +26,7 @@ from app.services.report import (
     ALL_CASH_FIELDS,
     PASTA_PRICES_MAP,
     SPICCI_MULTIPLIERS,
+    _compute_bev_total_eur,
     _compute_cash_sera_full,
     _compute_cassetto_total,
     _compute_paste_total_eur,
@@ -53,6 +54,38 @@ def _paste_text_from_order_docs(order_docs: list) -> str:
             continue
         rows.append(f"{doc.get('order_number')}  {desc}")
     return "\n".join(rows)
+
+
+def _media_report_revenue(
+    cash_doc: Optional[Dict],
+    beverage_docs: List[Dict],
+    fallback_pasta_prices: Dict[str, float],
+    fallback_beverage_prices: Dict[str, float],
+) -> Optional[float]:
+    """Return dishes + beverages exactly as priced by the daily Report.
+
+    ``None`` distinguishes a missing Report from a real Report whose sales are
+    zero. Historical row snapshots always win over the current price lists.
+    """
+    cash_doc = cash_doc or {}
+    beverage_docs = beverage_docs or []
+    if not cash_doc and not beverage_docs:
+        return None
+
+    pasta_prices = (
+        _pasta_dict_from_snapshot(cash_doc.get("pasta_dict_snapshot"))
+        or fallback_pasta_prices
+    )
+    dishes_revenue = _compute_paste_total_eur(
+        cash_doc.get("paste_text", "") or "",
+        cash_doc.get("manual_prices") or {},
+        pasta_prices,
+    )
+    beverages_revenue = _compute_bev_total_eur(
+        beverage_docs,
+        fallback_beverage_prices,
+    )
+    return round(dishes_revenue + beverages_revenue, 2)
 
 
 ANALYSIS_ORDER_SOURCES: Tuple[Tuple[str, str], ...] = (
